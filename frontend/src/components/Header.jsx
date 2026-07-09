@@ -18,7 +18,6 @@ export default function Header() {
         <header className="bg-abyss text-paper sticky top-0 z-40 border-b border-white/5">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-6">
                 <Link to="/" className="flex items-center gap-2 shrink-0">
-                    <img src="/brand/nexora-icon.png" alt="" className="h-8 w-auto" />
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
                 </Link>
 

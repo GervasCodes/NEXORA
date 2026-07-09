@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The "price tag" motif: a dashed string + a punched hole, used on
+   product cards and price displays throughout the storefront. */
+.tag-string {
+    position: relative;
+}
+
+.tag-string::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: theme("colors.paper");
+    border: 1.5px dashed theme("colors.ash");
+}
+
+.price {
+    font-family: theme("fontFamily.mono");
+    letter-spacing: -0.02em;
+}
+
+.focus-ring {
+    outline: none;
+}
+
+.focus-ring:focus-visible {
+    outline: 2px solid theme("colors.mango");
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+    }
+}

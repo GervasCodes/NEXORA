@@ -1,0 +1,16 @@
+{
+  "name": "nexora-database",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Migration and seed scripts for the NEXORA database. Run `npm install` in this folder once, then use the scripts below.",
+  "scripts": {
+    "migrate": "node migrate.js",
+    "migrate:status": "node migrate.js --status",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "mysql2": "^3.22.5"
+  }
+}

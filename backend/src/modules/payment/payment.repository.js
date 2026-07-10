@@ -17,6 +17,16 @@ exports.create = async (orderId, method, amount) => {
     return result.insertId;
 };
 
+exports.markPending = async (paymentId, transactionReference) => {
+    await db.query(
+        `UPDATE payments
+        SET status = 'pending',
+            transaction_reference = ?
+        WHERE id = ?`,
+        [transactionReference, paymentId]
+    );
+};
+
 exports.markCompleted = async (paymentId, transactionReference, receiptNumber) => {
     await db.query(
         `UPDATE payments

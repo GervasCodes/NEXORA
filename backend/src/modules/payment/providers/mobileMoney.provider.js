@@ -1,102 +1,57 @@
 /**
- * Mobile money provider adapter.
+ * Mobile money provider ROUTER.
  *
- * This is the ONLY place that should know whether we're talking to a real
- * mobile money API or simulating one. payment.service.js just calls
- * `initiate(phone, amount)` and doesn't care which mode it's in.
+ * This is the only file payment.service.js (and wallet.service.js, for
+ * payouts) ever talks to. It doesn't know or care which real provider is
+ * behind it — that's decided entirely by MOBILE_MONEY_PROVIDER in .env.
  *
- * Modes:
- *   - Configured  (MOBILE_MONEY_* env vars all set): calls the real provider.
- *   - Unconfigured + NODE_ENV !== "production": simulates a successful
- *     payment so you can build/test the rest of the checkout flow without
- *     real merchant credentials. Every simulated call logs a loud warning
- *     so it's impossible to miss in the logs.
- *   - Unconfigured + NODE_ENV === "production": throws. This is the whole
- *     point of this file existing — it makes it impossible to accidentally
- *     deploy to production still running in "always succeeds" mode.
+ * To switch providers (e.g. MalipoPay -> Selcom later), you change env
+ * vars only. No other file in the app needs to change.
+ *
+ *   MOBILE_MONEY_PROVIDER=malipopay   (or "selcom")
+ *
+ * Each provider file exports the same shape:
+ *   isConfigured() -> boolean
+ *   initiate(phone, amount, meta) -> { success, transactionReference }
+ *   disburse(phone, amount, meta) -> { success, transactionReference }
+ *
+ * Adding a third provider later (e.g. AzamPay) means: drop in
+ * azampay.provider.js with that same shape, add one line to `providers`
+ * below, and set MOBILE_MONEY_PROVIDER=azampay. Nothing else changes.
  */
 
-const isConfigured = () =>
-    Boolean(
-        process.env.MOBILE_MONEY_API_BASE_URL &&
-        process.env.MOBILE_MONEY_API_KEY &&
-        process.env.MOBILE_MONEY_API_SECRET &&
-        process.env.MOBILE_MONEY_MERCHANT_CODE
-    );
-
-// ---------------------------------------------------------------------------
-// Real provider call.
-//
-// TODO: This request/response shape is a placeholder — every mobile money
-// provider (M-Pesa, Tigo Pesa, Airtel Money, or an aggregator like Selcom /
-// Flutterwave / DPO) has its own API contract, auth scheme, and callback
-// flow. Replace the body of this function with the real integration once
-// you've picked a provider and have their API docs + merchant credentials.
-// Most of these APIs are asynchronous: this initiates the request, and the
-// provider then hits a webhook/callback URL with the real result - if so,
-// you'll also need a callback route (see payment.routes.js) that verifies
-// the callback signature and calls paymentRepository.markCompleted /
-// markFailed from there, rather than trusting the initiate response alone.
-// ---------------------------------------------------------------------------
-const callRealProvider = async (phone, amount) => {
-    const response = await fetch(
-        `${process.env.MOBILE_MONEY_API_BASE_URL}/payments`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.MOBILE_MONEY_API_KEY}`
-            },
-            body: JSON.stringify({
-                merchant_code: process.env.MOBILE_MONEY_MERCHANT_CODE,
-                phone,
-                amount
-            })
-        }
-    );
-
-    if (!response.ok) {
-        return { success: false, transactionReference: null };
-    }
-
-    const data = await response.json();
-
-    return {
-        success: Boolean(data.success),
-        transactionReference: data.transaction_reference || null
-    };
+const providers = {
+    malipopay: require("./malipopay.provider"),
+    selcom: require("./selcom.provider")
 };
 
-const simulateProvider = (phone, amount) => {
-    console.warn(
-        "\n" +
-        "=============================================================\n" +
-        "  SIMULATED MOBILE MONEY PAYMENT — no real charge occurred.\n" +
-        `  phone=${phone} amount=${amount}\n` +
-        "  Set MOBILE_MONEY_API_BASE_URL / API_KEY / API_SECRET /\n" +
-        "  MERCHANT_CODE in .env to use the real provider.\n" +
-        "=============================================================\n"
-    );
+const simulateProvider = require("./simulate.provider");
 
-    return {
-        success: true,
-        transactionReference: `SIMULATED-${Date.now()}`
-    };
-};
+const activeProvider = () => providers[(process.env.MOBILE_MONEY_PROVIDER || "").toLowerCase()];
 
-exports.initiate = async (phone, amount) => {
-    if (isConfigured()) {
-        return callRealProvider(phone, amount);
+const resolveProvider = () => {
+    const provider = activeProvider();
+
+    if (provider && provider.isConfigured()) {
+        return provider;
     }
 
     if (process.env.NODE_ENV === "production") {
         throw new Error(
-            "Mobile money is not configured (missing MOBILE_MONEY_API_BASE_URL / " +
-            "API_KEY / API_SECRET / MERCHANT_CODE) and NODE_ENV is 'production' - " +
-            "refusing to simulate a payment in production. Set these env vars " +
-            "or disable mobile money at checkout until they're set."
+            "Mobile money is not configured for production. Set " +
+            "MOBILE_MONEY_PROVIDER to 'malipopay' or 'selcom' and set that " +
+            "provider's required credentials in .env - refusing to simulate " +
+            "a payment in production."
         );
     }
 
-    return simulateProvider(phone, amount);
+    return simulateProvider;
+};
+
+exports.initiate = async (phone, amount, meta = {}) => {
+    return resolveProvider().initiate(phone, amount, meta);
+};
+
+exports.disburse = async (phone, amount, meta = {}) => {
+    return resolveProvider().disburse(phone, amount, meta);
 };

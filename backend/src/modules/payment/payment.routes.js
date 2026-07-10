@@ -8,6 +8,11 @@ const validationMiddleware = require("../../middleware/validation.middleware");
 const paymentController = require("./payment.controller");
 const { orderIdValidation } = require("./payment.validator");
 
+// Provider webhooks - called directly by MalipoPay/Selcom's servers, not
+// by anyone logged into NEXORA. No authMiddleware here on purpose.
+router.post("/webhooks/malipopay", paymentController.malipopayWebhook);
+router.post("/webhooks/selcom", paymentController.selcomWebhook);
+
 router.post(
     "/:orderId/initiate",
     authMiddleware,

@@ -4,7 +4,8 @@ import IncomingOfferModal from "./IncomingOfferModal";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
-    { to: "/delivery/mine", label: "My deliveries" }
+    { to: "/delivery/mine", label: "My deliveries" },
+    { to: "/delivery/earnings", label: "Earnings" }
 ];
 
 export default function DeliveryLayout() {

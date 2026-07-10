@@ -1,6 +1,7 @@
 const paymentRepository = require("./payment.repository");
 const orderRepository = require("../order/order.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
+const walletService = require("../wallet/wallet.service");
 
 const generateReceiptNumber = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -59,6 +60,10 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     );
 
     await orderRepository.updatePaymentStatus(orderId, "paid");
+
+    walletService.creditSellersForOrder(orderId).catch((err) =>
+        console.error("Seller wallet credit error:", err)
+    );
 
     return {
         receiptNumber,
@@ -127,6 +132,10 @@ exports.confirmCashOnDelivery = async (orderId, sellerId) => {
 
     await paymentRepository.markCompleted(payment.id, null, receiptNumber);
     await orderRepository.updatePaymentStatus(orderId, "paid");
+
+    walletService.creditSellersForOrder(orderId).catch((err) =>
+        console.error("Seller wallet credit error:", err)
+    );
 
     return { receiptNumber };
 };

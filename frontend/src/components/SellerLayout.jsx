@@ -4,6 +4,8 @@ import api from "../api/client";
 
 const tabs = [
     { to: "/seller", label: "Overview", end: true },
+    { to: "/seller/analytics", label: "Analytics" },
+    { to: "/seller/wallet", label: "Wallet" },
     { to: "/seller/products", label: "Products" },
     { to: "/seller/orders", label: "Orders" },
     { to: "/seller/delivery-team", label: "Delivery team" },

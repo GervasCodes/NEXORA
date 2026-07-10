@@ -1,4 +1,5 @@
 const sellerRepository = require("./seller.repository");
+const settingsService = require("../settings/settings.service");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
@@ -123,4 +124,38 @@ exports.removeAgentFromRoster = async (sellerId, agentId) => {
     if (!affectedRows) {
         throw new Error("That agent isn't in your roster");
     }
+};
+
+// --- Analytics ---
+
+exports.getAnalytics = async (sellerId) => {
+    const [totals, statusBreakdown, dailySales, topProducts, repeatCustomers, commissionRate] = await Promise.all([
+        sellerRepository.getOrderTotals(sellerId),
+        sellerRepository.getOrderStatusBreakdown(sellerId),
+        sellerRepository.getDailySales(sellerId, 30),
+        sellerRepository.getTopProducts(sellerId, 5),
+        sellerRepository.getRepeatCustomerCount(sellerId),
+        settingsService.getCommissionRate()
+    ]);
+
+    return {
+        commissionRate,
+        totals: {
+            totalOrders: Number(totals.total_orders),
+            grossSales: Number(totals.gross_sales),
+            commissionPaid: Number(totals.commission_paid),
+            netEarnings: Number(totals.net_earnings)
+        },
+        statusBreakdown: statusBreakdown.reduce((acc, row) => {
+            acc[row.status] = Number(row.count);
+            return acc;
+        }, {}),
+        dailySales: dailySales.map((row) => ({ day: row.day, amount: Number(row.amount) })),
+        topProducts: topProducts.map((row) => ({
+            ...row,
+            units_sold: Number(row.units_sold),
+            revenue: Number(row.revenue)
+        })),
+        repeatCustomers: Number(repeatCustomers)
+    };
 };

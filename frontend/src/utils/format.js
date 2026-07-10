@@ -10,3 +10,10 @@ export const formatDate = (dateString) => {
         year: "numeric"
     });
 };
+
+export const formatShortDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short"
+    });
+};

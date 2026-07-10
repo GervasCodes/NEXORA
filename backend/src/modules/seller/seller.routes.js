@@ -84,4 +84,11 @@ router.delete(
     sellerController.removeDeliveryAgent
 );
 
+router.get(
+    "/analytics",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.getAnalytics
+);
+
 module.exports = router;

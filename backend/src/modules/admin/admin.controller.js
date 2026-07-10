@@ -120,3 +120,73 @@ exports.getDashboard = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+// --- Platform settings ---
+
+exports.getSettings = async (req, res) => {
+    try {
+        const settings = await adminService.getSettings();
+
+        return res.json({ success: true, data: settings });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateSettings = async (req, res) => {
+    try {
+        const settings = await adminService.updateSettings(req.body);
+
+        return res.json({ success: true, message: "Settings updated", data: settings });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// --- Seller withdrawal requests ---
+
+exports.listWithdrawals = async (req, res) => {
+    try {
+        const withdrawals = await adminService.listWithdrawals();
+
+        return res.json({ success: true, data: withdrawals });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.approveWithdrawal = async (req, res) => {
+    try {
+        const result = await adminService.approveWithdrawal(req.params.id, req.body.admin_note);
+
+        return res.json({ success: true, message: "Withdrawal approved", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.rejectWithdrawal = async (req, res) => {
+    try {
+        const result = await adminService.rejectWithdrawal(req.params.id, req.body.admin_note);
+
+        return res.json({ success: true, message: "Withdrawal rejected and refunded", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.markWithdrawalPaid = async (req, res) => {
+    try {
+        const result = await adminService.markWithdrawalPaid(req.params.id, req.body.admin_note);
+
+        return res.json({ success: true, message: "Withdrawal marked as paid", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};

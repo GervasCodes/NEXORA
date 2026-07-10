@@ -7,7 +7,9 @@ const tabs = [
     { to: "/admin/products", label: "Products" },
     { to: "/admin/categories", label: "Categories" },
     { to: "/admin/store-types", label: "Store types" },
-    { to: "/admin/orders", label: "Orders" }
+    { to: "/admin/orders", label: "Orders" },
+    { to: "/admin/withdrawals", label: "Withdrawals" },
+    { to: "/admin/settings", label: "Settings" }
 ];
 
 export default function AdminLayout() {

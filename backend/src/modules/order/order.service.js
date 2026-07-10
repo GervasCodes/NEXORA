@@ -4,6 +4,7 @@ const sellerRepository = require("../seller/seller.repository");
 const deliveryRepository = require("../delivery/delivery.repository");
 const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
+const settingsService = require("../settings/settings.service");
 const {
     CANCELLABLE_STATUSES,
     SELLER_STATUS_TRANSITIONS
@@ -187,8 +188,10 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
             throw new Error("This order already has a delivery assigned");
         }
 
+        const deliveryFee = await settingsService.getRiderDeliveryFee();
+
         await orderRepository.setDeliveryMode(orderId, "own");
-        await deliveryRepository.create(orderId, agentId);
+        await deliveryRepository.create(orderId, agentId, deliveryFee);
 
         await notificationService.notify({
             userId: agentId,

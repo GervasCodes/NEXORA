@@ -1,5 +1,7 @@
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
+const settingsService = require("../settings/settings.service");
+const walletService = require("../wallet/wallet.service");
 
 exports.listUsers = async () => {
     return adminRepository.findAllUsers();
@@ -99,4 +101,32 @@ exports.getDashboard = async () => {
             active: Number(productCounts.active_products) || 0
         }
     };
+};
+
+// --- Platform settings (commission rate, rider delivery fee) ---
+
+exports.getSettings = async () => {
+    return settingsService.getAll();
+};
+
+exports.updateSettings = async (data) => {
+    return settingsService.updateSettings(data);
+};
+
+// --- Seller withdrawal requests ---
+
+exports.listWithdrawals = async () => {
+    return walletService.listAllWithdrawals();
+};
+
+exports.approveWithdrawal = async (withdrawalId, adminNote) => {
+    return walletService.processWithdrawal(withdrawalId, "approve", adminNote);
+};
+
+exports.rejectWithdrawal = async (withdrawalId, adminNote) => {
+    return walletService.processWithdrawal(withdrawalId, "reject", adminNote);
+};
+
+exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
+    return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
 };

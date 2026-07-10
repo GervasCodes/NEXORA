@@ -128,3 +128,77 @@ exports.removeFromRoster = async (sellerId, agentId) => {
     );
     return result.affectedRows;
 };
+
+// --- Analytics ---
+
+exports.getOrderTotals = async (sellerId) => {
+    const [[row]] = await db.query(
+        `SELECT
+            COUNT(DISTINCT oi.order_id) AS total_orders,
+            COALESCE(SUM(oi.subtotal), 0) AS gross_sales,
+            COALESCE(SUM(CASE WHEN oi.wallet_credited THEN oi.commission_amount ELSE 0 END), 0) AS commission_paid,
+            COALESCE(SUM(CASE WHEN oi.wallet_credited THEN oi.seller_net_amount ELSE 0 END), 0) AS net_earnings
+        FROM order_items oi
+        WHERE oi.seller_id = ?`,
+        [sellerId]
+    );
+    return row;
+};
+
+exports.getOrderStatusBreakdown = async (sellerId) => {
+    const [rows] = await db.query(
+        `SELECT o.status, COUNT(DISTINCT o.id) AS count
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE oi.seller_id = ?
+        GROUP BY o.status`,
+        [sellerId]
+    );
+    return rows;
+};
+
+// Gross sales per day for the last N days - powers a simple sales chart.
+exports.getDailySales = async (sellerId, days = 30) => {
+    const [rows] = await db.query(
+        `SELECT DATE(o.created_at) AS day, COALESCE(SUM(oi.subtotal), 0) AS amount
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.seller_id = ? AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        GROUP BY DATE(o.created_at)
+        ORDER BY day ASC`,
+        [sellerId, days]
+    );
+    return rows;
+};
+
+exports.getTopProducts = async (sellerId, limit = 5) => {
+    const [rows] = await db.query(
+        `SELECT p.id, p.name, p.slug,
+                SUM(oi.quantity) AS units_sold,
+                SUM(oi.subtotal) AS revenue
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        WHERE oi.seller_id = ?
+        GROUP BY p.id, p.name, p.slug
+        ORDER BY units_sold DESC
+        LIMIT ?`,
+        [sellerId, limit]
+    );
+    return rows;
+};
+
+// Buyers who've placed more than one order containing this seller's items.
+exports.getRepeatCustomerCount = async (sellerId) => {
+    const [[row]] = await db.query(
+        `SELECT COUNT(*) AS repeat_customers FROM (
+            SELECT o.buyer_id
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE oi.seller_id = ?
+            GROUP BY o.buyer_id
+            HAVING COUNT(DISTINCT o.id) > 1
+        ) t`,
+        [sellerId]
+    );
+    return row.repeat_customers;
+};

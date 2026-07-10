@@ -23,13 +23,28 @@ exports.findByOrderId = async (orderId) => {
     return rows[0];
 };
 
-exports.create = async (orderId, agentId) => {
+// deliveryFee is a snapshot of the platform's current rider fee at the
+// moment of assignment (see settingsService.getRiderDeliveryFee), so
+// later changes to that setting don't retroactively change what an agent
+// is owed for a delivery already in progress.
+exports.create = async (orderId, agentId, deliveryFee = null) => {
     const [result] = await db.query(
-        `INSERT INTO deliveries (order_id, agent_id, status)
-        VALUES (?, ?, 'assigned')`,
-        [orderId, agentId]
+        `INSERT INTO deliveries (order_id, agent_id, status, delivery_fee)
+        VALUES (?, ?, 'assigned', ?)`,
+        [orderId, agentId, deliveryFee]
     );
     return result.insertId;
+};
+
+// Flips earnings_credited only if it isn't already set, so a delivery can
+// only ever generate one agent_earnings row. Returns true the one time it
+// actually made the flip.
+exports.markEarningsCredited = async (deliveryId) => {
+    const [result] = await db.query(
+        "UPDATE deliveries SET earnings_credited = TRUE WHERE id = ? AND earnings_credited = FALSE",
+        [deliveryId]
+    );
+    return result.affectedRows > 0;
 };
 
 exports.findByAgent = async (agentId) => {

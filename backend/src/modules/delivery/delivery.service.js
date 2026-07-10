@@ -2,6 +2,8 @@ const deliveryRepository = require("./delivery.repository");
 const orderRepository = require("../order/order.repository");
 const notificationService = require("../notification/notification.service");
 const pushService = require("../push/push.service");
+const settingsService = require("../settings/settings.service");
+const earningsService = require("../earnings/earnings.service");
 const { haversineKm } = require("../../utils/geo");
 const {
     DELIVERY_STATUS_TRANSITIONS,
@@ -33,7 +35,8 @@ exports.claimDelivery = async (orderId, agentId) => {
         throw new Error("This order has already been claimed");
     }
 
-    const deliveryId = await deliveryRepository.create(orderId, agentId);
+    const deliveryFee = await settingsService.getRiderDeliveryFee();
+    const deliveryId = await deliveryRepository.create(orderId, agentId, deliveryFee);
 
     return { deliveryId, orderId };
 };
@@ -88,6 +91,10 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
     // Keep the order's own status in sync with the delivery outcome
     if (newStatus === "delivered") {
         await orderRepository.updateOrderStatus(orderId, "delivered");
+
+        earningsService.creditForDelivery(delivery).catch((err) =>
+            console.error("Rider earnings credit error:", err)
+        );
     }
 
     const order = await orderRepository.findOrderById(orderId);
@@ -240,7 +247,8 @@ exports.acceptOffer = async (offerId, agentId) => {
         throw new Error("This offer has expired");
     }
 
-    await deliveryRepository.create(offer.order_id, agentId);
+    const deliveryFee = await settingsService.getRiderDeliveryFee();
+    await deliveryRepository.create(offer.order_id, agentId, deliveryFee);
 
     const order = await orderRepository.findOrderById(offer.order_id);
     if (order) {

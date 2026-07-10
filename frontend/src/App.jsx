@@ -30,8 +30,11 @@ import SellerProductForm from "./pages/seller/SellerProductForm";
 import SellerOrders from "./pages/seller/SellerOrders";
 import SellerDeliveryTeam from "./pages/seller/SellerDeliveryTeam";
 import SellerStore from "./pages/seller/SellerStore";
+import SellerAnalytics from "./pages/seller/SellerAnalytics";
+import SellerWallet from "./pages/seller/SellerWallet";
 import DeliveryAvailable from "./pages/delivery/DeliveryAvailable";
 import DeliveryMine from "./pages/delivery/DeliveryMine";
+import DeliveryEarnings from "./pages/delivery/DeliveryEarnings";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminSellers from "./pages/admin/AdminSellers";
@@ -39,6 +42,8 @@ import AdminProducts from "./pages/admin/AdminProducts";
 import AdminCategories from "./pages/admin/AdminCategories";
 import AdminStoreTypes from "./pages/admin/AdminStoreTypes";
 import AdminOrders from "./pages/admin/AdminOrders";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
@@ -77,11 +82,14 @@ export default function App() {
                         <Route path="orders" element={<SellerOrders />} />
                         <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                         <Route path="store" element={<SellerStore />} />
+                        <Route path="analytics" element={<SellerAnalytics />} />
+                        <Route path="wallet" element={<SellerWallet />} />
                     </Route>
 
                     <Route path="/delivery" element={<RequireDeliveryAgent><DeliveryLayout /></RequireDeliveryAgent>}>
                         <Route index element={<DeliveryAvailable />} />
                         <Route path="mine" element={<DeliveryMine />} />
+                        <Route path="earnings" element={<DeliveryEarnings />} />
                     </Route>
 
                     <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
@@ -92,6 +100,8 @@ export default function App() {
                         <Route path="categories" element={<AdminCategories />} />
                         <Route path="store-types" element={<AdminStoreTypes />} />
                         <Route path="orders" element={<AdminOrders />} />
+                        <Route path="settings" element={<AdminSettings />} />
+                        <Route path="withdrawals" element={<AdminWithdrawals />} />
                     </Route>
 
                     <Route path="*" element={

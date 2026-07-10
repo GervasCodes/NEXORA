@@ -165,3 +165,20 @@ exports.removeDeliveryAgent = async (req, res) => {
         });
     }
 };
+
+exports.getAnalytics = async (req, res) => {
+    try {
+        const analytics = await sellerService.getAnalytics(req.user.id);
+
+        return res.json({
+            success: true,
+            data: analytics
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

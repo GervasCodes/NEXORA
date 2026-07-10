@@ -25,10 +25,22 @@ export default function SplashScreen({ onDone }) {
     return (
         <div
             onClick={finish}
-            className={`fixed inset-0 z-[100] bg-abyss flex flex-col items-center justify-center cursor-pointer transition-opacity duration-400 ease-out ${
+            className={`fixed inset-0 z-[100] bg-abyss overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-opacity duration-400 ease-out ${
                 leaving ? "opacity-0 pointer-events-none" : "opacity-100"
             }`}
         >
+            {/* Full-screen ambient glow — pure CSS, so it's crisp at any
+                resolution/screen size with no exported image asset. Colors
+                are sampled from the logo's own violet-to-azure gradient. */}
+            <div
+                className="pointer-events-none absolute -top-1/4 -left-1/4 w-[70vmax] h-[70vmax] rounded-full opacity-40 blur-[120px] animate-pulse"
+                style={{ background: "radial-gradient(circle, #7C3AED 0%, transparent 70%)" }}
+            />
+            <div
+                className="pointer-events-none absolute -bottom-1/4 -right-1/4 w-[70vmax] h-[70vmax] rounded-full opacity-40 blur-[120px] animate-pulse"
+                style={{ background: "radial-gradient(circle, #1D4ED8 0%, transparent 70%)", animationDelay: "1s" }}
+            />
+
             <video
                 ref={videoRef}
                 src="/brand/nexora-intro.mp4"
@@ -37,9 +49,9 @@ export default function SplashScreen({ onDone }) {
                 playsInline
                 onEnded={finish}
                 onError={finish}
-                className="w-56 sm:w-72 h-auto"
+                className="relative w-72 sm:w-96 h-auto drop-shadow-[0_0_60px_rgba(110,168,254,0.35)]"
             />
-            <p className="text-paper/30 text-xs mt-8 tracking-wide">Tap to skip</p>
+            <p className="relative text-paper/30 text-xs mt-8 tracking-wide">Tap to skip</p>
         </div>
     );
 }

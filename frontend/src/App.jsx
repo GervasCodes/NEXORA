@@ -22,6 +22,7 @@ import Orders from "./pages/Orders";
 import OrderDetail from "./pages/OrderDetail";
 import Messages from "./pages/Messages";
 import ConversationThread from "./pages/ConversationThread";
+import Account from "./pages/Account";
 
 import SellerSetup from "./pages/seller/SellerSetup";
 import SellerOverview from "./pages/seller/SellerOverview";
@@ -32,6 +33,7 @@ import SellerDeliveryTeam from "./pages/seller/SellerDeliveryTeam";
 import SellerStore from "./pages/seller/SellerStore";
 import SellerAnalytics from "./pages/seller/SellerAnalytics";
 import SellerWallet from "./pages/seller/SellerWallet";
+import SellerVerification from "./pages/seller/SellerVerification";
 import DeliveryAvailable from "./pages/delivery/DeliveryAvailable";
 import DeliveryMine from "./pages/delivery/DeliveryMine";
 import DeliveryEarnings from "./pages/delivery/DeliveryEarnings";
@@ -44,6 +46,8 @@ import AdminStoreTypes from "./pages/admin/AdminStoreTypes";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
+import AdminVerifications from "./pages/admin/AdminVerifications";
+import AdminManageAdmins from "./pages/admin/AdminManageAdmins";
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
@@ -72,6 +76,7 @@ export default function App() {
 
                     <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
                     <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
+                    <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
 
                     <Route path="/seller" element={<RequireSeller><SellerLayout /></RequireSeller>}>
                         <Route path="setup" element={<SellerSetup />} />
@@ -84,6 +89,7 @@ export default function App() {
                         <Route path="store" element={<SellerStore />} />
                         <Route path="analytics" element={<SellerAnalytics />} />
                         <Route path="wallet" element={<SellerWallet />} />
+                        <Route path="verification" element={<SellerVerification />} />
                     </Route>
 
                     <Route path="/delivery" element={<RequireDeliveryAgent><DeliveryLayout /></RequireDeliveryAgent>}>
@@ -102,6 +108,8 @@ export default function App() {
                         <Route path="orders" element={<AdminOrders />} />
                         <Route path="settings" element={<AdminSettings />} />
                         <Route path="withdrawals" element={<AdminWithdrawals />} />
+                        <Route path="verifications" element={<AdminVerifications />} />
+                        <Route path="admins" element={<AdminManageAdmins />} />
                     </Route>
 
                     <Route path="*" element={

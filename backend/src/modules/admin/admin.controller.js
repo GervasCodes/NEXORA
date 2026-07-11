@@ -190,3 +190,95 @@ exports.markWithdrawalPaid = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+// --- Seller verification review ---
+
+exports.listPendingVerifications = async (req, res) => {
+    try {
+        const pending = await adminService.listPendingVerifications();
+
+        return res.json({ success: true, data: pending });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getVerificationDocuments = async (req, res) => {
+    try {
+        const detail = await adminService.getSellerVerificationDetail(req.params.id);
+
+        return res.json({ success: true, data: detail });
+
+    } catch (error) {
+        return res.status(404).json({ success: false, message: error.message });
+    }
+};
+
+exports.approveVerification = async (req, res) => {
+    try {
+        await adminService.approveSellerVerification(req.params.id);
+
+        return res.json({ success: true, message: "Seller verification approved" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.rejectVerification = async (req, res) => {
+    try {
+        await adminService.rejectSellerVerification(req.params.id, req.body.reason);
+
+        return res.json({ success: true, message: "Seller verification rejected" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// --- Admin management (super admin only) ---
+
+exports.listAdmins = async (req, res) => {
+    try {
+        const admins = await adminService.listAdmins();
+
+        return res.json({ success: true, data: admins });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.createAdmin = async (req, res) => {
+    try {
+        const result = await adminService.addAdmin(req.body);
+
+        return res.status(201).json({ success: true, message: "Admin account created", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateAdminPermissions = async (req, res) => {
+    try {
+        await adminService.updateAdminPermissions(req.params.id, req.body.admin_level);
+
+        return res.json({ success: true, message: "Admin permissions updated" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.removeAdmin = async (req, res) => {
+    try {
+        await adminService.removeAdmin(req.params.id, req.user.id);
+
+        return res.json({ success: true, message: "Admin access removed" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};

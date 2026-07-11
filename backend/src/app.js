@@ -21,6 +21,7 @@ const pushRoutes = require("./modules/push/push.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
+const accountRoutes = require("./modules/account/account.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -161,6 +162,7 @@ app.use("/api/v1/push", pushRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
+app.use("/api/v1/account", accountRoutes);
 
 app.get("/api/v1/me", authMiddleware, (req, res) => {
     res.json({

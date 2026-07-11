@@ -35,6 +35,44 @@
     outline-offset: 2px;
 }
 
+/* --- Glassmorphism ---
+   Used sparingly: nav chrome, modals/overlays, and floating cards on top of
+   imagery/maps. Deliberately NOT used on data tables, forms, or financial
+   figures (wallet, checkout, withdrawals) where flat, opaque, high-contrast
+   surfaces matter more for legibility than they do for polish. */
+.glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 32px rgba(7, 9, 18, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.glass-dark {
+    background: rgba(7, 9, 18, 0.62);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(7, 9, 18, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.glass-strong {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 12px 40px rgba(7, 9, 18, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* backdrop-filter has no effect in a few older/embedded WebViews - fall
+   back to a solid, still-readable surface rather than a broken translucent
+   one with no blur behind it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background: theme("colors.paper"); }
+    .glass-dark { background: theme("colors.abyss"); }
+    .glass-strong { background: theme("colors.paper"); }
+}
+
 @media (prefers-reduced-motion: reduce) {
     * {
         animation-duration: 0.001ms !important;

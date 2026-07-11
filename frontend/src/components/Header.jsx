@@ -15,7 +15,7 @@ export default function Header() {
     };
 
     return (
-        <header className="bg-abyss text-paper sticky top-0 z-40 border-b border-white/5">
+        <header className="glass-dark text-paper sticky top-0 z-40">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-6">
                 <Link to="/" className="flex items-center gap-2 shrink-0">
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
@@ -76,6 +76,12 @@ export default function Header() {
                                     {itemCount}
                                 </span>
                             )}
+                        </Link>
+                    )}
+
+                    {user && (
+                        <Link to="/account" className="text-paper/80 hover:text-azure-light transition-colors hidden sm:inline">
+                            Account
                         </Link>
                     )}
 

@@ -9,6 +9,7 @@ const tabs = [
     { to: "/seller/products", label: "Products" },
     { to: "/seller/orders", label: "Orders" },
     { to: "/seller/delivery-team", label: "Delivery team" },
+    { to: "/seller/verification", label: "Verification" },
     { to: "/seller/store", label: "Store settings" }
 ];
 
@@ -53,9 +54,15 @@ export default function SellerLayout() {
                 <p className="font-display text-lg mb-1 truncate">{profile.store_name}</p>
                 <p className="text-xs mb-6">
                     {profile.is_verified ? (
-                        <span className="text-teal">✓ Verified store</span>
+                        <span className="text-teal">✓ Verified Seller</span>
+                    ) : profile.verification_status === "approved" ? (
+                        <span className="text-azure">Approved · badge pending fee</span>
+                    ) : profile.verification_status === "pending" ? (
+                        <span className="text-ash">Verification under review</span>
+                    ) : profile.verification_status === "rejected" ? (
+                        <span className="text-coral">Verification rejected</span>
                     ) : (
-                        <span className="text-ash">Pending verification</span>
+                        <span className="text-ash">Not verified yet</span>
                     )}
                 </p>
                 <nav className="flex md:flex-col gap-1 overflow-x-auto">

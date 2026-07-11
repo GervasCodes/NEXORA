@@ -4,11 +4,13 @@ const tabs = [
     { to: "/admin", label: "Dashboard", end: true },
     { to: "/admin/users", label: "Users" },
     { to: "/admin/sellers", label: "Sellers" },
+    { to: "/admin/verifications", label: "Verifications" },
     { to: "/admin/products", label: "Products" },
     { to: "/admin/categories", label: "Categories" },
     { to: "/admin/store-types", label: "Store types" },
     { to: "/admin/orders", label: "Orders" },
     { to: "/admin/withdrawals", label: "Withdrawals" },
+    { to: "/admin/admins", label: "Admins" },
     { to: "/admin/settings", label: "Settings" }
 ];
 

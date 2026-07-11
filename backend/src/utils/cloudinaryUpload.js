@@ -1,10 +1,11 @@
 const cloudinary = require("../config/cloudinary");
 
-exports.uploadToCloudinary = (fileBuffer, folder = "nexora") => {
+exports.uploadToCloudinary = (fileBuffer, folder = "nexora", resourceType = "image") => {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
             {
-                folder: folder
+                folder: folder,
+                resource_type: resourceType
             },
             (error, result) => {
                 if (error) return reject(error);

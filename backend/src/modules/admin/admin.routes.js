@@ -6,11 +6,15 @@ const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
 const adminController = require("./admin.controller");
+const requireSuperAdmin = require("../../middleware/requireSuperAdmin.middleware");
 const {
     userIdValidation,
     productIdValidation,
     withdrawalIdValidation,
-    updateSettingsValidation
+    updateSettingsValidation,
+    rejectVerificationValidation,
+    createAdminValidation,
+    updateAdminPermissionsValidation
 } = require("./admin.validator");
 
 router.use(authMiddleware, authorize("admin"));
@@ -38,5 +42,17 @@ router.get("/withdrawals", adminController.listWithdrawals);
 router.put("/withdrawals/:id/approve", withdrawalIdValidation, validationMiddleware, adminController.approveWithdrawal);
 router.put("/withdrawals/:id/reject", withdrawalIdValidation, validationMiddleware, adminController.rejectWithdrawal);
 router.put("/withdrawals/:id/paid", withdrawalIdValidation, validationMiddleware, adminController.markWithdrawalPaid);
+
+// --- Seller verification review ---
+router.get("/verifications", adminController.listPendingVerifications);
+router.get("/verifications/:id/documents", userIdValidation, validationMiddleware, adminController.getVerificationDocuments);
+router.put("/verifications/:id/approve", userIdValidation, validationMiddleware, adminController.approveVerification);
+router.put("/verifications/:id/reject", rejectVerificationValidation, validationMiddleware, adminController.rejectVerification);
+
+// --- Admin management (super admin only) ---
+router.get("/admins", requireSuperAdmin, adminController.listAdmins);
+router.post("/admins", requireSuperAdmin, createAdminValidation, validationMiddleware, adminController.createAdmin);
+router.put("/admins/:id/permissions", requireSuperAdmin, updateAdminPermissionsValidation, validationMiddleware, adminController.updateAdminPermissions);
+router.delete("/admins/:id", requireSuperAdmin, userIdValidation, validationMiddleware, adminController.removeAdmin);
 
 module.exports = router;

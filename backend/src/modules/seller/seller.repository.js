@@ -129,6 +129,57 @@ exports.removeFromRoster = async (sellerId, agentId) => {
     return result.affectedRows;
 };
 
+// --- Verification documents ---
+
+exports.insertDocument = async (sellerId, documentType, fileUrl) => {
+    const [result] = await db.query(
+        "INSERT INTO seller_verification_documents (seller_id, document_type, file_url) VALUES (?, ?, ?)",
+        [sellerId, documentType, fileUrl]
+    );
+    return result.insertId;
+};
+
+exports.findDocumentsBySeller = async (sellerId) => {
+    const [rows] = await db.query(
+        `SELECT id, document_type, file_url, uploaded_at
+        FROM seller_verification_documents
+        WHERE seller_id = ?
+        ORDER BY uploaded_at DESC`,
+        [sellerId]
+    );
+    return rows;
+};
+
+exports.setVerificationSubmitted = async (userId) => {
+    await db.query(
+        `UPDATE seller_profiles
+        SET verification_status = 'pending',
+            verification_rejection_reason = NULL,
+            verification_submitted_at = NOW()
+        WHERE user_id = ?`,
+        [userId]
+    );
+};
+
+exports.setVerificationFeePaid = async (userId, amount, reference) => {
+    await db.query(
+        `UPDATE seller_profiles
+        SET verification_fee_amount = ?, verification_fee_paid = TRUE,
+            verification_fee_reference = ?, verification_fee_paid_at = NOW()
+        WHERE user_id = ?`,
+        [amount, reference, userId]
+    );
+};
+
+// Awards/removes the paid "Verified Seller" badge once both approval and
+// fee payment are true (or either becomes false again).
+exports.setBadge = async (userId, isVerified) => {
+    await db.query(
+        "UPDATE seller_profiles SET is_verified = ? WHERE user_id = ?",
+        [isVerified, userId]
+    );
+};
+
 // --- Analytics ---
 
 exports.getOrderTotals = async (sellerId) => {

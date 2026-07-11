@@ -3,6 +3,7 @@ const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
+const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
 const upload = require("../../middleware/upload.middleware");
 const { createProductValidation } = require("./product.validator");
 
@@ -16,6 +17,7 @@ router.post(
     "/",
     authMiddleware,
     authorize("seller"),
+    requireApprovedSeller,
     createProductValidation,
     productController.createProduct
 );
@@ -24,6 +26,7 @@ router.post(
     "/:id/images",
     authMiddleware,
     authorize("seller"),
+    requireApprovedSeller,
     upload.single("image"),
     productController.uploadProductImage
 );
@@ -60,6 +63,7 @@ router.put(
     "/:id/activate",
     authMiddleware,
     authorize("seller"),
+    requireApprovedSeller,
     productController.activateMyProduct
 );
 

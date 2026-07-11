@@ -38,7 +38,7 @@ export default function DeliveryTrackingMap({ orderId, destination }) {
 
     return (
         <div>
-            <div className="rounded-md overflow-hidden border border-line" style={{ height: 260 }}>
+            <div className="relative rounded-md overflow-hidden border border-line" style={{ height: 260 }}>
                 <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
                     <TileLayer
                         attribution='&copy; OpenStreetMap contributors'
@@ -55,6 +55,13 @@ export default function DeliveryTrackingMap({ orderId, destination }) {
                         </Marker>
                     )}
                 </MapContainer>
+
+                <div className="glass absolute top-3 right-3 z-[400] rounded-lg px-3 py-2 flex items-center gap-2 pointer-events-none">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${agentPos ? "bg-teal animate-pulse" : "bg-ash"}`} />
+                    <span className="text-xs font-medium text-ink">
+                        {agentPos ? "Live tracking" : "Waiting for agent"}
+                    </span>
+                </div>
             </div>
             <p className="text-xs text-ash mt-1.5">
                 {agentPos ? "Live location — updates as your agent moves." : "Waiting for your agent's location…"}

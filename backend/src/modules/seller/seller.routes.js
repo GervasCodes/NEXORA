@@ -9,7 +9,8 @@ const sellerController = require("./seller.controller");
 const {
     createSellerValidation,
     updateSellerValidation,
-    addDeliveryAgentValidation
+    addDeliveryAgentValidation,
+    payVerificationFeeValidation
 } = require("./seller.validator");
 
 const {
@@ -18,6 +19,7 @@ const {
     updateSellerProfile
 } = require("./seller.controller");
 const upload = require("../../middleware/upload.middleware");
+const uploadDocument = require("../../middleware/uploadDocument.middleware");
 
 // Upload logo
 router.post(
@@ -89,6 +91,36 @@ router.get(
     authMiddleware,
     authorize("seller"),
     sellerController.getAnalytics
+);
+
+// --- Verification (National ID, Voter ID, business registration) ---
+
+router.get(
+    "/verification",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.getVerification
+);
+
+router.post(
+    "/verification/documents",
+    authMiddleware,
+    authorize("seller"),
+    uploadDocument.fields([
+        { name: "national_id", maxCount: 1 },
+        { name: "voter_id", maxCount: 1 },
+        { name: "business_registration", maxCount: 1 }
+    ]),
+    sellerController.submitVerification
+);
+
+router.post(
+    "/verification/fee",
+    authMiddleware,
+    authorize("seller"),
+    payVerificationFeeValidation,
+    validationMiddleware,
+    sellerController.payVerificationFee
 );
 
 module.exports = router;

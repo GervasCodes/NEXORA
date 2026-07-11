@@ -21,7 +21,8 @@ exports.login = async (email, password) => {
 
     const token = generateToken({
         id: user.id,
-        role: user.role
+        role: user.role,
+        admin_level: user.role === "admin" ? user.admin_level : undefined
     });
 
     delete user.password;

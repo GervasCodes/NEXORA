@@ -52,3 +52,12 @@ exports.addDeliveryAgentValidation = [
         .isEmail()
         .withMessage("A valid email is required")
 ];
+
+exports.payVerificationFeeValidation = [
+    body("phone")
+        .trim()
+        .notEmpty()
+        .withMessage("A mobile money phone number is required")
+        .isLength({ min: 10, max: 20 })
+        .withMessage("Invalid phone number.")
+];

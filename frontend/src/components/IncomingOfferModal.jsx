@@ -48,8 +48,8 @@ export default function IncomingOfferModal() {
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-abyss/50 flex items-end sm:items-center justify-center p-4">
-            <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4">
+            <div className="glass-strong rounded-xl max-w-sm w-full p-6">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">New delivery nearby</p>
                 <p className="font-display text-xl mb-1">{offer.orderNumber}</p>
                 <p className="text-sm text-ink/80 mb-1">

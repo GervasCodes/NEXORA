@@ -166,6 +166,61 @@ exports.removeDeliveryAgent = async (req, res) => {
     }
 };
 
+// --- Verification ---
+
+exports.getVerification = async (req, res) => {
+    try {
+        const verification = await sellerService.getVerification(req.user.id);
+
+        return res.json({
+            success: true,
+            data: verification
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.submitVerification = async (req, res) => {
+    try {
+        const verification = await sellerService.submitVerification(req.user.id, req.files);
+
+        return res.status(201).json({
+            success: true,
+            message: "Verification documents submitted for review.",
+            data: verification
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.payVerificationFee = async (req, res) => {
+    try {
+        const verification = await sellerService.payVerificationFee(req.user.id, req.body.phone);
+
+        return res.json({
+            success: true,
+            message: "Verification fee paid successfully.",
+            data: verification
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getAnalytics = async (req, res) => {
     try {
         const analytics = await sellerService.getAnalytics(req.user.id);

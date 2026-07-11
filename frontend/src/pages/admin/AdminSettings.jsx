@@ -6,6 +6,7 @@ export default function AdminSettings() {
     const [loading, setLoading] = useState(true);
     const [commissionRate, setCommissionRate] = useState("");
     const [riderFee, setRiderFee] = useState("");
+    const [verificationFee, setVerificationFee] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
@@ -16,6 +17,7 @@ export default function AdminSettings() {
                 setSettings(data.data);
                 setCommissionRate(data.data.commission_rate);
                 setRiderFee(data.data.rider_delivery_fee);
+                setVerificationFee(data.data.seller_verification_fee);
             })
             .catch(() => setError("Couldn't load settings."))
             .finally(() => setLoading(false));
@@ -30,7 +32,8 @@ export default function AdminSettings() {
         try {
             const { data } = await api.put("/admin/settings", {
                 commission_rate: Number(commissionRate),
-                rider_delivery_fee: Number(riderFee)
+                rider_delivery_fee: Number(riderFee),
+                seller_verification_fee: Number(verificationFee)
             });
             setSettings(data.data);
             setSaved(true);
@@ -82,6 +85,20 @@ export default function AdminSettings() {
                         className="w-full border border-line rounded-md px-3 py-2 text-sm"
                     />
                     <p className="text-xs text-ash mt-1">Flat amount a delivery agent earns per completed delivery.</p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-1">Seller verification fee (TZS)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        required
+                        value={verificationFee}
+                        onChange={(e) => setVerificationFee(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">One-time fee a seller pays to unlock the Verified Seller badge.</p>
                 </div>
 
                 <button

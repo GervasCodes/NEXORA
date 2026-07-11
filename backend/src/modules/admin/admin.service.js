@@ -130,3 +130,144 @@ exports.rejectWithdrawal = async (withdrawalId, adminNote) => {
 exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
 };
+
+// --- Seller verification review ---
+
+exports.listPendingVerifications = async () => {
+    return adminRepository.findPendingVerifications();
+};
+
+exports.getSellerVerificationDetail = async (sellerUserId) => {
+    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
+
+    if (!profile) {
+        throw new Error("Seller profile not found");
+    }
+
+    const documents = await adminRepository.findVerificationDocuments(sellerUserId);
+
+    return { profile, documents };
+};
+
+exports.approveSellerVerification = async (sellerUserId) => {
+    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
+
+    if (!profile) {
+        throw new Error("Seller profile not found");
+    }
+
+    if (profile.verification_status !== "pending") {
+        throw new Error(`This seller's verification is "${profile.verification_status}", not pending.`);
+    }
+
+    await adminRepository.setSellerVerificationStatus(sellerUserId, "approved");
+
+    // Award the paid badge immediately if the seller already paid the fee.
+    const sellerService = require("../seller/seller.service");
+    await sellerService.syncBadgeForSeller(sellerUserId);
+
+    await notificationService.notify({
+        userId: sellerUserId,
+        type: "seller_verification",
+        title: "Verification approved",
+        message: `Your documents have been approved. "${profile.store_name}" can now add and sell products.`,
+        withEmail: true
+    });
+};
+
+exports.rejectSellerVerification = async (sellerUserId, reason) => {
+    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
+
+    if (!profile) {
+        throw new Error("Seller profile not found");
+    }
+
+    if (profile.verification_status !== "pending") {
+        throw new Error(`This seller's verification is "${profile.verification_status}", not pending.`);
+    }
+
+    await adminRepository.setSellerVerificationStatus(sellerUserId, "rejected", reason || null);
+
+    await notificationService.notify({
+        userId: sellerUserId,
+        type: "seller_verification",
+        title: "Verification rejected",
+        message: reason
+            ? `Your verification documents were rejected: ${reason}. You can resubmit corrected documents.`
+            : "Your verification documents were rejected. You can resubmit corrected documents.",
+        withEmail: true
+    });
+};
+
+// --- Admin management (super admin only) ---
+
+exports.listAdmins = async () => {
+    return adminRepository.findAllAdmins();
+};
+
+exports.addAdmin = async (data) => {
+    const authRepository = require("../auth/auth.repository");
+    const hashPassword = require("../../utils/hashPassword");
+
+    const { first_name, last_name, email, phone, password, admin_level } = data;
+
+    if (await authRepository.findByEmail(email)) {
+        throw new Error("Email already exists");
+    }
+    if (await authRepository.findByPhone(phone)) {
+        throw new Error("Phone number already exists");
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    const userId = await adminRepository.createAdmin({
+        first_name,
+        last_name,
+        email,
+        phone,
+        password: hashedPassword,
+        admin_level: admin_level === "super_admin" ? "super_admin" : "admin"
+    });
+
+    return { userId };
+};
+
+exports.updateAdminPermissions = async (userId, adminLevel) => {
+    const admins = await adminRepository.findAllAdmins();
+    const target = admins.find((a) => a.id === Number(userId));
+
+    if (!target) {
+        throw new Error("Admin not found");
+    }
+
+    if (target.admin_level === "super_admin" && adminLevel !== "super_admin") {
+        const superAdminCount = await adminRepository.countSuperAdmins();
+        if (superAdminCount <= 1) {
+            throw new Error("Can't demote the last super admin.");
+        }
+    }
+
+    await adminRepository.updateAdminLevel(userId, adminLevel);
+};
+
+exports.removeAdmin = async (userId, requestingAdminId) => {
+    if (Number(userId) === Number(requestingAdminId)) {
+        throw new Error("You can't remove your own admin access.");
+    }
+
+    const admins = await adminRepository.findAllAdmins();
+    const target = admins.find((a) => a.id === Number(userId));
+
+    if (!target) {
+        throw new Error("Admin not found");
+    }
+
+    if (target.admin_level === "super_admin") {
+        const superAdminCount = await adminRepository.countSuperAdmins();
+        if (superAdminCount <= 1) {
+            throw new Error("Can't remove the last super admin.");
+        }
+    }
+
+    await adminRepository.revokeAdmin(userId);
+};

@@ -3,9 +3,11 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
-import { formatMoney, formatDate } from "../utils/format";
+import { formatDate } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 
 export default function ProductDetail() {
+    const { format } = useCurrency();
     const { slug } = useParams();
     const { user } = useAuth();
     const { addToCart } = useCart();
@@ -126,10 +128,10 @@ export default function ProductDetail() {
 
                     <div className="flex items-baseline gap-3 mb-6">
                         <span className="price text-2xl font-medium">
-                            {formatMoney(hasDiscount ? product.discount_price : product.price)}
+                            {format(hasDiscount ? product.discount_price : product.price)}
                         </span>
                         {hasDiscount && (
-                            <span className="price text-ash line-through">{formatMoney(product.price)}</span>
+                            <span className="price text-ash line-through">{format(product.price)}</span>
                         )}
                     </div>
 

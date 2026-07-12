@@ -15,6 +15,16 @@ module.exports = (req, res, next) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+        // Short-lived tokens (login pre-auth, password-change reauth) carry
+        // a `typ` claim and are only ever accepted by their own dedicated
+        // endpoints - never as a general session token.
+        if (decoded.typ) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired token."
+            });
+        }
+
         req.user = decoded;
 
         next();

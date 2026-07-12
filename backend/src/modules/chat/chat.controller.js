@@ -111,3 +111,38 @@ exports.markAsRead = async (req, res) => {
         });
     }
 };
+
+exports.deleteMessage = async (req, res) => {
+    try {
+        const result = await chatService.deleteMessage(req.params.id, req.params.messageId, req.user.id);
+
+        return res.json({
+            success: true,
+            message: "Message deleted",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.clearConversation = async (req, res) => {
+    try {
+        await chatService.clearConversation(req.params.id, req.user.id);
+
+        return res.json({
+            success: true,
+            message: "Conversation cleared"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

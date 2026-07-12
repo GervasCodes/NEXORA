@@ -205,12 +205,12 @@ exports.submitVerification = async (req, res) => {
 
 exports.payVerificationFee = async (req, res) => {
     try {
-        const verification = await sellerService.payVerificationFee(req.user.id, req.body.phone);
+        const result = await sellerService.payVerificationFee(req.user.id, req.body.phone);
 
-        return res.json({
+        return res.status(202).json({
             success: true,
-            message: "Verification fee paid successfully.",
-            data: verification
+            message: result.message,
+            data: result
         });
 
     } catch (error) {

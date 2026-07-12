@@ -33,9 +33,31 @@ exports.updateSettings = async (req, res) => {
     }
 };
 
+exports.requestPasswordChangeOtp = async (req, res) => {
+    try {
+        await accountService.requestPasswordChangeOtp(req.user.id);
+
+        return res.json({ success: true, message: "A verification code has been emailed to you." });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.verifyPasswordChangeOtp = async (req, res) => {
+    try {
+        const reauth_token = await accountService.verifyPasswordChangeOtp(req.user.id, req.body.code);
+
+        return res.json({ success: true, message: "Verified.", data: { reauth_token } });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.changePassword = async (req, res) => {
     try {
-        await accountService.changePassword(req.user.id, req.body.current_password, req.body.new_password);
+        await accountService.changePassword(req.user.id, req.body.reauth_token, req.body.new_password);
 
         return res.json({ success: true, message: "Password changed successfully." });
 

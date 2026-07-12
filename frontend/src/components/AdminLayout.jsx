@@ -17,7 +17,7 @@ const tabs = [
 export default function AdminLayout() {
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid md:grid-cols-[180px_1fr] gap-8">
-            <aside>
+            <aside className="glass-strong rounded-lg p-4 md:sticky md:top-20 md:self-start">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Admin</p>
                 <p className="font-display text-lg mb-6">Control room</p>
 

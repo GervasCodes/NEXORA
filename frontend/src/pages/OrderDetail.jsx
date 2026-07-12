@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
-import { formatMoney, formatDate } from "../utils/format";
+import { formatDate } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 import { useSocket } from "../context/SocketContext";
 import DeliveryTrackingMap from "../components/DeliveryTrackingMap";
 
 const CANCELLABLE = ["pending", "processing"];
 
 export default function OrderDetail() {
+    const { format } = useCurrency();
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -133,14 +135,14 @@ export default function OrderDetail() {
                 {order.items?.map((item) => (
                     <li key={item.id} className="py-3 flex justify-between text-sm">
                         <span>{item.name} × {item.quantity}</span>
-                        <span className="price">{formatMoney(item.subtotal)}</span>
+                        <span className="price">{format(item.subtotal)}</span>
                     </li>
                 ))}
             </ul>
 
             <div className="flex justify-between items-baseline mb-8">
                 <span className="text-sm text-ash">Total</span>
-                <span className="price text-xl font-medium">{formatMoney(order.total_amount)}</span>
+                <span className="price text-xl font-medium">{format(order.total_amount)}</span>
             </div>
 
             {delivery?.agent_id && !["delivered", "failed"].includes(delivery.status) && (

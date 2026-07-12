@@ -8,6 +8,7 @@ const chatController = require("./chat.controller");
 const {
     startConversationValidation,
     conversationIdValidation,
+    messageIdValidation,
     sendMessageValidation
 } = require("./chat.validator");
 
@@ -41,6 +42,20 @@ router.put(
     conversationIdValidation,
     validationMiddleware,
     chatController.markAsRead
+);
+
+router.delete(
+    "/conversations/:id/messages/:messageId",
+    messageIdValidation,
+    validationMiddleware,
+    chatController.deleteMessage
+);
+
+router.post(
+    "/conversations/:id/clear",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.clearConversation
 );
 
 module.exports = router;

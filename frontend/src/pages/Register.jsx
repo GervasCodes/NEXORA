@@ -88,7 +88,7 @@ export default function Register() {
                 <div>
                     <label className="block text-sm mb-1">I want to</label>
                     <select value={form.role} onChange={update("role")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white">
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
                         <option value="buyer">Buy products</option>
                         <option value="seller">Sell products</option>
                         <option value="delivery_agent">Deliver orders</option>

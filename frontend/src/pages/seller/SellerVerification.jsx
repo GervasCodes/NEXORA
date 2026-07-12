@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
@@ -18,12 +18,52 @@ export default function SellerVerification() {
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [paying, setPaying] = useState(false);
+    // Payment was initiated (USSD prompt sent) but not yet confirmed by the
+    // provider's webhook - we poll while this is true, same as any other
+    // mobile money payment in NEXORA: initiate() only means "prompt sent",
+    // never "paid".
+    const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+    const pollRef = useRef(null);
 
     const load = () => {
-        api.get("/seller/verification").then(({ data }) => setVerification(data.data)).catch(() => {});
+        return api.get("/seller/verification").then(({ data }) => {
+            setVerification(data.data);
+            return data.data;
+        }).catch(() => null);
     };
 
-    useEffect(load, []);
+    useEffect(() => {
+        load();
+        return () => clearInterval(pollRef.current);
+    }, []);
+
+    // Polls every 4s for up to 2 minutes after initiating the fee payment,
+    // waiting for the mobile money webhook to confirm and flip
+    // verification_fee_paid - matches how the badge actually gets synced
+    // server-side (see backend seller.service.confirmVerificationFeePaid).
+    const pollForConfirmation = () => {
+        let attempts = 0;
+        clearInterval(pollRef.current);
+        pollRef.current = setInterval(async () => {
+            attempts += 1;
+            const latest = await load();
+
+            if (latest?.verification_fee_paid) {
+                clearInterval(pollRef.current);
+                setAwaitingConfirmation(false);
+                setMessage("Verification fee confirmed. Your badge is now active.");
+                refreshProfile?.();
+                return;
+            }
+
+            if (attempts >= 30) {
+                clearInterval(pollRef.current);
+                setAwaitingConfirmation(false);
+                setMessage("");
+                setError("We haven't received confirmation yet. If you completed the payment on your phone, this page will update automatically once it's confirmed - you can also refresh later.");
+            }
+        }, 4000);
+    };
 
     const canSubmit = verification && ["unverified", "rejected"].includes(verification.verification_status);
 
@@ -64,9 +104,12 @@ export default function SellerVerification() {
         setPaying(true);
         try {
             const { data } = await api.post("/seller/verification/fee", { phone });
-            setVerification(data.data);
-            setMessage("Verification fee paid.");
-            refreshProfile?.();
+            // Response is { status: 'pending', message, transactionReference } -
+            // the fee is NOT paid yet, just requested. Poll until the
+            // webhook confirms it (or the seller checks back later).
+            setMessage(data.message || "Check your phone to complete the payment.");
+            setAwaitingConfirmation(true);
+            pollForConfirmation();
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -103,7 +146,7 @@ export default function SellerVerification() {
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
 
             {canSubmit && (
-                <form onSubmit={handleSubmit} className="space-y-4 mb-10 max-w-md">
+                <form onSubmit={handleSubmit} className="space-y-4 mb-10 max-w-md glass-strong rounded-lg p-5">
                     <h2 className="font-display text-lg">Submit documents</h2>
                     {Object.entries(DOC_LABELS).map(([key, label]) => (
                         <div key={key}>
@@ -144,21 +187,29 @@ export default function SellerVerification() {
             )}
 
             {!verification.verification_fee_paid && (
-                <form onSubmit={handlePay} className="space-y-3 max-w-md border border-line rounded-lg p-5">
+                <form onSubmit={handlePay} className="space-y-3 max-w-md glass-strong rounded-lg p-5">
                     <h2 className="font-display text-lg">Pay verification fee</h2>
                     <p className="text-sm text-ash">
                         One-time fee of {formatMoney(verification.required_fee)} to unlock the Verified Seller badge
                         {verification.verification_status !== "approved" && " once your documents are approved"}.
                     </p>
+
+                    {awaitingConfirmation && (
+                        <p className="text-sm text-azure-deep bg-azure/10 rounded-md px-3 py-2 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-azure-deep animate-pulse shrink-0" />
+                            Waiting for payment confirmation on your phone…
+                        </p>
+                    )}
+
                     <div>
                         <label className="block text-sm mb-1">Mobile money phone number</label>
-                        <input value={phone} onChange={(e) => setPhone(e.target.value)} required
+                        <input value={phone} onChange={(e) => setPhone(e.target.value)} required disabled={awaitingConfirmation}
                             placeholder="e.g. 0712345678"
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring disabled:opacity-60" />
                     </div>
-                    <button type="submit" disabled={paying}
+                    <button type="submit" disabled={paying || awaitingConfirmation}
                         className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
-                        {paying ? "Processing…" : `Pay ${formatMoney(verification.required_fee)}`}
+                        {paying ? "Sending prompt…" : awaitingConfirmation ? "Awaiting confirmation…" : `Pay ${formatMoney(verification.required_fee)}`}
                     </button>
                 </form>
             )}

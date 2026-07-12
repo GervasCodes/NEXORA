@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
-import { formatMoney, formatDate } from "../utils/format";
+import { formatDate } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -12,6 +13,7 @@ const statusStyles = {
 };
 
 export default function Orders() {
+    const { format } = useCurrency();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -45,7 +47,7 @@ export default function Orders() {
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[order.status] || "bg-line text-ash"}`}>
                                 {order.status}
                             </span>
-                            <p className="price text-sm font-medium">{formatMoney(order.total_amount)}</p>
+                            <p className="price text-sm font-medium">{format(order.total_amount)}</p>
                         </Link>
                     </li>
                 ))}

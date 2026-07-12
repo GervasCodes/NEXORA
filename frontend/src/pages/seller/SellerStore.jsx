@@ -125,7 +125,7 @@ export default function SellerStore() {
                 <div>
                     <label className="block text-sm mb-1">Store type</label>
                     <select value={form.store_type_id} onChange={update("store_type_id")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white">
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
                         <option value="">Select a store type…</option>
                         {storeTypes.map((t) => (
                             <option key={t.id} value={t.id}>{t.name}</option>

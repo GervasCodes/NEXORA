@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { formatMoney } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 
 export default function Cart() {
+    const { format } = useCurrency();
     const { items, total, loading, updateQuantity, removeFromCart } = useCart();
     const navigate = useNavigate();
 
@@ -34,7 +35,7 @@ export default function Cart() {
 
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{item.name}</p>
-                            <p className="price text-sm text-ash">{formatMoney(item.unit_price)} each</p>
+                            <p className="price text-sm text-ash">{format(item.unit_price)} each</p>
 
                             <div className="flex items-center gap-3 mt-2">
                                 <input
@@ -54,14 +55,14 @@ export default function Cart() {
                             </div>
                         </div>
 
-                        <p className="price text-sm font-medium">{formatMoney(item.subtotal)}</p>
+                        <p className="price text-sm font-medium">{format(item.subtotal)}</p>
                     </li>
                 ))}
             </ul>
 
             <div className="flex justify-between items-baseline mb-6">
                 <span className="text-ash text-sm">Total</span>
-                <span className="price text-2xl font-medium">{formatMoney(total)}</span>
+                <span className="price text-2xl font-medium">{format(total)}</span>
             </div>
 
             <button

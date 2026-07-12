@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Theme tokens ---
+   Every brand color is a CSS variable (space-separated RGB) so
+   tailwind.config.js can wrap it with rgb(var(...) / <alpha-value>) and
+   opacity modifiers like `text-paper/80` keep working. Switching from
+   light -> dark just swaps which set of variables is active - every
+   bg-ink / text-paper / border-line / etc. in the app repaints
+   automatically, with zero per-component changes needed. See
+   context/ThemeContext.jsx for how `.dark` gets added to <html>. */
+:root {
+    --color-abyss: 7 9 18;
+    --color-abyss2: 17 22 35;
+    --color-azure: 110 168 254;
+    --color-azure-light: 159 193 242;
+    --color-azure-deep: 29 78 216;
+    --color-ink: 17 24 39;
+    --color-paper: 247 248 251;
+    --color-mango: 245 166 35;
+    --color-mango-dark: 214 141 15;
+    --color-teal: 15 122 108;
+    --color-coral: 228 87 46;
+    --color-ash: 107 114 128;
+    --color-line: 227 230 236;
+}
+
+.dark {
+    /* Page background goes near-black; body text goes light. Brand accent
+       colors (mango/teal/coral/azure) stay the same - they're chosen to
+       read fine on both light and dark surfaces. */
+    --color-paper: 10 12 20;
+    --color-ink: 231 233 238;
+    --color-line: 34 39 54;
+    --color-ash: 148 155 168;
+    --color-abyss: 3 4 8;
+    --color-abyss2: 12 15 24;
+    --color-azure-light: 175 205 250;
+}
+
+html {
+    color-scheme: light;
+}
+
+html.dark {
+    color-scheme: dark;
+}
+
+body {
+    background-color: rgb(var(--color-paper));
+    color: rgb(var(--color-ink));
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
 /* The "price tag" motif: a dashed string + a punched hole, used on
    product cards and price displays throughout the storefront. */
 .tag-string {
@@ -36,32 +87,40 @@
 }
 
 /* --- Glassmorphism ---
-   Used sparingly: nav chrome, modals/overlays, and floating cards on top of
-   imagery/maps. Deliberately NOT used on data tables, forms, or financial
-   figures (wallet, checkout, withdrawals) where flat, opaque, high-contrast
-   surfaces matter more for legibility than they do for polish. */
+   Theme-aware: built from --color-paper/--color-ink/--color-abyss, so
+   these automatically read correctly in both light and dark mode instead
+   of being hardcoded to a white tint. Used across nav chrome, mobile
+   menus, modals/overlays, cards, and floating panels app-wide. */
 .glass {
-    background: rgba(255, 255, 255, 0.72);
+    background: rgb(var(--color-paper) / 0.72);
     backdrop-filter: blur(16px) saturate(160%);
     -webkit-backdrop-filter: blur(16px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow: 0 8px 32px rgba(7, 9, 18, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 1px solid rgb(var(--color-ink) / 0.08);
+    box-shadow: 0 8px 32px rgb(var(--color-abyss) / 0.12), inset 0 1px 0 rgb(var(--color-paper) / 0.6);
 }
 
 .glass-dark {
-    background: rgba(7, 9, 18, 0.62);
+    background: rgb(var(--color-abyss) / 0.62);
     backdrop-filter: blur(16px) saturate(160%);
     -webkit-backdrop-filter: blur(16px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px rgba(7, 9, 18, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    box-shadow: 0 8px 32px rgb(var(--color-abyss) / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
 .glass-strong {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgb(var(--color-paper) / 0.85);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow: 0 12px 40px rgba(7, 9, 18, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    border: 1px solid rgb(var(--color-ink) / 0.1);
+    box-shadow: 0 12px 40px rgb(var(--color-abyss) / 0.18), inset 0 1px 0 rgb(var(--color-paper) / 0.7);
+}
+
+/* Lighter-touch variant for things that sit *inside* an already-glass
+   surface (menu items, list rows) where a second full blur layer would
+   be excessive - just a subtle tint + hairline border. */
+.glass-inset {
+    background: rgb(var(--color-ink) / 0.04);
+    border: 1px solid rgb(var(--color-ink) / 0.06);
 }
 
 /* backdrop-filter has no effect in a few older/embedded WebViews - fall
@@ -71,6 +130,7 @@
     .glass { background: theme("colors.paper"); }
     .glass-dark { background: theme("colors.abyss"); }
     .glass-strong { background: theme("colors.paper"); }
+    .glass-inset { background: theme("colors.paper"); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -96,7 +96,7 @@ export default function SellerOrders() {
                                         <select
                                             value={shipChoice[order.id] || ""}
                                             onChange={(e) => setShipChoice({ ...shipChoice, [order.id]: e.target.value })}
-                                            className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring bg-white"
+                                            className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring bg-paper"
                                         >
                                             <option value="">Platform pool</option>
                                             {roster.map((agent) => (

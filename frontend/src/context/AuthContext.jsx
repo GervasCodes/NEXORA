@@ -11,12 +11,39 @@ const loadStoredUser = () => {
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(loadStoredUser());
 
+    // Step 1 of login: email + password. Never signs the user in directly -
+    // on success the backend has emailed an OTP, and this returns what's
+    // needed to complete step 2 (verifyLoginOtp).
     const login = useCallback(async (email, password) => {
         try {
             const { data } = await api.post("/auth/login", { email, password });
+            return {
+                success: true,
+                needsOtp: true,
+                preAuthToken: data.data.preAuthToken,
+                maskedEmail: data.data.maskedEmail
+            };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // Step 2 of login: the emailed OTP code. Only now is a session created.
+    const verifyLoginOtp = useCallback(async (preAuthToken, code) => {
+        try {
+            const { data } = await api.post("/auth/login/verify-otp", { pre_auth_token: preAuthToken, code });
             localStorage.setItem("nexora_token", data.data.token);
             localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
             setUser(data.data.user);
+            return { success: true };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    const resendLoginOtp = useCallback(async (preAuthToken) => {
+        try {
+            await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken });
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
@@ -47,7 +74,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, updateUser }}>
+        <AuthContext.Provider value={{ user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

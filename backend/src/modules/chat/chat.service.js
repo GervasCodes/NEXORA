@@ -54,8 +54,10 @@ exports.assertParticipant = async (conversationId, userId) => {
 };
 
 exports.getMessages = async (conversationId, userId) => {
-    await exports.assertParticipant(conversationId, userId);
-    return chatRepository.findMessages(conversationId);
+    const conversation = await exports.assertParticipant(conversationId, userId);
+    const clearedColumn = chatRepository.clearedColumnFor(conversation, userId);
+    const clearedAt = clearedColumn ? conversation[clearedColumn] : null;
+    return chatRepository.findMessages(conversationId, clearedAt);
 };
 
 exports.sendMessage = async (conversationId, senderId, message) => {
@@ -97,4 +99,51 @@ exports.sendMessage = async (conversationId, senderId, message) => {
 exports.markAsRead = async (conversationId, userId) => {
     await exports.assertParticipant(conversationId, userId);
     await chatRepository.markMessagesRead(conversationId, userId);
+};
+
+// "Delete message" - sender only, delete-for-everyone. The bubble stays
+// in place (so the thread doesn't visually reflow) but renders as a
+// tombstone for both participants.
+exports.deleteMessage = async (conversationId, messageId, userId) => {
+    await exports.assertParticipant(conversationId, userId);
+
+    const message = await chatRepository.findMessageById(messageId);
+
+    if (!message || String(message.conversation_id) !== String(conversationId)) {
+        throw new Error("Message not found");
+    }
+
+    if (message.sender_id !== userId) {
+        throw new Error("You can only delete your own messages");
+    }
+
+    if (message.is_deleted) {
+        return { id: messageId, already_deleted: true };
+    }
+
+    await chatRepository.softDeleteMessage(messageId);
+
+    const payload = { id: Number(messageId), conversation_id: Number(conversationId) };
+
+    try {
+        const socket = require("../../socket/socket");
+        socket.emitMessageDeleted(conversationId, payload);
+    } catch (error) {
+        // Socket layer being unavailable should never break deletion
+    }
+
+    return payload;
+};
+
+// "Clear chat" - per-user only. Hides everything up to now for the
+// requesting participant; the other participant's copy is untouched.
+exports.clearConversation = async (conversationId, userId) => {
+    const conversation = await exports.assertParticipant(conversationId, userId);
+    const clearedColumn = chatRepository.clearedColumnFor(conversation, userId);
+
+    if (!clearedColumn) {
+        throw new Error("Conversation not found");
+    }
+
+    await chatRepository.setClearedAt(conversationId, clearedColumn);
 };

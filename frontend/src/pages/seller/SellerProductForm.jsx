@@ -130,7 +130,7 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Condition</label>
                         <select value={form.product_condition} onChange={update("product_condition")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white">
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
                             <option value="new">New</option>
                             <option value="used">Used</option>
                         </select>
@@ -138,7 +138,7 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Category</label>
                         <select required value={form.category_id} onChange={update("category_id")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white">
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
                             <option value="">Select…</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>

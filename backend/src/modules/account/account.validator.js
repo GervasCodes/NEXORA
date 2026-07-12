@@ -24,8 +24,12 @@ exports.updateSettingsValidation = [
         .withMessage("Invalid currency code")
 ];
 
+exports.verifyPasswordChangeOtpValidation = [
+    body("code").trim().isLength({ min: 6, max: 6 }).withMessage("Enter the 6-digit code")
+];
+
 exports.changePasswordValidation = [
-    body("current_password").notEmpty().withMessage("Current password is required"),
+    body("reauth_token").notEmpty().withMessage("Please verify with the emailed code first"),
     body("new_password").isLength({ min: 8 }).withMessage("New password must be at least 8 characters")
 ];
 

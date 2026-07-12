@@ -72,17 +72,68 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     };
 };
 
-// Called by payment.controller's webhook handlers once MalipoPay/Selcom
-// confirm the buyer actually completed (or failed/cancelled) the payment
-// on their end. `providerReference` is the reference WE sent when calling
-// initiate (e.g. "ORDER-42") - see `reference` above.
-exports.handleProviderWebhook = async ({ providerReference, success, transactionReference }) => {
-    const match = /^ORDER-(\d+)$/.exec(providerReference || "");
-    if (!match) {
-        throw new Error(`Unrecognized payment reference: ${providerReference}`);
+// Seller verification fee, mobile-money route. Mirrors
+// initiateMobileMoneyPayment above: `initiate()` only means the USSD
+// prompt was sent to the seller's phone, NOT that they've paid. The fee
+// is only marked paid - and the badge only synced - once the provider's
+// webhook confirms success below. (Previously this flow marked the fee
+// paid immediately after initiate() returned, before the seller had
+// actually entered their PIN - this is the fix for that.)
+exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
+    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createVerificationFeePayment(sellerId, amount);
+
+    const reference = `VERIFY-${sellerId}`;
+
+    let providerResult;
+    try {
+        providerResult = await mobileMoneyProvider.initiate(phone, amount, {
+            reference,
+            purpose: "seller_verification_fee",
+            description: "NEXORA seller verification fee"
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        throw error;
     }
 
-    const orderId = Number(match[1]);
+    if (!providerResult.success) {
+        await paymentRepository.markFailed(paymentId);
+        throw new Error("Payment could not be initiated. Please try again");
+    }
+
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+
+    return {
+        status: "pending",
+        message: "Check your phone to complete the payment. Your Verified Seller badge will unlock automatically once payment is confirmed.",
+        transactionReference: providerResult.transactionReference
+    };
+};
+
+// Called by payment.controller's webhook handlers once MalipoPay/Selcom
+// confirm the buyer/seller actually completed (or failed/cancelled) the
+// payment on their end. `providerReference` is the reference WE sent when
+// calling initiate: "ORDER-42" for order payments, "VERIFY-7" for a
+// seller's verification fee - see the two `reference` values above.
+exports.handleProviderWebhook = async ({ providerReference, success, transactionReference }) => {
+    const orderMatch = /^ORDER-(\d+)$/.exec(providerReference || "");
+    const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
+
+    if (orderMatch) {
+        return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference);
+    }
+
+    if (verifyMatch) {
+        return exports._handleVerificationFeeWebhook(Number(verifyMatch[1]), success, transactionReference);
+    }
+
+    throw new Error(`Unrecognized payment reference: ${providerReference}`);
+};
+
+exports._handleOrderPaymentWebhook = async (orderId, success, transactionReference) => {
     const payment = await paymentRepository.findByOrderId(orderId);
 
     if (!payment) {
@@ -110,6 +161,32 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
     );
 
     return { orderId, success: true, receiptNumber };
+};
+
+exports._handleVerificationFeeWebhook = async (sellerId, success, transactionReference) => {
+    const payment = await paymentRepository.findPendingVerificationFeePayment(sellerId);
+
+    if (!payment) {
+        // Already processed (or never initiated) - no-op, same reasoning
+        // as the order-payment path above.
+        return { alreadyProcessed: true };
+    }
+
+    if (!success) {
+        await paymentRepository.markFailed(payment.id);
+        return { sellerId, success: false };
+    }
+
+    const receiptNumber = generateReceiptNumber();
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber);
+
+    // Lazy require to avoid a circular dependency (seller.service also
+    // calls into payment.service to initiate the fee payment) - same
+    // pattern chat.service uses for the socket layer.
+    const sellerService = require("../seller/seller.service");
+    await sellerService.confirmVerificationFeePaid(sellerId, payment.amount, transactionReference);
+
+    return { sellerId, success: true, receiptNumber };
 };
 
 exports.getPayment = async (orderId, userId) => {

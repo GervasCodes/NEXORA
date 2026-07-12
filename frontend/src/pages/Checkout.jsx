@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
-import { formatMoney } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 import LocationPicker from "../components/LocationPicker";
 
 const initialForm = {
@@ -14,6 +14,7 @@ const initialForm = {
 };
 
 export default function Checkout() {
+    const { format } = useCurrency();
     const { items, total, refresh } = useCart();
     const navigate = useNavigate();
     const [form, setForm] = useState(initialForm);
@@ -113,7 +114,7 @@ export default function Checkout() {
 
                 <button type="submit" disabled={submitting}
                     className="w-full bg-mango text-ink py-3 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
-                    {submitting ? "Placing order…" : `Place order · ${formatMoney(total)}`}
+                    {submitting ? "Placing order…" : `Place order · ${format(total)}`}
                 </button>
             </form>
 
@@ -123,13 +124,13 @@ export default function Checkout() {
                     {items.map((item) => (
                         <li key={item.cart_item_id} className="flex justify-between text-sm">
                             <span className="text-ink/80 truncate pr-2">{item.name} × {item.quantity}</span>
-                            <span className="price shrink-0">{formatMoney(item.subtotal)}</span>
+                            <span className="price shrink-0">{format(item.subtotal)}</span>
                         </li>
                     ))}
                 </ul>
                 <div className="flex justify-between border-t border-line pt-3">
                     <span className="text-sm">Total</span>
-                    <span className="price font-medium">{formatMoney(total)}</span>
+                    <span className="price font-medium">{format(total)}</span>
                 </div>
             </div>
         </div>

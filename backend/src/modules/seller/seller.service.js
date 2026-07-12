@@ -1,7 +1,6 @@
 const sellerRepository = require("./seller.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
-const mobileMoneyProvider = require("../payment/providers/mobileMoney.provider");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
@@ -252,6 +251,12 @@ const syncBadge = async (userId) => {
     return shouldBeVerified;
 };
 
+// Kicks off the fee payment. Does NOT mark the fee paid - it only sends
+// the mobile money prompt to the seller's phone and returns "pending".
+// The fee is marked paid, and the badge synced, only once
+// confirmVerificationFeePaid() is called below - which happens from
+// payment.service's webhook handler after MalipoPay/Selcom confirm the
+// seller actually completed the payment on their end.
 exports.payVerificationFee = async (userId, phone) => {
     const seller = await sellerRepository.findByUserId(userId);
 
@@ -269,19 +274,17 @@ exports.payVerificationFee = async (userId, phone) => {
 
     const feeAmount = await settingsService.getVerificationFee();
 
-    const result = await mobileMoneyProvider.initiate(phone, feeAmount, {
-        purpose: "seller_verification_fee",
-        sellerId: userId
-    });
+    // Lazy require to avoid a circular dependency: payment.service also
+    // requires seller.service to call confirmVerificationFeePaid below.
+    const paymentService = require("../payment/payment.service");
+    return paymentService.initiateVerificationFeePayment(userId, phone, feeAmount);
+};
 
-    if (!result.success) {
-        throw new Error("Payment failed. Please try again.");
-    }
-
-    await sellerRepository.setVerificationFeePaid(userId, feeAmount, result.transactionReference);
+// Called by payment.service once the mobile money provider's webhook
+// confirms the verification fee payment actually completed.
+exports.confirmVerificationFeePaid = async (userId, amount, transactionReference) => {
+    await sellerRepository.setVerificationFeePaid(userId, amount, transactionReference);
     await syncBadge(userId);
-
-    return exports.getVerification(userId);
 };
 
 exports.isApproved = async (userId) => {

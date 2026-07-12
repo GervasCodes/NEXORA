@@ -48,7 +48,7 @@ export default function SellerSetup() {
                     <select
                         value={form.store_type_id}
                         onChange={(e) => setForm({ ...form, store_type_id: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                     >
                         <option value="">Select a store type…</option>
                         {storeTypes.map((t) => (

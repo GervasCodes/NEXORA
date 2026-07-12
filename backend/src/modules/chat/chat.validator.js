@@ -26,6 +26,11 @@ exports.conversationIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid conversation")
 ];
 
+exports.messageIdValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
+    param("messageId").isInt({ gt: 0 }).withMessage("Invalid message")
+];
+
 exports.sendMessageValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
 

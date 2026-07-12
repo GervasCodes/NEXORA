@@ -96,7 +96,7 @@ export default function AdminManageAdmins() {
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                 <select value={form.admin_level}
                     onChange={(e) => setForm({ ...form, admin_level: e.target.value })}
-                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring bg-white">
+                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
                     <option value="admin">Admin (limited access)</option>
                     <option value="super_admin">Super Admin (full control)</option>
                 </select>

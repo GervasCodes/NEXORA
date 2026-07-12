@@ -8,6 +8,7 @@ const accountController = require("./account.controller");
 const {
     updateProfileValidation,
     updateSettingsValidation,
+    verifyPasswordChangeOtpValidation,
     changePasswordValidation,
     deleteAccountValidation
 } = require("./account.validator");
@@ -17,6 +18,11 @@ router.use(authMiddleware);
 router.get("/", accountController.getProfile);
 router.put("/profile", updateProfileValidation, validationMiddleware, accountController.updateProfile);
 router.put("/settings", updateSettingsValidation, validationMiddleware, accountController.updateSettings);
+
+// OTP-gated password change: request a code, verify it (get a short-lived
+// reauth token), then use that token to actually set the new password.
+router.post("/password/request-otp", accountController.requestPasswordChangeOtp);
+router.post("/password/verify-otp", verifyPasswordChangeOtpValidation, validationMiddleware, accountController.verifyPasswordChangeOtp);
 router.put("/password", changePasswordValidation, validationMiddleware, accountController.changePassword);
 router.delete("/", deleteAccountValidation, validationMiddleware, accountController.deleteAccount);
 

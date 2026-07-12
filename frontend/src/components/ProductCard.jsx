@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
-import { formatMoney } from "../utils/format";
+import { useCurrency } from "../context/CurrencyContext";
 
 export default function ProductCard({ product }) {
+    const { format } = useCurrency();
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
 
     return (
         <Link
             to={`/products/${product.slug}`}
-            className="tag-string group block bg-white border border-line rounded-lg pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5 transition-all"
+            className="tag-string group block bg-paper border border-line rounded-lg pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
             <div className="aspect-square bg-line/40 rounded-md overflow-hidden mb-3">
                 {product.image_url ? (
@@ -28,11 +29,11 @@ export default function ProductCard({ product }) {
 
             <div className="flex items-baseline gap-2">
                 <span className="price text-base font-medium text-ink">
-                    {formatMoney(hasDiscount ? product.discount_price : product.price)}
+                    {format(hasDiscount ? product.discount_price : product.price)}
                 </span>
                 {hasDiscount && (
                     <span className="price text-xs text-ash line-through">
-                        {formatMoney(product.price)}
+                        {format(product.price)}
                     </span>
                 )}
             </div>

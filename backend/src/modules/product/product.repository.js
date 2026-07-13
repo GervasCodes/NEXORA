@@ -68,23 +68,40 @@ exports.findAll = async ({ categoryId, search, page, limit }) => {
     const offset = (page - 1) * limit;
     const conditions = ["p.is_active = 1"];
     const params = [];
+    const selectExtra = [];
+    let orderBy = "p.created_at DESC";
 
     if (categoryId) {
         conditions.push("p.category_id = ?");
         params.push(categoryId);
     }
 
-    if (search) {
+    // FULLTEXT's default InnoDB minimum word length is 3 - a 1-2 char
+    // search would silently match nothing under MATCH...AGAINST, so those
+    // still fall back to the old (unindexed but correct) LIKE scan.
+    // For anything MATCH can actually search, this replaces a full table
+    // scan with an indexed lookup (see migration 022) AND ranks results
+    // by relevance instead of just newest-first.
+    if (search && search.trim().length >= 3) {
+        conditions.push("(MATCH(p.name, p.brand, p.description) AGAINST (? IN NATURAL LANGUAGE MODE) OR c.name LIKE ?)");
+        params.push(search.trim(), `%${search.trim()}%`);
+        selectExtra.push("MATCH(p.name, p.brand, p.description) AGAINST (? IN NATURAL LANGUAGE MODE) AS relevance");
+        orderBy = "relevance DESC, p.created_at DESC";
+    } else if (search) {
         conditions.push("(p.name LIKE ? OR p.brand LIKE ? OR p.description LIKE ? OR c.name LIKE ?)");
         params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     const whereClause = conditions.join(" AND ");
+    // relevance needs its own copy of the search term (used once in SELECT,
+    // once in WHERE) - only present when the FULLTEXT branch above ran.
+    const relevanceParam = selectExtra.length ? [search.trim()] : [];
 
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
             sp.store_name,
+            ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -96,9 +113,9 @@ exports.findAll = async ({ categoryId, search, page, limit }) => {
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
         LEFT JOIN categories c ON c.id = p.category_id
         WHERE ${whereClause}
-        ORDER BY p.created_at DESC
+        ORDER BY ${orderBy}
         LIMIT ? OFFSET ?`,
-        [...params, limit, offset]
+        [...relevanceParam, ...params, limit, offset]
     );
 
     const [[{ total }]] = await db.query(

@@ -1,8 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const compression = require("compression");
 
 const db = require("./config/db");
+const { apiLimiter } = require("./middleware/rateLimit.middleware");
 
 const authRoutes = require("./modules/auth/auth.routes");
 const authMiddleware = require("./middleware/auth.middleware");
@@ -36,9 +38,15 @@ const corsOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
     : "*";
 app.use(cors({ origin: corsOrigins, credentials: true }));
+// Gzips every JSON/HTML response over the wire - product listings and
+// admin tables in particular shrink dramatically, at negligible CPU cost.
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// General abuse safety net, not a per-user quota - see rateLimit.middleware.js.
+// authLimiter (tighter) is applied directly on the auth/password-OTP routes.
+app.use("/api/", apiLimiter);
 
 // Debug route - gated behind admin auth so it can't be used to probe the
 // database or leak connection errors to the public internet.

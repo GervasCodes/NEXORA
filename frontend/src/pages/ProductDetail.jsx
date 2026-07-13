@@ -107,7 +107,7 @@ export default function ProductDetail() {
                                         i === activeImage ? "border-mango" : "border-transparent"
                                     }`}
                                 >
-                                    {img.image_url && <img src={img.image_url} alt="" className="w-full h-full object-cover" />}
+                                    {img.image_url && <img src={img.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
                                 </button>
                             ))}
                         </div>

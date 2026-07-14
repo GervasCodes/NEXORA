@@ -147,3 +147,22 @@ exports.clearConversation = async (conversationId, userId) => {
 
     await chatRepository.setClearedAt(conversationId, clearedColumn);
 };
+
+// "Delete chat" - per-user, list-level. Removes the entire conversation
+// from the requesting participant's Messages list and, like "clear chat",
+// hides its message history for them going forward. The other
+// participant's list/thread is untouched. If a new message arrives later
+// the thread reappears in the list (same behavior as WhatsApp/Telegram).
+exports.deleteConversation = async (conversationId, userId) => {
+    const conversation = await exports.assertParticipant(conversationId, userId);
+
+    const deletedColumn = chatRepository.deletedColumnFor(conversation, userId);
+    const clearedColumn = chatRepository.clearedColumnFor(conversation, userId);
+
+    if (!deletedColumn || !clearedColumn) {
+        throw new Error("Conversation not found");
+    }
+
+    await chatRepository.setDeletedAt(conversationId, deletedColumn);
+    await chatRepository.setClearedAt(conversationId, clearedColumn);
+};

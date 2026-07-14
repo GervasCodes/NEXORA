@@ -1,15 +1,4 @@
-// Brevo transactional email, called over their HTTPS API rather than SMTP.
-//
-// Why not nodemailer/SMTP like backend/src/utils/sendEmail.js? Render's
-// free-tier network is IPv6-only outbound in places, which is exactly the
-// class of problem that has bitten this project before (see MERISMADE's
-// `family: 4` fix for Gmail SMTP). Brevo's REST API runs over normal
-// HTTPS, so there's no SMTP port/IP-family issue to fight - just an API
-// key. Uses the built-in fetch (Node 18+).
-//
-// Required env var: BREVO_API_KEY
-// Optional: BREVO_SENDER_EMAIL (defaults to EMAIL_FROM / EMAIL_USER),
-//           BREVO_SENDER_NAME (defaults to "NEXORA")
+// Brevo SMTP transactional email helper. See backend/.env.example for the required env vars.
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 

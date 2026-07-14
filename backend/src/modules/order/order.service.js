@@ -5,6 +5,7 @@ const deliveryRepository = require("../delivery/delivery.repository");
 const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
+const fraudService = require("../fraud/fraud.service");
 const {
     CANCELLABLE_STATUSES,
     SELLER_STATUS_TRANSITIONS
@@ -76,6 +77,16 @@ exports.checkout = async (buyerId, shippingInfo) => {
         withEmail: true
     });
 
+    // Fire-and-forget: fraud flagging is advisory (surfaces in the admin
+    // panel for review) and must never delay or fail a real checkout.
+    fraudService.evaluateOrder({ id: orderId, buyer_id: buyerId, total_amount: totalAmount })
+        .catch((err) => console.error("[fraud] order evaluation failed:", err.message));
+
+    // Lazy require to avoid a circular dependency (socket module doesn't
+    // depend back on order, but this keeps the pattern consistent with
+    // how delivery.service/chat.service reach the socket layer).
+    require("../../socket/socket").emitToAdmins("admin:stats_changed", { reason: "order_placed" });
+
     return {
         orderId,
         orderNumber,
@@ -118,6 +129,23 @@ exports.cancelOrder = async (orderId, buyerId) => {
         title: "Order cancelled",
         message: `Your order ${order.order_number} has been cancelled.`,
         relatedOrderId: orderId,
+        withEmail: true
+    });
+};
+
+// System-initiated (not buyer-initiated) - called by the staleOrders
+// background job. Unlike cancelOrder above, there's no buyer ownership
+// check since there's no requesting user; the query that selects
+// candidates (findStalePendingMobileMoneyOrders) is what scopes this.
+exports.autoCancelStaleOrder = async (order) => {
+    await orderRepository.updateOrderStatus(order.id, "cancelled");
+
+    await notificationService.notify({
+        userId: order.buyer_id,
+        type: "order_cancelled",
+        title: "Order cancelled",
+        message: `Your order ${order.order_number} was cancelled because payment was never completed. Feel free to place it again.`,
+        relatedOrderId: order.id,
         withEmail: true
     });
 };

@@ -18,10 +18,7 @@ export default function SellerVerification() {
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [paying, setPaying] = useState(false);
-    // Payment was initiated (USSD prompt sent) but not yet confirmed by the
-    // provider's webhook - we poll while this is true, same as any other
-    // mobile money payment in NEXORA: initiate() only means "prompt sent",
-    // never "paid".
+    
     const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
     const pollRef = useRef(null);
 
@@ -37,10 +34,7 @@ export default function SellerVerification() {
         return () => clearInterval(pollRef.current);
     }, []);
 
-    // Polls every 4s for up to 2 minutes after initiating the fee payment,
-    // waiting for the mobile money webhook to confirm and flip
-    // verification_fee_paid - matches how the badge actually gets synced
-    // server-side (see backend seller.service.confirmVerificationFeePaid).
+    
     const pollForConfirmation = () => {
         let attempts = 0;
         clearInterval(pollRef.current);
@@ -104,9 +98,7 @@ export default function SellerVerification() {
         setPaying(true);
         try {
             const { data } = await api.post("/seller/verification/fee", { phone });
-            // Response is { status: 'pending', message, transactionReference } -
-            // the fee is NOT paid yet, just requested. Poll until the
-            // webhook confirms it (or the seller checks back later).
+            
             setMessage(data.message || "Check your phone to complete the payment.");
             setAwaitingConfirmation(true);
             pollForConfirmation();

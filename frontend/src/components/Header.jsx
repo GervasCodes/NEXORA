@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import SearchBox from "./SearchBox";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -16,6 +17,7 @@ function useNavLinks() {
     if (user?.role === "admin") links.push({ to: "/admin", label: t("nav.admin") });
     if (user?.role === "buyer" || user?.role === "seller") links.push({ to: "/messages", label: t("nav.messages") });
     if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders") });
+    if (user?.role === "buyer") links.push({ to: "/saved", label: "Saved" });
     if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart") });
     if (user) links.push({ to: "/account", label: t("nav.account") });
 
@@ -27,7 +29,6 @@ export default function Header() {
     const { itemCount } = useCart();
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const [search, setSearch] = useState("");
     const [menuOpen, setMenuOpen] = useState(false);
     const links = useNavLinks();
 
@@ -37,17 +38,13 @@ export default function Header() {
         setMenuOpen(false);
     }, [user]);
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        setMenuOpen(false);
-        navigate(search.trim() ? `/?search=${encodeURIComponent(search.trim())}` : "/");
-    };
-
     const handleSignOut = () => {
         setMenuOpen(false);
         logout();
         navigate("/");
     };
+
+    const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
     return (
         <header className="glass-dark text-paper sticky top-0 z-40">
@@ -56,21 +53,13 @@ export default function Header() {
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
                 </Link>
 
-                <form onSubmit={handleSearch} className="flex-1 hidden md:flex">
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        type="text"
+                <div className="flex-1 hidden md:flex max-w-md">
+                    <SearchBox
                         placeholder={t("nav.searchPlaceholder")}
-                        className="w-full max-w-md bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent"
+                        submitLabel={t("nav.search")}
+                        inputClassName={searchInputClass}
                     />
-                    <button
-                        type="submit"
-                        className="bg-mango text-abyss px-4 rounded-r-md text-sm font-semibold hover:bg-mango-dark transition-colors focus-ring"
-                    >
-                        {t("nav.search")}
-                    </button>
-                </form>
+                </div>
 
                 {/* Desktop nav - hidden below md, so it never has to squeeze
                     (and overflow off-screen) below that width. */}
@@ -147,16 +136,14 @@ export default function Header() {
                 </div>
             </div>
 
-            <form onSubmit={handleSearch} className="md:hidden px-4 pb-3 flex">
-                <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    type="text"
+            <div className="md:hidden px-4 pb-3">
+                <SearchBox
                     placeholder={t("nav.searchPlaceholder")}
-                    className="w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent"
+                    submitLabel={t("nav.go")}
+                    inputClassName={searchInputClass}
+                    onNavigate={() => setMenuOpen(false)}
                 />
-                <button type="submit" className="bg-mango text-abyss px-4 rounded-r-md text-sm font-semibold">{t("nav.go")}</button>
-            </form>
+            </div>
 
             {/* Mobile drawer - every nav item, always reachable regardless
                 of screen width or orientation. */}

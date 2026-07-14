@@ -146,3 +146,20 @@ exports.clearConversation = async (req, res) => {
         });
     }
 };
+
+exports.deleteConversation = async (req, res) => {
+    try {
+        await chatService.deleteConversation(req.params.id, req.user.id);
+
+        return res.json({
+            success: true,
+            message: "Conversation deleted"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

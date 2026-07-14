@@ -160,6 +160,8 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
         console.error("Seller wallet credit error:", err)
     );
 
+    require("../../socket/socket").emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
+
     return { orderId, success: true, receiptNumber };
 };
 

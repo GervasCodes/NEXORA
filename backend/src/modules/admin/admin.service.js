@@ -105,6 +105,104 @@ exports.getDashboard = async () => {
 
 // --- Platform settings (commission rate, rider delivery fee) ---
 
+exports.getAnalytics = async () => {
+    const DAYS = 14;
+    const FORECAST_DAYS = 7;
+    const REGRESSION_WINDOW_DAYS = 30;
+
+    const [dailyRows, regressionRows, topProducts, topSellers] = await Promise.all([
+        adminRepository.getDailySales(DAYS),
+        adminRepository.getDailySales(REGRESSION_WINDOW_DAYS),
+        adminRepository.getTopProducts(5),
+        adminRepository.getTopSellers(5)
+    ]);
+
+    // Fill in days with zero sales so the chart doesn't have gaps or
+    // misleadingly compress into however many days actually had orders.
+    const byDay = new Map(dailyRows.map((r) => [
+        new Date(r.day).toISOString().slice(0, 10),
+        { revenue: Number(r.revenue) || 0, order_count: Number(r.order_count) || 0 }
+    ]));
+
+    const dailySales = [];
+    for (let i = DAYS - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().slice(0, 10);
+        const entry = byDay.get(key) || { revenue: 0, order_count: 0 };
+        dailySales.push({
+            day: key,
+            label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            ...entry
+        });
+    }
+
+    const forecast = forecastRevenue(regressionRows, REGRESSION_WINDOW_DAYS, FORECAST_DAYS);
+
+    return {
+        dailySales,
+        forecast,
+        topProducts: topProducts.map((p) => ({
+            ...p,
+            units_sold: Number(p.units_sold) || 0,
+            revenue: Number(p.revenue) || 0
+        })),
+        topSellers: topSellers.map((s) => ({
+            ...s,
+            revenue: Number(s.revenue) || 0,
+            order_count: Number(s.order_count) || 0
+        }))
+    };
+};
+
+// Ordinary least-squares linear regression on daily revenue over the
+// trailing window, projected forward. Deliberately not anything fancier
+// (no seasonality modeling, no external forecasting service) - a straight
+// trend line over 30 days is honest about being a rough estimate, which
+// is the right amount of confidence to project for a platform this size,
+// versus a "smarter" model that would just be overfitting noise.
+function forecastRevenue(rows, windowDays, forecastDays) {
+    const byDay = new Map(rows.map((r) => [
+        new Date(r.day).toISOString().slice(0, 10),
+        Number(r.revenue) || 0
+    ]));
+
+    // x = day index (0..windowDays-1), y = revenue that day
+    const points = [];
+    for (let i = windowDays - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().slice(0, 10);
+        points.push({ x: windowDays - 1 - i, y: byDay.get(key) || 0 });
+    }
+
+    const n = points.length;
+    const sumX = points.reduce((s, p) => s + p.x, 0);
+    const sumY = points.reduce((s, p) => s + p.y, 0);
+    const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+    const sumXX = points.reduce((s, p) => s + p.x * p.x, 0);
+
+    const denominator = n * sumXX - sumX * sumX;
+    // Flat history (or all-zero) - denominator is 0, fall back to a flat
+    // projection at the historical average rather than dividing by zero.
+    const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
+    const intercept = (sumY - slope * sumX) / n;
+
+    const projected = [];
+    for (let i = 0; i < forecastDays; i++) {
+        const x = n + i;
+        const date = new Date();
+        date.setDate(date.getDate() + i + 1);
+        projected.push({
+            day: date.toISOString().slice(0, 10),
+            label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            revenue: Math.max(0, Math.round(intercept + slope * x))
+        });
+    }
+
+    return projected;
+}
+
 exports.getSettings = async () => {
     return settingsService.getAll();
 };

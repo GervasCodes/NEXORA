@@ -20,6 +20,9 @@ const {
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/dashboard", adminController.getDashboard);
+router.get("/analytics", adminController.getAnalytics);
+router.get("/fraud-flags", adminController.listFraudFlags);
+router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 
 router.get("/users", adminController.listUsers);
 router.put("/users/:id/deactivate", userIdValidation, validationMiddleware, adminController.deactivateUser);

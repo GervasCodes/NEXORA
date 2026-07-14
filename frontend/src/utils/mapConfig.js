@@ -1,8 +1,6 @@
 import L from "leaflet";
 
-// react-leaflet's default marker icon references image paths that Vite's
-// bundler doesn't resolve correctly, so markers silently fail to render.
-// Pointing at the CDN copies is the standard workaround.
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -10,8 +8,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
 });
 
-// Dar es Salaam city center — sensible default map center for a
-// Tanzania-focused marketplace when we don't have a location yet.
+
 export const DEFAULT_CENTER = [-6.7924, 39.2083];
 
 export const agentIcon = new L.DivIcon({

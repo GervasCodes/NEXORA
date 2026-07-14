@@ -8,11 +8,7 @@ export const LANGUAGES = [
     { code: "sw", label: "Kiswahili" }
 ];
 
-// Core, high-visibility strings (nav, common actions, account) translated
-// so switching language is visibly real-time across the app shell. Not
-// every string in NEXORA is wired through t() yet - untranslated strings
-// simply fall back to the English source text (via the `|| key` below),
-// so adding coverage elsewhere later is a drop-in change, not a redesign.
+
 const DICTIONARY = {
     en: {
         "nav.dashboard": "Dashboard",

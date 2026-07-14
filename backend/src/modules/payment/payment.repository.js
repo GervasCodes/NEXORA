@@ -60,6 +60,19 @@ exports.markCompleted = async (paymentId, transactionReference, receiptNumber) =
     );
 };
 
+// Any payment (order or verification fee) that's been sitting 'pending'
+// past the cutoff with no webhook confirmation either way - used by the
+// staleOrders background job to close these out as failed instead of
+// leaving them pending indefinitely.
+exports.findStalePending = async (olderThanMinutes) => {
+    const [rows] = await db.query(
+        `SELECT * FROM payments
+        WHERE status = 'pending' AND created_at < (NOW() - INTERVAL ? MINUTE)`,
+        [olderThanMinutes]
+    );
+    return rows;
+};
+
 exports.markFailed = async (paymentId) => {
     await db.query(
         "UPDATE payments SET status = 'failed' WHERE id = ?",

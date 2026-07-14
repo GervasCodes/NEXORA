@@ -5,9 +5,7 @@ import { enablePushNotifications, disablePushNotifications } from "../utils/push
 
 const LOCATION_PING_MS = 8000;
 
-// Drives the "on shift" toggle for a delivery agent: watches the device's
-// GPS and pings the position to the server every LOCATION_PING_MS while
-// online, and flips the server-side is_online flag on start/stop.
+
 export function useAgentShift() {
     const { socket, connected } = useSocket();
     const [online, setOnline] = useState(false);
@@ -52,7 +50,7 @@ export function useAgentShift() {
             { enableHighAccuracy: true, maximumAge: 5000 }
         );
 
-        // Throttle actual socket emits rather than firing on every GPS tick
+        
         intervalRef.current = setInterval(() => {
             if (lastCoordsRef.current && socket?.connected) {
                 socket.emit("agent:location", lastCoordsRef.current);
@@ -63,15 +61,12 @@ export function useAgentShift() {
         socket?.emit("agent:online");
         try { await api.put("/delivery/online", { isOnline: true }); } catch { /* best effort */ }
 
-        // Push is a "nice to have" layer on top of the socket offer — never
-        // let a permission dialog or missing VAPID config block the shift
-        // from starting.
+        
         const pushResult = await enablePushNotifications();
         setPushWarning(pushResult.success ? "" : pushResult.message);
     }, [socket]);
 
-    // If the socket drops while online, the server already marks us offline
-    // (see socket.js disconnect handler) — mirror that in the UI.
+    
     useEffect(() => {
         if (!connected && online) {
             stopWatching();

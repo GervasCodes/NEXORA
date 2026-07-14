@@ -58,4 +58,11 @@ router.post(
     chatController.clearConversation
 );
 
+router.delete(
+    "/conversations/:id",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.deleteConversation
+);
+
 module.exports = router;

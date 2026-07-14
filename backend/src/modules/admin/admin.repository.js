@@ -116,6 +116,60 @@ exports.getDashboardStats = async () => {
     return { userCounts, orderCounts, revenue, productCounts };
 };
 
+// --- Analytics: daily sales, top products, top sellers ---
+
+// Revenue/order-count per day for the last N days, paid orders only.
+// Doesn't fill in gap days with zero sales - admin.service.js does that,
+// since it's just JS array work and keeps this a single simple query.
+exports.getDailySales = async (days) => {
+    const [rows] = await db.query(
+        `SELECT DATE(created_at) AS day,
+                COALESCE(SUM(total_amount), 0) AS revenue,
+                COUNT(*) AS order_count
+        FROM orders
+        WHERE payment_status = 'paid' AND created_at >= (NOW() - INTERVAL ? DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY day ASC`,
+        [days]
+    );
+    return rows;
+};
+
+exports.getTopProducts = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT p.id, p.name, p.slug, sp.store_name,
+                SUM(oi.quantity) AS units_sold,
+                SUM(oi.subtotal) AS revenue
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN products p ON p.id = oi.product_id
+        JOIN seller_profiles sp ON sp.user_id = p.seller_id
+        WHERE o.payment_status = 'paid'
+        GROUP BY p.id, p.name, p.slug, sp.store_name
+        ORDER BY revenue DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+exports.getTopSellers = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT sp.user_id, sp.store_name, sp.is_verified,
+                SUM(oi.subtotal) AS revenue,
+                COUNT(DISTINCT oi.order_id) AS order_count
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN seller_profiles sp ON sp.user_id = oi.seller_id
+        WHERE o.payment_status = 'paid'
+        GROUP BY sp.user_id, sp.store_name, sp.is_verified
+        ORDER BY revenue DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
 // --- Seller verification review ---
 
 exports.findPendingVerifications = async () => {

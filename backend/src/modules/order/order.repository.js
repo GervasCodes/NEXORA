@@ -73,6 +73,21 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
     }
 };
 
+// Orders placed via mobile money that never got a payment confirmation
+// webhook (buyer abandoned the USSD prompt, network issue, etc.) and
+// have sat unpaid/pending past the cutoff - candidates for the
+// staleOrders background job to auto-cancel, freeing the buyer to retry
+// instead of an order sitting in limbo forever.
+exports.findStalePendingMobileMoneyOrders = async (olderThanMinutes) => {
+    const [rows] = await db.query(
+        `SELECT id, buyer_id, order_number FROM orders
+        WHERE status = 'pending' AND payment_status = 'unpaid' AND payment_method = 'mobile_money'
+        AND created_at < (NOW() - INTERVAL ? MINUTE)`,
+        [olderThanMinutes]
+    );
+    return rows;
+};
+
 exports.findOrdersByBuyer = async (buyerId) => {
     const [rows] = await db.query(
         `SELECT id, order_number, status, payment_status, payment_method, total_amount, created_at

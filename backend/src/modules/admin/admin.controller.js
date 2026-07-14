@@ -1,4 +1,5 @@
 const adminService = require("./admin.service");
+const fraudService = require("../fraud/fraud.service");
 
 exports.listUsers = async (req, res) => {
     try {
@@ -115,6 +116,17 @@ exports.getDashboard = async (req, res) => {
         const stats = await adminService.getDashboard();
 
         return res.json({ success: true, data: stats });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getAnalytics = async (req, res) => {
+    try {
+        const analytics = await adminService.getAnalytics();
+
+        return res.json({ success: true, data: analytics });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -277,6 +289,28 @@ exports.removeAdmin = async (req, res) => {
         await adminService.removeAdmin(req.params.id, req.user.id);
 
         return res.json({ success: true, message: "Admin access removed" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.listFraudFlags = async (req, res) => {
+    try {
+        const flags = await fraudService.listOpenFlags();
+
+        return res.json({ success: true, data: flags });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.resolveFraudFlag = async (req, res) => {
+    try {
+        await fraudService.resolveFlag(req.params.id, req.body.status, req.user.id);
+
+        return res.json({ success: true, message: "Flag updated." });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

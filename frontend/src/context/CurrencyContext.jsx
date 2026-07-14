@@ -5,14 +5,7 @@ const CurrencyContext = createContext(null);
 const STORAGE_KEY = "nexora_currency";
 export const CURRENCIES = ["TZS", "EUR", "GBP", "KES", "UGX", "USD"].sort();
 
-// Approximate reference rates, expressed as "1 TZS = X of this currency".
-// NEXORA's prices are stored in TZS; there's no live FX provider configured
-// (see backend/.env - only mobile money + email providers are set up), so
-// these are static reference rates. They're clearly good enough for
-// *display* purposes (letting a buyer roughly gauge a price in their own
-// currency) but are NOT precise enough for anything transactional - actual
-// charges/payouts always happen in TZS via mobile money, regardless of the
-// currency selected here.
+
 const RATES_PER_TZS = {
     TZS: 1,
     USD: 1 / 2600,

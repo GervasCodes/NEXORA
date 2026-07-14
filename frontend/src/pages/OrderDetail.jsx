@@ -5,6 +5,7 @@ import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useSocket } from "../context/SocketContext";
 import DeliveryTrackingMap from "../components/DeliveryTrackingMap";
+import OrderTimeline from "../components/OrderTimeline";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -110,6 +111,8 @@ export default function OrderDetail() {
 
             {actionMessage && <p className="text-sm text-teal mb-4">{actionMessage}</p>}
             {actionError && <p className="text-sm text-coral mb-4">{actionError}</p>}
+
+            <OrderTimeline status={order.status} />
 
             <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
                 <div>

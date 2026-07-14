@@ -8,7 +8,16 @@ import { SocketProvider } from "./context/SocketContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { CurrencyProvider } from "./context/CurrencyContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
+import { WishlistProvider } from "./context/WishlistContext.jsx";
 import "./index.css";
+
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(() => {
+            
+        });
+    });
+}
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
@@ -19,7 +28,9 @@ createRoot(document.getElementById("root")).render(
                         <AuthProvider>
                             <SocketProvider>
                                 <CartProvider>
-                                    <App />
+                                    <WishlistProvider>
+                                        <App />
+                                    </WishlistProvider>
                                 </CartProvider>
                             </SocketProvider>
                         </AuthProvider>

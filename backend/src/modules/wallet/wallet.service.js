@@ -2,6 +2,7 @@ const db = require("../../config/db");
 const walletRepository = require("./wallet.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
+const fraudService = require("../fraud/fraud.service");
 
 // Called once an order's payment is confirmed (mobile money success, or a
 // Cash on Delivery confirmation). Splits the order's line items by seller,
@@ -122,6 +123,11 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
         }, connection);
 
         await connection.commit();
+
+        // Fire-and-forget, after commit - fraud flagging is advisory and
+        // must never delay or block a legitimate withdrawal.
+        fraudService.evaluateWithdrawal(sellerId, amount)
+            .catch((err) => console.error("[fraud] withdrawal evaluation failed:", err.message));
 
         return { withdrawalId, balance: balanceAfter };
 

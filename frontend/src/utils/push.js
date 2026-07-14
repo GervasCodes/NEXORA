@@ -1,7 +1,6 @@
 import api from "../api/client";
 
-// PushManager needs the VAPID key as a Uint8Array, but the server hands it
-// back as a URL-safe base64 string — this is the standard conversion.
+
 const urlBase64ToUint8Array = (base64String) => {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -12,7 +11,7 @@ const urlBase64ToUint8Array = (base64String) => {
 export const pushSupported = () =>
     "serviceWorker" in navigator && "PushManager" in window;
 
-// Idempotent — safe to call every time an agent goes on shift.
+
 export const enablePushNotifications = async () => {
     if (!pushSupported()) return { success: false, message: "Push isn't supported on this device/browser." };
 
@@ -41,7 +40,7 @@ export const enablePushNotifications = async () => {
         return { success: true };
 
     } catch (error) {
-        // Most common case: server hasn't set VAPID_PUBLIC_KEY yet (503).
+        
         return { success: false, message: "Push notifications aren't available right now." };
     }
 };

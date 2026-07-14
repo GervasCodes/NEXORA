@@ -15,6 +15,18 @@ const clearedColumnFor = (conversation, userId) => {
 };
 exports.clearedColumnFor = clearedColumnFor;
 
+// Which "deleted_at" column belongs to a given user in a conversation they
+// participate in. Used for "delete chat" - removes the thread from that
+// user's Messages list (distinct from clearedColumnFor, which only hides
+// message history but keeps the thread listed).
+const deletedColumnFor = (conversation, userId) => {
+    if (conversation.buyer_id === userId) return "buyer_deleted_at";
+    if (conversation.seller_id === userId) return "seller_deleted_at";
+    if (conversation.delivery_agent_id === userId) return "agent_deleted_at";
+    return null;
+};
+exports.deletedColumnFor = deletedColumnFor;
+
 exports.findUserRole = async (userId) => {
     const [rows] = await db.query("SELECT role FROM users WHERE id = ?", [userId]);
     return rows[0]?.role;
@@ -94,9 +106,14 @@ exports.findConversationsByUser = async (userId) => {
         JOIN users buyer ON buyer.id = c.buyer_id
         LEFT JOIN users seller ON seller.id = c.seller_id
         LEFT JOIN users agent ON agent.id = c.delivery_agent_id
-        WHERE c.buyer_id = ? OR c.seller_id = ? OR c.delivery_agent_id = ?
+        WHERE (c.buyer_id = ? OR c.seller_id = ? OR c.delivery_agent_id = ?)
+        AND NOT (
+            (c.buyer_id = ? AND c.buyer_deleted_at IS NOT NULL AND c.updated_at <= c.buyer_deleted_at) OR
+            (c.seller_id = ? AND c.seller_deleted_at IS NOT NULL AND c.updated_at <= c.seller_deleted_at) OR
+            (c.delivery_agent_id = ? AND c.agent_deleted_at IS NOT NULL AND c.updated_at <= c.agent_deleted_at)
+        )
         ORDER BY c.updated_at DESC`,
-        [userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId]
+        [userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId]
     );
     return rows;
 };
@@ -164,6 +181,16 @@ exports.softDeleteMessage = async (messageId) => {
 exports.setClearedAt = async (conversationId, clearedColumn) => {
     await db.query(
         `UPDATE conversations SET ${clearedColumn} = NOW() WHERE id = ?`,
+        [conversationId]
+    );
+};
+
+// "Delete chat" (list-level, per-user): stamps this user's deleted_at
+// column. The conversation stops appearing in findConversationsByUser for
+// them until a new message bumps conversations.updated_at again.
+exports.setDeletedAt = async (conversationId, deletedColumn) => {
+    await db.query(
+        `UPDATE conversations SET ${deletedColumn} = NOW() WHERE id = ?`,
         [conversationId]
     );
 };

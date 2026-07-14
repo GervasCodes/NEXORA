@@ -13,16 +13,12 @@ import SellerLayout from "./components/SellerLayout";
 import DeliveryLayout from "./components/DeliveryLayout";
 import AdminLayout from "./components/AdminLayout";
 
-// Every page below is code-split with React.lazy instead of imported
-// eagerly. Previously this file pulled in all ~28 pages - admin tables,
-// seller analytics charts, delivery dashboards - into one bundle that
-// EVERY visitor downloaded before seeing the homepage, even a buyer who
-// never touches the seller or admin areas. Each import() below becomes
-// its own chunk that only loads when that route is actually visited.
+
 const Home = lazy(() => import("./pages/Home"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
@@ -30,6 +26,7 @@ const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
+const Saved = lazy(() => import("./pages/Saved"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
@@ -57,6 +54,7 @@ const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminVerifications = lazy(() => import("./pages/admin/AdminVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
+const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
@@ -78,11 +76,13 @@ export default function App() {
                         <Route path="/products/:slug" element={<ProductDetail />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
 
                         <Route path="/cart" element={<RequireBuyer><Cart /></RequireBuyer>} />
                         <Route path="/checkout" element={<RequireBuyer><Checkout /></RequireBuyer>} />
                         <Route path="/orders" element={<RequireBuyer><Orders /></RequireBuyer>} />
                         <Route path="/orders/:id" element={<RequireBuyer><OrderDetail /></RequireBuyer>} />
+                        <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
 
                         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
                         <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
@@ -120,6 +120,7 @@ export default function App() {
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="verifications" element={<AdminVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
+                            <Route path="fraud" element={<AdminFraud />} />
                         </Route>
 
                         <Route path="*" element={

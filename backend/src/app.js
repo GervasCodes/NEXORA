@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const compression = require("compression");
+const helmet = require("helmet");
 
 const db = require("./config/db");
 const { apiLimiter } = require("./middleware/rateLimit.middleware");
@@ -24,6 +25,7 @@ const adminRoutes = require("./modules/admin/admin.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
+const wishlistRoutes = require("./modules/wishlist/wishlist.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -38,6 +40,12 @@ const corsOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
     : "*";
 app.use(cors({ origin: corsOrigins, credentials: true }));
+// Sets X-Content-Type-Options, X-Frame-Options, HSTS, and friends.
+// contentSecurityPolicy is off: this is a JSON API (the frontend is a
+// separate deployed app), and the one HTML page it does serve (/health)
+// uses an inline <style> block that a default CSP would block for no
+// real security benefit here.
+app.use(helmet({ contentSecurityPolicy: false }));
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
@@ -171,6 +179,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);
+app.use("/api/v1/wishlist", wishlistRoutes);
 
 app.get("/api/v1/me", authMiddleware, (req, res) => {
     res.json({

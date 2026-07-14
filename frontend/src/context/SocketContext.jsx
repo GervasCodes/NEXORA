@@ -4,9 +4,7 @@ import { useAuth } from "./AuthContext";
 
 const SocketContext = createContext(null);
 
-// Socket.IO attaches to the bare server, not under /api/v1 - so derive the
-// socket URL from VITE_API_URL by stripping the API path, unless a separate
-// VITE_SOCKET_URL is provided.
+
 const getSocketUrl = () => {
     if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
@@ -8,6 +8,7 @@ export default function ConversationThread() {
     const { id } = useParams();
     const { user } = useAuth();
     const { socket } = useSocket();
+    const navigate = useNavigate();
 
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -17,6 +18,8 @@ export default function ConversationThread() {
     const [openMenuId, setOpenMenuId] = useState(null);
     const [confirmingClear, setConfirmingClear] = useState(false);
     const [clearing, setClearing] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [deletingChat, setDeletingChat] = useState(false);
     const bottomRef = useRef(null);
 
     useEffect(() => {
@@ -41,8 +44,7 @@ export default function ConversationThread() {
             );
         };
 
-        // Live "delete for everyone" - tombstone the message in place for
-        // anyone else with this thread open, no refetch needed.
+        
         const handleMessageDeleted = (payload) => {
             if (String(payload.conversation_id) !== String(id)) return;
             setMessages((prev) =>
@@ -86,9 +88,7 @@ export default function ConversationThread() {
         }
     };
 
-    // "Delete message" - sender only, delete-for-everyone. Optimistically
-    // tombstones locally; the server does the same and broadcasts it to
-    // anyone else in the thread via socket (see handleMessageDeleted above).
+    
     const handleDeleteMessage = async (messageId) => {
         setOpenMenuId(null);
         setMessages((prev) =>
@@ -102,8 +102,7 @@ export default function ConversationThread() {
         }
     };
 
-    // "Clear chat" - hides history for me only, doesn't touch the other
-    // participant's copy of the conversation.
+    
     const handleClearChat = async () => {
         setClearing(true);
         setError("");
@@ -118,6 +117,19 @@ export default function ConversationThread() {
         }
     };
 
+    
+    const handleDeleteChat = async () => {
+        setDeletingChat(true);
+        setError("");
+        try {
+            await api.delete(`/chat/conversations/${id}`);
+            navigate("/messages");
+        } catch (err) {
+            setError(extractErrorMessage(err));
+            setDeletingChat(false);
+        }
+    };
+
     if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading…</div>;
 
     return (
@@ -127,15 +139,26 @@ export default function ConversationThread() {
                     ← All messages
                 </Link>
 
-                {!confirmingClear ? (
-                    <button
-                        type="button"
-                        onClick={() => setConfirmingClear(true)}
-                        className="text-xs text-ash hover:text-coral transition-colors"
-                    >
-                        Clear chat
-                    </button>
-                ) : (
+                {!confirmingClear && !confirmingDelete && (
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setConfirmingClear(true)}
+                            className="text-xs text-ash hover:text-coral transition-colors"
+                        >
+                            Clear chat
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfirmingDelete(true)}
+                            className="text-xs text-ash hover:text-coral transition-colors"
+                        >
+                            Delete chat
+                        </button>
+                    </div>
+                )}
+
+                {confirmingClear && (
                     <div className="flex items-center gap-2 text-xs">
                         <span className="text-ash">Clear for you?</span>
                         <button
@@ -147,6 +170,23 @@ export default function ConversationThread() {
                             {clearing ? "Clearing…" : "Yes, clear"}
                         </button>
                         <button type="button" onClick={() => setConfirmingClear(false)} className="text-ash hover:text-ink">
+                            Cancel
+                        </button>
+                    </div>
+                )}
+
+                {confirmingDelete && (
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="text-ash">Delete this chat?</span>
+                        <button
+                            type="button"
+                            onClick={handleDeleteChat}
+                            disabled={deletingChat}
+                            className="text-coral font-medium hover:underline disabled:opacity-60"
+                        >
+                            {deletingChat ? "Deleting…" : "Yes, delete"}
+                        </button>
+                        <button type="button" onClick={() => setConfirmingDelete(false)} className="text-ash hover:text-ink">
                             Cancel
                         </button>
                     </div>

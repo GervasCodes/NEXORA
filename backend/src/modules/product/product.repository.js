@@ -100,7 +100,7 @@ exports.findAll = async ({ categoryId, search, page, limit }) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
-            sp.store_name,
+            sp.store_name, sp.is_verified,
             ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
                 SELECT pi.image_url FROM product_images pi

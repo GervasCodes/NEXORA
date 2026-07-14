@@ -1,71 +1,102 @@
-# NEXORA - efficiency pass
+# NEXORA - free features pass (PWA, background jobs, fraud detection, forecasting, realtime admin, voice search)
 
-## 1. Install new backend dependencies
-`package.json` now lists `compression` and `express-rate-limit`. On your
-machine / Render build:
+## 1. Install new backend dependency
+`package.json` now also lists `node-cron`.
 
     cd backend && npm install
 
-## 2. Run the new migration
-`database/migrations/022_product_search_and_indexes.sql` adds two
-composite indexes and a FULLTEXT index on `products`. FULLTEXT index
-creation briefly locks the table (usually well under a second unless your
-catalog is huge) - fine to run during a normal deploy, but worth knowing.
-
+## 2. Run new migration
     cd database && npm run migrate
 
-## 3. What changed and why
+`024_fraud_flags.sql` adds the fraud flag table.
 
-**Backend**
-- **Gzip compression** (`compression` middleware in `app.js`) - every
-  JSON/HTML response is now compressed over the wire. Biggest win on
-  product listings and admin tables.
-- **Rate limiting** (`rateLimit.middleware.js`) - a strict limiter (20
-  requests/15min) on login, register, and both OTP flows (login + password
-  change), since each of those can trigger a bcrypt compare, a DB write,
-  and for OTP, a Brevo email send - the most expensive endpoints to abuse.
-  A looser general limiter (600 req/15min) sits in front of the whole API
-  as a safety net against scraping/misbehaving clients.
-- **Settings caching** (`settings.service.js`) - `platform_settings`
-  (commission rate, rider fee, verification fee) is read on nearly every
-  order, completed delivery, and verification page load, but only
-  changes when an admin edits it. Added a 30s in-memory cache, invalidated
-  immediately on any admin update - so it's never stale after a real
-  change, just cached between them.
-- **Product search & indexes** (migration 022 + `product.repository.js`)
-  - Search used to be `LIKE '%term%'`, which can never use an index (the
-    leading `%` forces a full table scan) and gets slower as your catalog
-    grows. It now uses a MySQL FULLTEXT index with `MATCH...AGAINST`,
-    which is indexed and ranks results by relevance instead of just
-    newest-first. Falls back to the old LIKE behavior only for 1-2
-    character searches, since FULLTEXT's default minimum word length
-    would otherwise silently match nothing on those.
-  - Added composite indexes for the two most common listing queries
-    (`is_active + created_at`, `category_id + is_active`) so browsing the
-    catalog or a category doesn't need a filesort as your product count
-    grows.
+## 3. What's in this pass
 
-**Frontend**
-- **Route-based code splitting** (`App.jsx`) - every page was previously
-  imported eagerly, so a buyer who never opens the seller or admin areas
-  still downloaded all of it on first load. All ~28 pages are now
-  `React.lazy()`, each becoming its own small chunk loaded only when that
-  route is visited. Measured result on this build: the main JS bundle
-  dropped from 553KB to 288KB, and the "chunk too large" warning from
-  `vite build` is gone entirely.
-- **Lazy-loaded images** - product thumbnails on catalog pages and the
-  product-detail thumbnail strip now use `loading="lazy"`, so images
-  below the fold don't compete with visible content for bandwidth on
-  page load.
+### PWA + offline browsing
+- `manifest.json` + generated placeholder icons (`icon-192.png`,
+  `icon-512.png`, `icon-512-maskable.png`) - **these are placeholder
+  monogram icons in your brand colors (abyss background, mango "N"), not
+  real artwork**. Swap them for real app icons whenever you have them;
+  same filenames, same three sizes, and it just works.
+- Also fixed a pre-existing broken reference: `index.html` linked to
+  `/apple-touch-icon.png`, which didn't actually exist in `/public`. Now
+  points at the generated icon.
+- Extended the existing `sw.js` (previously push-notifications-only) to
+  also cache the app shell and safe public GET data (`/products`,
+  `/categories`) so pages/products someone has already browsed stay
+  viewable offline. Deliberately does **not** cache anything
+  authenticated - cart, orders, account, messages, seller/admin data all
+  bypass the cache entirely and always hit the network, so there's no
+  risk of stale or cross-user personal data being served from cache.
+- The service worker now registers on every page load for every visitor
+  (previously it only registered when a delivery agent opted into push
+  notifications), which is also what makes the site installable as an
+  app on a phone's home screen.
+- `offline.html` - shown when someone navigates to a page that isn't
+  cached and there's no connection.
+
+### Background job processing (node-cron, no Redis/queue needed)
+- **staleOrders** (every 15 min): auto-cancels orders paid by mobile
+  money that sat 2+ hours with no payment confirmation webhook (buyer
+  abandoned the USSD prompt, network dropped, etc.) - previously these
+  just sat "pending" forever. Also closes out any payment row (order or
+  seller verification fee) stuck pending past the same cutoff.
+- **otpCleanup** (daily, 03:00): housekeeping - deletes old
+  consumed/expired OTP codes so `otp_codes` doesn't grow forever. Not a
+  correctness fix (expired codes are already rejected regardless), just
+  keeps the table small.
+
+### Fraud detection (rule-based, no ML/external service)
+Three explainable heuristics, each producing a plain-English reason an
+admin can immediately understand:
+- **High-value first order** - a buyer's very first order is unusually
+  large (≥1,000,000 TZS)
+- **Order velocity** - 3+ orders from the same buyer within 10 minutes
+- **Withdrawal outlier** - a seller's withdrawal request is 4x+ their own
+  historical average (needs 2+ prior withdrawals to have a baseline)
+
+New admin page at `/admin/fraud` ("Fraud review" in the sidebar) to
+dismiss or confirm each flag. Flags are advisory only - nothing is
+auto-blocked, orders/withdrawals still process normally; this just
+surfaces things for a human to look at.
+
+### Revenue forecasting (linear regression, no ML service)
+Ordinary least-squares trend line fit to the last 30 days of revenue,
+projected 7 days forward. Shows on the admin dashboard chart as dashed
+mango bars alongside the real 14-day history. Deliberately simple - no
+seasonality modeling, no external forecasting API - a straight trend line
+is an honest level of confidence for a platform this size; anything
+fancier would mostly be overfitting noise.
+
+### Realtime admin dashboard
+New orders and confirmed payments now push a lightweight
+`admin:stats_changed` event over the existing Socket.io connection to
+anyone with an admin dashboard open, which silently refetches the numbers
+(with a small "Updating…" indicator) instead of only ever reflecting
+whatever the numbers were on page load.
+
+### Voice search
+Mic button in the header search box using the browser's built-in Web
+Speech API - no external speech-to-text service. The button **only
+renders when the browser actually supports it**; iOS Safari and some
+others don't, and rather than show a mic button that errors or does
+nothing there, it just doesn't appear.
 
 ## 4. Smoke test after deploy
-- [ ] Search for something 3+ characters - results should still be
-      relevant (now ranked by match quality, not just recency)
-- [ ] Search for something 1-2 characters - should still work (LIKE fallback)
-- [ ] Open Network tab, load the homepage - JS should arrive gzip-encoded
-      (`content-encoding: gzip` response header)
-- [ ] Open Network tab, navigate around the site - you should see small,
-      separate JS chunk files load per page instead of one big bundle
-      upfront
-- [ ] Try logging in with the wrong password ~20+ times fast - should get
-      a "Too many attempts" response instead of hanging the server
+- [ ] Visit the site on your phone → browser should offer "Add to Home
+      Screen" / install prompt (may take a couple of visits on some browsers)
+- [ ] Browse a few products, then turn off wifi/data → those pages should
+      still load; a page you haven't visited should show the offline screen
+- [ ] Admin dashboard → daily sales chart should show dashed
+      "projected" bars for the next 7 days
+- [ ] Place a high-value first order (or 3 fast orders) as a test buyer →
+      check it shows up under Admin → Fraud review
+- [ ] Open the admin dashboard in two tabs, place an order in a third →
+      both dashboard tabs should show "Updating…" and refresh automatically
+- [ ] On a browser that supports it (Chrome desktop/Android), tap the mic
+      icon in search and speak a product name
+
+## 5. Still not attempted (needs a paid API/provider decision)
+AI chatbot, AI product descriptions, AI category prediction, AI spam
+review detection, personalized homepage - same as last time, these need
+an LLM provider chosen before any of them make sense to build.

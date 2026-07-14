@@ -1,4 +1,4 @@
-export default function BarChart({ data, labelKey, valueKey, formatValue }) {
+export default function BarChart({ data, labelKey, valueKey, formatValue, highlightKey }) {
     if (!data || data.length === 0) {
         return <p className="text-ash text-sm">No data to display.</p>;
     }
@@ -13,6 +13,9 @@ export default function BarChart({ data, labelKey, valueKey, formatValue }) {
                 const heightPct = (value / max) * 100;
                 const label = item[labelKey];
                 const display = formatValue ? formatValue(value) : value;
+                // Optional second series marker (e.g. forecasted vs actual
+                // days) - renders as a dashed/muted bar instead of solid.
+                const isHighlighted = highlightKey && item[highlightKey];
 
                 return (
                     <div
@@ -20,11 +23,16 @@ export default function BarChart({ data, labelKey, valueKey, formatValue }) {
                         className="group relative flex-1 flex flex-col justify-end h-full"
                     >
                         <div
-                            className="w-full bg-azure hover:bg-azure-deep rounded-sm transition-colors"
+                            className={`w-full rounded-sm transition-colors ${
+                                isHighlighted
+                                    ? "bg-mango/40 border border-dashed border-mango-dark hover:bg-mango/60"
+                                    : "bg-azure hover:bg-azure-deep"
+                            }`}
                             style={{ height: `${heightPct}%`, minHeight: value > 0 ? "2px" : 0 }}
                         />
                         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-ink px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-10">
                             {display}
+                            {isHighlighted && <span className="text-mango"> · projected</span>}
                             {label !== undefined && (
                                 <span className="text-white/60"> · {label}</span>
                             )}

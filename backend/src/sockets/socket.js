@@ -12,13 +12,6 @@ exports.emitNewMessage = (conversationId, payload) => {
     io.to(`conversation:${conversationId}`).emit("new_message", payload);
 };
 
-// Broadcasts a "delete for everyone" so anyone with the thread open live
-// removes/tombstones the message without needing to refetch.
-exports.emitMessageDeleted = (conversationId, payload) => {
-    if (!io) return;
-    io.to(`conversation:${conversationId}`).emit("message_deleted", payload);
-};
-
 // Every authenticated socket auto-joins `user:{id}` on connect (see below),
 // so any backend module can push an event straight to one person without
 // needing to know their socket id — used for delivery offers, assignment
@@ -33,6 +26,15 @@ exports.emitToUser = (userId, event, payload) => {
 exports.emitToOrder = (orderId, event, payload) => {
     if (!io) return;
     io.to(`order:${orderId}`).emit(event, payload);
+};
+
+// Every admin socket auto-joins `admins` on connect (see below) - used to
+// push a lightweight "your numbers changed, go refetch" signal to any
+// open admin dashboard on new orders/payments, rather than the dashboard
+// only ever reflecting whatever it looked like when the page loaded.
+exports.emitToAdmins = (event, payload) => {
+    if (!io) return;
+    io.to("admins").emit(event, payload);
 };
 
 exports.init = (httpServer) => {
@@ -65,6 +67,10 @@ exports.init = (httpServer) => {
     io.on("connection", (socket) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
+
+        if (socket.user.role === "admin") {
+            socket.join("admins");
+        }
 
         socket.on("join_conversation", async (conversationId) => {
             try {

@@ -1,12 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 
 // Wraps a CSS custom property (defined in index.css as space-separated
-// RGB, e.g. "17 24 39") so Tailwind's opacity modifiers keep working,
-// e.g. `text-paper/80`, `bg-mango/10`. This is what makes theme
-// switching (light/dark) apply everywhere these tokens are used, without
-// touching every component: swap the variable's value once (in
-// :root / .dark in index.css) and every bg-ink / text-paper / border-line
-// / etc. in the app repaints automatically.
 const withOpacity = (variable) => ({ opacityValue }) =>
     opacityValue !== undefined
         ? `rgb(var(${variable}) / ${opacityValue})`

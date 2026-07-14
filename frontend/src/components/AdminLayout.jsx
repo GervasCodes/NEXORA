@@ -10,6 +10,7 @@ const tabs = [
     { to: "/admin/store-types", label: "Store types" },
     { to: "/admin/orders", label: "Orders" },
     { to: "/admin/withdrawals", label: "Withdrawals" },
+    { to: "/admin/fraud", label: "Fraud review" },
     { to: "/admin/admins", label: "Admins" },
     { to: "/admin/settings", label: "Settings" }
 ];

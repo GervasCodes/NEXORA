@@ -11,9 +11,7 @@ const loadStoredUser = () => {
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(loadStoredUser());
 
-    // Step 1 of login: email + password. Never signs the user in directly -
-    // on success the backend has emailed an OTP, and this returns what's
-    // needed to complete step 2 (verifyLoginOtp).
+   
     const login = useCallback(async (email, password) => {
         try {
             const { data } = await api.post("/auth/login", { email, password });
@@ -28,7 +26,7 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    // Step 2 of login: the emailed OTP code. Only now is a session created.
+    
     const verifyLoginOtp = useCallback(async (preAuthToken, code) => {
         try {
             const { data } = await api.post("/auth/login/verify-otp", { pre_auth_token: preAuthToken, code });

@@ -18,9 +18,7 @@ export default function Account() {
     const [deletePassword, setDeletePassword] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    // --- OTP-gated password change ---
-    // 'idle' -> tap "Change Password" -> 'otp' (code emailed, awaiting entry)
-    // -> verified -> 'form' (new password field unlocked) -> 'idle' on success
+    
     const [pwdStep, setPwdStep] = useState("idle");
     const [pwdCode, setPwdCode] = useState("");
     const [reauthToken, setReauthToken] = useState(null);
@@ -38,8 +36,7 @@ export default function Account() {
                 email: data.data.email,
                 phone: data.data.phone
             });
-            // Only takes effect if this device doesn't already have a local
-            // preference saved - see ThemeContext/LanguageContext/CurrencyContext.
+            
             syncTheme(data.data.theme);
             syncLanguage(data.data.language);
             syncCurrency(data.data.currency);
@@ -65,9 +62,7 @@ export default function Account() {
         }
     };
 
-    // Settings apply instantly (via context) the moment they're picked -
-    // saving here just persists that choice to the account so it follows
-    // the user to their next device/session.
+    
     const persistSettings = async (patch) => {
         setBusy("settings");
         try {

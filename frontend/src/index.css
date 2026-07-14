@@ -2,14 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Theme tokens ---
-   Every brand color is a CSS variable (space-separated RGB) so
-   tailwind.config.js can wrap it with rgb(var(...) / <alpha-value>) and
-   opacity modifiers like `text-paper/80` keep working. Switching from
-   light -> dark just swaps which set of variables is active - every
-   bg-ink / text-paper / border-line / etc. in the app repaints
-   automatically, with zero per-component changes needed. See
-   context/ThemeContext.jsx for how `.dark` gets added to <html>. */
+
 :root {
     --color-abyss: 7 9 18;
     --color-abyss2: 17 22 35;
@@ -27,9 +20,7 @@
 }
 
 .dark {
-    /* Page background goes near-black; body text goes light. Brand accent
-       colors (mango/teal/coral/azure) stay the same - they're chosen to
-       read fine on both light and dark surfaces. */
+  
     --color-paper: 10 12 20;
     --color-ink: 231 233 238;
     --color-line: 34 39 54;
@@ -53,8 +44,7 @@ body {
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* The "price tag" motif: a dashed string + a punched hole, used on
-   product cards and price displays throughout the storefront. */
+
 .tag-string {
     position: relative;
 }
@@ -86,11 +76,7 @@ body {
     outline-offset: 2px;
 }
 
-/* --- Glassmorphism ---
-   Theme-aware: built from --color-paper/--color-ink/--color-abyss, so
-   these automatically read correctly in both light and dark mode instead
-   of being hardcoded to a white tint. Used across nav chrome, mobile
-   menus, modals/overlays, cards, and floating panels app-wide. */
+
 .glass {
     background: rgb(var(--color-paper) / 0.72);
     backdrop-filter: blur(16px) saturate(160%);
@@ -115,17 +101,13 @@ body {
     box-shadow: 0 12px 40px rgb(var(--color-abyss) / 0.18), inset 0 1px 0 rgb(var(--color-paper) / 0.7);
 }
 
-/* Lighter-touch variant for things that sit *inside* an already-glass
-   surface (menu items, list rows) where a second full blur layer would
-   be excessive - just a subtle tint + hairline border. */
+
 .glass-inset {
     background: rgb(var(--color-ink) / 0.04);
     border: 1px solid rgb(var(--color-ink) / 0.06);
 }
 
-/* backdrop-filter has no effect in a few older/embedded WebViews - fall
-   back to a solid, still-readable surface rather than a broken translucent
-   one with no blur behind it. */
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .glass { background: theme("colors.paper"); }
     .glass-dark { background: theme("colors.abyss"); }

@@ -1,6 +1,7 @@
 const { validationResult } = require("express-validator");
 const authService = require("./auth.service");
 const loginService = require("./login.service");
+const passwordResetService = require("./passwordReset.service");
 
 exports.register = async (req, res) => {
     try {
@@ -80,6 +81,36 @@ exports.resendLoginOtp = async (req, res) => {
             success: true,
             message: "A new code has been sent."
         });
+
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Always responds success regardless of whether the email exists -
+// see passwordReset.service.js for why (prevents email enumeration).
+exports.forgotPassword = async (req, res) => {
+    try {
+        await passwordResetService.requestPasswordReset(req.body.email);
+    } catch (error) {
+        // Swallowed deliberately - an OTP send failure here shouldn't
+        // reveal anything different to the caller than the happy path.
+    }
+
+    res.json({
+        success: true,
+        message: "If an account exists for that email, we've sent a reset code."
+    });
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        await passwordResetService.resetPassword(req.body.email, req.body.code, req.body.new_password);
+
+        res.json({ success: true, message: "Password reset. You can now sign in." });
 
     } catch (error) {
         res.status(400).json({

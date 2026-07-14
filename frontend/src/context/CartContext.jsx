@@ -23,7 +23,7 @@ export function CartProvider({ children }) {
             setItems(data.data.items);
             setTotal(data.data.total);
         } catch (error) {
-            // Silently ignore - cart just stays empty if this fails
+            
         } finally {
             setLoading(false);
         }

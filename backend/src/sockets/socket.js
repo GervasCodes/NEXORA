@@ -28,15 +28,6 @@ exports.emitToOrder = (orderId, event, payload) => {
     io.to(`order:${orderId}`).emit(event, payload);
 };
 
-// Every admin socket auto-joins `admins` on connect (see below) - used to
-// push a lightweight "your numbers changed, go refetch" signal to any
-// open admin dashboard on new orders/payments, rather than the dashboard
-// only ever reflecting whatever it looked like when the page loaded.
-exports.emitToAdmins = (event, payload) => {
-    if (!io) return;
-    io.to("admins").emit(event, payload);
-};
-
 exports.init = (httpServer) => {
     const corsOrigins = process.env.CORS_ORIGIN
         ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
@@ -56,6 +47,18 @@ exports.init = (httpServer) => {
             }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            // Same rule as REST auth.middleware.js: short-lived tokens
+            // (login pre-auth, password-change reauth) carry a `typ`
+            // claim and are only valid for their own dedicated endpoints -
+            // never as a real session, including opening a socket. Without
+            // this, a leaked pre-auth token (issued before OTP is even
+            // verified) could open a live connection to that user's
+            // channel before 2FA ever completes.
+            if (decoded.typ) {
+                return next(new Error("Invalid or expired token"));
+            }
+
             socket.user = decoded;
             next();
 
@@ -67,10 +70,6 @@ exports.init = (httpServer) => {
     io.on("connection", (socket) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
-
-        if (socket.user.role === "admin") {
-            socket.join("admins");
-        }
 
         socket.on("join_conversation", async (conversationId) => {
             try {

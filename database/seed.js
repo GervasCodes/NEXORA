@@ -35,6 +35,9 @@ const buildSslConfig = () => {
     if (process.env.DB_SSL_CA) {
         return { ca: process.env.DB_SSL_CA.replace(/\\n/g, "\n") };
     }
+    if (process.env.DB_SSL === "true") {
+        return { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === "true" };
+    }
     return undefined;
 };
 

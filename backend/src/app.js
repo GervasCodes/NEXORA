@@ -32,6 +32,17 @@ const authorizeMiddleware = require("./middleware/authorize.middleware");
 
 const app = express();
 
+// Render (like Heroku/most PaaS) puts the app behind a reverse proxy, so
+// every request's real client IP only exists in the X-Forwarded-For
+// header - req.ip resolves to the proxy's own IP unless this is set.
+// Without it, express-rate-limit below keys its rate limits off that one
+// shared proxy IP for EVERY user, meaning normal combined traffic from
+// real visitors could trip the limiter and lock out the whole site
+// within minutes of going live. `1` = trust exactly one hop (Render's
+// own proxy) rather than blindly trusting the whole X-Forwarded-For
+// chain, which would let a malicious client spoof their own IP.
+app.set("trust proxy", 1);
+
 // Middlewares
 // CORS_ORIGIN can be a single origin or a comma-separated list. Falls back
 // to "*" only if unset, which is fine for local dev but should always be

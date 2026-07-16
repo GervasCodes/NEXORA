@@ -82,7 +82,7 @@ export default function AdminCategories() {
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[200px]"
                 />
                 <button type="submit" disabled={submitting}
-                    className="bg-mango text-ink px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60">
+                    className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60">
                     {submitting ? "Saving…" : editingId ? "Save changes" : "Add category"}
                 </button>
                 {editingId && (

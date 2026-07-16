@@ -55,7 +55,7 @@ export default function DeliveryAvailable() {
                         <button
                             onClick={() => claim(order.order_id)}
                             disabled={busyId === order.order_id}
-                            className="bg-mango text-ink px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60"
+                            className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60"
                         >
                             {busyId === order.order_id ? "Claiming…" : "Claim"}
                         </button>

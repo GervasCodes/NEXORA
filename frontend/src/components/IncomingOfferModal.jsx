@@ -70,7 +70,7 @@ export default function IncomingOfferModal() {
                         Decline
                     </button>
                     <button onClick={() => respond(true)}
-                        className="flex-1 bg-mango text-ink py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                        className="flex-1 bg-mango text-abyss py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
                         Accept ({Math.ceil(msLeft / 1000)}s)
                     </button>
                 </div>

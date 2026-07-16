@@ -158,7 +158,7 @@ export default function ProductDetail() {
                             />
                             <button
                                 onClick={handleAddToCart}
-                                className="bg-mango text-ink px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring"
+                                className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring"
                             >
                                 Add to cart
                             </button>

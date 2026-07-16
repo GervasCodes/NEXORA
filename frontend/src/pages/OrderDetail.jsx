@@ -165,7 +165,7 @@ export default function OrderDetail() {
             <div className="flex flex-wrap gap-3">
                 {order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryPayment} disabled={busy}
-                        className="bg-mango text-ink px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Processing…" : "Pay with Mobile Money"}
                     </button>
                 )}

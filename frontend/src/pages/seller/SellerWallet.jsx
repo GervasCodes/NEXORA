@@ -76,7 +76,7 @@ export default function SellerWallet() {
                 </div>
                 <button
                     onClick={() => setShowForm((s) => !s)}
-                    className="bg-mango text-ink px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors"
+                    className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors"
                 >
                     {showForm ? "Cancel" : "Withdraw funds"}
                 </button>

@@ -176,7 +176,7 @@ export default function SellerStore() {
                 {saved && <p className="text-teal text-sm">Store settings saved.</p>}
 
                 <button type="submit" disabled={submitting}
-                    className="bg-mango text-ink px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                     {submitting ? "Saving…" : "Save changes"}
                 </button>
             </form>

@@ -104,7 +104,7 @@ export default function AdminSettings() {
                 <button
                     type="submit"
                     disabled={saving}
-                    className="bg-mango text-ink px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-50"
+                    className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-50"
                 >
                     {saving ? "Saving…" : "Save settings"}
                 </button>

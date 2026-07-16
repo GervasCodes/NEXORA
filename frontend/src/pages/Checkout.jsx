@@ -113,7 +113,7 @@ export default function Checkout() {
                 {error && <p className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
-                    className="w-full bg-mango text-ink py-3 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    className="w-full bg-mango text-abyss py-3 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                     {submitting ? "Placing order…" : `Place order · ${format(total)}`}
                 </button>
             </form>

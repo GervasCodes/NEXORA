@@ -88,7 +88,7 @@ export default function Login() {
                     <button
                         type="submit"
                         disabled={submitting || code.length !== 6}
-                        className="w-full bg-mango text-ink py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                        className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
                     >
                         {submitting ? "Verifying…" : "Verify & sign in"}
                     </button>
@@ -145,7 +145,7 @@ export default function Login() {
                 <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-mango text-ink py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
                 >
                     {submitting ? "Signing in…" : "Sign in"}
                 </button>

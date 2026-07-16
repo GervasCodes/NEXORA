@@ -194,7 +194,7 @@ export default function Register() {
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="flex-1 bg-mango text-ink py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                            className="flex-1 bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
                         >
                             {submitting ? "Submitting…" : "Submit for review"}
                         </button>
@@ -260,7 +260,7 @@ export default function Register() {
                 {error && <p className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
-                    className="w-full bg-mango text-ink py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                     {submitting ? "Creating account…" : needsDocuments ? "Continue to verification" : "Create account"}
                 </button>
             </form>

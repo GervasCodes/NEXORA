@@ -40,7 +40,7 @@ export default function SellerOverview() {
             </div>
 
             <div className="flex gap-3">
-                <Link to="/seller/products/new" className="bg-mango text-ink px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                <Link to="/seller/products/new" className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
                     List a new product
                 </Link>
                 <Link to="/seller/orders" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">

@@ -150,7 +150,7 @@ export default function SellerProductForm() {
                 {error && <p className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
-                    className="bg-mango text-ink px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                     {submitting ? "Saving…" : isEdit ? "Save changes" : "Create product"}
                 </button>
             </form>

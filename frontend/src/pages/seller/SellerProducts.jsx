@@ -30,7 +30,7 @@ export default function SellerProducts() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-display text-2xl">Your products</h1>
-                <Link to="/seller/products/new" className="bg-mango text-ink px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                <Link to="/seller/products/new" className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
                     + New product
                 </Link>
             </div>

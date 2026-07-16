@@ -67,7 +67,7 @@ export default function Cart() {
 
             <button
                 onClick={() => navigate("/checkout")}
-                className="w-full sm:w-auto bg-mango text-ink px-8 py-3 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring"
+                className="w-full sm:w-auto bg-mango text-abyss px-8 py-3 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring"
             >
                 Proceed to checkout
             </button>

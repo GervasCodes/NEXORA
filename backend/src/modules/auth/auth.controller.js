@@ -14,7 +14,7 @@ exports.register = async (req, res) => {
             });
         }
 
-        const result = await authService.register(req.body);
+        const result = await authService.register(req.body, req.files);
 
         res.status(201).json({
             success: true,

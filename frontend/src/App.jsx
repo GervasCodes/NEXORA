@@ -53,6 +53,7 @@ const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminVerifications = lazy(() => import("./pages/admin/AdminVerifications"));
+const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
 
@@ -119,6 +120,7 @@ export default function App() {
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="verifications" element={<AdminVerifications />} />
+                            <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />
                         </Route>

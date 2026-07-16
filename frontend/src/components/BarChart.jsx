@@ -30,11 +30,11 @@ export default function BarChart({ data, labelKey, valueKey, formatValue, highli
                             }`}
                             style={{ height: `${heightPct}%`, minHeight: value > 0 ? "2px" : 0 }}
                         />
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-ink px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-ink px-2 py-1 text-xs text-paper opacity-0 group-hover:opacity-100 transition-opacity z-10">
                             {display}
                             {isHighlighted && <span className="text-mango"> · projected</span>}
                             {label !== undefined && (
-                                <span className="text-white/60"> · {label}</span>
+                                <span className="text-paper/60"> · {label}</span>
                             )}
                         </div>
                     </div>

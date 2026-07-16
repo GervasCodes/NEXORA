@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAgentShift } from "../hooks/useAgentShift";
 import IncomingOfferModal from "./IncomingOfferModal";
+import { useAuth } from "../context/AuthContext";
+import AccountReviewNotice from "./AccountReviewNotice";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
@@ -8,7 +10,7 @@ const tabs = [
     { to: "/delivery/earnings", label: "Earnings" }
 ];
 
-export default function DeliveryLayout() {
+function ApprovedDeliveryLayout() {
     const { online, goOnline, goOffline, locationError, pushWarning } = useAgentShift();
 
     const toggleShift = () => (online ? goOffline() : goOnline());
@@ -62,4 +64,29 @@ export default function DeliveryLayout() {
             <Outlet />
         </div>
     );
+}
+
+export default function DeliveryLayout() {
+    const { user } = useAuth();
+
+    // Base account-level gate: set during registration, reviewed by an
+    // admin. Going online, browsing available orders, claiming
+    // deliveries, and viewing earnings all stay hidden until this is
+    // "approved" - see requireApprovedDeliveryAgent.middleware.js for the
+    // matching API-side gate. useAgentShift() (geolocation, push
+    // subscription, online-status polling) only mounts once approved, so
+    // a pending agent isn't prompted for location access for nothing.
+    if (user?.account_verification_status !== "approved") {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+                <AccountReviewNotice
+                    status={user?.account_verification_status}
+                    rejectionReason={user?.account_verification_rejection_reason}
+                    roleLabel="delivery"
+                />
+            </div>
+        );
+    }
+
+    return <ApprovedDeliveryLayout />;
 }

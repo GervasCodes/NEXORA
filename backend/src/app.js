@@ -22,6 +22,7 @@ const notificationRoutes = require("./modules/notification/notification.routes")
 const chatRoutes = require("./modules/chat/chat.routes");
 const pushRoutes = require("./modules/push/push.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
+const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
@@ -187,6 +188,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/push", pushRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);

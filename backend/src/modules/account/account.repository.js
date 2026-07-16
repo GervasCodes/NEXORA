@@ -3,6 +3,8 @@ const db = require("../../config/db");
 exports.findById = async (userId) => {
     const [rows] = await db.query(
         `SELECT id, first_name, last_name, email, phone, role, admin_level,
+                account_verification_status, account_verification_rejection_reason,
+                account_verification_submitted_at, account_verification_reviewed_at,
                 language, theme, currency, is_active, created_at
         FROM users WHERE id = ?`,
         [userId]

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
+import { useAuth } from "../context/AuthContext";
+import AccountReviewNotice from "./AccountReviewNotice";
 
 const tabs = [
     { to: "/seller", label: "Overview", end: true },
@@ -14,12 +16,23 @@ const tabs = [
 ];
 
 export default function SellerLayout() {
+    const { user } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Base account-level gate: set during registration, reviewed by an
+    // admin. Nothing seller-specific (store setup, products, orders,
+    // analytics, wallet) is reachable until this is "approved" - see
+    // requireApprovedSeller.middleware.js for the matching API-side gate.
+    const isApproved = user?.account_verification_status === "approved";
+
     const loadProfile = () => {
+        if (!isApproved) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         api.get("/seller/profile")
             .then(({ data }) => setProfile(data.data))
@@ -27,13 +40,25 @@ export default function SellerLayout() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(loadProfile, []);
+    useEffect(loadProfile, [isApproved]);
 
     useEffect(() => {
-        if (!loading && !profile && location.pathname !== "/seller/setup") {
+        if (isApproved && !loading && !profile && location.pathname !== "/seller/setup") {
             navigate("/seller/setup", { replace: true });
         }
-    }, [loading, profile, location.pathname, navigate]);
+    }, [isApproved, loading, profile, location.pathname, navigate]);
+
+    if (!isApproved) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+                <AccountReviewNotice
+                    status={user?.account_verification_status}
+                    rejectionReason={user?.account_verification_rejection_reason}
+                    roleLabel="seller"
+                />
+            </div>
+        );
+    }
 
     if (loading) {
         return <div className="max-w-5xl mx-auto px-6 py-16 text-ash">Loading your store…</div>;

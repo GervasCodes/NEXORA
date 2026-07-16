@@ -50,7 +50,10 @@ export function AuthProvider({ children }) {
 
     const register = useCallback(async (payload) => {
         try {
-            await api.post("/auth/register", payload);
+            const isFormData = payload instanceof FormData;
+            await api.post("/auth/register", payload, isFormData ? {
+                headers: { "Content-Type": "multipart/form-data" }
+            } : undefined);
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };

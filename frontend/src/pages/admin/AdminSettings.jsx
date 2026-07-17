@@ -7,6 +7,7 @@ export default function AdminSettings() {
     const [commissionRate, setCommissionRate] = useState("");
     const [riderFee, setRiderFee] = useState("");
     const [verificationFee, setVerificationFee] = useState("");
+    const [usdRate, setUsdRate] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
@@ -18,6 +19,7 @@ export default function AdminSettings() {
                 setCommissionRate(data.data.commission_rate);
                 setRiderFee(data.data.rider_delivery_fee);
                 setVerificationFee(data.data.seller_verification_fee);
+                setUsdRate(data.data.usd_exchange_rate);
             })
             .catch(() => setError("Couldn't load settings."))
             .finally(() => setLoading(false));
@@ -33,7 +35,8 @@ export default function AdminSettings() {
             const { data } = await api.put("/admin/settings", {
                 commission_rate: Number(commissionRate),
                 rider_delivery_fee: Number(riderFee),
-                seller_verification_fee: Number(verificationFee)
+                seller_verification_fee: Number(verificationFee),
+                usd_exchange_rate: Number(usdRate)
             });
             setSettings(data.data);
             setSaved(true);
@@ -99,6 +102,23 @@ export default function AdminSettings() {
                         className="w-full border border-line rounded-md px-3 py-2 text-sm"
                     />
                     <p className="text-xs text-ash mt-1">One-time fee a seller pays to unlock the Verified Seller badge.</p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-1">USD exchange rate (TZS per $1)</label>
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                        value={usdRate}
+                        onChange={(e) => setUsdRate(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">
+                        Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
+                        Stripe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
+                    </p>
                 </div>
 
                 <button

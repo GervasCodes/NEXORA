@@ -36,13 +36,34 @@ export default function Checkout() {
                 delivery_lng: pin?.lng ?? null
             };
             const { data } = await api.post("/orders", payload);
+            const orderId = data.data.orderId;
 
             if (form.payment_method === "mobile_money") {
-                await api.post(`/payments/${data.data.orderId}/initiate`);
+                await api.post(`/payments/${orderId}/initiate`);
+
+            } else if (form.payment_method === "stripe") {
+                const origin = window.location.origin;
+                const { data: checkout } = await api.post(`/payments/${orderId}/stripe/checkout`, {
+                    successUrl: `${origin}/orders/${orderId}?payment=success`,
+                    cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
+                });
+                await refresh();
+                window.location.href = checkout.data.url;
+                return;
+
+            } else if (form.payment_method === "paypal") {
+                const origin = window.location.origin;
+                const { data: checkout } = await api.post(`/payments/${orderId}/paypal/create`, {
+                    returnUrl: `${origin}/orders/${orderId}?payment=paypal_return`,
+                    cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
+                });
+                await refresh();
+                window.location.href = checkout.data.url;
+                return;
             }
 
             await refresh();
-            navigate(`/orders/${data.data.orderId}`, { state: { justPlaced: true } });
+            navigate(`/orders/${orderId}`, { state: { justPlaced: true } });
 
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -106,6 +127,19 @@ export default function Checkout() {
                                 checked={form.payment_method === "cash_on_delivery"}
                                 onChange={update("payment_method")} />
                             Cash on Delivery
+                        </label>
+                        <label className="flex items-center gap-2 border border-line rounded-md px-3 py-2 text-sm cursor-pointer">
+                            <input type="radio" name="payment_method" value="stripe"
+                                checked={form.payment_method === "stripe"}
+                                onChange={update("payment_method")} />
+                            Card (Stripe)
+                        </label>
+                        <label className="flex items-center gap-2 border border-line rounded-md px-3 py-2 text-sm cursor-pointer">
+                            <input type="radio" name="payment_method" value="paypal"
+                                checked={form.payment_method === "paypal"}
+                                onChange={update("payment_method")} />
+                            PayPal
+                            <span className="text-xs text-ash">(charged in USD)</span>
                         </label>
                     </div>
                 </div>

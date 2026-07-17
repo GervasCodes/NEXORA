@@ -30,6 +30,48 @@ export default function OrderDetail() {
 
     useEffect(load, [id]);
 
+    // Handles the buyer landing back here after Stripe/PayPal:
+    //   ?payment=success        - Stripe: the webhook already confirmed the
+    //                             payment server-side by the time the buyer's
+    //                             browser gets here in most cases, but we
+    //                             still reload the order to pick that up.
+    //   ?payment=cancelled      - buyer backed out on Stripe/PayPal's site.
+    //   ?payment=paypal_return  - PayPal redirects back with ?token=<paypal
+    //                             order id>; THIS is what actually captures
+    //                             the funds - never trust the redirect alone.
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const payment = params.get("payment");
+        if (!payment) return;
+
+        const cleanUrl = () => navigate(`/orders/${id}`, { replace: true, state: location.state });
+
+        if (payment === "paypal_return") {
+            const paypalOrderId = params.get("token");
+            if (!paypalOrderId) {
+                cleanUrl();
+                return;
+            }
+            api.post("/payments/paypal/capture", { paypalOrderId })
+                .then(() => setActionMessage("Payment successful."))
+                .catch((err) => setActionError(extractErrorMessage(err)))
+                .finally(() => {
+                    load();
+                    cleanUrl();
+                });
+
+        } else if (payment === "success") {
+            setActionMessage("Payment successful.");
+            load();
+            cleanUrl();
+
+        } else if (payment === "cancelled") {
+            setActionError("Payment was cancelled - your order is still saved, you can try paying again below.");
+            cleanUrl();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.search]);
+
     const { socket, connected } = useSocket();
 
     useEffect(() => {
@@ -88,6 +130,38 @@ export default function OrderDetail() {
         } catch (err) {
             setActionError(extractErrorMessage(err));
         } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleRetryStripe = async () => {
+        setBusy(true);
+        setActionError("");
+        try {
+            const origin = window.location.origin;
+            const { data } = await api.post(`/payments/${id}/stripe/checkout`, {
+                successUrl: `${origin}/orders/${id}?payment=success`,
+                cancelUrl: `${origin}/orders/${id}?payment=cancelled`
+            });
+            window.location.href = data.data.url;
+        } catch (err) {
+            setActionError(extractErrorMessage(err));
+            setBusy(false);
+        }
+    };
+
+    const handleRetryPaypal = async () => {
+        setBusy(true);
+        setActionError("");
+        try {
+            const origin = window.location.origin;
+            const { data } = await api.post(`/payments/${id}/paypal/create`, {
+                returnUrl: `${origin}/orders/${id}?payment=paypal_return`,
+                cancelUrl: `${origin}/orders/${id}?payment=cancelled`
+            });
+            window.location.href = data.data.url;
+        } catch (err) {
+            setActionError(extractErrorMessage(err));
             setBusy(false);
         }
     };
@@ -167,6 +241,18 @@ export default function OrderDetail() {
                     <button onClick={handleRetryPayment} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Processing…" : "Pay with Mobile Money"}
+                    </button>
+                )}
+                {order.payment_method === "stripe" && order.payment_status === "unpaid" && (
+                    <button onClick={handleRetryStripe} disabled={busy}
+                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                        {busy ? "Redirecting…" : "Pay with Card (Stripe)"}
+                    </button>
+                )}
+                {order.payment_method === "paypal" && order.payment_status === "unpaid" && (
+                    <button onClick={handleRetryPaypal} disabled={busy}
+                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                        {busy ? "Redirecting…" : "Pay with PayPal"}
                     </button>
                 )}
                 {CANCELLABLE.includes(order.status) && (

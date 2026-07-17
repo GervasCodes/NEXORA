@@ -18,12 +18,14 @@ exports.create = async (orderId, method, amount) => {
 };
 
 // Seller verification fee payments have no order - they're tied to a
-// seller instead, and identified by purpose.
-exports.createVerificationFeePayment = async (sellerId, amount) => {
+// seller instead, and identified by purpose. `method` defaults to
+// 'mobile_money' for backwards compatibility with existing callers, but
+// Stripe/PayPal verification fee payments pass their own method.
+exports.createVerificationFeePayment = async (sellerId, amount, method = "mobile_money") => {
     const [result] = await db.query(
         `INSERT INTO payments (order_id, seller_id, method, status, amount, purpose)
-        VALUES (NULL, ?, 'mobile_money', 'pending', ?, 'seller_verification_fee')`,
-        [sellerId, amount]
+        VALUES (NULL, ?, ?, 'pending', ?, 'seller_verification_fee')`,
+        [sellerId, method, amount]
     );
     return result.insertId;
 };
@@ -38,6 +40,19 @@ exports.findPendingVerificationFeePayment = async (sellerId) => {
     return rows[0];
 };
 
+// Looks up a payment by the reference stored when it was initiated
+// (Stripe Checkout Session id, or PayPal order id) - used when a
+// provider only gives us that id back (e.g. PayPal's capture response,
+// or a frontend return-URL query param) and we need to find our own
+// payment row and its order_id/seller_id/purpose.
+exports.findByTransactionReference = async (transactionReference) => {
+    const [rows] = await db.query(
+        "SELECT * FROM payments WHERE transaction_reference = ? ORDER BY created_at DESC LIMIT 1",
+        [transactionReference]
+    );
+    return rows[0];
+};
+
 exports.markPending = async (paymentId, transactionReference) => {
     await db.query(
         `UPDATE payments
@@ -48,15 +63,21 @@ exports.markPending = async (paymentId, transactionReference) => {
     );
 };
 
-exports.markCompleted = async (paymentId, transactionReference, receiptNumber) => {
+// chargedCurrency/chargedAmount: only set for foreign-currency gateways
+// (PayPal, currently) where what was actually charged differs from
+// payments.amount (always TZS) - see migration 028. Left undefined/null
+// for TZS-native gateways (mobile money, Stripe, COD).
+exports.markCompleted = async (paymentId, transactionReference, receiptNumber, chargedCurrency = null, chargedAmount = null) => {
     await db.query(
         `UPDATE payments
         SET status = 'completed',
             transaction_reference = ?,
             receipt_number = ?,
-            paid_at = NOW()
+            paid_at = NOW(),
+            charged_currency = ?,
+            charged_amount = ?
         WHERE id = ?`,
-        [transactionReference, receiptNumber, paymentId]
+        [transactionReference, receiptNumber, chargedCurrency, chargedAmount, paymentId]
     );
 };
 

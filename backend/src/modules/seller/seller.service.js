@@ -1,10 +1,9 @@
 const sellerRepository = require("./seller.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
+const authRepository = require("../auth/auth.repository");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
-
-const DOCUMENT_TYPES = ["national_id", "voter_id", "business_registration"];
 
 exports.uploadStoreLogo = async (userId, file) => {
     const seller = await sellerRepository.findByUserId(userId);
@@ -163,76 +162,21 @@ exports.getAnalytics = async (sellerId) => {
     };
 };
 
-// --- Seller verification (National ID / Voter ID / business registration) ---
+// --- Verification fee / paid "Verified Seller" badge ---
+// The document-based per-seller verification_status flow this used to
+// depend on was removed in migration 029 - approval now comes from the
+// centralized users.account_verification_status gate (set at
+// registration, reviewed via accountVerification module) instead.
 
-exports.getVerification = async (userId) => {
-    const seller = await sellerRepository.findByUserId(userId);
-
-    if (!seller) {
-        throw new Error("Seller profile not found. Set up your store first.");
-    }
-
-    const documents = await sellerRepository.findDocumentsBySeller(userId);
-    const feeAmount = await settingsService.getVerificationFee();
-
-    return {
-        verification_status: seller.verification_status,
-        verification_rejection_reason: seller.verification_rejection_reason,
-        verification_submitted_at: seller.verification_submitted_at,
-        verification_reviewed_at: seller.verification_reviewed_at,
-        verification_fee_paid: !!seller.verification_fee_paid,
-        verification_fee_amount: seller.verification_fee_amount,
-        is_verified: !!seller.is_verified,
-        required_fee: feeAmount,
-        documents
-    };
-};
-
-// files: { national_id: [file], voter_id: [file], business_registration: [file] }
-exports.submitVerification = async (userId, files) => {
-    const seller = await sellerRepository.findByUserId(userId);
-
-    if (!seller) {
-        throw new Error("Seller profile not found. Set up your store first.");
-    }
-
-    if (seller.verification_status === "pending") {
-        throw new Error("Your documents are already under review.");
-    }
-
-    if (seller.verification_status === "approved") {
-        throw new Error("Your seller account is already verified.");
-    }
-
-    const missing = DOCUMENT_TYPES.filter((type) => !files?.[type]?.[0]);
-    if (missing.length > 0) {
-        throw new Error(`Please upload all required documents: ${missing.join(", ")}`);
-    }
-
-    for (const type of DOCUMENT_TYPES) {
-        const file = files[type][0];
-        const result = await uploadToCloudinary(file.buffer, "seller/verification", "auto");
-        await sellerRepository.insertDocument(userId, type, result.secure_url);
-    }
-
-    await sellerRepository.setVerificationSubmitted(userId);
-
-    notificationService.notify({
-        userId,
-        type: "seller_verification",
-        title: "Verification documents submitted",
-        message: "We've received your verification documents. An admin will review them shortly.",
-        withEmail: true
-    }).catch((err) => console.error("verification submit notify error:", err));
-
-    return exports.getVerification(userId);
-};
-
-// Reconciles the paid badge: only true once an admin has approved AND the
-// fee has been paid, in either order.
+// Reconciles the paid badge: only true once the account-level
+// verification has been approved AND the fee has been paid, in either
+// order.
 const syncBadge = async (userId) => {
-    const seller = await sellerRepository.findByUserId(userId);
-    const shouldBeVerified = seller.verification_status === "approved" && !!seller.verification_fee_paid;
+    const [seller, user] = await Promise.all([
+        sellerRepository.findByUserId(userId),
+        authRepository.findById(userId)
+    ]);
+    const shouldBeVerified = user?.account_verification_status === "approved" && !!seller.verification_fee_paid;
 
     if (!!seller.is_verified !== shouldBeVerified) {
         await sellerRepository.setBadge(userId, shouldBeVerified);
@@ -285,11 +229,6 @@ exports.payVerificationFee = async (userId, phone) => {
 exports.confirmVerificationFeePaid = async (userId, amount, transactionReference) => {
     await sellerRepository.setVerificationFeePaid(userId, amount, transactionReference);
     await syncBadge(userId);
-};
-
-exports.isApproved = async (userId) => {
-    const seller = await sellerRepository.findByUserId(userId);
-    return seller?.verification_status === "approved";
 };
 
 exports.syncBadgeForSeller = syncBadge;

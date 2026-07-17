@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import api from "../../api/client";
+import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatShortDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
+import VerificationFeeGate from "../../components/VerificationFeeGate";
 
 const STATUS_LABELS = {
     pending: "Pending",
@@ -13,19 +14,51 @@ const STATUS_LABELS = {
 };
 
 export default function SellerAnalytics() {
-    const { profile } = useOutletContext();
+    const { profile, refreshProfile } = useOutletContext();
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [feeRequired, setFeeRequired] = useState(null); // required_fee amount, or null if not locked
 
-    useEffect(() => {
+    const load = () => {
+        setLoading(true);
+        setError("");
+        setFeeRequired(null);
         api.get("/seller/analytics")
             .then(({ data }) => setAnalytics(data.data))
-            .catch(() => setError("Couldn't load analytics."))
+            .catch((err) => {
+                if (err.response?.data?.code === "VERIFICATION_FEE_REQUIRED") {
+                    setFeeRequired(err.response.data.required_fee);
+                } else {
+                    setError(extractErrorMessage(err));
+                }
+            })
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(load, []);
 
     if (loading) return <p className="text-ash">Loading analytics…</p>;
+
+    if (feeRequired !== null) {
+        return (
+            <div>
+                <h1 className="font-display text-2xl mb-1">Analytics</h1>
+                <p className="text-ash text-sm mb-8">
+                    Analytics is part of the paid Verified Seller features - pay the one-time fee below to unlock it.
+                </p>
+                <VerificationFeeGate
+                    requiredFee={feeRequired}
+                    returnPath="/seller/analytics"
+                    onPaid={() => {
+                        refreshProfile?.();
+                        load();
+                    }}
+                />
+            </div>
+        );
+    }
+
     if (error) return <p className="text-coral text-sm">{error}</p>;
     if (!analytics) return null;
 

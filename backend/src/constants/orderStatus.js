@@ -6,7 +6,7 @@ exports.ORDER_STATUSES = [
     "cancelled"
 ];
 
-exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery"];
+exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "stripe", "paypal"];
 
 // Statuses a buyer is allowed to cancel from
 exports.CANCELLABLE_STATUSES = ["pending", "processing"];

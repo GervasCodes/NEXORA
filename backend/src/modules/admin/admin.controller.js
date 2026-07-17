@@ -203,51 +203,10 @@ exports.markWithdrawalPaid = async (req, res) => {
     }
 };
 
-// --- Seller verification review ---
-
-exports.listPendingVerifications = async (req, res) => {
-    try {
-        const pending = await adminService.listPendingVerifications();
-
-        return res.json({ success: true, data: pending });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.getVerificationDocuments = async (req, res) => {
-    try {
-        const detail = await adminService.getSellerVerificationDetail(req.params.id);
-
-        return res.json({ success: true, data: detail });
-
-    } catch (error) {
-        return res.status(404).json({ success: false, message: error.message });
-    }
-};
-
-exports.approveVerification = async (req, res) => {
-    try {
-        await adminService.approveSellerVerification(req.params.id);
-
-        return res.json({ success: true, message: "Seller verification approved" });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.rejectVerification = async (req, res) => {
-    try {
-        await adminService.rejectSellerVerification(req.params.id, req.body.reason);
-
-        return res.json({ success: true, message: "Seller verification rejected" });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
+// Old seller document-verification review actions lived here
+// (listPendingVerifications / getVerificationDocuments /
+// approveVerification / rejectVerification) - removed; see
+// accountVerification module for the centralized replacement.
 
 // --- Admin management (super admin only) ---
 

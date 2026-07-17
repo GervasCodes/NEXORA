@@ -229,73 +229,12 @@ exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
 };
 
-// --- Seller verification review ---
-
-exports.listPendingVerifications = async () => {
-    return adminRepository.findPendingVerifications();
-};
-
-exports.getSellerVerificationDetail = async (sellerUserId) => {
-    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
-
-    if (!profile) {
-        throw new Error("Seller profile not found");
-    }
-
-    const documents = await adminRepository.findVerificationDocuments(sellerUserId);
-
-    return { profile, documents };
-};
-
-exports.approveSellerVerification = async (sellerUserId) => {
-    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
-
-    if (!profile) {
-        throw new Error("Seller profile not found");
-    }
-
-    if (profile.verification_status !== "pending") {
-        throw new Error(`This seller's verification is "${profile.verification_status}", not pending.`);
-    }
-
-    await adminRepository.setSellerVerificationStatus(sellerUserId, "approved");
-
-    // Award the paid badge immediately if the seller already paid the fee.
-    const sellerService = require("../seller/seller.service");
-    await sellerService.syncBadgeForSeller(sellerUserId);
-
-    await notificationService.notify({
-        userId: sellerUserId,
-        type: "seller_verification",
-        title: "Verification approved",
-        message: `Your documents have been approved. "${profile.store_name}" can now add and sell products.`,
-        withEmail: true
-    });
-};
-
-exports.rejectSellerVerification = async (sellerUserId, reason) => {
-    const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
-
-    if (!profile) {
-        throw new Error("Seller profile not found");
-    }
-
-    if (profile.verification_status !== "pending") {
-        throw new Error(`This seller's verification is "${profile.verification_status}", not pending.`);
-    }
-
-    await adminRepository.setSellerVerificationStatus(sellerUserId, "rejected", reason || null);
-
-    await notificationService.notify({
-        userId: sellerUserId,
-        type: "seller_verification",
-        title: "Verification rejected",
-        message: reason
-            ? `Your verification documents were rejected: ${reason}. You can resubmit corrected documents.`
-            : "Your verification documents were rejected. You can resubmit corrected documents.",
-        withEmail: true
-    });
-};
+// Old seller document-verification review methods lived here
+// (listPendingVerifications / getSellerVerificationDetail /
+// approveSellerVerification / rejectSellerVerification) - removed; see
+// accountVerification module for the centralized replacement, which now
+// also triggers the paid-badge resync previously done here (see
+// accountVerification.service's approve()).
 
 // --- Admin management (super admin only) ---
 

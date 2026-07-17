@@ -129,37 +129,11 @@ exports.removeFromRoster = async (sellerId, agentId) => {
     return result.affectedRows;
 };
 
-// --- Verification documents ---
-
-exports.insertDocument = async (sellerId, documentType, fileUrl) => {
-    const [result] = await db.query(
-        "INSERT INTO seller_verification_documents (seller_id, document_type, file_url) VALUES (?, ?, ?)",
-        [sellerId, documentType, fileUrl]
-    );
-    return result.insertId;
-};
-
-exports.findDocumentsBySeller = async (sellerId) => {
-    const [rows] = await db.query(
-        `SELECT id, document_type, file_url, uploaded_at
-        FROM seller_verification_documents
-        WHERE seller_id = ?
-        ORDER BY uploaded_at DESC`,
-        [sellerId]
-    );
-    return rows;
-};
-
-exports.setVerificationSubmitted = async (userId) => {
-    await db.query(
-        `UPDATE seller_profiles
-        SET verification_status = 'pending',
-            verification_rejection_reason = NULL,
-            verification_submitted_at = NOW()
-        WHERE user_id = ?`,
-        [userId]
-    );
-};
+// --- Verification fee / paid badge ---
+// (The old document-based verification_status flow was removed in
+// migration 029 - account-level verification now lives on `users`,
+// see accountVerification module. This fee/badge pair is the separate,
+// still-needed concept.)
 
 exports.setVerificationFeePaid = async (userId, amount, reference) => {
     await db.query(

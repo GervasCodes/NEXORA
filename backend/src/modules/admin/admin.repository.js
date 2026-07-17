@@ -23,7 +23,7 @@ exports.setUserActive = async (userId, isActive) => {
 exports.findAllSellers = async () => {
     const [rows] = await db.query(
         `SELECT sp.id AS profile_id, sp.user_id, sp.store_name, sp.store_slug,
-                sp.country, sp.region, sp.city, sp.is_verified, sp.verification_status,
+                sp.country, sp.region, sp.city, sp.is_verified,
                 u.first_name, u.last_name, u.email, u.is_active
         FROM seller_profiles sp
         JOIN users u ON u.id = sp.user_id
@@ -170,40 +170,11 @@ exports.getTopSellers = async (limit) => {
     return rows;
 };
 
-// --- Seller verification review ---
-
-exports.findPendingVerifications = async () => {
-    const [rows] = await db.query(
-        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.verification_status,
-                sp.verification_submitted_at, sp.verification_fee_paid,
-                u.first_name, u.last_name, u.email, u.phone
-        FROM seller_profiles sp
-        JOIN users u ON u.id = sp.user_id
-        WHERE sp.verification_status = 'pending'
-        ORDER BY sp.verification_submitted_at ASC`
-    );
-    return rows;
-};
-
-exports.findVerificationDocuments = async (sellerUserId) => {
-    const [rows] = await db.query(
-        `SELECT id, document_type, file_url, uploaded_at
-        FROM seller_verification_documents
-        WHERE seller_id = ?
-        ORDER BY uploaded_at DESC`,
-        [sellerUserId]
-    );
-    return rows;
-};
-
-exports.setSellerVerificationStatus = async (sellerUserId, status, rejectionReason = null) => {
-    await db.query(
-        `UPDATE seller_profiles
-        SET verification_status = ?, verification_rejection_reason = ?, verification_reviewed_at = NOW()
-        WHERE user_id = ?`,
-        [status, rejectionReason, sellerUserId]
-    );
-};
+// Old seller document-verification review queries lived here
+// (findPendingVerifications / findVerificationDocuments /
+// setSellerVerificationStatus) - removed along with
+// seller_verification_documents (migration 029); see accountVerification
+// module for the centralized replacement.
 
 // --- Admin management (super admin only) ---
 

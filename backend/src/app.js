@@ -61,6 +61,22 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
+
+// Stripe webhook signature verification (stripe.provider.js ->
+// constructWebhookEvent) needs the exact raw request bytes - once
+// express.json() below parses the body into an object, that's gone for
+// good. So this one route is registered here, with its own
+// express.raw() parser, BEFORE the global express.json() - Express
+// handles a fully-matched route and never reaches the later json()
+// middleware for this path. Every other route (including the mobile
+// money webhooks, which verify a shared-secret header instead of a body
+// signature) is fine going through the normal JSON body parser below.
+app.post(
+    "/api/v1/payments/webhooks/stripe",
+    express.raw({ type: "application/json" }),
+    require("./modules/payment/payment.controller").stripeWebhook
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -187,8 +203,16 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/push", pushRoutes);
-app.use("/api/v1/admin", adminRoutes);
+// Must be mounted BEFORE /api/v1/admin: it's a more specific prefix of
+// that path, and Express falls through an unmatched router to the next
+// app.use() rather than stopping - so with the general /admin mount
+// first, every /admin/account-verifications/* request would needlessly
+// run adminRoutes' authMiddleware/authorize("admin") twice (once there,
+// once again in accountVerificationRoutes), and any future literal
+// route accidentally added to admin.routes.js matching this path would
+// silently shadow this router entirely.
 app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
+app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);

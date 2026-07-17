@@ -37,7 +37,6 @@ const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
-const SellerVerification = lazy(() => import("./pages/seller/SellerVerification"));
 
 const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"));
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
@@ -52,7 +51,6 @@ const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
-const AdminVerifications = lazy(() => import("./pages/admin/AdminVerifications"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
@@ -100,7 +98,6 @@ export default function App() {
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
                             <Route path="wallet" element={<SellerWallet />} />
-                            <Route path="verification" element={<SellerVerification />} />
                         </Route>
 
                         <Route path="/delivery" element={<RequireDeliveryAgent><DeliveryLayout /></RequireDeliveryAgent>}>
@@ -119,7 +116,6 @@ export default function App() {
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
-                            <Route path="verifications" element={<AdminVerifications />} />
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />

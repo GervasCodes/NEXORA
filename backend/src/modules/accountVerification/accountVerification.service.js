@@ -29,6 +29,16 @@ exports.approve = async (userId, adminId) => {
     await accountVerificationRepository.setStatus(userId, "approved", { actorAdminId: adminId });
     await accountVerificationRepository.insertHistory(userId, "approved", null, adminId);
 
+    // The paid "Verified Seller" badge requires both this approval and the
+    // verification fee - re-check now in case the fee was already paid
+    // before this approval came through (see seller.service's syncBadge).
+    if (user.role === "seller") {
+        const sellerService = require("../seller/seller.service");
+        await sellerService.syncBadgeForSeller(userId).catch((err) =>
+            console.error("badge sync error after account verification approval:", err)
+        );
+    }
+
     const roleLabel = user.role === "delivery_agent" ? "delivery" : "seller";
     await notificationService.notify({
         userId,

@@ -14,8 +14,51 @@ const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middlewar
 // users), but verifyMalipopayWebhook/verifySelcomWebhook check a shared
 // secret header so this can't be forged by a random POST request - see
 // webhookAuth.middleware.js for why that mattered.
+//
+// NOTE: the Stripe webhook (POST /webhooks/stripe) is NOT defined here -
+// it's registered directly in app.js, before the global JSON body
+// parser, because Stripe's signature verification needs the raw request
+// body. See the comment in app.js for why.
 router.post("/webhooks/malipopay", verifyMalipopayWebhook, paymentController.malipopayWebhook);
 router.post("/webhooks/selcom", verifySelcomWebhook, paymentController.selcomWebhook);
+
+// IMPORTANT: every literal-path route below (verification-fee/*,
+// paypal/capture) MUST stay registered before the "/:orderId/..." routes
+// further down. Express matches routes in registration order, and
+// "/:orderId/stripe/checkout" has the same segment count/shape as
+// "/verification-fee/stripe/checkout" - if the dynamic route were
+// registered first, a request for the literal path would match it
+// instead, with orderId wrongly bound to the string "verification-fee"
+// (caught live during this audit: it 403'd with "Access denied" because
+// that route also requires the buyer role, not seller).
+
+// Verification fee (seller-only) - Stripe/PayPal alternatives to the
+// existing mobile-money verification fee flow in seller.routes.js
+// (POST /seller/verification/fee). Kept in the payment module since
+// they're genuinely payment-gateway concerns, not seller-profile ones.
+router.post(
+    "/verification-fee/stripe/checkout",
+    authMiddleware,
+    authorize("seller"),
+    paymentController.initiateStripeVerificationFeePayment
+);
+
+router.post(
+    "/verification-fee/paypal/create",
+    authMiddleware,
+    authorize("seller"),
+    paymentController.initiatePaypalVerificationFeePayment
+);
+
+// Called by our OWN frontend after a buyer/seller approves on PayPal's
+// site and is redirected back - this is what actually captures the
+// funds. Works for both an order payment and the verification fee
+// (capturePaypalPayment figures out which from the stored payment row).
+router.post(
+    "/paypal/capture",
+    authMiddleware,
+    paymentController.capturePaypalPayment
+);
 
 router.post(
     "/:orderId/initiate",
@@ -24,6 +67,24 @@ router.post(
     orderIdValidation,
     validationMiddleware,
     paymentController.initiateMobileMoneyPayment
+);
+
+router.post(
+    "/:orderId/stripe/checkout",
+    authMiddleware,
+    authorize("buyer"),
+    orderIdValidation,
+    validationMiddleware,
+    paymentController.initiateStripeOrderPayment
+);
+
+router.post(
+    "/:orderId/paypal/create",
+    authMiddleware,
+    authorize("buyer"),
+    orderIdValidation,
+    validationMiddleware,
+    paymentController.initiatePaypalOrderPayment
 );
 
 router.get(

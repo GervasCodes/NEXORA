@@ -1,7 +1,10 @@
 const paymentRepository = require("./payment.repository");
 const orderRepository = require("../order/order.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
+const stripeProvider = require("./providers/stripe.provider");
+const paypalProvider = require("./providers/paypal.provider");
 const walletService = require("../wallet/wallet.service");
+const settingsService = require("../settings/settings.service");
 
 const generateReceiptNumber = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -113,27 +116,30 @@ exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
     };
 };
 
-// Called by payment.controller's webhook handlers once MalipoPay/Selcom
-// confirm the buyer/seller actually completed (or failed/cancelled) the
-// payment on their end. `providerReference` is the reference WE sent when
-// calling initiate: "ORDER-42" for order payments, "VERIFY-7" for a
-// seller's verification fee - see the two `reference` values above.
-exports.handleProviderWebhook = async ({ providerReference, success, transactionReference }) => {
+// Called by payment.controller's webhook handlers once MalipoPay/Selcom/
+// Stripe confirm the buyer/seller actually completed (or failed/cancelled)
+// the payment on their end, or by the PayPal capture flow once we've
+// confirmed a capture server-side. `providerReference` is the reference WE
+// sent when initiating the payment: "ORDER-42" for order payments,
+// "VERIFY-7" for a seller's verification fee - see the two `reference`
+// values above. `chargedCurrency`/`chargedAmount` are only passed for
+// foreign-currency gateways (PayPal) - see migration 028.
+exports.handleProviderWebhook = async ({ providerReference, success, transactionReference, chargedCurrency, chargedAmount }) => {
     const orderMatch = /^ORDER-(\d+)$/.exec(providerReference || "");
     const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
 
     if (orderMatch) {
-        return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference);
+        return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
     if (verifyMatch) {
-        return exports._handleVerificationFeeWebhook(Number(verifyMatch[1]), success, transactionReference);
+        return exports._handleVerificationFeeWebhook(Number(verifyMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
     throw new Error(`Unrecognized payment reference: ${providerReference}`);
 };
 
-exports._handleOrderPaymentWebhook = async (orderId, success, transactionReference) => {
+exports._handleOrderPaymentWebhook = async (orderId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
     const payment = await paymentRepository.findByOrderId(orderId);
 
     if (!payment) {
@@ -153,7 +159,7 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
 
     const receiptNumber = generateReceiptNumber();
 
-    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber);
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
     await orderRepository.updatePaymentStatus(orderId, "paid");
 
     walletService.creditSellersForOrder(orderId).catch((err) =>
@@ -165,7 +171,7 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     return { orderId, success: true, receiptNumber };
 };
 
-exports._handleVerificationFeeWebhook = async (sellerId, success, transactionReference) => {
+exports._handleVerificationFeeWebhook = async (sellerId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
     const payment = await paymentRepository.findPendingVerificationFeePayment(sellerId);
 
     if (!payment) {
@@ -180,7 +186,7 @@ exports._handleVerificationFeeWebhook = async (sellerId, success, transactionRef
     }
 
     const receiptNumber = generateReceiptNumber();
-    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber);
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
 
     // Lazy require to avoid a circular dependency (seller.service also
     // calls into payment.service to initiate the fee payment) - same
@@ -189,6 +195,186 @@ exports._handleVerificationFeeWebhook = async (sellerId, success, transactionRef
     await sellerService.confirmVerificationFeePaid(sellerId, payment.amount, transactionReference);
 
     return { sellerId, success: true, receiptNumber };
+};
+
+// --- Stripe (card payments) -------------------------------------------
+// Used for both order checkout and the seller verification fee. Stripe
+// supports TZS natively, so no currency conversion is needed (contrast
+// with PayPal below).
+
+exports.initiateStripeOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order || order.buyer_id !== buyerId) {
+        throw new Error("Order not found");
+    }
+
+    if (order.payment_method !== "stripe") {
+        throw new Error("This order is not set up for Stripe payment");
+    }
+
+    if (order.payment_status === "paid") {
+        throw new Error("This order has already been paid");
+    }
+
+    let payment = await paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+        const paymentId = await paymentRepository.create(orderId, "stripe", order.total_amount);
+        payment = { id: paymentId };
+    }
+
+    const reference = `ORDER-${orderId}`;
+
+    const session = await stripeProvider.createCheckoutSession({
+        amountTzs: order.total_amount,
+        reference,
+        description: `NEXORA order #${orderId}`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(payment.id, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+exports.initiateStripeVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
+    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "stripe");
+
+    const reference = `VERIFY-${sellerId}`;
+
+    const session = await stripeProvider.createCheckoutSession({
+        amountTzs: amount,
+        reference,
+        description: "NEXORA seller verification fee",
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+// Called from the Stripe webhook controller with an already
+// signature-verified event (see stripeProvider.constructWebhookEvent).
+exports.handleStripeWebhookEvent = async (event) => {
+    if (event.type !== "checkout.session.completed") {
+        return { ignored: true };
+    }
+
+    const session = event.data.object;
+    const reference = session.client_reference_id || session.metadata?.reference;
+
+    return exports.handleProviderWebhook({
+        providerReference: reference,
+        success: session.payment_status === "paid",
+        transactionReference: session.payment_intent || session.id
+    });
+};
+
+// --- PayPal (card / PayPal balance) -------------------------------------
+// PayPal doesn't support TZS, so amounts are converted to USD first (see
+// paypal.provider.js). Capture happens server-side when the frontend
+// calls back after the buyer approves on PayPal's site - never trust the
+// redirect alone.
+
+exports.initiatePaypalOrderPayment = async (orderId, buyerId, { returnUrl, cancelUrl }) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order || order.buyer_id !== buyerId) {
+        throw new Error("Order not found");
+    }
+
+    if (order.payment_method !== "paypal") {
+        throw new Error("This order is not set up for PayPal payment");
+    }
+
+    if (order.payment_status === "paid") {
+        throw new Error("This order has already been paid");
+    }
+
+    let payment = await paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+        const paymentId = await paymentRepository.create(orderId, "paypal", order.total_amount);
+        payment = { id: paymentId };
+    }
+
+    const usdExchangeRate = await settingsService.getUsdExchangeRate();
+    const reference = `ORDER-${orderId}`;
+
+    const result = await paypalProvider.createOrder({
+        amountTzs: order.total_amount,
+        usdExchangeRate,
+        reference,
+        description: `NEXORA order #${orderId}`,
+        returnUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(payment.id, result.paypalOrderId);
+
+    return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
+};
+
+exports.initiatePaypalVerificationFeePayment = async (sellerId, amount, { returnUrl, cancelUrl }) => {
+    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "paypal");
+
+    const usdExchangeRate = await settingsService.getUsdExchangeRate();
+    const reference = `VERIFY-${sellerId}`;
+
+    const result = await paypalProvider.createOrder({
+        amountTzs: amount,
+        usdExchangeRate,
+        reference,
+        description: "NEXORA seller verification fee",
+        returnUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, result.paypalOrderId);
+
+    return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
+};
+
+// Called by our own /paypal/capture endpoint once the buyer/seller is
+// redirected back from PayPal's approval page (?token=<paypalOrderId>).
+exports.capturePaypalPayment = async (paypalOrderId) => {
+    const capture = await paypalProvider.captureOrder(paypalOrderId);
+
+    // Prefer the reference PayPal itself echoes back; fall back to our
+    // own payment row (looked up by the order id we stored at initiate
+    // time) in case a given integration doesn't return reference_id.
+    let reference = capture.reference;
+    if (!reference) {
+        const payment = await paymentRepository.findByTransactionReference(paypalOrderId);
+        if (payment) {
+            reference = payment.purpose === "seller_verification_fee"
+                ? `VERIFY-${payment.seller_id}`
+                : `ORDER-${payment.order_id}`;
+        }
+    }
+
+    if (!reference) {
+        throw new Error("Could not determine what this PayPal payment was for");
+    }
+
+    const payment = await paymentRepository.findByTransactionReference(paypalOrderId);
+    const chargedAmount = payment ? Number((payment.amount / (await settingsService.getUsdExchangeRate())).toFixed(2)) : null;
+
+    return exports.handleProviderWebhook({
+        providerReference: reference,
+        success: capture.success,
+        transactionReference: capture.transactionReference,
+        chargedCurrency: capture.success ? "USD" : null,
+        chargedAmount: capture.success ? chargedAmount : null
+    });
 };
 
 exports.getPayment = async (orderId, userId) => {

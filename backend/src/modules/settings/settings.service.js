@@ -6,7 +6,13 @@ const settingsRepository = require("./settings.repository");
 const DEFAULTS = {
     commission_rate: "10",
     rider_delivery_fee: "3000",
-    seller_verification_fee: "20000"
+    seller_verification_fee: "20000",
+    // TZS per 1 USD. Only used to convert a TZS amount into USD for
+    // PayPal, which (unlike Stripe) doesn't support TZS as a transaction
+    // currency - see providers/paypal.provider.js. Admin-editable so it
+    // can be kept roughly in line with the real exchange rate without a
+    // deploy; it's a coarse approximation, not a live FX feed.
+    usd_exchange_rate: "2600"
 };
 
 // platform_settings is read on nearly every order (commission),
@@ -61,6 +67,12 @@ exports.getVerificationFee = async () => {
     return Number(map.seller_verification_fee);
 };
 
+// TZS per 1 USD - see DEFAULTS comment above.
+exports.getUsdExchangeRate = async () => {
+    const map = await getCachedAll();
+    return Number(map.usd_exchange_rate);
+};
+
 exports.updateSettings = async (data) => {
     if (data.commission_rate !== undefined) {
         await settingsRepository.upsert("commission_rate", String(data.commission_rate));
@@ -70,6 +82,9 @@ exports.updateSettings = async (data) => {
     }
     if (data.seller_verification_fee !== undefined) {
         await settingsRepository.upsert("seller_verification_fee", String(data.seller_verification_fee));
+    }
+    if (data.usd_exchange_rate !== undefined) {
+        await settingsRepository.upsert("usd_exchange_rate", String(data.usd_exchange_rate));
     }
     invalidateCache();
     return exports.getAll();

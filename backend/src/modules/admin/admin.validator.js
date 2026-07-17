@@ -26,17 +26,12 @@ exports.updateSettingsValidation = [
     body("seller_verification_fee")
         .optional()
         .isFloat({ min: 0 })
-        .withMessage("Verification fee must be a positive amount")
-];
+        .withMessage("Verification fee must be a positive amount"),
 
-exports.rejectVerificationValidation = [
-    param("id").isInt({ gt: 0 }).withMessage("Invalid seller"),
-    body("reason")
-        .trim()
-        .notEmpty()
-        .withMessage("A rejection reason is required")
-        .isLength({ max: 255 })
-        .withMessage("Reason cannot exceed 255 characters")
+    body("usd_exchange_rate")
+        .optional()
+        .isFloat({ min: 1 })
+        .withMessage("Exchange rate must be a positive number (TZS per 1 USD)")
 ];
 
 exports.createAdminValidation = [

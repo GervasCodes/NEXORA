@@ -34,18 +34,7 @@ exports.emitToOrder = (orderId, event, payload) => {
     io.to(`order:${orderId}`).emit(event, payload);
 };
 
-io.on("connection", (socket) => {
-    socket.join(`user:${socket.user.id}`);
 
-    if (
-        socket.user.role === "admin" ||
-        socket.user.role === "super_admin"
-    ) {
-        socket.join("admins");
-    }
-
-    // rest of your handlers...
-});
 
 exports.init = (httpServer) => {
     const corsOrigins = process.env.CORS_ORIGIN

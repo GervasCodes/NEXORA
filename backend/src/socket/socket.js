@@ -19,6 +19,12 @@ exports.emitNewMessage = (conversationId, payload) => {
 exports.emitToUser = (userId, event, payload) => {
     if (!io) return;
     io.to(`user:${userId}`).emit(event, payload);
+
+};
+
+exports.emitToAdmins = (event, payload) => {
+    if (!io) return;
+    io.to("admins").emit(event, payload);
 };
 
 // Buyer's tracking page joins `order:{orderId}` to receive the assigned
@@ -27,6 +33,19 @@ exports.emitToOrder = (orderId, event, payload) => {
     if (!io) return;
     io.to(`order:${orderId}`).emit(event, payload);
 };
+
+io.on("connection", (socket) => {
+    socket.join(`user:${socket.user.id}`);
+
+    if (
+        socket.user.role === "admin" ||
+        socket.user.role === "super_admin"
+    ) {
+        socket.join("admins");
+    }
+
+    // rest of your handlers...
+});
 
 exports.init = (httpServer) => {
     const corsOrigins = process.env.CORS_ORIGIN
@@ -58,6 +77,15 @@ exports.init = (httpServer) => {
     io.on("connection", (socket) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
+
+// Join shared admin room
+if (
+    socket.user.role === "admin" ||
+    socket.user.role === "super_admin"
+) {
+    socket.join("admins");
+}
+
 
         socket.on("join_conversation", async (conversationId) => {
             try {

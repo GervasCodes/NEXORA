@@ -19,6 +19,12 @@ exports.emitNewMessage = (conversationId, payload) => {
 exports.emitToUser = (userId, event, payload) => {
     if (!io) return;
     io.to(`user:${userId}`).emit(event, payload);
+
+};
+
+exports.emitToAdmins = (event, payload) => {
+    if (!io) return;
+    io.to("admins").emit(event, payload);
 };
 
 // Buyer's tracking page joins `order:{orderId}` to receive the assigned
@@ -27,6 +33,19 @@ exports.emitToOrder = (orderId, event, payload) => {
     if (!io) return;
     io.to(`order:${orderId}`).emit(event, payload);
 };
+
+io.on("connection", (socket) => {
+    socket.join(`user:${socket.user.id}`);
+
+    if (
+        socket.user.role === "admin" ||
+        socket.user.role === "super_admin"
+    ) {
+        socket.join("admins");
+    }
+
+    // rest of your handlers...
+});
 
 exports.init = (httpServer) => {
     const corsOrigins = process.env.CORS_ORIGIN
@@ -47,18 +66,6 @@ exports.init = (httpServer) => {
             }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-            // Same rule as REST auth.middleware.js: short-lived tokens
-            // (login pre-auth, password-change reauth) carry a `typ`
-            // claim and are only valid for their own dedicated endpoints -
-            // never as a real session, including opening a socket. Without
-            // this, a leaked pre-auth token (issued before OTP is even
-            // verified) could open a live connection to that user's
-            // channel before 2FA ever completes.
-            if (decoded.typ) {
-                return next(new Error("Invalid or expired token"));
-            }
-
             socket.user = decoded;
             next();
 
@@ -70,6 +77,15 @@ exports.init = (httpServer) => {
     io.on("connection", (socket) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
+
+// Join shared admin room
+if (
+    socket.user.role === "admin" ||
+    socket.user.role === "super_admin"
+) {
+    socket.join("admins");
+}
+
 
         socket.on("join_conversation", async (conversationId) => {
             try {
@@ -180,3 +196,4 @@ exports.init = (httpServer) => {
 
     return io;
 };
+

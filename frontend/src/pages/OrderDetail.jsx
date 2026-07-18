@@ -5,9 +5,27 @@ import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useSocket } from "../context/SocketContext";
 import DeliveryTrackingMap from "../components/DeliveryTrackingMap";
+import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
 
 const CANCELLABLE = ["pending", "processing"];
+
+const statusStyles = {
+    pending: "bg-line text-ash",
+    processing: "bg-mango/20 text-mango-dark",
+    shipped: "bg-teal/10 text-teal",
+    delivered: "bg-teal text-white",
+    cancelled: "bg-coral/10 text-coral"
+};
+
+const VEHICLE_LABELS = {
+    bicycle: "Bicycle",
+    motorcycle: "Motorcycle",
+    tuktuk: "Tuk-tuk",
+    car: "Car",
+    van: "Van",
+    truck: "Truck"
+};
 
 export default function OrderDetail() {
     const { format } = useCurrency();
@@ -24,18 +42,24 @@ export default function OrderDetail() {
     const [busy, setBusy] = useState(false);
 
     const load = () => {
-        api.get(`/orders/${id}`).then(({ data }) => setOrder(data.data)).finally(() => setLoading(false));
-        api.get(`/delivery/${id}`).then(({ data }) => setDelivery(data.data)).catch(() => setDelivery(null));
+        api.get(`/orders/${id}`).then(({ data }) => {
+            setOrder(data.data);
+            if (!data.data.is_parent) {
+                api.get(`/delivery/${id}`).then(({ data: d }) => setDelivery(d.data)).catch(() => setDelivery(null));
+            } else {
+                setDelivery(null);
+            }
+        }).finally(() => setLoading(false));
     };
 
     useEffect(load, [id]);
 
-    // Handles the buyer landing back here after Stripe/PayPal:
-    //   ?payment=success        - Stripe: the webhook already confirmed the
+    // Handles the buyer landing back here after Snippe/PayPal:
+    //   ?payment=success        - Snippe: the webhook already confirmed the
     //                             payment server-side by the time the buyer's
     //                             browser gets here in most cases, but we
     //                             still reload the order to pick that up.
-    //   ?payment=cancelled      - buyer backed out on Stripe/PayPal's site.
+    //   ?payment=cancelled      - buyer backed out on Snippe/PayPal's site.
     //   ?payment=paypal_return  - PayPal redirects back with ?token=<paypal
     //                             order id>; THIS is what actually captures
     //                             the funds - never trust the redirect alone.
@@ -75,7 +99,7 @@ export default function OrderDetail() {
     const { socket, connected } = useSocket();
 
     useEffect(() => {
-        if (!socket || !connected) return;
+        if (!socket || !connected || order?.is_parent) return;
 
         socket.emit("join_order_tracking", id);
 
@@ -91,7 +115,7 @@ export default function OrderDetail() {
             socket.off("delivery:assigned", refreshDelivery);
             socket.off("delivery:status", refreshDelivery);
         };
-    }, [socket, connected, id]);
+    }, [socket, connected, id, order?.is_parent]);
 
     const handleMessageAgent = async () => {
         try {
@@ -134,12 +158,12 @@ export default function OrderDetail() {
         }
     };
 
-    const handleRetryStripe = async () => {
+    const handleRetrySnippe = async () => {
         setBusy(true);
         setActionError("");
         try {
             const origin = window.location.origin;
-            const { data } = await api.post(`/payments/${id}/stripe/checkout`, {
+            const { data } = await api.post(`/payments/${id}/snippe/checkout`, {
                 successUrl: `${origin}/orders/${id}?payment=success`,
                 cancelUrl: `${origin}/orders/${id}?payment=cancelled`
             });
@@ -186,13 +210,15 @@ export default function OrderDetail() {
             {actionMessage && <p className="text-sm text-teal mb-4">{actionMessage}</p>}
             {actionError && <p className="text-sm text-coral mb-4">{actionError}</p>}
 
-            <OrderTimeline status={order.status} />
+            {!order.is_parent && <OrderTimeline status={order.status} />}
 
             <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
-                <div>
-                    <p className="text-ash mb-0.5">Status</p>
-                    <p className="capitalize font-medium">{order.status}</p>
-                </div>
+                {!order.is_parent && (
+                    <div>
+                        <p className="text-ash mb-0.5">Status</p>
+                        <p className="capitalize font-medium">{order.status}</p>
+                    </div>
+                )}
                 <div>
                     <p className="text-ash mb-0.5">Payment</p>
                     <p className="capitalize font-medium">
@@ -208,23 +234,59 @@ export default function OrderDetail() {
                 </div>
             </div>
 
-            <ul className="divide-y divide-line border-y border-line mb-6">
-                {order.items?.map((item) => (
-                    <li key={item.id} className="py-3 flex justify-between text-sm">
-                        <span>{item.name} × {item.quantity}</span>
-                        <span className="price">{format(item.subtotal)}</span>
-                    </li>
-                ))}
-            </ul>
+            {order.is_parent ? (
+                <div className="space-y-4 mb-8">
+                    <p className="text-xs uppercase tracking-widest text-ash">
+                        {order.children.length} vendor {order.children.length === 1 ? "order" : "orders"}
+                    </p>
+                    {order.children.map((child) => (
+                        <Link
+                            key={child.id}
+                            to={`/orders/${child.id}`}
+                            className="block border border-line rounded-lg p-4 hover:border-abyss transition-colors"
+                        >
+                            <div className="flex items-center justify-between gap-4 mb-2">
+                                <p className="text-sm font-medium price">{child.order_number}</p>
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[child.status] || "bg-line text-ash"}`}>
+                                    {child.status}
+                                </span>
+                            </div>
+                            <ul className="text-sm text-ash space-y-1">
+                                {child.items?.map((item) => (
+                                    <li key={item.id} className="flex justify-between">
+                                        <span>{item.name} × {item.quantity}</span>
+                                        <span className="price">{format(item.subtotal)}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Link>
+                    ))}
+                </div>
+            ) : (
+                <ul className="divide-y divide-line border-y border-line mb-6">
+                    {order.items?.map((item) => (
+                        <li key={item.id} className="py-3 flex justify-between text-sm">
+                            <span>{item.name} × {item.quantity}</span>
+                            <span className="price">{format(item.subtotal)}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
 
             <div className="flex justify-between items-baseline mb-8">
                 <span className="text-sm text-ash">Total</span>
                 <span className="price text-xl font-medium">{format(order.total_amount)}</span>
             </div>
 
-            {delivery?.agent_id && !["delivered", "failed"].includes(delivery.status) && (
+            {!order.is_parent && delivery?.agent_id && !["delivered", "failed"].includes(delivery.status) && (
                 <div className="mb-8">
                     <p className="text-xs uppercase tracking-widest text-ash mb-2">Live tracking</p>
+                    {(delivery.agent_vehicle_type || delivery.agent_vehicle_plate_number) && (
+                        <p className="text-sm text-ash mb-2">
+                            {delivery.agent_first_name} is on a {VEHICLE_LABELS[delivery.agent_vehicle_type] || delivery.agent_vehicle_type}
+                            {delivery.agent_vehicle_plate_number && ` · Plate ${delivery.agent_vehicle_plate_number}`}
+                        </p>
+                    )}
                     <DeliveryTrackingMap
                         orderId={id}
                         destination={
@@ -236,26 +298,42 @@ export default function OrderDetail() {
                 </div>
             )}
 
+            {!order.is_parent && delivery?.agent_id && delivery.status === "delivered" && (
+                <div className="mb-8">
+                    <DeliveryAgentRating
+                        orderId={id}
+                        existingRating={delivery.rating}
+                        onRated={load}
+                    />
+                </div>
+            )}
+
+            {order.parent_order_id && (
+                <p className="text-xs text-ash mb-4">
+                    Part of order <Link to={`/orders/${order.parent_order_id}`} className="text-teal hover:underline">{order.order_number.split("-V")[0]}</Link> · payment and cancellation are handled there.
+                </p>
+            )}
+
             <div className="flex flex-wrap gap-3">
-                {order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryPayment} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Processing…" : "Pay with Mobile Money"}
                     </button>
                 )}
-                {order.payment_method === "stripe" && order.payment_status === "unpaid" && (
-                    <button onClick={handleRetryStripe} disabled={busy}
+                {!order.parent_order_id && order.payment_method === "snippe" && order.payment_status === "unpaid" && (
+                    <button onClick={handleRetrySnippe} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
-                        {busy ? "Redirecting…" : "Pay with Card (Stripe)"}
+                        {busy ? "Redirecting…" : "Pay with Card (Snippe)"}
                     </button>
                 )}
-                {order.payment_method === "paypal" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.payment_method === "paypal" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryPaypal} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Redirecting…" : "Pay with PayPal"}
                     </button>
                 )}
-                {CANCELLABLE.includes(order.status) && (
+                {!order.parent_order_id && CANCELLABLE.includes(order.status) && (
                     <button onClick={handleCancel} disabled={busy}
                         className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
                         Cancel order

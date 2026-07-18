@@ -14,3 +14,19 @@ exports.updateDeliveryStatusValidation = [
 
     body("notes").optional().isString()
 ];
+
+exports.rateDeliveryValidation = [
+    param("orderId").isInt({ gt: 0 }).withMessage("Invalid order"),
+
+    body("rating")
+        .notEmpty()
+        .withMessage("Rating is required")
+        .isInt({ min: 1, max: 5 })
+        .withMessage("Rating must be between 1 and 5"),
+
+    body("comment")
+        .optional()
+        .isString()
+        .isLength({ max: 500 })
+        .withMessage("Comment is too long")
+];

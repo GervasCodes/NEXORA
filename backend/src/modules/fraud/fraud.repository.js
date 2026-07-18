@@ -54,7 +54,7 @@ exports.resolve = async (id, status, adminId) => {
 exports.getBuyerPriorOrderStats = async (buyerId) => {
     const [[stats]] = await db.query(
         `SELECT COUNT(*) AS prior_order_count, COALESCE(AVG(total_amount), 0) AS avg_amount
-        FROM orders WHERE buyer_id = ?`,
+        FROM orders WHERE buyer_id = ? AND parent_order_id IS NULL`,
         [buyerId]
     );
     return { priorOrderCount: Number(stats.prior_order_count), avgAmount: Number(stats.avg_amount) };
@@ -63,7 +63,7 @@ exports.getBuyerPriorOrderStats = async (buyerId) => {
 exports.countRecentOrdersByBuyer = async (buyerId, minutes) => {
     const [[{ count }]] = await db.query(
         `SELECT COUNT(*) AS count FROM orders
-        WHERE buyer_id = ? AND created_at > (NOW() - INTERVAL ? MINUTE)`,
+        WHERE buyer_id = ? AND parent_order_id IS NULL AND created_at > (NOW() - INTERVAL ? MINUTE)`,
         [buyerId, minutes]
     );
     return Number(count);

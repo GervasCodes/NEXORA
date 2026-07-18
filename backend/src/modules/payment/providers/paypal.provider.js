@@ -1,9 +1,9 @@
 /**
  * PayPal provider - Orders v2 REST API (create + capture), used for the
- * same two purposes as stripe.provider.js: order checkout and the
+ * same two purposes as snippe.provider.js: order checkout and the
  * seller verification fee.
  *
- * IMPORTANT: unlike Stripe, PayPal does NOT support TZS as a transaction
+ * IMPORTANT: unlike Snippe, PayPal does NOT support TZS as a transaction
  * currency. Every amount here is converted to USD first, using the
  * admin-editable `usd_exchange_rate` platform setting (TZS per 1 USD -
  * see settings.service.js). This is a coarse approximation, not a live

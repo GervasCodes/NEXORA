@@ -25,7 +25,7 @@ const sendTransactionalEmail = async ({ to, toName, subject, html, text }) => {
         },
         body: JSON.stringify({
             sender: {
-                email: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_USER,
+                email: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM,
                 name: process.env.BREVO_SENDER_NAME || "NEXORA"
             },
             to: [{ email: to, name: toName || undefined }],

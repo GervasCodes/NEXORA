@@ -37,7 +37,9 @@ exports.createUser = async (user, conn) => {
         email,
         phone,
         password,
-        role
+        role,
+        vehicle_type,
+        vehicle_plate_number
     } = user;
 
     // Seller/delivery_agent accounts start life needing verification;
@@ -46,10 +48,14 @@ exports.createUser = async (user, conn) => {
     // requireApprovedDeliveryAgent middleware).
     const needsVerification = role === "seller" || role === "delivery_agent";
 
+    // vehicle_type/vehicle_plate_number (migration 032) only ever arrive
+    // for delivery_agent registrations - auth.validator.js requires both
+    // when role === "delivery_agent" and every other role never sends
+    // them, so they're simply NULL for buyer/seller/admin rows.
     const [result] = await runner(conn).query(
         `INSERT INTO users
-        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at)
-        VALUES (?,?,?,?,?,?,?,?)`,
+        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [
             first_name,
             last_name,
@@ -58,7 +64,9 @@ exports.createUser = async (user, conn) => {
             password,
             role,
             needsVerification ? "pending" : "not_required",
-            needsVerification ? new Date() : null
+            needsVerification ? new Date() : null,
+            role === "delivery_agent" ? vehicle_type : null,
+            role === "delivery_agent" ? (vehicle_plate_number || null) : null
         ]
     );
 

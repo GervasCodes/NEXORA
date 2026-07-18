@@ -41,6 +41,7 @@ const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
 const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"));
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
 const DeliveryEarnings = lazy(() => import("./pages/delivery/DeliveryEarnings"));
+const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
@@ -104,6 +105,7 @@ export default function App() {
                             <Route index element={<DeliveryAvailable />} />
                             <Route path="mine" element={<DeliveryMine />} />
                             <Route path="earnings" element={<DeliveryEarnings />} />
+                            <Route path="ratings" element={<DeliveryRatings />} />
                         </Route>
 
                         <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>

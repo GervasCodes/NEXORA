@@ -11,14 +11,14 @@ import { formatMoney } from "../utils/format";
 // gate before any of this is ever rendered.
 //
 // Offers all three payment options the platform supports for this fee
-// (mobile money, Stripe, PayPal) - the old standalone Seller
+// (mobile money, Snippe, PayPal) - the old standalone Seller
 // Verification page only offered mobile money; the other two existed on
 // the backend since Phase 2 but had no frontend surface until now.
 export default function VerificationFeeGate({ requiredFee, onPaid, returnPath }) {
     const [phone, setPhone] = useState("");
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
-    const [busy, setBusy] = useState(null); // "mobile_money" | "stripe" | "paypal" | null
+    const [busy, setBusy] = useState(null); // "mobile_money" | "snippe" | "paypal" | null
     const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
     const pollRef = useRef(null);
     const navigate = useNavigate();
@@ -26,7 +26,7 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
 
     useEffect(() => () => clearInterval(pollRef.current), []);
 
-    // Handles landing back here after Stripe/PayPal - same pattern as
+    // Handles landing back here after Snippe/PayPal - same pattern as
     // OrderDetail.jsx's checkout return handling.
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -105,12 +105,12 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
         }
     };
 
-    const payWithStripe = async () => {
+    const payWithSnippe = async () => {
         setError("");
-        setBusy("stripe");
+        setBusy("snippe");
         try {
             const origin = window.location.origin;
-            const { data } = await api.post("/payments/verification-fee/stripe/checkout", {
+            const { data } = await api.post("/payments/verification-fee/snippe/checkout", {
                 successUrl: `${origin}${returnPath}?payment=success`,
                 cancelUrl: `${origin}${returnPath}?payment=cancelled`
             });
@@ -173,9 +173,9 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
             </div>
 
             <div className="space-y-2">
-                <button type="button" onClick={payWithStripe} disabled={busy === "stripe" || awaitingConfirmation}
+                <button type="button" onClick={payWithSnippe} disabled={busy === "snippe" || awaitingConfirmation}
                     className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
-                    {busy === "stripe" ? "Redirecting…" : "Pay with card (Stripe)"}
+                    {busy === "snippe" ? "Redirecting…" : "Pay with card (Snippe)"}
                 </button>
                 <button type="button" onClick={payWithPaypal} disabled={busy === "paypal" || awaitingConfirmation}
                     className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">

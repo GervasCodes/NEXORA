@@ -52,7 +52,7 @@ exports.getDelivery = async (orderId, userId) => {
         throw new Error("Order not found");
     }
 
-    const delivery = await deliveryRepository.findByOrderId(orderId);
+    const delivery = await deliveryRepository.findByOrderIdWithAgent(orderId);
 
     if (!delivery) {
         throw new Error("No delivery record for this order yet");
@@ -68,7 +68,13 @@ exports.getDelivery = async (orderId, userId) => {
         throw new Error("No delivery record for this order yet");
     }
 
-    return delivery;
+    // Only relevant once the buyer can actually rate (delivered) or has
+    // already rated - cheap to always attach, keeps the frontend from
+    // needing a second request just to know whether to show the rating
+    // form or the buyer's existing rating.
+    const rating = await deliveryRepository.findRatingByOrder(orderId);
+
+    return { ...delivery, rating: rating || null };
 };
 
 exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
@@ -268,6 +274,61 @@ exports.acceptOffer = async (offerId, agentId) => {
     }
 
     return { orderId: offer.order_id, deliveryId: offer.order_id };
+};
+
+// ---- Post-delivery ratings (migration 032) --------------------------------
+
+// Only the buyer of the order can rate, only after the delivery has
+// actually completed, and only once - same "one rating per subject"
+// shape reviews.js uses for products, just enforced against
+// delivery_ratings' UNIQUE(order_id) instead of UNIQUE(buyer_id, product_id).
+exports.rateDelivery = async (orderId, buyerId, rating, comment) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order || order.buyer_id !== buyerId) {
+        throw new Error("Order not found");
+    }
+
+    const delivery = await deliveryRepository.findByOrderId(orderId);
+
+    if (!delivery) {
+        throw new Error("No delivery record for this order yet");
+    }
+
+    if (delivery.status !== "delivered") {
+        throw new Error("You can only rate a delivery agent after your order has been delivered");
+    }
+
+    const existing = await deliveryRepository.findRatingByOrder(orderId);
+    if (existing) {
+        throw new Error("You've already rated this delivery");
+    }
+
+    const ratingId = await deliveryRepository.createRating(
+        orderId,
+        delivery.agent_id,
+        buyerId,
+        rating,
+        comment
+    );
+
+    return { ratingId };
+};
+
+// Agent-facing summary (average + count) for their own dashboard.
+exports.getMyRatingSummary = async (agentId) => {
+    const [summary, ratings] = await Promise.all([
+        deliveryRepository.getAgentRatingSummary(agentId),
+        deliveryRepository.findRatingsByAgent(agentId)
+    ]);
+
+    return {
+        average_rating: summary.average_rating
+            ? Number(Number(summary.average_rating).toFixed(1))
+            : null,
+        rating_count: summary.rating_count,
+        ratings
+    };
 };
 
 exports.declineOffer = async (offerId, agentId) => {

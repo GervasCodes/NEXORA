@@ -62,7 +62,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
 
-// Stripe webhook signature verification (stripe.provider.js ->
+// Snippe webhook signature verification (snippe.provider.js ->
 // constructWebhookEvent) needs the exact raw request bytes - once
 // express.json() below parses the body into an object, that's gone for
 // good. So this one route is registered here, with its own
@@ -72,9 +72,9 @@ app.use(compression());
 // money webhooks, which verify a shared-secret header instead of a body
 // signature) is fine going through the normal JSON body parser below.
 app.post(
-    "/api/v1/payments/webhooks/stripe",
+    "/api/v1/payments/webhooks/snippe",
     express.raw({ type: "application/json" }),
-    require("./modules/payment/payment.controller").stripeWebhook
+    require("./modules/payment/payment.controller").snippeWebhook
 );
 
 app.use(express.json());

@@ -9,7 +9,8 @@ const deliveryController = require("./delivery.controller");
 const requireApprovedDeliveryAgent = require("../../middleware/requireApprovedDeliveryAgent.middleware");
 const {
     orderIdValidation,
-    updateDeliveryStatusValidation
+    updateDeliveryStatusValidation,
+    rateDeliveryValidation
 } = require("./delivery.validator");
 
 // Delivery agent routes - all gated behind requireApprovedDeliveryAgent,
@@ -49,6 +50,14 @@ router.get(
     deliveryController.getMyDeliveries
 );
 
+router.get(
+    "/my/rating-summary",
+    authMiddleware,
+    authorize("delivery_agent"),
+    requireApprovedDeliveryAgent,
+    deliveryController.getMyRatingSummary
+);
+
 router.put(
     "/:orderId/status",
     authMiddleware,
@@ -66,6 +75,15 @@ router.get(
     orderIdValidation,
     validationMiddleware,
     deliveryController.getDelivery
+);
+
+router.post(
+    "/:orderId/rating",
+    authMiddleware,
+    authorize("buyer"),
+    rateDeliveryValidation,
+    validationMiddleware,
+    deliveryController.rateDelivery
 );
 
 module.exports = router;

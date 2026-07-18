@@ -7,7 +7,8 @@ import AccountReviewNotice from "./AccountReviewNotice";
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
     { to: "/delivery/mine", label: "My deliveries" },
-    { to: "/delivery/earnings", label: "Earnings" }
+    { to: "/delivery/earnings", label: "Earnings" },
+    { to: "/delivery/ratings", label: "Ratings" }
 ];
 
 function ApprovedDeliveryLayout() {

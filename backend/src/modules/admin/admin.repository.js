@@ -70,13 +70,18 @@ exports.setProductActive = async (productId, isActive) => {
 };
 
 // --- Orders (platform-wide view) ---
+// parent_order_id IS NULL: top-level orders only (standalone + parents).
+// A split cart's child orders carry their own slice of the total and
+// exist so vendors/delivery can track them independently - listing them
+// here too would show the same cart's money twice.
 exports.findAllOrders = async () => {
     const [rows] = await db.query(
         `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
-                o.total_amount, o.created_at,
+                o.total_amount, o.created_at, o.is_parent,
                 u.first_name, u.last_name, u.email
         FROM orders o
         JOIN users u ON u.id = o.buyer_id
+        WHERE o.parent_order_id IS NULL
         ORDER BY o.created_at DESC
         LIMIT 200`
     );
@@ -99,13 +104,14 @@ exports.getDashboardStats = async () => {
             SUM(status = 'pending') AS pending_orders,
             SUM(status = 'delivered') AS delivered_orders,
             SUM(status = 'cancelled') AS cancelled_orders
-        FROM orders`
+        FROM orders
+        WHERE parent_order_id IS NULL`
     );
 
     const [[revenue]] = await db.query(
         `SELECT COALESCE(SUM(total_amount), 0) AS total_revenue
         FROM orders
-        WHERE payment_status = 'paid'`
+        WHERE payment_status = 'paid' AND parent_order_id IS NULL`
     );
 
     const [[productCounts]] = await db.query(
@@ -127,7 +133,7 @@ exports.getDailySales = async (days) => {
                 COALESCE(SUM(total_amount), 0) AS revenue,
                 COUNT(*) AS order_count
         FROM orders
-        WHERE payment_status = 'paid' AND created_at >= (NOW() - INTERVAL ? DAY)
+        WHERE payment_status = 'paid' AND parent_order_id IS NULL AND created_at >= (NOW() - INTERVAL ? DAY)
         GROUP BY DATE(created_at)
         ORDER BY day ASC`,
         [days]

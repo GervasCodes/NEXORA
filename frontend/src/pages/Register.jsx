@@ -8,7 +8,9 @@ const initialForm = {
     email: "",
     phone: "",
     password: "",
-    role: "buyer"
+    role: "buyer",
+    vehicle_type: "motorcycle",
+    vehicle_plate_number: ""
 };
 
 // Which document fields each role needs before an account can be
@@ -77,6 +79,11 @@ export default function Register() {
         }
         if (!files.id_document) {
             setError("Please upload your National ID or Voter ID.");
+            return;
+        }
+
+        if (form.role === "delivery_agent" && !form.vehicle_plate_number.trim()) {
+            setError("Please enter your vehicle's plate number.");
             return;
         }
 
@@ -178,6 +185,36 @@ export default function Register() {
                                 onChange={updateFile("drivers_license")}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                             />
+                        </div>
+                    )}
+
+                    {form.role === "delivery_agent" && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-sm mb-1">Vehicle type</label>
+                                <select
+                                    value={form.vehicle_type}
+                                    onChange={update("vehicle_type")}
+                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                                >
+                                    <option value="bicycle">Bicycle</option>
+                                    <option value="motorcycle">Motorcycle</option>
+                                    <option value="tuktuk">Tuk-tuk (Bajaji)</option>
+                                    <option value="car">Car</option>
+                                    <option value="van">Van</option>
+                                    <option value="truck">Truck</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm mb-1">Plate number</label>
+                                <input
+                                    required
+                                    placeholder="e.g. T123 ABC"
+                                    value={form.vehicle_plate_number}
+                                    onChange={update("vehicle_plate_number")}
+                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                                />
+                            </div>
                         </div>
                     )}
 

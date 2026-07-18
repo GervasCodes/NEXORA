@@ -89,6 +89,48 @@ exports.setOnlineStatus = async (req, res) => {
     }
 };
 
+exports.rateDelivery = async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+
+        const result = await deliveryService.rateDelivery(
+            req.params.orderId,
+            req.user.id,
+            rating,
+            comment
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Thanks for rating your delivery agent",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.getMyRatingSummary = async (req, res) => {
+    try {
+        const summary = await deliveryService.getMyRatingSummary(req.user.id);
+
+        return res.json({
+            success: true,
+            data: summary
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.updateDeliveryStatus = async (req, res) => {
     try {
         const { status, notes } = req.body;

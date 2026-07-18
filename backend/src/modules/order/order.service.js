@@ -17,7 +17,11 @@ const generateOrderNumber = () => {
     return `ORD-${timestamp}-${random}`;
 };
 
-// Checkout: turn the buyer's current cart into an order
+// Checkout: turn the buyer's current cart into an order. A cart with
+// items from a single vendor becomes one standalone order (unchanged
+// behavior). A cart spanning multiple vendors becomes one parent order
+// (buyer-facing - payment, shipping, combined total) plus one child
+// order per vendor (that vendor's items, own status/delivery).
 exports.checkout = async (buyerId, shippingInfo) => {
     const cart = await cartRepository.getCartByUser(buyerId);
 
@@ -26,6 +30,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     }
 
     const cartItems = [];
+    const bySeller = new Map(); // seller_id -> { items: [], subtotal: 0 }
     let totalAmount = 0;
 
     for (const item of cart) {
@@ -46,33 +51,58 @@ exports.checkout = async (buyerId, shippingInfo) => {
         const unitPrice = item.discount_price ?? item.price;
         const subtotal = Number((unitPrice * item.quantity).toFixed(2));
 
-        cartItems.push({
+        const cartItem = {
             product_id: item.product_id,
             seller_id: item.seller_id,
             name: item.name,
             quantity: item.quantity,
             unit_price: unitPrice,
             subtotal
-        });
+        };
 
+        cartItems.push(cartItem);
         totalAmount += subtotal;
+
+        const group = bySeller.get(item.seller_id) || { sellerId: item.seller_id, items: [], subtotal: 0 };
+        group.items.push(cartItem);
+        group.subtotal = Number((group.subtotal + subtotal).toFixed(2));
+        bySeller.set(item.seller_id, group);
     }
 
     const orderNumber = generateOrderNumber();
+    const roundedTotal = Number(totalAmount.toFixed(2));
+    const isMultiVendor = bySeller.size > 1;
 
-    const orderId = await orderRepository.createOrder(
-        buyerId,
-        orderNumber,
-        shippingInfo,
-        cartItems,
-        Number(totalAmount.toFixed(2))
-    );
+    let orderId;
+    let vendorCount = 1;
+
+    if (isMultiVendor) {
+        const { parentOrderId } = await orderRepository.createSplitOrder(
+            buyerId,
+            orderNumber,
+            shippingInfo,
+            Array.from(bySeller.values()),
+            roundedTotal
+        );
+        orderId = parentOrderId;
+        vendorCount = bySeller.size;
+    } else {
+        orderId = await orderRepository.createOrder(
+            buyerId,
+            orderNumber,
+            shippingInfo,
+            cartItems,
+            roundedTotal
+        );
+    }
 
     await notificationService.notify({
         userId: buyerId,
         type: "order_placed",
         title: "Order placed",
-        message: `Your order ${orderNumber} has been placed successfully.`,
+        message: isMultiVendor
+            ? `Your order ${orderNumber} (${vendorCount} vendors) has been placed successfully.`
+            : `Your order ${orderNumber} has been placed successfully.`,
         relatedOrderId: orderId,
         withEmail: true
     });
@@ -90,7 +120,9 @@ exports.checkout = async (buyerId, shippingInfo) => {
     return {
         orderId,
         orderNumber,
-        totalAmount: Number(totalAmount.toFixed(2))
+        totalAmount: roundedTotal,
+        isMultiVendor,
+        vendorCount
     };
 };
 
@@ -105,6 +137,19 @@ exports.getOrderDetail = async (orderId, buyerId) => {
         throw new Error("Order not found");
     }
 
+    if (order.is_parent) {
+        const children = await orderRepository.findChildOrders(orderId);
+
+        const childrenWithItems = await Promise.all(
+            children.map(async (child) => ({
+                ...child,
+                items: await orderRepository.findOrderItems(child.id)
+            }))
+        );
+
+        return { ...order, children: childrenWithItems };
+    }
+
     const items = await orderRepository.findOrderItems(orderId);
 
     return { ...order, items };
@@ -117,7 +162,27 @@ exports.cancelOrder = async (orderId, buyerId) => {
         throw new Error("Order not found");
     }
 
-    if (!CANCELLABLE_STATUSES.includes(order.status)) {
+    // A child order is cancelled as part of its parent, not on its own -
+    // otherwise the buyer's single payment for the whole cart would no
+    // longer match what's actually being fulfilled.
+    if (order.parent_order_id) {
+        throw new Error("Cancel the full order instead of a single vendor's part of it");
+    }
+
+    if (order.is_parent) {
+        const children = await orderRepository.findChildOrders(orderId);
+        const nonCancellable = children.find((child) => !CANCELLABLE_STATUSES.includes(child.status));
+
+        if (nonCancellable) {
+            throw new Error(
+                `Order can no longer be cancelled (vendor order ${nonCancellable.order_number} is "${nonCancellable.status}")`
+            );
+        }
+
+        for (const child of children) {
+            await orderRepository.updateOrderStatus(child.id, "cancelled");
+        }
+    } else if (!CANCELLABLE_STATUSES.includes(order.status)) {
         throw new Error(`Order can no longer be cancelled (status: ${order.status})`);
     }
 
@@ -138,6 +203,13 @@ exports.cancelOrder = async (orderId, buyerId) => {
 // check since there's no requesting user; the query that selects
 // candidates (findStalePendingMobileMoneyOrders) is what scopes this.
 exports.autoCancelStaleOrder = async (order) => {
+    if (order.is_parent) {
+        const children = await orderRepository.findChildOrders(order.id);
+        for (const child of children) {
+            await orderRepository.updateOrderStatus(child.id, "cancelled");
+        }
+    }
+
     await orderRepository.updateOrderStatus(order.id, "cancelled");
 
     await notificationService.notify({

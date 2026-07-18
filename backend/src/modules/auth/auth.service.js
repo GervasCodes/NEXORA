@@ -26,6 +26,11 @@ const firstFile = (files, field) => files?.[field]?.[0];
 exports.register = async (userData, files = {}) => {
     const { email, phone, password, role } = userData;
 
+    // Delivery agents must register with their vehicle info; every other
+    // role never sends these fields, so createUser stores them as NULL.
+    // (auth.validator.js already enforces both are present when
+    // role === "delivery_agent" before this point is ever reached.)
+
     // Check email
     const existingEmail = await userRepository.findByEmail(email);
     if (existingEmail) {

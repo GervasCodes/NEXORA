@@ -23,6 +23,22 @@ exports.findByOrderId = async (orderId) => {
     return rows[0];
 };
 
+// Same lookup as findByOrderId, but also brings back the assigned
+// agent's vehicle info (migration 032) - used by delivery.service's
+// getDelivery, so a buyer tracking their order can see what vehicle/
+// plate number to expect, without a second round trip.
+exports.findByOrderIdWithAgent = async (orderId) => {
+    const [rows] = await db.query(
+        `SELECT d.*, u.first_name AS agent_first_name, u.last_name AS agent_last_name,
+                u.vehicle_type AS agent_vehicle_type, u.vehicle_plate_number AS agent_vehicle_plate_number
+        FROM deliveries d
+        JOIN users u ON u.id = d.agent_id
+        WHERE d.order_id = ?`,
+        [orderId]
+    );
+    return rows[0];
+};
+
 // deliveryFee is a snapshot of the platform's current rider fee at the
 // moment of assignment (see settingsService.getRiderDeliveryFee), so
 // later changes to that setting don't retroactively change what an agent
@@ -169,4 +185,46 @@ exports.expireOffer = async (offerId) => {
         [offerId]
     );
     return result.affectedRows > 0;
+};
+
+// ---- Post-delivery ratings (migration 032) --------------------------------
+
+exports.findRatingByOrder = async (orderId) => {
+    const [rows] = await db.query(
+        "SELECT * FROM delivery_ratings WHERE order_id = ?",
+        [orderId]
+    );
+    return rows[0];
+};
+
+exports.createRating = async (orderId, agentId, buyerId, rating, comment) => {
+    const [result] = await db.query(
+        `INSERT INTO delivery_ratings (order_id, agent_id, buyer_id, rating, comment)
+        VALUES (?, ?, ?, ?, ?)`,
+        [orderId, agentId, buyerId, rating, comment || null]
+    );
+    return result.insertId;
+};
+
+exports.findRatingsByAgent = async (agentId) => {
+    const [rows] = await db.query(
+        `SELECT r.id, r.rating, r.comment, r.created_at, r.order_id,
+                o.order_number
+        FROM delivery_ratings r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.agent_id = ?
+        ORDER BY r.created_at DESC`,
+        [agentId]
+    );
+    return rows;
+};
+
+exports.getAgentRatingSummary = async (agentId) => {
+    const [rows] = await db.query(
+        `SELECT COUNT(*) AS rating_count, AVG(rating) AS average_rating
+        FROM delivery_ratings
+        WHERE agent_id = ?`,
+        [agentId]
+    );
+    return rows[0];
 };

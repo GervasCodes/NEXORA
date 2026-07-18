@@ -117,7 +117,7 @@ export default function AdminSettings() {
                     />
                     <p className="text-xs text-ash mt-1">
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
-                        Stripe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
+                        Snippe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
                     </p>
                 </div>
 

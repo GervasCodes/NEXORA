@@ -5,7 +5,8 @@ exports.findById = async (userId) => {
         `SELECT id, first_name, last_name, email, phone, role, admin_level,
                 account_verification_status, account_verification_rejection_reason,
                 account_verification_submitted_at, account_verification_reviewed_at,
-                language, theme, currency, is_active, created_at
+                language, theme, currency, is_active, created_at,
+                vehicle_type, vehicle_plate_number
         FROM users WHERE id = ?`,
         [userId]
     );

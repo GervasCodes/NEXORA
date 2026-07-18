@@ -44,9 +44,15 @@ export default function Orders() {
                                 <p className="text-sm font-medium price">{order.order_number}</p>
                                 <p className="text-xs text-ash mt-0.5">{formatDate(order.created_at)}</p>
                             </div>
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[order.status] || "bg-line text-ash"}`}>
-                                {order.status}
-                            </span>
+                            {order.is_parent ? (
+                                <span className="text-xs font-medium px-2.5 py-1 rounded-full capitalize bg-teal/10 text-teal">
+                                    {order.vendor_count} vendors
+                                </span>
+                            ) : (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[order.status] || "bg-line text-ash"}`}>
+                                    {order.status}
+                                </span>
+                            )}
                             <p className="price text-sm font-medium">{format(order.total_amount)}</p>
                         </Link>
                     </li>

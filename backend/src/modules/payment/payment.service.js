@@ -1,7 +1,7 @@
 const paymentRepository = require("./payment.repository");
 const orderRepository = require("../order/order.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
-const stripeProvider = require("./providers/stripe.provider");
+const snippeProvider = require("./providers/snippe.provider");
 const paypalProvider = require("./providers/paypal.provider");
 const walletService = require("../wallet/wallet.service");
 const settingsService = require("../settings/settings.service");
@@ -117,7 +117,7 @@ exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
 };
 
 // Called by payment.controller's webhook handlers once MalipoPay/Selcom/
-// Stripe confirm the buyer/seller actually completed (or failed/cancelled)
+// Snippe confirm the buyer/seller actually completed (or failed/cancelled)
 // the payment on their end, or by the PayPal capture flow once we've
 // confirmed a capture server-side. `providerReference` is the reference WE
 // sent when initiating the payment: "ORDER-42" for order payments,
@@ -162,9 +162,27 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
     await orderRepository.updatePaymentStatus(orderId, "paid");
 
-    walletService.creditSellersForOrder(orderId).catch((err) =>
-        console.error("Seller wallet credit error:", err)
-    );
+    // A multi-vendor cart is paid for once, on the parent order - but each
+    // vendor child order has its own order_items (for wallet crediting)
+    // and is what sellers/agents actually read payment_status off, so both
+    // need to reflect "paid" too.
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (order && order.is_parent) {
+        const children = await orderRepository.findChildOrders(orderId);
+
+        await orderRepository.updatePaymentStatusForChildren(orderId, "paid");
+
+        for (const child of children) {
+            walletService.creditSellersForOrder(child.id).catch((err) =>
+                console.error("Seller wallet credit error:", err)
+            );
+        }
+    } else {
+        walletService.creditSellersForOrder(orderId).catch((err) =>
+            console.error("Seller wallet credit error:", err)
+        );
+    }
 
     require("../../socket/socket").emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
 
@@ -197,20 +215,20 @@ exports._handleVerificationFeeWebhook = async (sellerId, success, transactionRef
     return { sellerId, success: true, receiptNumber };
 };
 
-// --- Stripe (card payments) -------------------------------------------
-// Used for both order checkout and the seller verification fee. Stripe
-// supports TZS natively, so no currency conversion is needed (contrast
-// with PayPal below).
+// --- Snippe (card payments) --------------------------------------------
+// Used for both order checkout and the seller verification fee. Amounts
+// are sent to Snippe as decimal TZS, so no currency conversion is needed
+// (contrast with PayPal below).
 
-exports.initiateStripeOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
+exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
     const order = await orderRepository.findOrderById(orderId);
 
     if (!order || order.buyer_id !== buyerId) {
         throw new Error("Order not found");
     }
 
-    if (order.payment_method !== "stripe") {
-        throw new Error("This order is not set up for Stripe payment");
+    if (order.payment_method !== "snippe") {
+        throw new Error("This order is not set up for Snippe payment");
     }
 
     if (order.payment_status === "paid") {
@@ -219,13 +237,13 @@ exports.initiateStripeOrderPayment = async (orderId, buyerId, { successUrl, canc
 
     let payment = await paymentRepository.findByOrderId(orderId);
     if (!payment) {
-        const paymentId = await paymentRepository.create(orderId, "stripe", order.total_amount);
+        const paymentId = await paymentRepository.create(orderId, "snippe", order.total_amount);
         payment = { id: paymentId };
     }
 
     const reference = `ORDER-${orderId}`;
 
-    const session = await stripeProvider.createCheckoutSession({
+    const session = await snippeProvider.createCheckoutSession({
         amountTzs: order.total_amount,
         reference,
         description: `NEXORA order #${orderId}`,
@@ -238,15 +256,15 @@ exports.initiateStripeOrderPayment = async (orderId, buyerId, { successUrl, canc
     return { status: "redirect", url: session.url };
 };
 
-exports.initiateStripeVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
+exports.initiateSnippeVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
     const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
     const paymentId = existingPending
         ? existingPending.id
-        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "stripe");
+        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "snippe");
 
     const reference = `VERIFY-${sellerId}`;
 
-    const session = await stripeProvider.createCheckoutSession({
+    const session = await snippeProvider.createCheckoutSession({
         amountTzs: amount,
         reference,
         description: "NEXORA seller verification fee",
@@ -259,20 +277,20 @@ exports.initiateStripeVerificationFeePayment = async (sellerId, amount, { succes
     return { status: "redirect", url: session.url };
 };
 
-// Called from the Stripe webhook controller with an already
-// signature-verified event (see stripeProvider.constructWebhookEvent).
-exports.handleStripeWebhookEvent = async (event) => {
+// Called from the Snippe webhook controller with an already
+// signature-verified event (see snippeProvider.constructWebhookEvent).
+exports.handleSnippeWebhookEvent = async (event) => {
     if (event.type !== "checkout.session.completed") {
         return { ignored: true };
     }
 
-    const session = event.data.object;
-    const reference = session.client_reference_id || session.metadata?.reference;
+    const session = event.data || event.session || event;
+    const reference = session.reference || session.client_reference_id;
 
     return exports.handleProviderWebhook({
         providerReference: reference,
-        success: session.payment_status === "paid",
-        transactionReference: session.payment_intent || session.id
+        success: session.payment_status === "paid" || session.status === "completed",
+        transactionReference: session.payment_id || session.id
     });
 };
 

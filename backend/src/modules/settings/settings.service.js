@@ -8,7 +8,7 @@ const DEFAULTS = {
     rider_delivery_fee: "3000",
     seller_verification_fee: "20000",
     // TZS per 1 USD. Only used to convert a TZS amount into USD for
-    // PayPal, which (unlike Stripe) doesn't support TZS as a transaction
+    // PayPal, which (unlike Snippe) doesn't support TZS as a transaction
     // currency - see providers/paypal.provider.js. Admin-editable so it
     // can be kept roughly in line with the real exchange rate without a
     // deploy; it's a coarse approximation, not a live FX feed.

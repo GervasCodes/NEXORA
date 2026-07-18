@@ -31,7 +31,7 @@ exports.findUserById = async (userId) => {
         `SELECT id, first_name, last_name, email, phone, role,
                 account_verification_status, account_verification_rejection_reason,
                 account_verification_submitted_at, account_verification_reviewed_at,
-                account_verification_reviewed_by
+                account_verification_reviewed_by, vehicle_type, vehicle_plate_number
         FROM users WHERE id = ?`,
         [userId]
     );

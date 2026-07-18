@@ -1,7 +1,7 @@
 const paymentService = require("./payment.service");
 
 // Buyers/sellers pass their own return URLs (e.g. the exact order or
-// verification page they were on) so Stripe/PayPal send them back to the
+// verification page they were on) so Snippe/PayPal send them back to the
 // right place - but an unchecked client-supplied redirect URL is an
 // open-redirect risk, so only allow one whose origin matches a configured
 // CORS_ORIGIN.
@@ -116,14 +116,14 @@ exports.selcomWebhook = async (req, res) => {
     }
 };
 
-// --- Stripe -------------------------------------------------------------
+// --- Snippe ---------------------------------------------------------
 
-exports.initiateStripeOrderPayment = async (req, res) => {
+exports.initiateSnippeOrderPayment = async (req, res) => {
     try {
         const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
         const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
 
-        const result = await paymentService.initiateStripeOrderPayment(
+        const result = await paymentService.initiateSnippeOrderPayment(
             req.params.orderId,
             req.user.id,
             { successUrl, cancelUrl }
@@ -135,14 +135,14 @@ exports.initiateStripeOrderPayment = async (req, res) => {
     }
 };
 
-exports.initiateStripeVerificationFeePayment = async (req, res) => {
+exports.initiateSnippeVerificationFeePayment = async (req, res) => {
     try {
         const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
         const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
         const settingsService = require("../settings/settings.service");
         const amount = await settingsService.getVerificationFee();
 
-        const result = await paymentService.initiateStripeVerificationFeePayment(
+        const result = await paymentService.initiateSnippeVerificationFeePayment(
             req.user.id,
             amount,
             { successUrl, cancelUrl }
@@ -154,28 +154,27 @@ exports.initiateStripeVerificationFeePayment = async (req, res) => {
     }
 };
 
-// Stripe calls this URL directly (server-to-server), signed with
-// STRIPE_WEBHOOK_SECRET. Give Stripe this exact path in the Dashboard:
-//   https://<your-domain>/api/v1/payments/webhooks/stripe
+// Snippe calls this URL directly (server-to-server), signed with
+// SNIPPE_WEBHOOK_SECRET. Give Snippe this exact path in their dashboard:
+//   https://<your-domain>/api/v1/payments/webhooks/snippe
 //
 // IMPORTANT: this route must receive the RAW request body (not JSON-
 // parsed) for signature verification to work - see the express.raw()
 // wiring in payment.routes.js.
-exports.stripeWebhook = async (req, res) => {
+exports.snippeWebhook = async (req, res) => {
     try {
-        const stripeProvider = require("./providers/stripe.provider");
-        const event = stripeProvider.constructWebhookEvent(req.body, req.headers["stripe-signature"]);
+        const snippeProvider = require("./providers/snippe.provider");
+        const event = snippeProvider.constructWebhookEvent(req.body, req.headers["snippe-signature"]);
 
-        await paymentService.handleStripeWebhookEvent(event);
+        await paymentService.handleSnippeWebhookEvent(event);
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("Stripe webhook error:", error.message);
-        // 400 here (unlike the mobile money webhooks) is correct and
-        // Stripe-recommended: an invalid signature means this request
-        // didn't come from Stripe, and Stripe's retry behavior on a 4xx
-        // for a signature failure is what we want (it won't retry a
-        // request that will never become valid).
+        console.error("Snippe webhook error:", error.message);
+        // 400 here (unlike the mobile money webhooks) is correct: an
+        // invalid signature means this request didn't come from Snippe,
+        // and a 4xx on a signature failure is what we want (it won't
+        // retry a request that will never become valid).
         return res.status(400).json({ success: false });
     }
 };

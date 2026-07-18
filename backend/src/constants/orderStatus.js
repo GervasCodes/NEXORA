@@ -6,7 +6,7 @@ exports.ORDER_STATUSES = [
     "cancelled"
 ];
 
-exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "stripe", "paypal"];
+exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "snippe", "paypal"];
 
 // Statuses a buyer is allowed to cancel from
 exports.CANCELLABLE_STATUSES = ["pending", "processing"];
@@ -17,6 +17,9 @@ exports.SELLER_STATUS_TRANSITIONS = {
     processing: ["shipped", "cancelled"],
     shipped: ["delivered"]
 };
+
+// Vehicle types a delivery agent can register with (migration 032).
+exports.VEHICLE_TYPES = ["bicycle", "motorcycle", "tuktuk", "car", "van", "truck"];
 
 exports.DELIVERY_STATUSES = [
     "assigned",

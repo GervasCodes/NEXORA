@@ -165,6 +165,18 @@ export default function AdminAccountVerifications() {
 
                         {expanded === r.id && (
                             <div className="mt-3 pl-1 space-y-4">
+                                {r.role === "delivery_agent" && (detail[r.id]?.vehicle_type || detail[r.id]?.vehicle_plate_number) && (
+                                    <div>
+                                        <p className="text-xs uppercase tracking-wide text-ash mb-1">Vehicle</p>
+                                        <p className="text-sm">
+                                            {detail[r.id]?.vehicle_type && (
+                                                <span className="capitalize">{detail[r.id].vehicle_type}</span>
+                                            )}
+                                            {detail[r.id]?.vehicle_plate_number && ` · Plate ${detail[r.id].vehicle_plate_number}`}
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div>
                                     <p className="text-xs uppercase tracking-wide text-ash mb-1">Documents</p>
                                     <ul className="text-sm space-y-1">

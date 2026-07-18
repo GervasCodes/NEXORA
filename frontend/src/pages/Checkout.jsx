@@ -41,9 +41,9 @@ export default function Checkout() {
             if (form.payment_method === "mobile_money") {
                 await api.post(`/payments/${orderId}/initiate`);
 
-            } else if (form.payment_method === "stripe") {
+            } else if (form.payment_method === "snippe") {
                 const origin = window.location.origin;
-                const { data: checkout } = await api.post(`/payments/${orderId}/stripe/checkout`, {
+                const { data: checkout } = await api.post(`/payments/${orderId}/snippe/checkout`, {
                     successUrl: `${origin}/orders/${orderId}?payment=success`,
                     cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
                 });
@@ -129,10 +129,10 @@ export default function Checkout() {
                             Cash on Delivery
                         </label>
                         <label className="flex items-center gap-2 border border-line rounded-md px-3 py-2 text-sm cursor-pointer">
-                            <input type="radio" name="payment_method" value="stripe"
-                                checked={form.payment_method === "stripe"}
+                            <input type="radio" name="payment_method" value="snippe"
+                                checked={form.payment_method === "snippe"}
                                 onChange={update("payment_method")} />
-                            Card (Stripe)
+                            Card (Snippe)
                         </label>
                         <label className="flex items-center gap-2 border border-line rounded-md px-3 py-2 text-sm cursor-pointer">
                             <input type="radio" name="payment_method" value="paypal"

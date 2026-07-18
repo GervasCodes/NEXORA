@@ -1,21 +1,14 @@
-const transporter = require("../config/email");
+const { sendTransactionalEmail } = require("../config/brevo");
 
-// Best-effort email send. Deliberately swallows errors so that a missing/
-// misconfigured SMTP setup never breaks the actual feature (order placed,
-// status changed, etc.) that triggered the email.
+// Best-effort email send for general notifications (order updates, etc).
+// Deliberately swallows errors so that a missing/misconfigured Brevo
+// setup never breaks the actual feature (order placed, status changed,
+// etc.) that triggered the email - contrast with OTP delivery
+// (otp.service.js), where a send failure IS the request failing, so it
+// calls sendTransactionalEmail directly instead of going through here.
 const sendEmail = async (to, subject, text) => {
-    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER) {
-        console.warn(`Email not sent (EMAIL_HOST/EMAIL_USER not configured): "${subject}" to ${to}`);
-        return;
-    }
-
     try {
-        await transporter.sendMail({
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-            to,
-            subject,
-            text
-        });
+        await sendTransactionalEmail({ to, subject, text, html: `<p>${text}</p>` });
     } catch (error) {
         console.error(`Failed to send email to ${to}:`, error.message);
     }

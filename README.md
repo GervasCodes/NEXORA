@@ -1,4 +1,44 @@
-# NEXORA — pre-launch audit
+# NEXORA
+
+## Phase 3 — Order Splitting (multi-vendor carts)
+
+A buyer's cart can hold products from more than one seller. Checkout now
+handles that properly instead of forcing every seller's items into one
+order with one shared status:
+
+- **Single-vendor cart** → unchanged: one standalone order, exactly as
+  before.
+- **Multi-vendor cart** → one **parent order** (buyer-facing: payment,
+  shipping address, combined total) plus one **child order per vendor**
+  (that vendor's items only, its own status, its own delivery). Child
+  order numbers are the parent's number with `-V1`, `-V2`, ... appended.
+
+This means each vendor can now progress their own part of the order
+(processing → shipped → delivered) independently, and each gets its own
+delivery assignment — previously a multi-vendor cart could only ever have
+one delivery row for the whole order, so only one seller could ever
+actually get it shipped.
+
+Paying once (mobile money / card / PayPal) pays the parent; on webhook
+confirmation the payment status cascades to every child order and
+sellers are credited per child order exactly as before. Cash on
+Delivery is confirmed per child order already, since each child has
+exactly one seller.
+
+**Migration required:** run `node database/migrate.js` before deploying
+this build — adds `parent_order_id` and `is_parent` to `orders`.
+
+**Known limitation carried into a later phase:** a parent order's own
+`status` column isn't kept in sync with its children's individual
+statuses (it only ever moves to `cancelled`) — the buyer-facing detail
+page shows each vendor's real status on its own card, but nothing yet
+computes a single rolled-up "order status" for the parent. Revisit this
+if/when the admin order list or notifications need a one-line summary
+status for split orders.
+
+---
+
+## Pre-launch audit
 
 Full pass over the codebase looking for anything that would break at
 launch: broken routes, dead links, config gaps, and security holes.
@@ -162,3 +202,152 @@ that key from the backend at runtime — corrected before finalizing.
 anywhere in the code — harmless, just unused. Left it alone since
 removing env vars from your real `.env` wasn't part of this pass and
 it's not hurting anything.
+
+---
+
+# Phase 4 — Delivery improvements
+
+Adds vehicle info to delivery agent registration and lets buyers rate
+the agent who delivered their order. No new environment variables and
+no new API base paths - everything below lives under the existing
+`/api/v1/auth` and `/api/v1/delivery` routes.
+
+**Migration required:** run `node database/migrate.js` before
+deploying this build - it adds two columns to `users` and a new
+`delivery_ratings` table (migration
+`032_delivery_agent_vehicle_and_ratings.sql`).
+
+## 1. Vehicle type + plate number at registration
+Delivery agents now submit their vehicle type (bicycle, motorcycle,
+tuktuk, car, van, or truck) and plate number as part of the same
+"verify your identity" step that already collects their ID and
+driver's license - no new registration step, no separate form.
+Buyers/sellers never see or send these fields; they're required only
+when `role = "delivery_agent"` (enforced server-side in
+`auth.validator.js`, not just hidden in the UI).
+
+Where it shows up afterwards:
+- **The buyer**, while tracking a live delivery on the order page, now
+  sees "David is on a Motorcycle · Plate T123 ABC" above the map.
+- **The agent**, via `GET /account/me` (their own profile).
+- **Admins**, reviewing a pending delivery agent's registration in
+  Account Verifications, see the declared vehicle/plate alongside the
+  uploaded documents - useful context when deciding whether to approve.
+
+## 2. Delivery agent ratings
+Once a delivery's status is `delivered`, the buyer who placed that
+order can leave a 1-5 star rating (with an optional comment) for the
+agent who delivered it - exactly one rating per order, mirroring how
+product reviews work (one review per buyer per product). The buyer
+sees a star-picker on the order page immediately after delivery, and
+their own submitted rating (read-only) on every visit after that.
+
+Agents see their own ratings on a new **Ratings** tab in their
+dashboard: average rating, total count, and the individual
+ratings/comments they've received, newest first.
+
+## New API endpoints
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| POST | `/api/v1/delivery/:orderId/rating` | Buyer (order owner) | Rate the agent who delivered this order. Only once, and only after `delivered`. Body: `{ rating: 1-5, comment?: string }`. |
+| GET | `/api/v1/delivery/my/rating-summary` | Delivery agent | The logged-in agent's own average rating, count, and rating history. |
+
+`GET /api/v1/delivery/:orderId` (existing route) now also returns the
+assigned agent's `agent_vehicle_type` / `agent_vehicle_plate_number` /
+`agent_first_name` / `agent_last_name`, plus a `rating` field (`null`
+until the buyer rates it) - no new route needed for the buyer to see
+either of those.
+
+## What was completed
+- Migration adding `vehicle_type` / `vehicle_plate_number` to `users`
+  and the new `delivery_ratings` table.
+- Registration validation, service, and repository changes so vehicle
+  info is required and stored for `delivery_agent` signups only.
+- Vehicle info surfaced in the agent's own profile, the buyer's live
+  tracking view, and the admin verification review screen.
+- Full rate-a-delivery flow: repository, service (with the
+  buyer-owns-order / delivered-only / one-rating-only checks),
+  controller, validator, and routes.
+- Agent-facing ratings dashboard tab + page.
+
+## What remains
+- Nothing outstanding from this phase - Phase 4 is complete as
+  scoped (vehicle type, plate number, delivery agent ratings).
+- Not in scope for this phase, flagging for later phases per the plan:
+  Phase 5 (distance-based delivery pricing for Tanzania), Phase 6
+  (disputes), Phase 7 (legal/policy pages), Phase 8 (Swahili), Phase 9
+  (animations/UX polish), Phase 10 (automated tests).
+
+
+## Phase 1 — Payments: Stripe removed, Snippe added
+Stripe has been fully removed and replaced with a new **Snippe**
+provider. Payment providers remain isolated (one file per gateway under
+`payment/providers/`), and PayPal / mobile money / cash-on-delivery are
+unaffected.
+
+**Changed**:
+- `providers/stripe.provider.js` deleted, `providers/snippe.provider.js`
+  added — same hosted-checkout-session shape (`isConfigured`,
+  `createCheckoutSession`, `constructWebhookEvent`), no SDK dependency
+  (plain `fetch`, same pattern already used for PayPal). Webhook
+  authenticity is verified via an HMAC-SHA256 signature
+  (`SNIPPE_WEBHOOK_SECRET`) over the raw request body, same trust model
+  Stripe had.
+- `payment.service.js` / `payment.controller.js` / `payment.routes.js` /
+  `app.js`: every Stripe-specific function, route, and webhook handler
+  renamed/rewired to Snippe (`/payments/:orderId/snippe/checkout`,
+  `/payments/verification-fee/snippe/checkout`,
+  `/payments/webhooks/snippe`).
+- `orderStatus.js`'s `PAYMENT_METHODS` now lists `snippe` instead of
+  `stripe`.
+- Frontend (`Checkout.jsx`, `OrderDetail.jsx`,
+  `VerificationFeeGate.jsx`, `AdminSettings.jsx`): UI labels and API
+  calls updated to Snippe.
+- `backend/package.json`: `stripe` npm dependency removed.
+- New migration `030_snippe_payment_gateway.sql`: widens then narrows
+  the `payment_method`/`method` ENUMs so any existing `'stripe'` rows
+  are moved to `'snippe'` rather than left pointing at a gateway the app
+  no longer understands.
+
+**Action needed from you**:
+- Set `SNIPPE_SECRET_KEY` and `SNIPPE_WEBHOOK_SECRET` in your production
+  `.env` (placeholders added, both currently empty) — checkout and the
+  seller verification fee will error on the Snippe path until these are
+  set.
+- Verify Snippe's actual hosted-checkout API shape (endpoint path,
+  request/response field names, webhook signature header name) against
+  their real docs once you're onboarded — `snippe.provider.js` follows a
+  common hosted-checkout pattern but wasn't built against Snippe's
+  actual documentation, since none was available at the time of this
+  change.
+- Run the new migration (`npm run db:migrate` from `backend/`) before
+  deploying.
+- Run `npm install` in `backend/` to drop `stripe` from
+  `package-lock.json` (not hand-edited, since lockfiles should be
+  regenerated by npm, not patched by hand).
+
+## Phase 2 — Emails: Nodemailer removed, Brevo used everywhere
+Nodemailer/SMTP has been fully removed. Every outgoing email (OTP *and*
+general notifications) now goes through the Brevo HTTPS API.
+
+**Changed**:
+- `config/email.js` (the Nodemailer transporter) deleted.
+- `utils/sendEmail.js` (used by `notification.service.js` for order/
+  status-change emails) now calls `config/brevo.js`'s
+  `sendTransactionalEmail` instead of a Nodemailer transporter. Same
+  best-effort behavior as before — a failed send is logged, not thrown,
+  so a broken email config never breaks the feature that triggered it.
+  OTP delivery (`otp.service.js`) already used Brevo directly and is
+  unchanged.
+- `backend/package.json`: `nodemailer` dependency removed.
+- `backend/.env`: `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` /
+  `EMAIL_PASSWORD` (SMTP-only) removed. `EMAIL_FROM` kept as a fallback
+  sender address, alongside the existing `BREVO_API_KEY` /
+  `BREVO_SENDER_EMAIL` / `BREVO_SENDER_NAME`, now all under one
+  "Transactional email" section.
+
+**Action needed from you**:
+- Nothing new — `BREVO_API_KEY` / `BREVO_SENDER_EMAIL` were already set
+  and working for OTP, and now cover general notification emails too.
+- Run `npm install` in `backend/` to drop `nodemailer` from
+  `package-lock.json`.

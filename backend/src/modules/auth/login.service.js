@@ -3,6 +3,7 @@ const comparePassword = require("../../utils/comparePassword");
 const generateToken = require("../../utils/generateToken");
 const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/shortLivedToken");
 const otpService = require("../otp/otp.service");
+const appError = require("../../utils/appError");
 
 const PRE_AUTH_TYP = "login_otp";
 const PRE_AUTH_EXPIRY = "10m";
@@ -14,13 +15,13 @@ exports.login = async (email, password) => {
     const user = await userRepository.findByEmail(email);
 
     if (!user) {
-        throw new Error("Invalid email or password");
+        throw appError("INVALID_CREDENTIALS", 401);
     }
 
     const match = await comparePassword(password, user.password);
 
     if (!match) {
-        throw new Error("Invalid email or password");
+        throw appError("INVALID_CREDENTIALS", 401);
     }
 
     if (user.is_active === 0) {
@@ -62,7 +63,7 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
     const user = await userRepository.findById(decoded.id);
 
     if (!user) {
-        throw new Error("Account not found");
+        throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
     await otpService.verifyOtp(user.id, "login", code);
@@ -70,7 +71,8 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
     const token = generateToken({
         id: user.id,
         role: user.role,
-        admin_level: user.role === "admin" ? user.admin_level : undefined
+        admin_level: user.role === "admin" ? user.admin_level : undefined,
+        language: user.language
     });
 
     delete user.password;

@@ -263,6 +263,19 @@ exports.findOrdersBySeller = async (sellerId) => {
     return rows;
 };
 
+// Every non-parent order (standalone or child) has exactly one seller
+// across all its order_items by construction (see createSplitOrder) -
+// used by deliveryPricing.service.js to find whose pickup pin to measure
+// distance from. Returns undefined for a parent order (no items of its
+// own) or an order with no items at all.
+exports.findOrderSellerId = async (orderId) => {
+    const [rows] = await db.query(
+        "SELECT seller_id FROM order_items WHERE order_id = ? LIMIT 1",
+        [orderId]
+    );
+    return rows[0]?.seller_id;
+};
+
 // Whether this seller owns at least one item in the given order
 exports.sellerHasItemInOrder = async (orderId, sellerId) => {
     const [rows] = await db.query(

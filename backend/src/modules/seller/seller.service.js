@@ -185,8 +185,8 @@ const syncBadge = async (userId) => {
             notificationService.notify({
                 userId,
                 type: "seller_verification",
-                title: "You're now a Verified Seller!",
-                message: "Your Verified Seller badge is live. Advanced analytics, revenue reports and premium tools are now unlocked.",
+                titleKey: "notifications.seller.badge.title",
+                messageKey: "notifications.seller.badge.message",
                 withEmail: true
             }).catch((err) => console.error("badge notify error:", err));
         }

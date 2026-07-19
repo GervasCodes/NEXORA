@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
+import LocationPicker from "../../components/LocationPicker";
 
 export default function SellerStore() {
     const { profile, refreshProfile } = useOutletContext();
@@ -17,6 +18,11 @@ export default function SellerStore() {
         city: profile.city || "",
         address: profile.address || ""
     });
+    const [pickupPin, setPickupPin] = useState(
+        profile.pickup_lat != null && profile.pickup_lng != null
+            ? { lat: profile.pickup_lat, lng: profile.pickup_lng }
+            : null
+    );
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -35,7 +41,11 @@ export default function SellerStore() {
         setError("");
         setSaved(false);
         try {
-            await api.put("/seller/profile", form);
+            await api.put("/seller/profile", {
+                ...form,
+                pickup_lat: pickupPin?.lat ?? null,
+                pickup_lng: pickupPin?.lng ?? null
+            });
             refreshProfile();
             setSaved(true);
         } catch (err) {
@@ -170,6 +180,16 @@ export default function SellerStore() {
                         <input value={form.address} onChange={update("address")}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
+                </div>
+
+                <div>
+                    <LocationPicker
+                        value={pickupPin}
+                        onChange={setPickupPin}
+                        label="Pickup location (for delivery pricing)"
+                        placedHint="Pin placed — delivery fees for your orders will be priced by distance from here instead of the platform's flat rate."
+                        emptyHint="Tap the map to drop a pin at your store/warehouse. Without one, deliveries for your orders use the platform's flat rider fee instead of distance-based pricing."
+                    />
                 </div>
 
                 {error && <p className="text-coral text-sm">{error}</p>}

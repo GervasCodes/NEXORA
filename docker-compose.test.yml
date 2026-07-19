@@ -1,0 +1,35 @@
+# Disposable MySQL for the backend's real-database integration tests
+# (tests/db-integration/**) - NOT used by the default `npm test`, which
+# mocks the db pool entirely and needs nothing running.
+#
+# Local usage:
+#   docker compose -f docker-compose.test.yml up -d
+#   npm --prefix backend run db:migrate
+#   npm --prefix backend run test:db
+#   docker compose -f docker-compose.test.yml down -v
+#
+# The credentials/port here match the defaults tests/setupEnv.js falls
+# back to (DB_HOST=localhost, DB_PORT=3306, DB_USER=test, DB_PASSWORD=test,
+# DB_NAME=nexora_test) so no .env is needed to run this locally. CI sets
+# the same values explicitly - see .github/workflows/backend-tests.yml.
+
+services:
+  mysql-test:
+    image: mysql:8.0
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: nexora_test
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      # No named volume - this database is rebuilt from migrations every
+      # run and should never persist real data between test runs.
+      - /var/lib/mysql

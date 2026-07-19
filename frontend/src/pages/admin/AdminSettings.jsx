@@ -8,6 +8,8 @@ export default function AdminSettings() {
     const [riderFee, setRiderFee] = useState("");
     const [verificationFee, setVerificationFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
+    const [bands, setBands] = useState([]);
+    const [perKmBeyond, setPerKmBeyond] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
@@ -20,10 +22,30 @@ export default function AdminSettings() {
                 setRiderFee(data.data.rider_delivery_fee);
                 setVerificationFee(data.data.seller_verification_fee);
                 setUsdRate(data.data.usd_exchange_rate);
+
+                const parsed = typeof data.data.delivery_distance_bands === "string"
+                    ? JSON.parse(data.data.delivery_distance_bands)
+                    : data.data.delivery_distance_bands;
+                setBands(parsed?.bands?.length ? parsed.bands : [{ up_to_km: 3, fee: 2000 }]);
+                setPerKmBeyond(parsed?.per_km_beyond ?? 0);
             })
             .catch(() => setError("Couldn't load settings."))
             .finally(() => setLoading(false));
     }, []);
+
+    const updateBand = (index, field, value) => {
+        setBands(bands.map((band, i) => (i === index ? { ...band, [field]: value } : band)));
+    };
+
+    const addBand = () => {
+        const last = bands[bands.length - 1];
+        setBands([...bands, { up_to_km: (last?.up_to_km ?? 0) + 5, fee: (last?.fee ?? 0) + 2000 }]);
+    };
+
+    const removeBand = (index) => {
+        if (bands.length <= 1) return; // at least one band required
+        setBands(bands.filter((_, i) => i !== index));
+    };
 
     const save = async (e) => {
         e.preventDefault();
@@ -36,7 +58,13 @@ export default function AdminSettings() {
                 commission_rate: Number(commissionRate),
                 rider_delivery_fee: Number(riderFee),
                 seller_verification_fee: Number(verificationFee),
-                usd_exchange_rate: Number(usdRate)
+                usd_exchange_rate: Number(usdRate),
+                delivery_distance_bands: {
+                    bands: bands
+                        .map((b) => ({ up_to_km: Number(b.up_to_km), fee: Number(b.fee) }))
+                        .sort((a, b) => a.up_to_km - b.up_to_km),
+                    per_km_beyond: Number(perKmBeyond)
+                }
             });
             setSettings(data.data);
             setSaved(true);
@@ -77,7 +105,7 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Rider delivery fee (TZS)</label>
+                    <label className="text-xs text-ash block mb-1">Fallback rider delivery fee (TZS)</label>
                     <input
                         type="number"
                         min="0"
@@ -87,7 +115,74 @@ export default function AdminSettings() {
                         onChange={(e) => setRiderFee(e.target.value)}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm"
                     />
-                    <p className="text-xs text-ash mt-1">Flat amount a delivery agent earns per completed delivery.</p>
+                    <p className="text-xs text-ash mt-1">
+                        Used when distance-based pricing below can't be calculated - the seller has no pickup pin set,
+                        or the order has no delivery pin. Otherwise the distance bands below decide the fee.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-2">Distance-based delivery pricing (Tanzania)</label>
+                    <div className="space-y-2">
+                        {bands.map((band, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs text-ash whitespace-nowrap">Up to</span>
+                                <input
+                                    type="number"
+                                    min="0.1"
+                                    step="0.5"
+                                    required
+                                    value={band.up_to_km}
+                                    onChange={(e) => updateBand(i, "up_to_km", e.target.value)}
+                                    className="w-20 border border-line rounded-md px-2 py-1.5 text-sm"
+                                />
+                                <span className="text-xs text-ash whitespace-nowrap">km →</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="100"
+                                    required
+                                    value={band.fee}
+                                    onChange={(e) => updateBand(i, "fee", e.target.value)}
+                                    className="flex-1 border border-line rounded-md px-2 py-1.5 text-sm"
+                                />
+                                <span className="text-xs text-ash whitespace-nowrap">TZS</span>
+                                <button
+                                    type="button"
+                                    onClick={() => removeBand(i)}
+                                    disabled={bands.length <= 1}
+                                    className="text-xs text-coral hover:underline disabled:opacity-40 disabled:no-underline px-1"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={addBand}
+                        className="text-xs text-teal hover:underline mt-2"
+                    >
+                        + Add band
+                    </button>
+
+                    <div className="mt-3">
+                        <label className="text-xs text-ash block mb-1">Rate beyond the last band (TZS per km)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="10"
+                            required
+                            value={perKmBeyond}
+                            onChange={(e) => setPerKmBeyond(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        />
+                    </div>
+
+                    <p className="text-xs text-ash mt-2">
+                        Bolt-style tiers: a delivery is priced by the first band its distance fits under (seller's pickup
+                        pin to the buyer's delivery pin). Past the last band, each extra km adds the rate above.
+                    </p>
                 </div>
 
                 <div>

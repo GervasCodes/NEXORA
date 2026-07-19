@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { t, resolveLocale } = require("../i18n");
 
 module.exports = (req, res, next) => {
     try {
@@ -7,7 +8,7 @@ module.exports = (req, res, next) => {
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
                 success: false,
-                message: "Access denied. No token provided."
+                message: t(req.locale, "common.unauthorized")
             });
         }
 
@@ -21,18 +22,26 @@ module.exports = (req, res, next) => {
         if (decoded.typ) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid or expired token."
+                message: t(req.locale, "common.invalidToken")
             });
         }
 
         req.user = decoded;
+
+        // The account's saved language (see auth/login.service.js, which
+        // bakes it into the token at login) is authoritative for a signed-in
+        // user - unless the request explicitly asked for a different locale
+        // via ?lang=, which locale.middleware already recorded.
+        if (!req.localeExplicit && decoded.language) {
+            req.locale = resolveLocale(decoded.language);
+        }
 
         next();
 
     } catch (error) {
         return res.status(401).json({
             success: false,
-            message: "Invalid or expired token."
+            message: t(req.locale, "common.invalidToken")
         });
     }
 };

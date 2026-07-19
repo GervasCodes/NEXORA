@@ -13,8 +13,17 @@ function ClickToPlace({ onPick }) {
 }
 
 // Controlled-ish: reports { lat, lng } up via onChange whenever the buyer
-// clicks the map. Parent (Checkout.jsx) owns whether a pin has been placed.
-export default function LocationPicker({ value, onChange }) {
+// clicks the map. Parent (Checkout.jsx / SellerStore.jsx) owns whether a
+// pin has been placed. label/placedHint/emptyHint let callers other than
+// checkout (e.g. a seller's pickup pin) reuse this with wording that
+// makes sense for them.
+export default function LocationPicker({
+    value,
+    onChange,
+    label = "Drop a pin for delivery (optional but recommended)",
+    placedHint = "Pin placed — this speeds up matching you with the nearest delivery agent.",
+    emptyHint = "Tap the map to drop a pin, or leave blank to skip auto-matching (an agent can still claim your order manually)."
+}) {
     const [locating, setLocating] = useState(false);
 
     const useMyLocation = () => {
@@ -33,7 +42,7 @@ export default function LocationPicker({ value, onChange }) {
     return (
         <div>
             <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm">Drop a pin for delivery (optional but recommended)</label>
+                <label className="block text-sm">{label}</label>
                 <button type="button" onClick={useMyLocation} disabled={locating}
                     className="text-xs text-teal hover:underline disabled:opacity-60">
                     {locating ? "Locating…" : "Use my current location"}
@@ -56,9 +65,7 @@ export default function LocationPicker({ value, onChange }) {
             </div>
 
             <p className="text-xs text-ash mt-1.5">
-                {value
-                    ? "Pin placed — this speeds up matching you with the nearest delivery agent."
-                    : "Tap the map to drop a pin, or leave blank to skip auto-matching (an agent can still claim your order manually)."}
+                {value ? placedHint : emptyHint}
             </p>
         </div>
     );

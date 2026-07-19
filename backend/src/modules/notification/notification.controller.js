@@ -1,4 +1,5 @@
 const notificationService = require("./notification.service");
+const { t } = require("../../i18n");
 
 exports.getMyNotifications = async (req, res) => {
     try {
@@ -10,9 +11,9 @@ exports.getMyNotifications = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -27,9 +28,9 @@ exports.getUnreadCount = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -44,9 +45,9 @@ exports.markAsRead = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -61,9 +62,9 @@ exports.markAllAsRead = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -78,9 +79,9 @@ exports.deleteNotification = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };

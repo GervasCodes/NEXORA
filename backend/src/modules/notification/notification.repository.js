@@ -49,3 +49,12 @@ exports.getUserEmail = async (userId) => {
     const [rows] = await db.query("SELECT email FROM users WHERE id = ?", [userId]);
     return rows[0]?.email;
 };
+
+// Used by notification.service to render the in-app record and the
+// notification email in the recipient's own saved language, rather than
+// whatever language the request that triggered the notification happened
+// to be in.
+exports.getUserContact = async (userId) => {
+    const [rows] = await db.query("SELECT email, language FROM users WHERE id = ?", [userId]);
+    return rows[0] || null;
+};

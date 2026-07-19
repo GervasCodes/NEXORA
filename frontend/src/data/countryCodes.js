@@ -1,0 +1,60 @@
+// Country calling codes used to prefix the phone number a user enters
+// during registration (e.g. Tanzania -> +255). Tanzania is listed first
+// and used as the default since NEXORA's primary market is Tanzania
+// (see the Bajaji vehicle type and Selcom/Malipo payment providers).
+//
+// Shape: { name, iso2, dial } — dial includes the leading "+".
+export const COUNTRY_CODES = [
+    { name: "Tanzania", iso2: "TZ", dial: "+255" },
+    { name: "Kenya", iso2: "KE", dial: "+254" },
+    { name: "Uganda", iso2: "UG", dial: "+256" },
+    { name: "Rwanda", iso2: "RW", dial: "+250" },
+    { name: "Burundi", iso2: "BI", dial: "+257" },
+    { name: "DR Congo", iso2: "CD", dial: "+243" },
+    { name: "Zambia", iso2: "ZM", dial: "+260" },
+    { name: "Malawi", iso2: "MW", dial: "+265" },
+    { name: "Mozambique", iso2: "MZ", dial: "+258" },
+    { name: "South Africa", iso2: "ZA", dial: "+27" },
+    { name: "Nigeria", iso2: "NG", dial: "+234" },
+    { name: "Ghana", iso2: "GH", dial: "+233" },
+    { name: "Ethiopia", iso2: "ET", dial: "+251" },
+    { name: "Somalia", iso2: "SO", dial: "+252" },
+    { name: "Egypt", iso2: "EG", dial: "+20" },
+    { name: "Sudan", iso2: "SD", dial: "+249" },
+    { name: "Zimbabwe", iso2: "ZW", dial: "+263" },
+    { name: "Botswana", iso2: "BW", dial: "+267" },
+    { name: "Namibia", iso2: "NA", dial: "+264" },
+    { name: "Angola", iso2: "AO", dial: "+244" },
+    { name: "Cameroon", iso2: "CM", dial: "+237" },
+    { name: "Ivory Coast", iso2: "CI", dial: "+225" },
+    { name: "Senegal", iso2: "SN", dial: "+221" },
+    { name: "Morocco", iso2: "MA", dial: "+212" },
+    { name: "Algeria", iso2: "DZ", dial: "+213" },
+    { name: "Tunisia", iso2: "TN", dial: "+216" },
+    { name: "India", iso2: "IN", dial: "+91" },
+    { name: "China", iso2: "CN", dial: "+86" },
+    { name: "United Arab Emirates", iso2: "AE", dial: "+971" },
+    { name: "Saudi Arabia", iso2: "SA", dial: "+966" },
+    { name: "United Kingdom", iso2: "GB", dial: "+44" },
+    { name: "United States", iso2: "US", dial: "+1" },
+    { name: "Canada", iso2: "CA", dial: "+1" },
+    { name: "Germany", iso2: "DE", dial: "+49" },
+    { name: "France", iso2: "FR", dial: "+33" },
+    { name: "Italy", iso2: "IT", dial: "+39" },
+    { name: "Spain", iso2: "ES", dial: "+34" },
+    { name: "Netherlands", iso2: "NL", dial: "+31" },
+    { name: "Portugal", iso2: "PT", dial: "+351" },
+    { name: "Sweden", iso2: "SE", dial: "+46" },
+    { name: "Turkey", iso2: "TR", dial: "+90" },
+    { name: "Pakistan", iso2: "PK", dial: "+92" },
+    { name: "Bangladesh", iso2: "BD", dial: "+880" },
+    { name: "Indonesia", iso2: "ID", dial: "+62" },
+    { name: "Philippines", iso2: "PH", dial: "+63" },
+    { name: "Malaysia", iso2: "MY", dial: "+60" },
+    { name: "Australia", iso2: "AU", dial: "+61" },
+    { name: "Brazil", iso2: "BR", dial: "+55" },
+    { name: "Japan", iso2: "JP", dial: "+81" },
+    { name: "South Korea", iso2: "KR", dial: "+82" }
+];
+
+export const DEFAULT_COUNTRY_DIAL = "+255"; // Tanzania

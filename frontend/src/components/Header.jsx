@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import SearchBox from "./SearchBox";
+import NotificationBell from "./NotificationBell";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -17,7 +18,8 @@ function useNavLinks() {
     if (user?.role === "admin") links.push({ to: "/admin", label: t("nav.admin") });
     if (user?.role === "buyer" || user?.role === "seller") links.push({ to: "/messages", label: t("nav.messages") });
     if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders") });
-    if (user?.role === "buyer") links.push({ to: "/saved", label: "Saved" });
+    if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes") });
+    if (user?.role === "buyer") links.push({ to: "/saved", label: t("nav.saved") });
     if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart") });
     if (user) links.push({ to: "/account", label: t("nav.account") });
 
@@ -79,6 +81,8 @@ export default function Header() {
                         </Link>
                     ))}
 
+                    {user && <NotificationBell />}
+
                     {user ? (
                         <button onClick={handleSignOut} className="text-paper/80 hover:text-azure-light transition-colors">
                             {t("nav.signOut")}
@@ -102,6 +106,8 @@ export default function Header() {
                     of viewport width or orientation - this is what actually
                     fixes buttons being unreachable in portrait mode. */}
                 <div className="flex items-center gap-3 ml-auto md:hidden">
+                    {user && <NotificationBell />}
+
                     {user?.role === "buyer" && (
                         <Link to="/cart" className="relative text-paper/90 shrink-0" aria-label={t("nav.cart")}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-6 h-6">

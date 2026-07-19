@@ -27,6 +27,7 @@ const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
 const wishlistRoutes = require("./modules/wishlist/wishlist.routes");
+const disputeRoutes = require("./modules/dispute/dispute.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -80,6 +81,11 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// Determines req.locale ("en" | "sw") for every request - from ?lang=,
+// then Accept-Language, then default - so error messages, notifications,
+// and emails render in the right language. auth.middleware refines this
+// further for signed-in users using their saved language preference.
+app.use(require("./middleware/locale.middleware"));
 // General abuse safety net, not a per-user quota - see rateLimit.middleware.js.
 // authLimiter (tighter) is applied directly on the auth/password-OTP routes.
 app.use("/api/", apiLimiter);
@@ -217,6 +223,7 @@ app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
+app.use("/api/v1/disputes", disputeRoutes);
 
 app.get("/api/v1/me", authMiddleware, (req, res) => {
     res.json({

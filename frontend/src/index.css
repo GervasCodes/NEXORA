@@ -121,3 +121,38 @@ body {
         transition-duration: 0.001ms !important;
     }
 }
+
+/* ---- Phase 9: shared UI/UX animation helpers ------------------------- */
+
+/* Shimmering placeholder used by <Skeleton /> while data loads - a plain
+   CSS gradient sweep rather than a JS-driven animation, so it costs
+   nothing on the main thread and is free on low-end mobile devices. */
+.skeleton {
+    background: linear-gradient(
+        100deg,
+        rgb(var(--color-line) / 0.5) 30%,
+        rgb(var(--color-line) / 0.9) 45%,
+        rgb(var(--color-line) / 0.5) 60%
+    );
+    background-size: 250% 100%;
+}
+
+/* Small stagger helpers for list entrance animations (Cart/Orders rows,
+   notification items) - keeps the animation utility class itself
+   reusable instead of writing inline style={{ animationDelay }} at every
+   call site. Six steps is plenty; anything beyond that reuses the last. */
+.stagger-1 { animation-delay: 40ms; }
+.stagger-2 { animation-delay: 80ms; }
+.stagger-3 { animation-delay: 120ms; }
+.stagger-4 { animation-delay: 160ms; }
+.stagger-5 { animation-delay: 200ms; }
+.stagger-6 { animation-delay: 240ms; }
+
+/* Leaflet positions markers with an inline `transform: translate3d(...)`
+   on `.leaflet-marker-icon` every time a "agent:position" socket event
+   updates state - this single rule is what turns that into a smooth
+   glide across the map instead of a jump-cut, with no React/JS changes
+   needed in DeliveryTrackingMap.jsx. */
+.leaflet-marker-icon {
+    transition: transform 0.6s linear;
+}

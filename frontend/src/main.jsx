@@ -9,12 +9,13 @@ import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { CurrencyProvider } from "./context/CurrencyContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
+import { ToastProvider } from "./context/ToastContext.jsx";
 import "./index.css";
 
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("/sw.js").catch(() => {
-            
+
         });
     });
 }
@@ -29,7 +30,9 @@ createRoot(document.getElementById("root")).render(
                             <SocketProvider>
                                 <CartProvider>
                                     <WishlistProvider>
-                                        <App />
+                                        <ToastProvider>
+                                            <App />
+                                        </ToastProvider>
                                     </WishlistProvider>
                                 </CartProvider>
                             </SocketProvider>

@@ -1,0 +1,62 @@
+NEXORA — phone country codes + gap-closing delivery (audit log, terms
+consent, DB backup/restore, partial i18n rollout)
+
+Files touched this session. Paths are relative to the repo root.
+
+MODIFIED (already-tracked files — review diff before staging):
+  database/package.json                          added backup/restore scripts
+  database/.gitignore                             ignore local backup dumps
+  backend/src/modules/auth/auth.controller.js     audit-log calls on register/login/OTP
+  backend/src/modules/auth/auth.service.js        terms-accepted guard, terms_version, appError import
+  backend/src/modules/auth/auth.repository.js     stores terms_accepted_at / terms_version
+  backend/src/modules/auth/auth.validator.js      requires terms_accepted on register
+  backend/src/modules/order/order.service.js      audit-log call on order creation
+  backend/src/modules/payment/payment.service.js  audit-log calls on payment webhook success/failure
+  backend/src/modules/admin/admin.controller.js   new listAuditLogs endpoint
+  backend/src/modules/admin/admin.routes.js       new GET /admin/audit-logs route
+  backend/src/i18n/locales/en.js                  new errors.TERMS_NOT_ACCEPTED key
+  backend/src/i18n/locales/sw.js                  matching Swahili key
+  frontend/src/pages/Register.jsx                 country-code phone input, terms checkbox, i18n wiring
+  frontend/src/context/LanguageContext.jsx        ~24 new auth.* translation keys (en + sw)
+
+NEW (untracked — just git add):
+  database/migrations/035_audit_log.sql           audit_logs table (SRS 3.10)
+  database/migrations/036_terms_acceptance.sql    users.terms_accepted_at / terms_version (SRS-adjacent, legal consent)
+  database/backup.js                              mysqldump-based backup script (SRS 3.9)
+  database/restore.js                             restore from a backup.js dump (SRS 3.9)
+  backend/src/modules/audit/audit.repository.js   audit_logs insert/query
+  backend/src/modules/audit/audit.service.js      fire-and-forget audit logging helper
+  frontend/src/data/countryCodes.js               50-country dial-code list, Tanzania default
+
+To apply: unzip this over your repo root (preserves paths), then:
+  git add <paths above>
+  git status   # confirm nothing unexpected got staged
+
+Before deploying:
+  1. cd database && npm run migrate     # applies 035 and 036
+  2. Ensure `mysqldump`/`mysql` client tools are installed on wherever
+     you'll run database/backup.js and database/restore.js (they shell
+     out to the CLI tools, not a JS driver).
+  3. Schedule database/backup.js on a cron (see the comment at the top
+     of that file for a sample crontab line) and ship the output
+     somewhere off-box.
+
+Verified this session (static checks only — no live MySQL/npm registry
+access in this environment, so these were NOT run):
+  - `node --check` passed on every touched/new backend and database .js file
+  - Brace-balance and manual review passed on the touched .jsx files
+  - Did NOT run: npm install, the Jest suite, or `npm run build`
+    (frontend/backend) — please run these yourself before merging,
+    the same way the project's own MANIFEST.txt from the prior session
+    reports having done with real MySQL and a real build.
+
+Known gaps intentionally left for a follow-up pass (see chat for full
+list):
+  - i18n: only Register.jsx's main account step is wired to t(). The
+    documents-step of Register.jsx, Login.jsx, and the other ~41 pages
+    are still English-only.
+  - No re-consent flow yet if CURRENT_TERMS_VERSION is bumped later
+    (existing users are not prompted to re-accept).
+  - backup.js/restore.js are not wired into a scheduler themselves —
+    cron (or your host's job scheduler) still needs to be configured
+    to call them regularly.

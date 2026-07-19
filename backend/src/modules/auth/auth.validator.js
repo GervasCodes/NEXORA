@@ -9,6 +9,13 @@ exports.registerValidation = [
     body("password")
         .isLength({ min: 8 })
         .withMessage("Password must be at least 8 characters"),
+    // Sent as a plain multipart/JSON field ("true"/"false" as a string on
+    // multipart submissions, boolean true on JSON ones), so accept both -
+    // this is a required, explicit consent checkbox on the register form,
+    // not implied by merely submitting the form.
+    body("terms_accepted")
+        .custom((value) => value === true || value === "true")
+        .withMessage("You must accept the Terms of Service and Privacy Policy"),
     body("role")
         .isIn(["buyer", "seller", "delivery_agent"])
         .withMessage("Invalid role"),

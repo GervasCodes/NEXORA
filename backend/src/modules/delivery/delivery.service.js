@@ -1,4 +1,5 @@
 const deliveryRepository = require("./delivery.repository");
+const deliveryPricingService = require("./deliveryPricing.service");
 const orderRepository = require("../order/order.repository");
 const notificationService = require("../notification/notification.service");
 const pushService = require("../push/push.service");
@@ -35,8 +36,8 @@ exports.claimDelivery = async (orderId, agentId) => {
         throw new Error("This order has already been claimed");
     }
 
-    const deliveryFee = await settingsService.getRiderDeliveryFee();
-    const deliveryId = await deliveryRepository.create(orderId, agentId, deliveryFee);
+    const { fee: deliveryFee, distanceKm } = await deliveryPricingService.calculateDeliveryFee(order);
+    const deliveryId = await deliveryRepository.create(orderId, agentId, deliveryFee, distanceKm);
 
     return { deliveryId, orderId };
 };
@@ -108,8 +109,9 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
         await notificationService.notify({
             userId: order.buyer_id,
             type: "delivery_update",
-            title: "Delivery update",
-            message: `Your order ${order.order_number} delivery status is now "${newStatus}".`,
+            titleKey: "notifications.delivery.update.title",
+            messageKey: "notifications.delivery.update.message",
+            messageParams: { orderNumber: order.order_number, status: newStatus },
             relatedOrderId: orderId,
             withEmail: newStatus === "delivered"
         });
@@ -253,16 +255,20 @@ exports.acceptOffer = async (offerId, agentId) => {
         throw new Error("This offer has expired");
     }
 
-    const deliveryFee = await settingsService.getRiderDeliveryFee();
-    await deliveryRepository.create(offer.order_id, agentId, deliveryFee);
-
     const order = await orderRepository.findOrderById(offer.order_id);
+
+    const { fee: deliveryFee, distanceKm } = order
+        ? await deliveryPricingService.calculateDeliveryFee(order)
+        : { fee: await settingsService.getRiderDeliveryFee(), distanceKm: null };
+    await deliveryRepository.create(offer.order_id, agentId, deliveryFee, distanceKm);
+
     if (order) {
         await notificationService.notify({
             userId: order.buyer_id,
             type: "delivery_assigned",
-            title: "A delivery agent is on the way to pick up your order",
-            message: `Your order ${order.order_number} has been picked up by a delivery agent.`,
+            titleKey: "notifications.delivery.pickedUp.title",
+            messageKey: "notifications.delivery.pickedUp.message",
+            messageParams: { orderNumber: order.order_number },
             relatedOrderId: offer.order_id,
             withEmail: true
         });

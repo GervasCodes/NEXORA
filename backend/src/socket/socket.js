@@ -16,6 +16,13 @@ exports.emitNewMessage = (conversationId, payload) => {
 // so any backend module can push an event straight to one person without
 // needing to know their socket id — used for delivery offers, assignment
 // notices, etc.
+// Other modules (chat.service) call this to broadcast a soft-deleted
+// message's tombstone to everyone currently in that conversation's room.
+exports.emitMessageDeleted = (conversationId, payload) => {
+    if (!io) return;
+    io.to(`conversation:${conversationId}`).emit("message_deleted", payload);
+};
+
 exports.emitToUser = (userId, event, payload) => {
     if (!io) return;
     io.to(`user:${userId}`).emit(event, payload);

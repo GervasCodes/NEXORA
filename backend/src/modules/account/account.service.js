@@ -6,6 +6,7 @@ const comparePassword = require("../../utils/comparePassword");
 const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
 const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/shortLivedToken");
+const appError = require("../../utils/appError");
 
 const REAUTH_TYP = "pwd_reauth";
 const REAUTH_EXPIRY = "10m";
@@ -14,7 +15,7 @@ exports.getProfile = async (userId) => {
     const user = await accountRepository.findById(userId);
 
     if (!user) {
-        throw new Error("Account not found");
+        throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
     return user;
@@ -24,14 +25,14 @@ exports.updateProfile = async (userId, data) => {
     if (data.email) {
         const existing = await accountRepository.findByEmailExcluding(data.email, userId);
         if (existing) {
-            throw new Error("That email is already in use by another account");
+            throw appError("EMAIL_IN_USE", 409);
         }
     }
 
     if (data.phone) {
         const existing = await accountRepository.findByPhoneExcluding(data.phone, userId);
         if (existing) {
-            throw new Error("That phone number is already in use by another account");
+            throw appError("PHONE_IN_USE", 409);
         }
     }
 
@@ -52,7 +53,7 @@ exports.requestPasswordChangeOtp = async (userId) => {
     const user = await accountRepository.findById(userId);
 
     if (!user) {
-        throw new Error("Account not found");
+        throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
     return otpService.requestOtp(user, "password_change");
@@ -74,17 +75,17 @@ exports.changePassword = async (userId, reauthToken, newPassword) => {
     try {
         decoded = verifyShortLivedToken(REAUTH_TYP, reauthToken);
     } catch (error) {
-        throw new Error("Your verification expired. Please verify with a new code.");
+        throw appError("REAUTH_EXPIRED", 401);
     }
 
     if (decoded.id !== userId) {
-        throw new Error("Your verification expired. Please verify with a new code.");
+        throw appError("REAUTH_EXPIRED", 401);
     }
 
     const account = await accountRepository.findAuthById(userId);
 
     if (!account) {
-        throw new Error("Account not found");
+        throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
     const hashed = await hashPassword(newPassword);
@@ -100,12 +101,12 @@ exports.deleteAccount = async (userId, password) => {
     const account = await accountRepository.findAuthById(userId);
 
     if (!account) {
-        throw new Error("Account not found");
+        throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
     const match = await comparePassword(password, account.password);
     if (!match) {
-        throw new Error("Incorrect password. Account was not deleted.");
+        throw appError("INCORRECT_PASSWORD", 401);
     }
 
     const connection = await db.getConnection();

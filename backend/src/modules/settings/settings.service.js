@@ -1,4 +1,5 @@
 const settingsRepository = require("./settings.repository");
+const { DEFAULT_BANDS, parseBandsConfig } = require("../../utils/deliveryPricing");
 
 // Fallbacks used only if the row is somehow missing (e.g. migration ran
 // but the default INSERT was skipped) - keeps the platform functional
@@ -12,7 +13,13 @@ const DEFAULTS = {
     // currency - see providers/paypal.provider.js. Admin-editable so it
     // can be kept roughly in line with the real exchange rate without a
     // deploy; it's a coarse approximation, not a live FX feed.
-    usd_exchange_rate: "2600"
+    usd_exchange_rate: "2600",
+    // Tanzania distance-band delivery pricing (migration 033) - see
+    // utils/deliveryPricing.js for the shape and getDeliveryDistanceBands
+    // below. Only used when both the seller's pickup pin and the order's
+    // delivery pin are set; rider_delivery_fee above remains the fallback
+    // whenever either pin is missing.
+    delivery_distance_bands: JSON.stringify(DEFAULT_BANDS)
 };
 
 // platform_settings is read on nearly every order (commission),
@@ -73,6 +80,15 @@ exports.getUsdExchangeRate = async () => {
     return Number(map.usd_exchange_rate);
 };
 
+// Parsed { bands, per_km_beyond } config for Tanzania distance-based
+// delivery pricing - see utils/deliveryPricing.js. Always returns a
+// usable config (falls back to DEFAULT_BANDS if the stored value is
+// missing or corrupt), so callers never need their own fallback.
+exports.getDeliveryDistanceBands = async () => {
+    const map = await getCachedAll();
+    return parseBandsConfig(map.delivery_distance_bands);
+};
+
 exports.updateSettings = async (data) => {
     if (data.commission_rate !== undefined) {
         await settingsRepository.upsert("commission_rate", String(data.commission_rate));
@@ -85,6 +101,9 @@ exports.updateSettings = async (data) => {
     }
     if (data.usd_exchange_rate !== undefined) {
         await settingsRepository.upsert("usd_exchange_rate", String(data.usd_exchange_rate));
+    }
+    if (data.delivery_distance_bands !== undefined) {
+        await settingsRepository.upsert("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
     }
     invalidateCache();
     return exports.getAll();

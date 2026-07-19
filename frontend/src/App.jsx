@@ -27,6 +27,10 @@ const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
 const Saved = lazy(() => import("./pages/Saved"));
+const Disputes = lazy(() => import("./pages/Disputes"));
+const NewDispute = lazy(() => import("./pages/NewDispute"));
+const DisputeDetail = lazy(() => import("./pages/DisputeDetail"));
+const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
@@ -37,6 +41,7 @@ const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
+const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 
 const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"));
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
@@ -55,6 +60,7 @@ const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
+const AdminDisputes = lazy(() => import("./pages/admin/AdminDisputes"));
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
@@ -82,7 +88,12 @@ export default function App() {
                         <Route path="/checkout" element={<RequireBuyer><Checkout /></RequireBuyer>} />
                         <Route path="/orders" element={<RequireBuyer><Orders /></RequireBuyer>} />
                         <Route path="/orders/:id" element={<RequireBuyer><OrderDetail /></RequireBuyer>} />
+                        <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
+                        <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
+                        <Route path="/disputes/new" element={<RequireBuyer><NewDispute /></RequireBuyer>} />
+                        {/* Shared: buyer, seller, or admin - dispute.service.js enforces per-dispute access */}
+                        <Route path="/disputes/:id" element={<RequireAuth><DisputeDetail /></RequireAuth>} />
 
                         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
                         <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
@@ -99,6 +110,7 @@ export default function App() {
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
                             <Route path="wallet" element={<SellerWallet />} />
+                            <Route path="disputes" element={<SellerDisputes />} />
                         </Route>
 
                         <Route path="/delivery" element={<RequireDeliveryAgent><DeliveryLayout /></RequireDeliveryAgent>}>
@@ -121,6 +133,7 @@ export default function App() {
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />
+                            <Route path="disputes" element={<AdminDisputes />} />
                         </Route>
 
                         <Route path="*" element={

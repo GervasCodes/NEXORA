@@ -1,5 +1,6 @@
 const adminService = require("./admin.service");
 const fraudService = require("../fraud/fraud.service");
+const auditRepository = require("../audit/audit.repository");
 
 exports.listUsers = async (req, res) => {
     try {
@@ -259,6 +260,27 @@ exports.listFraudFlags = async (req, res) => {
         const flags = await fraudService.listOpenFlags();
 
         return res.json({ success: true, data: flags });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Read-only view over audit_logs (SRS 3.10) - lets an admin check recent
+// logins, failed logins, registrations, orders, and payments for
+// troubleshooting/security review without needing direct DB access.
+// Optional ?event_type= / ?user_id= / ?limit= query filters.
+exports.listAuditLogs = async (req, res) => {
+    try {
+        const { event_type, user_id, limit } = req.query;
+
+        const logs = await auditRepository.findRecent({
+            eventType: event_type,
+            userId: user_id ? Number(user_id) : undefined,
+            limit: limit ? Number(limit) : undefined
+        });
+
+        return res.json({ success: true, data: logs });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

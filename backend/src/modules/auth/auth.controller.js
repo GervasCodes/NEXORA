@@ -1,7 +1,9 @@
 const { validationResult } = require("express-validator");
 const authService = require("./auth.service");
+const { t } = require("../../i18n");
 const loginService = require("./login.service");
 const passwordResetService = require("./passwordReset.service");
+const auditService = require("../audit/audit.service");
 
 exports.register = async (req, res) => {
     try {
@@ -16,6 +18,13 @@ exports.register = async (req, res) => {
 
         const result = await authService.register(req.body, req.files);
 
+        auditService.logFromRequest(req, {
+            userId: result.userId,
+            eventType: "user_registered",
+            description: `New ${req.body.role || "buyer"} account registered`,
+            metadata: { role: req.body.role || "buyer" }
+        });
+
         res.status(201).json({
             success: true,
             message: "User registered successfully.",
@@ -23,9 +32,9 @@ exports.register = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(400).json({
+        res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -45,9 +54,15 @@ exports.login = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(401).json({
+        auditService.logFromRequest(req, {
+            eventType: "login_failed",
+            description: `Failed login attempt for ${req.body.email || "unknown email"}`,
+            metadata: { email: req.body.email, stage: "password" }
+        });
+
+        res.status(error.status || 401).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -59,6 +74,13 @@ exports.verifyLoginOtp = async (req, res) => {
 
         const result = await loginService.verifyLoginOtp(pre_auth_token, code);
 
+        auditService.logFromRequest(req, {
+            userId: result.user?.id,
+            eventType: "login_success",
+            description: "User signed in",
+            metadata: { role: result.user?.role }
+        });
+
         res.json({
             success: true,
             message: "Login successful",
@@ -66,9 +88,15 @@ exports.verifyLoginOtp = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(401).json({
+        auditService.logFromRequest(req, {
+            eventType: "login_failed",
+            description: "Failed login attempt (invalid or expired OTP)",
+            metadata: { stage: "otp" }
+        });
+
+        res.status(error.status || 401).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -83,9 +111,9 @@ exports.resendLoginOtp = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(400).json({
+        res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };
@@ -113,9 +141,9 @@ exports.resetPassword = async (req, res) => {
         res.json({ success: true, message: "Password reset. You can now sign in." });
 
     } catch (error) {
-        res.status(400).json({
+        res.status(error.status || 400).json({
             success: false,
-            message: error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
 };

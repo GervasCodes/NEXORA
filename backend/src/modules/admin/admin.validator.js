@@ -31,7 +31,27 @@ exports.updateSettingsValidation = [
     body("usd_exchange_rate")
         .optional()
         .isFloat({ min: 1 })
-        .withMessage("Exchange rate must be a positive number (TZS per 1 USD)")
+        .withMessage("Exchange rate must be a positive number (TZS per 1 USD)"),
+
+    body("delivery_distance_bands")
+        .optional()
+        .custom((value) => {
+            if (!value || !Array.isArray(value.bands) || value.bands.length === 0) {
+                throw new Error("At least one distance band is required");
+            }
+            for (const band of value.bands) {
+                if (typeof band.up_to_km !== "number" || band.up_to_km <= 0) {
+                    throw new Error("Each band's distance (km) must be a positive number");
+                }
+                if (typeof band.fee !== "number" || band.fee < 0) {
+                    throw new Error("Each band's fee must be zero or a positive number");
+                }
+            }
+            if (value.per_km_beyond !== undefined && (typeof value.per_km_beyond !== "number" || value.per_km_beyond < 0)) {
+                throw new Error("The per-km overage rate must be zero or a positive number");
+            }
+            return true;
+        })
 ];
 
 exports.createAdminValidation = [

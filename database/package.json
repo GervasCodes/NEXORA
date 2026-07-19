@@ -6,7 +6,9 @@
   "scripts": {
     "migrate": "node migrate.js",
     "migrate:status": "node migrate.js --status",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "backup": "node backup.js",
+    "restore": "node restore.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

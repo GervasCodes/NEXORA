@@ -2,6 +2,7 @@ const db = require("../../config/db");
 const generateToken = require("../../utils/generateToken");
 const hashPassword = require("../../utils/hashPassword");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const appError = require("../../utils/appError");
 
 const userRepository = require("./auth.repository");
 
@@ -9,6 +10,13 @@ const userRepository = require("./auth.repository");
 // created at all - see requireApprovedSeller / requireApprovedDeliveryAgent
 // for where this gate is enforced on the API.
 const VERIFICATION_REQUIRED_ROLES = ["seller", "delivery_agent"];
+
+// Bump this when the Terms of Service / Privacy Policy change in a way
+// that requires re-consent. Not enforced retroactively on existing users
+// yet (that would need a "please re-accept" gate on login) - this just
+// makes each new registration's acceptance traceable to a specific
+// version of the documents.
+const CURRENT_TERMS_VERSION = "2026-07-19";
 
 // Every role in VERIFICATION_REQUIRED_ROLES needs an owner photo/selfie
 // plus at least one government ID. Delivery agents additionally need a
@@ -24,7 +32,15 @@ const REQUIRED_DOCS_BY_ROLE = {
 const firstFile = (files, field) => files?.[field]?.[0];
 
 exports.register = async (userData, files = {}) => {
-    const { email, phone, password, role } = userData;
+    const { email, phone, password, role, terms_accepted } = userData;
+
+    // Belt-and-suspenders: auth.validator.js already rejects this at the
+    // HTTP layer, but the service shouldn't trust that every caller goes
+    // through that middleware (e.g. a future internal/admin-created
+    // account path).
+    if (terms_accepted !== true && terms_accepted !== "true") {
+        throw appError("TERMS_NOT_ACCEPTED", 400);
+    }
 
     // Delivery agents must register with their vehicle info; every other
     // role never sends these fields, so createUser stores them as NULL.
@@ -99,7 +115,7 @@ exports.register = async (userData, files = {}) => {
         await connection.beginTransaction();
 
         const userId = await userRepository.createUser(
-            { ...userData, password: hashedPassword },
+            { ...userData, password: hashedPassword, terms_version: CURRENT_TERMS_VERSION },
             connection
         );
 
@@ -112,7 +128,7 @@ exports.register = async (userData, files = {}) => {
 
         await connection.commit();
 
-        const token = generateToken({ id: userId, role });
+        const token = generateToken({ id: userId, role, language: userData.language || "en" });
 
         return {
             userId,

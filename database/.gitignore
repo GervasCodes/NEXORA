@@ -28,3 +28,7 @@ Thumbs.db
 
 # --- Coverage / test artifacts ---
 coverage/
+
+# --- Database backups (may contain real user/payment data) ---
+backups/
+*.sql.gz

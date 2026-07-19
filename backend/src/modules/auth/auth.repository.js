@@ -39,7 +39,8 @@ exports.createUser = async (user, conn) => {
         password,
         role,
         vehicle_type,
-        vehicle_plate_number
+        vehicle_plate_number,
+        terms_version
     } = user;
 
     // Seller/delivery_agent accounts start life needing verification;
@@ -52,10 +53,15 @@ exports.createUser = async (user, conn) => {
     // for delivery_agent registrations - auth.validator.js requires both
     // when role === "delivery_agent" and every other role never sends
     // them, so they're simply NULL for buyer/seller/admin rows.
+    //
+    // terms_accepted_at is set to "now" here rather than trusted from the
+    // client - auth.validator.js/auth.service.js have already confirmed
+    // terms_accepted === true by the time this runs, so "now" IS the
+    // moment of acceptance.
     const [result] = await runner(conn).query(
         `INSERT INTO users
-        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number,terms_accepted_at,terms_version)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
             first_name,
             last_name,
@@ -66,7 +72,9 @@ exports.createUser = async (user, conn) => {
             needsVerification ? "pending" : "not_required",
             needsVerification ? new Date() : null,
             role === "delivery_agent" ? vehicle_type : null,
-            role === "delivery_agent" ? (vehicle_plate_number || null) : null
+            role === "delivery_agent" ? (vehicle_plate_number || null) : null,
+            new Date(),
+            terms_version || null
         ]
     );
 

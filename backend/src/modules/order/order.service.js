@@ -2,10 +2,11 @@ const orderRepository = require("./order.repository");
 const cartRepository = require("../cart/cart.repository");
 const sellerRepository = require("../seller/seller.repository");
 const deliveryRepository = require("../delivery/delivery.repository");
+const deliveryPricingService = require("../delivery/deliveryPricing.service");
 const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
-const settingsService = require("../settings/settings.service");
 const fraudService = require("../fraud/fraud.service");
+const auditService = require("../audit/audit.service");
 const {
     CANCELLABLE_STATUSES,
     SELLER_STATUS_TRANSITIONS
@@ -99,10 +100,9 @@ exports.checkout = async (buyerId, shippingInfo) => {
     await notificationService.notify({
         userId: buyerId,
         type: "order_placed",
-        title: "Order placed",
-        message: isMultiVendor
-            ? `Your order ${orderNumber} (${vendorCount} vendors) has been placed successfully.`
-            : `Your order ${orderNumber} has been placed successfully.`,
+        titleKey: "notifications.order.placed.title",
+        messageKey: isMultiVendor ? "notifications.order.placed.messageMultiVendor" : "notifications.order.placed.messageSingle",
+        messageParams: { orderNumber, vendorCount },
         relatedOrderId: orderId,
         withEmail: true
     });
@@ -111,6 +111,13 @@ exports.checkout = async (buyerId, shippingInfo) => {
     // panel for review) and must never delay or fail a real checkout.
     fraudService.evaluateOrder({ id: orderId, buyer_id: buyerId, total_amount: totalAmount })
         .catch((err) => console.error("[fraud] order evaluation failed:", err.message));
+
+    auditService.log({
+        userId: buyerId,
+        eventType: "order_created",
+        description: `Order ${orderNumber} created`,
+        metadata: { orderId, orderNumber, totalAmount: roundedTotal, isMultiVendor, vendorCount }
+    });
 
     // Lazy require to avoid a circular dependency (socket module doesn't
     // depend back on order, but this keeps the pattern consistent with
@@ -191,8 +198,9 @@ exports.cancelOrder = async (orderId, buyerId) => {
     await notificationService.notify({
         userId: buyerId,
         type: "order_cancelled",
-        title: "Order cancelled",
-        message: `Your order ${order.order_number} has been cancelled.`,
+        titleKey: "notifications.order.cancelled.title",
+        messageKey: "notifications.order.cancelled.message",
+        messageParams: { orderNumber: order.order_number },
         relatedOrderId: orderId,
         withEmail: true
     });
@@ -215,8 +223,9 @@ exports.autoCancelStaleOrder = async (order) => {
     await notificationService.notify({
         userId: order.buyer_id,
         type: "order_cancelled",
-        title: "Order cancelled",
-        message: `Your order ${order.order_number} was cancelled because payment was never completed. Feel free to place it again.`,
+        titleKey: "notifications.order.cancelled.title",
+        messageKey: "notifications.order.cancelledUnpaid.message",
+        messageParams: { orderNumber: order.order_number },
         relatedOrderId: order.id,
         withEmail: true
     });
@@ -288,16 +297,17 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
             throw new Error("This order already has a delivery assigned");
         }
 
-        const deliveryFee = await settingsService.getRiderDeliveryFee();
+        const { fee: deliveryFee, distanceKm } = await deliveryPricingService.calculateDeliveryFee(order);
 
         await orderRepository.setDeliveryMode(orderId, "own");
-        await deliveryRepository.create(orderId, agentId, deliveryFee);
+        await deliveryRepository.create(orderId, agentId, deliveryFee, distanceKm);
 
         await notificationService.notify({
             userId: agentId,
             type: "delivery_assigned",
-            title: "New delivery assigned to you",
-            message: `You've been assigned to deliver order ${order.order_number}.`,
+            titleKey: "notifications.delivery.assigned.title",
+            messageKey: "notifications.delivery.assigned.message",
+            messageParams: { orderNumber: order.order_number },
             relatedOrderId: orderId,
             withEmail: true
         });
@@ -317,8 +327,9 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
     await notificationService.notify({
         userId: order.buyer_id,
         type: "order_status_update",
-        title: "Order status updated",
-        message: `Your order ${order.order_number} is now "${newStatus}".`,
+        titleKey: "notifications.order.statusUpdated.title",
+        messageKey: "notifications.order.statusUpdated.message",
+        messageParams: { orderNumber: order.order_number, status: newStatus },
         relatedOrderId: orderId,
         withEmail: true
     });

@@ -44,7 +44,17 @@ exports.updateSellerValidation = [
     body("store_type_id")
         .optional()
         .isInt({ gt: 0 })
-        .withMessage("Invalid store type")
+        .withMessage("Invalid store type"),
+
+    body("pickup_lat")
+        .optional({ nullable: true })
+        .isFloat({ min: -90, max: 90 })
+        .withMessage("Invalid pickup latitude"),
+
+    body("pickup_lng")
+        .optional({ nullable: true })
+        .isFloat({ min: -180, max: 180 })
+        .withMessage("Invalid pickup longitude")
 ];
 
 exports.addDeliveryAgentValidation = [

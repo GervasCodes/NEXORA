@@ -40,14 +40,18 @@ exports.findByOrderIdWithAgent = async (orderId) => {
 };
 
 // deliveryFee is a snapshot of the platform's current rider fee at the
-// moment of assignment (see settingsService.getRiderDeliveryFee), so
-// later changes to that setting don't retroactively change what an agent
-// is owed for a delivery already in progress.
-exports.create = async (orderId, agentId, deliveryFee = null) => {
+// moment of assignment (see deliveryPricing.service's calculateDeliveryFee,
+// or settingsService.getRiderDeliveryFee for the flat fallback), so later
+// changes to pricing don't retroactively change what an agent is owed for
+// a delivery already in progress. distanceKm is the distance that fee was
+// actually calculated from (see migration 033) - null when the flat
+// fallback fee was used instead, so an agent/admin can tell which one
+// happened.
+exports.create = async (orderId, agentId, deliveryFee = null, distanceKm = null) => {
     const [result] = await db.query(
-        `INSERT INTO deliveries (order_id, agent_id, status, delivery_fee)
-        VALUES (?, ?, 'assigned', ?)`,
-        [orderId, agentId, deliveryFee]
+        `INSERT INTO deliveries (order_id, agent_id, status, delivery_fee, distance_km)
+        VALUES (?, ?, 'assigned', ?, ?)`,
+        [orderId, agentId, deliveryFee, distanceKm]
     );
     return result.insertId;
 };

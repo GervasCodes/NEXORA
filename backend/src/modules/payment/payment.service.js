@@ -5,6 +5,7 @@ const snippeProvider = require("./providers/snippe.provider");
 const paypalProvider = require("./providers/paypal.provider");
 const walletService = require("../wallet/wallet.service");
 const settingsService = require("../settings/settings.service");
+const auditService = require("../audit/audit.service");
 
 const generateReceiptNumber = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -154,6 +155,11 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
 
     if (!success) {
         await paymentRepository.markFailed(payment.id);
+        auditService.log({
+            eventType: "payment_processed",
+            description: `Payment failed for order #${orderId}`,
+            metadata: { orderId, success: false, transactionReference }
+        });
         return { orderId, success: false };
     }
 
@@ -185,6 +191,12 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     }
 
     require("../../socket/socket").emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
+
+    auditService.log({
+        eventType: "payment_processed",
+        description: `Payment completed for order #${orderId}`,
+        metadata: { orderId, success: true, transactionReference, receiptNumber, chargedCurrency, chargedAmount }
+    });
 
     return { orderId, success: true, receiptNumber };
 };

@@ -62,8 +62,9 @@ exports.creditSellersForOrder = async (orderId) => {
             notificationService.notify({
                 userId: sellerId,
                 type: "wallet_credit",
-                title: "Wallet credited",
-                message: `Your wallet has been credited for order #${orderId}.`,
+                titleKey: "notifications.wallet.credited.title",
+                messageKey: "notifications.wallet.credited.message",
+                messageParams: { orderId },
                 relatedOrderId: orderId,
                 withEmail: false
             }).catch((err) => console.error("wallet credit notify error:", err));
@@ -198,10 +199,14 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
         notificationService.notify({
             userId: withdrawal.seller_id,
             type: "withdrawal_status",
-            title: `Withdrawal ${nextStatus}`,
-            message: action === "reject"
-                ? `Your withdrawal request of ${withdrawal.amount} was rejected and refunded to your wallet.${adminNote ? ` Note: ${adminNote}` : ""}`
-                : `Your withdrawal request of ${withdrawal.amount} is now "${nextStatus}".`,
+            titleKey: "notifications.withdrawal.status.title",
+            titleParams: { status: nextStatus },
+            messageKey: action === "reject" ? "notifications.withdrawal.rejected.message" : "notifications.withdrawal.status.message",
+            messageParams: {
+                amount: withdrawal.amount,
+                status: nextStatus,
+                note: adminNote ? { key: "notifications.withdrawal.note", params: { note: adminNote } } : ""
+            },
             withEmail: true
         }).catch((err) => console.error("withdrawal notify error:", err));
 

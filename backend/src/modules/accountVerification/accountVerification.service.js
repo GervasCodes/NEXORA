@@ -43,8 +43,9 @@ exports.approve = async (userId, adminId) => {
     await notificationService.notify({
         userId,
         type: "account_verification",
-        title: "Verification approved",
-        message: `Your ${roleLabel} account has been verified. You now have full access to ${roleLabel} features.`,
+        titleKey: "notifications.verification.approved.title",
+        messageKey: "notifications.verification.approved.message",
+        messageParams: { role: roleLabel },
         withEmail: true
     }).catch((err) => console.error("verification approve notify error:", err));
 
@@ -70,8 +71,9 @@ exports.reject = async (userId, reason, adminId) => {
     await notificationService.notify({
         userId,
         type: "account_verification",
-        title: "Verification rejected",
-        message: `Your ${roleLabel} account verification was rejected: ${reason}. Please contact support.`,
+        titleKey: "notifications.verification.rejected.title",
+        messageKey: "notifications.verification.rejected.message",
+        messageParams: { role: roleLabel, reason },
         withEmail: true
     }).catch((err) => console.error("verification reject notify error:", err));
 

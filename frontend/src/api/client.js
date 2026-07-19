@@ -9,6 +9,13 @@ api.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+    // Kept in sync with LanguageContext's own localStorage key - read
+    // directly here (rather than via the hook) so this works even for
+    // requests fired before the provider mounts.
+    const language = localStorage.getItem("nexora_language");
+    if (language) {
+        config.headers["Accept-Language"] = language;
+    }
     return config;
 });
 

@@ -345,6 +345,12 @@ export default function OrderDetail() {
                         💬 Message delivery agent
                     </button>
                 )}
+                {!order.is_parent && !["pending", "cancelled"].includes(order.status) && (
+                    <Link to={`/disputes/new?order_id=${id}`}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-coral hover:text-coral transition-colors focus-ring">
+                        ⚠️ Report a problem
+                    </Link>
+                )}
             </div>
         </div>
     );

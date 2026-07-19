@@ -19,10 +19,8 @@ exports.setUserActive = async (userId, isActive) => {
     await notificationService.notify({
         userId,
         type: "account_status",
-        title: isActive ? "Account reactivated" : "Account deactivated",
-        message: isActive
-            ? "Your account has been reactivated. Welcome back!"
-            : "Your account has been deactivated. Contact support if you believe this is a mistake.",
+        titleKey: isActive ? "notifications.account.reactivated.title" : "notifications.account.deactivated.title",
+        messageKey: isActive ? "notifications.account.reactivated.message" : "notifications.account.deactivated.message",
         withEmail: true
     });
 };
@@ -43,10 +41,9 @@ exports.setSellerVerified = async (sellerUserId, isVerified) => {
     await notificationService.notify({
         userId: sellerUserId,
         type: "seller_verification",
-        title: isVerified ? "Store verified" : "Store verification removed",
-        message: isVerified
-            ? `Congratulations! "${profile.store_name}" has been verified.`
-            : `Verification for "${profile.store_name}" has been removed.`,
+        titleKey: isVerified ? "notifications.seller.storeVerified.title" : "notifications.seller.storeUnverified.title",
+        messageKey: isVerified ? "notifications.seller.storeVerified.message" : "notifications.seller.storeUnverified.message",
+        messageParams: { storeName: profile.store_name },
         withEmail: true
     });
 };
@@ -67,10 +64,9 @@ exports.setProductActive = async (productId, isActive) => {
     await notificationService.notify({
         userId: product.seller_id,
         type: "product_moderation",
-        title: isActive ? "Product reactivated" : "Product removed",
-        message: isActive
-            ? `Your product "${product.name}" is visible again.`
-            : `Your product "${product.name}" was removed by an administrator for review.`,
+        titleKey: isActive ? "notifications.product.reactivated.title" : "notifications.product.removed.title",
+        messageKey: isActive ? "notifications.product.reactivated.message" : "notifications.product.removed.message",
+        messageParams: { productName: product.name },
         withEmail: true
     });
 };

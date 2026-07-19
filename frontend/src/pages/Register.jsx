@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
+import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 
 const initialForm = {
     first_name: "",
@@ -10,7 +12,8 @@ const initialForm = {
     password: "",
     role: "buyer",
     vehicle_type: "motorcycle",
-    vehicle_plate_number: ""
+    vehicle_plate_number: "",
+    terms_accepted: false
 };
 
 // Which document fields each role needs before an account can be
@@ -37,8 +40,10 @@ const STEP_DONE = "done";
 
 export default function Register() {
     const { register } = useAuth();
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const [form, setForm] = useState(initialForm);
+    const [countryDial, setCountryDial] = useState(DEFAULT_COUNTRY_DIAL);
     const [files, setFiles] = useState({});
     const [idDocType, setIdDocType] = useState("national_id");
     const [step, setStep] = useState(STEP_ACCOUNT);
@@ -46,6 +51,7 @@ export default function Register() {
     const [submitting, setSubmitting] = useState(false);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+    const updateCheckbox = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
     const updateFile = (field) => (e) => setFiles({ ...files, [field]: e.target.files?.[0] || null });
 
     const needsDocuments = form.role === "seller" || form.role === "delivery_agent";
@@ -57,6 +63,17 @@ export default function Register() {
     const handleAccountStepSubmit = (e) => {
         e.preventDefault();
         setError("");
+
+        const digitsOnly = form.phone.trim().replace(/[^\d]/g, "");
+        if (digitsOnly.length < 7) {
+            setError(t("auth.invalidPhoneError"));
+            return;
+        }
+
+        if (!form.terms_accepted) {
+            setError(t("auth.termsRequiredError"));
+            return;
+        }
 
         if (needsDocuments) {
             setStep(STEP_DOCUMENTS);
@@ -90,15 +107,23 @@ export default function Register() {
         submitRegistration();
     };
 
+    // Combine the selected country dial code with the locally-entered
+    // number (e.g. "+255" + "712345678") into the single "phone" field
+    // the backend expects (see auth.validator.js#registerValidation and
+    // the users.phone column).
+    const buildFullPhone = () => `${countryDial}${form.phone.trim().replace(/[^\d]/g, "")}`;
+
     const submitRegistration = async () => {
         setSubmitting(true);
         setError("");
 
-        let payload = form;
+        const fullPhone = buildFullPhone();
+        const formWithPhone = { ...form, phone: fullPhone };
+        let payload = formWithPhone;
 
         if (needsDocuments) {
             const formData = new FormData();
-            Object.entries(form).forEach(([key, value]) => formData.append(key, value));
+            Object.entries(formWithPhone).forEach(([key, value]) => formData.append(key, value));
             formData.append("owner_photo", files.owner_photo);
             formData.append(idDocType, files.id_document);
             if (form.role === "delivery_agent") {
@@ -243,67 +268,111 @@ export default function Register() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-16">
-            <h1 className="font-display text-2xl mb-1">Join NEXORA</h1>
-            <p className="text-ash text-sm mb-8">Create your account to start buying, selling, or delivering.</p>
+            <h1 className="font-display text-2xl mb-1">{t("auth.registerTitle")}</h1>
+            <p className="text-ash text-sm mb-8">{t("auth.registerSubtitle")}</p>
 
             <form onSubmit={handleAccountStepSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">First name</label>
+                        <label className="block text-sm mb-1">{t("auth.firstNameLabel")}</label>
                         <input required value={form.first_name} onChange={update("first_name")}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Last name</label>
+                        <label className="block text-sm mb-1">{t("auth.lastNameLabel")}</label>
                         <input required value={form.last_name} onChange={update("last_name")}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Email</label>
+                    <label className="block text-sm mb-1">{t("auth.emailLabel")}</label>
                     <input type="email" required value={form.email} onChange={update("email")}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Phone</label>
-                    <input required value={form.phone} onChange={update("phone")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                    <label className="block text-sm mb-1">{t("auth.phoneLabel")}</label>
+                    <div className="flex gap-2">
+                        <select
+                            value={countryDial}
+                            onChange={(e) => setCountryDial(e.target.value)}
+                            aria-label={t("auth.countryCodeLabel")}
+                            className="w-32 shrink-0 border border-line rounded-md px-2 py-2 text-sm focus-ring bg-paper"
+                        >
+                            {COUNTRY_CODES.map((c) => (
+                                <option key={c.iso2} value={c.dial}>
+                                    {c.iso2} {c.dial}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            type="tel"
+                            required
+                            inputMode="numeric"
+                            placeholder="712 345 678"
+                            value={form.phone}
+                            onChange={update("phone")}
+                            className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                        />
+                    </div>
+                    <p className="text-xs text-ash mt-1">
+                        {t("auth.phoneHint")}
+                    </p>
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Password</label>
+                    <label className="block text-sm mb-1">{t("auth.passwordLabel")}</label>
                     <input type="password" required minLength={8} value={form.password} onChange={update("password")}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                    <p className="text-xs text-ash mt-1">At least 8 characters.</p>
+                    <p className="text-xs text-ash mt-1">{t("auth.passwordHint")}</p>
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">I want to</label>
+                    <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
                     <select value={form.role} onChange={update("role")}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
-                        <option value="buyer">Buy products</option>
-                        <option value="seller">Sell products</option>
-                        <option value="delivery_agent">Deliver orders</option>
+                        <option value="buyer">{t("auth.roleBuyer")}</option>
+                        <option value="seller">{t("auth.roleSeller")}</option>
+                        <option value="delivery_agent">{t("auth.roleDeliveryAgent")}</option>
                     </select>
                     {needsDocuments && (
                         <p className="text-xs text-ash mt-1">
-                            You'll be asked to verify your identity on the next step before your account is created.
+                            {t("auth.roleVerificationHint")}
                         </p>
                     )}
+                </div>
+
+                <div className="flex items-start gap-2">
+                    <input
+                        type="checkbox"
+                        id="terms_accepted"
+                        checked={form.terms_accepted}
+                        onChange={updateCheckbox("terms_accepted")}
+                        className="mt-1 focus-ring"
+                    />
+                    <label htmlFor="terms_accepted" className="text-xs text-ash">
+                        {t("auth.termsPrefix")}{" "}
+                        <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">
+                            {t("auth.termsOfService")}
+                        </Link>{" "}
+                        {t("auth.and")}{" "}
+                        <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">
+                            {t("auth.privacyPolicy")}
+                        </Link>.
+                    </label>
                 </div>
 
                 {error && <p className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
                     className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
-                    {submitting ? "Creating account…" : needsDocuments ? "Continue to verification" : "Create account"}
+                    {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </button>
             </form>
 
             <p className="text-sm text-ash mt-6">
-                Already have an account? <Link to="/login" className="text-teal hover:underline">Sign in</Link>
+                {t("auth.haveAccount")} <Link to="/login" className="text-teal hover:underline">{t("auth.signInLink")}</Link>
             </p>
         </div>
     );

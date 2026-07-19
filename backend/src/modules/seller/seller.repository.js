@@ -49,7 +49,8 @@ exports.update = async (userId, data) => {
 
     const allowed = [
         "store_name", "store_description", "business_email",
-        "business_phone", "country", "region", "city", "address", "store_type_id"
+        "business_phone", "country", "region", "city", "address", "store_type_id",
+        "pickup_lat", "pickup_lng"
     ];
 
     for (const key of allowed) {

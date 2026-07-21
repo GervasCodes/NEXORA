@@ -20,6 +20,7 @@ const buyerPayload = (overrides = {}) => ({
     phone: `+25570${Date.now()}`,
     password: "correct horse battery staple",
     role: "buyer",
+    terms_accepted: true,
     ...overrides
 });
 
@@ -70,6 +71,17 @@ describe("auth.service.register (real database)", () => {
         const before = await db.query("SELECT COUNT(*) AS n FROM users");
 
         await expect(authService.register(payload, {})).rejects.toThrow(/upload/i);
+
+        const after = await db.query("SELECT COUNT(*) AS n FROM users");
+        expect(after[0][0].n).toBe(before[0][0].n);
+    });
+
+    it("rejects registration without terms_accepted, and writes no row", async () => {
+        const payload = buyerPayload({ terms_accepted: false });
+
+        const before = await db.query("SELECT COUNT(*) AS n FROM users");
+
+        await expect(authService.register(payload)).rejects.toThrow("TERMS_NOT_ACCEPTED");
 
         const after = await db.query("SELECT COUNT(*) AS n FROM users");
         expect(after[0][0].n).toBe(before[0][0].n);

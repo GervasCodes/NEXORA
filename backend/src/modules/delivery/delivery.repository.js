@@ -27,13 +27,27 @@ exports.findByOrderId = async (orderId) => {
 // agent's vehicle info (migration 032) - used by delivery.service's
 // getDelivery, so a buyer tracking their order can see what vehicle/
 // plate number to expect, without a second round trip.
+//
+// Phase 1 (live order tracking) extends this with three more things the
+// full tracking page needs on first load (before any socket event has
+// arrived): the agent's last known position + when it was last updated,
+// and the seller's pickup pin (LEFT JOINed - many sellers haven't set one
+// yet, see migration 033) so the page can plot a pickup marker. All new
+// columns are nullable and simply come back as null when unavailable.
 exports.findByOrderIdWithAgent = async (orderId) => {
     const [rows] = await db.query(
         `SELECT d.*, u.first_name AS agent_first_name, u.last_name AS agent_last_name,
-                u.vehicle_type AS agent_vehicle_type, u.vehicle_plate_number AS agent_vehicle_plate_number
+                u.phone AS agent_phone,
+                u.vehicle_type AS agent_vehicle_type, u.vehicle_plate_number AS agent_vehicle_plate_number,
+                u.current_lat AS agent_current_lat, u.current_lng AS agent_current_lng,
+                u.location_updated_at AS agent_location_updated_at,
+                sp.pickup_lat, sp.pickup_lng
         FROM deliveries d
         JOIN users u ON u.id = d.agent_id
-        WHERE d.order_id = ?`,
+        LEFT JOIN order_items oi ON oi.order_id = d.order_id
+        LEFT JOIN seller_profiles sp ON sp.user_id = oi.seller_id
+        WHERE d.order_id = ?
+        LIMIT 1`,
         [orderId]
     );
     return rows[0];
@@ -46,12 +60,25 @@ exports.findByOrderIdWithAgent = async (orderId) => {
 // a delivery already in progress. distanceKm is the distance that fee was
 // actually calculated from (see migration 033) - null when the flat
 // fallback fee was used instead, so an agent/admin can tell which one
-// happened.
-exports.create = async (orderId, agentId, deliveryFee = null, distanceKm = null) => {
+// happened. durationMinutes (migration 039) is the road-routing travel
+// time estimate for that same origin/destination at assignment time -
+// also null under the flat fallback. It's a snapshot, not a live value:
+// it's what "on-time" gets compared against later (see Phase 6's
+// dispatch dashboard delay detection), so it deliberately doesn't get
+// recalculated as the agent moves.
+exports.create = async (
+    orderId,
+    agentId,
+    deliveryFee = null,
+    distanceKm = null,
+    durationMinutes = null,
+    routingProvider = null
+) => {
     const [result] = await db.query(
-        `INSERT INTO deliveries (order_id, agent_id, status, delivery_fee, distance_km)
-        VALUES (?, ?, 'assigned', ?, ?)`,
-        [orderId, agentId, deliveryFee, distanceKm]
+        `INSERT INTO deliveries
+            (order_id, agent_id, status, delivery_fee, distance_km, estimated_duration_minutes, routing_provider)
+        VALUES (?, ?, 'assigned', ?, ?, ?, ?)`,
+        [orderId, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider]
     );
     return result.insertId;
 };
@@ -67,12 +94,19 @@ exports.markEarningsCredited = async (deliveryId) => {
     return result.affectedRows > 0;
 };
 
+// Phase 5C: LEFT JOINs the agent's vehicle_type so callers (updateAgentLocation's
+// live per-order ETA calculation) can pick the right OSRM profile without a
+// second round trip. Nullable/optional like every other vehicle-type read in
+// this module - a missing vehicle_type just falls back to routing's default
+// profile (see routing config / osrm.provider.js).
 exports.findByAgent = async (agentId) => {
     const [rows] = await db.query(
         `SELECT d.*, o.order_number, o.shipping_address, o.shipping_city,
-                o.shipping_region, o.shipping_phone, o.delivery_lat, o.delivery_lng
+                o.shipping_region, o.shipping_phone, o.delivery_lat, o.delivery_lng,
+                u.vehicle_type AS agent_vehicle_type
         FROM deliveries d
         JOIN orders o ON o.id = d.order_id
+        LEFT JOIN users u ON u.id = d.agent_id
         WHERE d.agent_id = ?
         ORDER BY d.assigned_at DESC`,
         [agentId]
@@ -82,14 +116,18 @@ exports.findByAgent = async (agentId) => {
 
 exports.updateStatus = async (deliveryId, status, notes) => {
     const deliveredAt = status === "delivered" ? new Date() : null;
+    const pickedUpAt = status === "picked_up" ? new Date() : null;
+    const inTransitAt = status === "in_transit" ? new Date() : null;
 
     await db.query(
         `UPDATE deliveries
         SET status = ?,
             notes = COALESCE(?, notes),
+            picked_up_at = COALESCE(?, picked_up_at),
+            in_transit_at = COALESCE(?, in_transit_at),
             delivered_at = COALESCE(?, delivered_at)
         WHERE id = ?`,
-        [status, notes || null, deliveredAt, deliveryId]
+        [status, notes || null, pickedUpAt, inTransitAt, deliveredAt, deliveryId]
     );
 };
 
@@ -106,6 +144,14 @@ exports.updateLocation = async (agentId, lat, lng) => {
         WHERE id = ?`,
         [lat, lng, agentId]
     );
+};
+
+exports.findAgentLocation = async (agentId) => {
+    const [rows] = await db.query(
+        "SELECT current_lat, current_lng, location_updated_at FROM users WHERE id = ?",
+        [agentId]
+    );
+    return rows[0];
 };
 
 // Online agents with a known location, who don't already have an active

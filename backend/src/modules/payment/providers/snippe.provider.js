@@ -60,6 +60,45 @@ exports.createCheckoutSession = async ({ amountTzs, reference, description, succ
     return { success: true, sessionId: data.id, url: data.checkout_url || data.url };
 };
 
+// Refund leg (Phase 2 - Refund Automation). Follows the same
+// hosted-gateway REST convention as createCheckoutSession above (a
+// `/payments/{reference}/refund` style endpoint is the commonly
+// documented shape for hosted-checkout providers) - confirm the exact
+// path/field names against Snippe's real API docs before relying on
+// this in production, same caveat as the rest of this file.
+//
+// transactionReference: the reference stored on the payments row for
+// this Snippe payment (see payment.service.js handleSnippeWebhookEvent).
+// amountTzs: decimal TZS amount to refund - full or partial.
+exports.refundPayment = async ({ transactionReference, amountTzs, reason }) => {
+    if (!exports.isConfigured()) {
+        throw new Error("Snippe is not configured");
+    }
+
+    const response = await fetch(`${baseUrl()}/payments/${transactionReference}/refund`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${process.env.SNIPPE_SECRET_KEY}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            amount: Number(amountTzs),
+            reason: reason || "dispute_resolution"
+        })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        return { success: false, refundReference: null, error: data.message || "Snippe refund failed" };
+    }
+
+    return {
+        success: Boolean(data.success ?? data.status === "succeeded" ?? data.status === "refunded"),
+        refundReference: data.id || data.refund_id || null
+    };
+};
+
 // Verifies the webhook actually came from Snippe (HMAC-SHA256 over the
 // raw request body, signed with SNIPPE_WEBHOOK_SECRET) and returns the
 // parsed event. Throws if the signature is missing/invalid - the caller

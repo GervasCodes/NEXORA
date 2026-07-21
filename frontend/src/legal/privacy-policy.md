@@ -18,7 +18,7 @@ Delivery Agents on the Platform, why we collect it, and the choices you have.
 - Order details: delivery address, items purchased, order notes.
 - Payment details: NEXORA does not store full card or mobile-money credentials; these
   are handled by our payment providers (mobile money gateways, PayPal, Selcom, Snippe,
-  Stripe as applicable). We store transaction references, amounts, and status.
+  as applicable). We store transaction references, amounts, and status.
 - Content you create: reviews, dispute messages, evidence photos, chat messages between
   Buyers, Sellers, and Delivery Agents.
 
@@ -49,7 +49,7 @@ Seller is separately responsible for lawful handling of that data.
 - **Between transaction parties**: a Buyer's delivery address and contact details are
   shared with the Seller and assigned Delivery Agent for that order only; a Seller's
   store details are visible to Buyers who order from them.
-- **Payment processors**: mobile money providers, PayPal, Selcom, Snippe, and Stripe
+- **Payment processors**: mobile money providers, PayPal, Selcom, and Snippe
   process payments on our behalf under their own privacy terms.
 - **Service providers**: cloud hosting, file storage (for photos and evidence), email
   delivery, and push-notification providers, bound by confidentiality obligations.

@@ -1,85 +1,89 @@
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import { useEffect } from "react";
 import "leaflet/dist/leaflet.css";
-import { useSocket } from "../context/SocketContext";
-import { DEFAULT_CENTER, agentIcon, destinationIcon } from "../utils/mapConfig";
-import Skeleton from "./Skeleton";
+import { DEFAULT_CENTER, agentIcon, destinationIcon, pickupIcon } from "../utils/mapConfig";
+import { useLanguage } from "../context/LanguageContext";
 
-// Shown on the buyer's order page once a delivery agent has been assigned
-// and the delivery isn't finished yet. Joins the order's tracking room and
-// re-renders the agent's marker as "agent:position" events stream in.
-// Marker movement itself is smoothed via a global CSS rule on
-// `.leaflet-marker-icon` (see index.css) rather than JS interpolation -
-// Leaflet already animates its own inline transform, so a CSS transition
-// on that same property is enough to turn position jumps into a glide.
-export default function DeliveryTrackingMap({ orderId, destination }) {
-    const { socket, connected } = useSocket();
-    const [agentPos, setAgentPos] = useState(null);
+// Recenters the map to keep the agent marker in view as it moves,
+// without fighting the user if they've panned/zoomed manually - only
+// re-centers when the agent is meaningfully outside the current view.
+function FollowAgent({ agentPos }) {
+    const map = useMap();
 
     useEffect(() => {
-        if (!socket || !connected) return;
+        if (!agentPos) return;
+        const bounds = map.getBounds();
+        if (!bounds.contains([agentPos.lat, agentPos.lng])) {
+            map.panTo([agentPos.lat, agentPos.lng], { animate: true, duration: 0.8 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [agentPos?.lat, agentPos?.lng]);
 
-        socket.emit("join_order_tracking", orderId);
+    return null;
+}
 
-        const handlePosition = (payload) => {
-            if (payload.orderId === Number(orderId) || payload.orderId === orderId) {
-                setAgentPos({ lat: payload.lat, lng: payload.lng });
-            }
-        };
+// Real Leaflet map for the full-screen tracking page (see
+// pages/OrderTrackingPage.jsx). Renders the pickup pin, destination pin,
+// a straight-line route between them (see Phase 5 for real road
+// routing), and the agent's live, smoothly-interpolated position -
+// `agentPos` is expected to already be the smoothed value from
+// hooks/useSmoothPosition, this component just renders whatever it's
+// given. Also used standalone in tests.
+//
+// Marker glide: Leaflet positions markers with an inline
+// `transform: translate3d(...)` that a global CSS rule
+// (.leaflet-marker-icon { transition: transform ... }, see index.css)
+// turns into a visual glide on its own - combined with the JS-side
+// easing in useSmoothPosition, movement stays smooth even when position
+// ticks arrive at an uneven cadence.
+export default function DeliveryTrackingMap({ agentPos, pickup, destination, height = 260, fitAll = false }) {
+    const { t } = useLanguage();
 
-        socket.on("agent:position", handlePosition);
-
-        return () => {
-            socket.emit("leave_order_tracking", orderId);
-            socket.off("agent:position", handlePosition);
-        };
-    }, [socket, connected, orderId]);
-
-    const center = destination
-        ? [destination.lat, destination.lng]
-        : agentPos
-            ? [agentPos.lat, agentPos.lng]
+    const center = agentPos
+        ? [agentPos.lat, agentPos.lng]
+        : destination
+            ? [destination.lat, destination.lng]
             : DEFAULT_CENTER;
 
-    if (!connected) {
-        return (
-            <div>
-                <Skeleton className="w-full rounded-md" style={{ height: 260 }} />
-                <p className="text-xs text-ash mt-1.5 animate-fade-in">Connecting to live tracking…</p>
-            </div>
-        );
-    }
+    const routePoints = pickup && destination
+        ? [[pickup.lat, pickup.lng], [destination.lat, destination.lng]]
+        : null;
 
     return (
-        <div className="animate-fade-in">
-            <div className="relative rounded-md overflow-hidden border border-line" style={{ height: 260 }}>
-                <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
-                    <TileLayer
-                        attribution='&copy; OpenStreetMap contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    {destination && (
-                        <Marker position={[destination.lat, destination.lng]} icon={destinationIcon}>
-                            <Popup>Delivery address</Popup>
-                        </Marker>
-                    )}
-                    {agentPos && (
-                        <Marker position={[agentPos.lat, agentPos.lng]} icon={agentIcon}>
-                            <Popup>Your delivery agent</Popup>
-                        </Marker>
-                    )}
-                </MapContainer>
+        <div className="relative rounded-md overflow-hidden border border-line" style={{ height }}>
+            <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+                <TileLayer
+                    attribution='&copy; OpenStreetMap contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
 
-                <div className="glass absolute top-3 right-3 z-[400] rounded-lg px-3 py-2 flex items-center gap-2 pointer-events-none animate-slide-down">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${agentPos ? "bg-teal animate-pulse" : "bg-ash"}`} />
-                    <span className="text-xs font-medium text-ink">
-                        {agentPos ? "Live tracking" : "Waiting for agent"}
-                    </span>
-                </div>
-            </div>
-            <p className="text-xs text-ash mt-1.5">
-                {agentPos ? "Live location — updates as your agent moves." : "Waiting for your agent's location…"}
-            </p>
+                {routePoints && (
+                    <Polyline
+                        positions={routePoints}
+                        pathOptions={{ color: "#0F7A6C", weight: 3, opacity: 0.55, dashArray: "1 8" }}
+                    />
+                )}
+
+                {pickup && (
+                    <Marker position={[pickup.lat, pickup.lng]} icon={pickupIcon}>
+                        <Popup>{t("delivery.tracking.pickup")}</Popup>
+                    </Marker>
+                )}
+
+                {destination && (
+                    <Marker position={[destination.lat, destination.lng]} icon={destinationIcon}>
+                        <Popup>{t("delivery.tracking.destination")}</Popup>
+                    </Marker>
+                )}
+
+                {agentPos && (
+                    <Marker position={[agentPos.lat, agentPos.lng]} icon={agentIcon}>
+                        <Popup>{t("delivery.tracking.agentEnRoute")}</Popup>
+                    </Marker>
+                )}
+
+                {!fitAll && <FollowAgent agentPos={agentPos} />}
+            </MapContainer>
         </div>
     );
 }

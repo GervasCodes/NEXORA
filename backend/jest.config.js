@@ -36,8 +36,12 @@ module.exports = {
         "src/modules/seller/seller.service.js",
         "src/modules/notification/notification.service.js",
         "src/utils/deliveryPricing.js",
+        "src/utils/eta.js",
         "src/utils/appError.js",
-        "src/i18n/index.js"
+        "src/i18n/index.js",
+        "src/services/routing/routing.service.js",
+        "src/services/routing/providers/osrm.provider.js",
+        "src/services/routing/providers/fallback.provider.js"
     ],
     coverageDirectory: "<rootDir>/coverage",
     coverageThreshold: {

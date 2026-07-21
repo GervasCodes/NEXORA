@@ -478,13 +478,15 @@ describe("order.service.updateOrderStatusBySeller", () => {
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         sellerRepository.isInRoster.mockResolvedValue(true);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
-        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({ fee: 5000, distanceKm: 8.2 });
+        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({
+            fee: 5000, distanceKm: 8.2, durationMinutes: 15, routingProvider: "osrm"
+        });
 
         await orderService.updateOrderStatusBySeller(1, 10, "shipped", 77);
 
         expect(sellerRepository.isInRoster).toHaveBeenCalledWith(10, 77);
         expect(orderRepository.setDeliveryMode).toHaveBeenCalledWith(1, "own");
-        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 77, 5000, 8.2);
+        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 77, 5000, 8.2, 15, "osrm");
         expect(deliveryService.startMatching).not.toHaveBeenCalled();
         expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "shipped");
         expect(notificationService.notify).toHaveBeenCalledWith(

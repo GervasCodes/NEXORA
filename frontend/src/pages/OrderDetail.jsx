@@ -4,9 +4,9 @@ import api, { extractErrorMessage } from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useSocket } from "../context/SocketContext";
-import DeliveryTrackingMap from "../components/DeliveryTrackingMap";
 import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
+import TrackingWidget from "../components/TrackingWidget";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -287,8 +287,9 @@ export default function OrderDetail() {
                             {delivery.agent_vehicle_plate_number && ` · Plate ${delivery.agent_vehicle_plate_number}`}
                         </p>
                     )}
-                    <DeliveryTrackingMap
+                    <TrackingWidget
                         orderId={id}
+                        delivery={delivery}
                         destination={
                             order.delivery_lat && order.delivery_lng
                                 ? { lat: order.delivery_lat, lng: order.delivery_lng }

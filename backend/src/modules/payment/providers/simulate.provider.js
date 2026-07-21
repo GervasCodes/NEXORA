@@ -35,3 +35,18 @@ exports.disburse = (phone, amount) => {
         transactionReference: `SIMULATED-PAYOUT-${Date.now()}`
     });
 };
+
+exports.refund = (phone, amount) => {
+    console.warn(
+        "\n" +
+        "=============================================================\n" +
+        "  SIMULATED MOBILE MONEY REFUND — no real transfer occurred.\n" +
+        `  phone=${phone} amount=${amount}\n` +
+        "=============================================================\n"
+    );
+
+    return Promise.resolve({
+        success: true,
+        transactionReference: `SIMULATED-REFUND-${Date.now()}`
+    });
+};

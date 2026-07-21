@@ -55,3 +55,10 @@ exports.initiate = async (phone, amount, meta = {}) => {
 exports.disburse = async (phone, amount, meta = {}) => {
     return resolveProvider().disburse(phone, amount, meta);
 };
+
+// Refund leg (Phase 2 - Refund Automation). Same routing rules as
+// initiate/disburse: whichever provider is active in .env, falling back
+// to the simulate provider outside production.
+exports.refund = async (phone, amount, meta = {}) => {
+    return resolveProvider().refund(phone, amount, meta);
+};

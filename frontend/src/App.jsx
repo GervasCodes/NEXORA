@@ -23,6 +23,7 @@ const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
 const OrderDetail = lazy(() => import("./pages/OrderDetail"));
+const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
 const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
@@ -49,6 +50,7 @@ const DeliveryEarnings = lazy(() => import("./pages/delivery/DeliveryEarnings"))
 const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
@@ -88,6 +90,7 @@ export default function App() {
                         <Route path="/checkout" element={<RequireBuyer><Checkout /></RequireBuyer>} />
                         <Route path="/orders" element={<RequireBuyer><Orders /></RequireBuyer>} />
                         <Route path="/orders/:id" element={<RequireBuyer><OrderDetail /></RequireBuyer>} />
+                        <Route path="/orders/:id/tracking" element={<RequireBuyer><OrderTrackingPage /></RequireBuyer>} />
                         <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
                         <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
@@ -122,6 +125,7 @@ export default function App() {
 
                         <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
                             <Route index element={<AdminDashboard />} />
+                            <Route path="dispatch" element={<AdminDispatch />} />
                             <Route path="users" element={<AdminUsers />} />
                             <Route path="sellers" element={<AdminSellers />} />
                             <Route path="products" element={<AdminProducts />} />

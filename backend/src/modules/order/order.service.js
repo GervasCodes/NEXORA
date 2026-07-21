@@ -297,10 +297,11 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
             throw new Error("This order already has a delivery assigned");
         }
 
-        const { fee: deliveryFee, distanceKm } = await deliveryPricingService.calculateDeliveryFee(order);
+        const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
+            await deliveryPricingService.calculateDeliveryFee(order);
 
         await orderRepository.setDeliveryMode(orderId, "own");
-        await deliveryRepository.create(orderId, agentId, deliveryFee, distanceKm);
+        await deliveryRepository.create(orderId, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider);
 
         await notificationService.notify({
             userId: agentId,

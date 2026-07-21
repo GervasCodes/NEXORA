@@ -77,7 +77,7 @@ You are the party responsible for:
 
 You are **not** automatically responsible for damage that a courier caused in transit
 after a proper handoff, or for delays caused solely by the Delivery Agent's route —
-see the Delivery Liability Policy for the full attribution framework, and Section 7
+see the Delivery Liability Policy for the full attribution framework, and Section 2
 of the Insurance Policy for how these losses may be covered.
 
 ## 7. Disputes involving your orders

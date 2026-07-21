@@ -19,10 +19,15 @@ const {
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/dashboard", adminController.getDashboard);
+router.get("/dispatch", adminController.getDispatchOverview);
 router.get("/analytics", adminController.getAnalytics);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 router.get("/audit-logs", adminController.listAuditLogs);
+
+router.get("/refunds", adminController.listRefunds);
+router.get("/refunds/:id", adminController.getRefund);
+router.post("/refunds/:id/retry", adminController.retryRefund);
 
 router.get("/users", adminController.listUsers);
 router.put("/users/:id/deactivate", userIdValidation, validationMiddleware, adminController.deactivateUser);

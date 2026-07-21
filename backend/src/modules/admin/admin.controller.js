@@ -1,6 +1,7 @@
 const adminService = require("./admin.service");
 const fraudService = require("../fraud/fraud.service");
 const auditRepository = require("../audit/audit.repository");
+const refundService = require("../refund/refund.service");
 
 exports.listUsers = async (req, res) => {
     try {
@@ -106,6 +107,17 @@ exports.listOrders = async (req, res) => {
         const orders = await adminService.listAllOrders();
 
         return res.json({ success: true, data: orders });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getDispatchOverview = async (req, res) => {
+    try {
+        const overview = await adminService.getDispatchOverview();
+
+        return res.json({ success: true, data: overview });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -260,6 +272,57 @@ exports.listFraudFlags = async (req, res) => {
         const flags = await fraudService.listOpenFlags();
 
         return res.json({ success: true, data: flags });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// ---- Refunds (Phase 2 - Refund Automation) -----------------------------
+// Automatic refunds are triggered by dispute.service.js when a dispute
+// is resolved in the buyer's favor; these endpoints are for triage of
+// ones that need attention ('failed' / 'manual_required') and for
+// manually retrying a failed automatic attempt.
+
+exports.listRefunds = async (req, res) => {
+    try {
+        const { status, limit } = req.query;
+
+        // No status filter -> default to only what needs an admin's
+        // attention, since 'completed'/'pending' don't need triage.
+        const statusFilter = status
+            ? String(status).split(",")
+            : ["failed", "manual_required", "processing"];
+
+        const refunds = await refundService.listRefunds({
+            status: statusFilter,
+            limit: limit ? Number(limit) : undefined
+        });
+
+        return res.json({ success: true, data: refunds });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getRefund = async (req, res) => {
+    try {
+        const refund = await refundService.getRefund(req.params.id);
+        if (!refund) {
+            return res.status(404).json({ success: false, message: "Refund not found" });
+        }
+        return res.json({ success: true, data: refund });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.retryRefund = async (req, res) => {
+    try {
+        const result = await refundService.retryRefund(req.params.id, req.user.id);
+        return res.json({ success: true, data: result });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

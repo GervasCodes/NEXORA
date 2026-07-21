@@ -5,6 +5,7 @@ jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/push/push.service");
 jest.mock("../../../src/modules/settings/settings.service");
 jest.mock("../../../src/modules/earnings/earnings.service");
+jest.mock("../../../src/services/routing/routing.service");
 jest.mock("../../../src/socket/socket");
 
 const deliveryRepository = require("../../../src/modules/delivery/delivery.repository");
@@ -14,6 +15,7 @@ const notificationService = require("../../../src/modules/notification/notificat
 const pushService = require("../../../src/modules/push/push.service");
 const settingsService = require("../../../src/modules/settings/settings.service");
 const earningsService = require("../../../src/modules/earnings/earnings.service");
+const routingService = require("../../../src/services/routing/routing.service");
 const socket = require("../../../src/socket/socket");
 
 const deliveryService = require("../../../src/modules/delivery/delivery.service");
@@ -25,6 +27,7 @@ beforeEach(() => {
     earningsService.creditForDelivery.mockResolvedValue(undefined);
     socket.emitToOrder = jest.fn();
     socket.emitToUser = jest.fn();
+    socket.emitToAdmins = jest.fn();
 });
 
 afterEach(() => {
@@ -52,13 +55,41 @@ describe("delivery.service.claimDelivery", () => {
     it("prices and creates the delivery on a valid claim", async () => {
         orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "shipped" });
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
-        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({ fee: 4000, distanceKm: 6 });
+        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({
+            fee: 4000, distanceKm: 6, durationMinutes: 18, routingProvider: "osrm"
+        });
         deliveryRepository.create.mockResolvedValue(77);
 
         const result = await deliveryService.claimDelivery(1, 5);
 
-        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 5, 4000, 6);
+        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 5, 4000, 6, 18, "osrm");
         expect(result).toEqual({ deliveryId: 77, orderId: 1 });
+        expect(socket.emitToAdmins).toHaveBeenCalledWith(
+            "dispatch:delivery_assigned",
+            { orderId: 1, deliveryId: 77, agentId: 5 }
+        );
+    });
+});
+
+describe("delivery.service.setAgentOnline", () => {
+    it("persists the online flag and notifies the dispatch dashboard", async () => {
+        await deliveryService.setAgentOnline(5, true);
+
+        expect(deliveryRepository.setOnlineStatus).toHaveBeenCalledWith(5, true);
+        expect(socket.emitToAdmins).toHaveBeenCalledWith(
+            "dispatch:agent_status",
+            { agentId: 5, isOnline: true }
+        );
+    });
+
+    it("notifies the dispatch dashboard when an agent goes offline", async () => {
+        await deliveryService.setAgentOnline(5, false);
+
+        expect(deliveryRepository.setOnlineStatus).toHaveBeenCalledWith(5, false);
+        expect(socket.emitToAdmins).toHaveBeenCalledWith(
+            "dispatch:agent_status",
+            { agentId: 5, isOnline: false }
+        );
     });
 });
 
@@ -81,7 +112,17 @@ describe("delivery.service.getDelivery", () => {
 
         const result = await deliveryService.getDelivery(1, 5);
 
-        expect(result).toEqual({ id: 9, agent_id: 20, rating: null });
+        expect(result).toEqual({
+            id: 9,
+            agent_id: 20,
+            rating: null,
+            pickup: null,
+            destination: null,
+            distance_remaining_km: null,
+            eta_minutes: null,
+            routing_provider: null,
+            degraded: false
+        });
     });
 
     it("allows the assigned agent", async () => {
@@ -108,6 +149,120 @@ describe("delivery.service.getDelivery", () => {
         orderRepository.sellerHasItemInOrder.mockResolvedValue(false);
 
         await expect(deliveryService.getDelivery(1, 99)).rejects.toThrow("No delivery record for this order yet");
+    });
+    it("computes distance-remaining and ETA from the agent's current position while en route", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, delivery_lat: -6.80, delivery_lng: 39.20 });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue({
+            id: 9,
+            agent_id: 20,
+            status: "in_transit",
+            agent_vehicle_type: "motorcycle",
+            agent_current_lat: -6.81,
+            agent_current_lng: 39.21,
+            pickup_lat: -6.85,
+            pickup_lng: 39.25
+        });
+        deliveryRepository.findRatingByOrder.mockResolvedValue(undefined);
+        routingService.getRoute.mockResolvedValue({
+            distanceKm: 1.8, durationMinutes: 6, provider: "osrm", degraded: false
+        });
+
+        const result = await deliveryService.getDelivery(1, 5);
+
+        expect(routingService.getRoute).toHaveBeenCalledWith({
+            originLat: -6.81, originLng: 39.21, destLat: -6.8, destLng: 39.2, vehicleType: "motorcycle"
+        });
+        expect(result.destination).toEqual({ lat: -6.8, lng: 39.2 });
+        expect(result.pickup).toEqual({ lat: -6.85, lng: 39.25 });
+        expect(result.distance_remaining_km).toBeGreaterThan(0);
+        expect(result.eta_minutes).toBeGreaterThan(0);
+        expect(result.routing_provider).toBe("osrm");
+        expect(result.degraded).toBe(false);
+    });
+
+    it("measures from the pickup pin (not the agent) before the order has been picked up", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, delivery_lat: -6.80, delivery_lng: 39.20 });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue({
+            id: 9,
+            agent_id: 20,
+            status: "assigned",
+            agent_vehicle_type: "car",
+            // Stale/irrelevant while still "assigned" - agent hasn't
+            // physically started from here yet, pickup should win.
+            agent_current_lat: -7.5,
+            agent_current_lng: 40.0,
+            pickup_lat: -6.85,
+            pickup_lng: 39.25
+        });
+        deliveryRepository.findRatingByOrder.mockResolvedValue(undefined);
+        routingService.getRoute.mockResolvedValue({
+            distanceKm: 6.4, durationMinutes: 12, provider: "osrm", degraded: false
+        });
+
+        const result = await deliveryService.getDelivery(1, 5);
+
+        // Assert the *pickup* pin (not the agent's unrelated current
+        // position) was the one passed as the route's origin.
+        expect(routingService.getRoute).toHaveBeenCalledWith(
+            expect.objectContaining({ originLat: -6.85, originLng: 39.25 })
+        );
+        expect(result.distance_remaining_km).toBeLessThan(20);
+    });
+
+    it("returns null distance/ETA when the order has no delivery pin", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, delivery_lat: null, delivery_lng: null });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue({
+            id: 9, agent_id: 20, status: "in_transit",
+            agent_current_lat: -6.81, agent_current_lng: 39.21
+        });
+        deliveryRepository.findRatingByOrder.mockResolvedValue(undefined);
+
+        const result = await deliveryService.getDelivery(1, 5);
+
+        expect(result.distance_remaining_km).toBeNull();
+        expect(result.eta_minutes).toBeNull();
+        expect(result.destination).toBeNull();
+    });
+
+    it("returns null distance/ETA when the agent hasn't shared a location yet", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, delivery_lat: -6.8, delivery_lng: 39.2 });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue({
+            id: 9, agent_id: 20, status: "in_transit",
+            agent_current_lat: null, agent_current_lng: null
+        });
+        deliveryRepository.findRatingByOrder.mockResolvedValue(undefined);
+
+        const result = await deliveryService.getDelivery(1, 5);
+
+        expect(result.distance_remaining_km).toBeNull();
+        expect(result.eta_minutes).toBeNull();
+    });
+});
+
+describe("delivery.service.getLastKnownAgentPosition", () => {
+    it("returns null when there's no delivery for the order", async () => {
+        deliveryRepository.findByOrderId.mockResolvedValue(undefined);
+        await expect(deliveryService.getLastKnownAgentPosition(1)).resolves.toBeNull();
+    });
+
+    it("returns null once the delivery is finished (nothing left to track)", async () => {
+        deliveryRepository.findByOrderId.mockResolvedValue({ agent_id: 20, status: "delivered" });
+        await expect(deliveryService.getLastKnownAgentPosition(1)).resolves.toBeNull();
+    });
+
+    it("returns null when the agent has no recorded location", async () => {
+        deliveryRepository.findByOrderId.mockResolvedValue({ agent_id: 20, status: "in_transit" });
+        deliveryRepository.findAgentLocation.mockResolvedValue({ current_lat: null, current_lng: null });
+        await expect(deliveryService.getLastKnownAgentPosition(1)).resolves.toBeNull();
+    });
+
+    it("returns the agent's last known lat/lng while a delivery is in progress", async () => {
+        deliveryRepository.findByOrderId.mockResolvedValue({ agent_id: 20, status: "in_transit" });
+        deliveryRepository.findAgentLocation.mockResolvedValue({ current_lat: "-6.8100000", current_lng: "39.2100000" });
+
+        const result = await deliveryService.getLastKnownAgentPosition(1);
+
+        expect(result).toEqual({ lat: -6.81, lng: 39.21 });
     });
 });
 
@@ -154,29 +309,98 @@ describe("delivery.service.updateDeliveryStatus", () => {
     it("only sends the buyer an email when the delivery is actually completed", async () => {
         deliveryRepository.findByOrderId.mockResolvedValue({ id: 9, agent_id: 5, status: "assigned" });
         orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 20, order_number: "ORD-1" });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue(undefined);
 
         await deliveryService.updateDeliveryStatus(1, 5, "picked_up");
 
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({ withEmail: false })
         );
-        expect(socket.emitToOrder).toHaveBeenCalledWith(1, "delivery:status", { orderId: 1, status: "picked_up" });
+        expect(socket.emitToOrder).toHaveBeenCalledWith(1, "delivery:status", {
+            orderId: 1,
+            status: "picked_up",
+            distance_remaining_km: null,
+            eta_minutes: null,
+            routing_provider: null,
+            degraded: false
+        });
+    });
+
+    it("recomputes and includes the road-routing ETA in the delivery:status event (Phase 5C)", async () => {
+        deliveryRepository.findByOrderId.mockResolvedValue({ id: 9, agent_id: 5, status: "assigned" });
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 20, order_number: "ORD-1", delivery_lat: -6.80, delivery_lng: 39.20
+        });
+        deliveryRepository.findByOrderIdWithAgent.mockResolvedValue({
+            id: 9,
+            agent_id: 5,
+            status: "picked_up",
+            agent_vehicle_type: "motorcycle",
+            agent_current_lat: -6.81,
+            agent_current_lng: 39.21,
+            pickup_lat: -6.85,
+            pickup_lng: 39.25
+        });
+        routingService.getRoute.mockResolvedValue({
+            distanceKm: 1.8, durationMinutes: 6, provider: "osrm", degraded: false
+        });
+
+        await deliveryService.updateDeliveryStatus(1, 5, "picked_up");
+
+        expect(socket.emitToOrder).toHaveBeenCalledWith(1, "delivery:status", {
+            orderId: 1,
+            status: "picked_up",
+            distance_remaining_km: 1.8,
+            eta_minutes: 6,
+            routing_provider: "osrm",
+            degraded: false
+        });
+        expect(socket.emitToAdmins).toHaveBeenCalledWith("dispatch:delivery_status", {
+            orderId: 1,
+            deliveryId: 9,
+            status: "picked_up"
+        });
     });
 });
 
 describe("delivery.service.updateAgentLocation", () => {
-    it("returns order ids for deliveries still in progress, excluding delivered/failed", async () => {
+    it("excludes delivered/failed deliveries and returns null ETA fields when a destination or position is missing", async () => {
         deliveryRepository.findByAgent.mockResolvedValue([
-            { order_id: 1, status: "in_transit" },
-            { order_id: 2, status: "delivered" },
-            { order_id: 3, status: "failed" },
-            { order_id: 4, status: "picked_up" }
+            { order_id: 1, status: "in_transit", delivery_lat: null, delivery_lng: null },
+            { order_id: 2, status: "delivered", delivery_lat: -6.9, delivery_lng: 39.3 },
+            { order_id: 3, status: "failed", delivery_lat: -6.9, delivery_lng: 39.3 },
+            { order_id: 4, status: "picked_up", delivery_lat: null, delivery_lng: null }
         ]);
 
         const result = await deliveryService.updateAgentLocation(5, -6.8, 39.2);
 
         expect(deliveryRepository.updateLocation).toHaveBeenCalledWith(5, -6.8, 39.2);
-        expect(result).toEqual([1, 4]);
+        expect(result).toEqual([
+            { orderId: 1, distance_remaining_km: null, eta_minutes: null, routing_provider: null, degraded: false },
+            { orderId: 4, distance_remaining_km: null, eta_minutes: null, routing_provider: null, degraded: false }
+        ]);
+    });
+
+    it("computes a road-routing distance/ETA from the new position to each active order's destination", async () => {
+        deliveryRepository.findByAgent.mockResolvedValue([
+            {
+                order_id: 1, status: "in_transit",
+                delivery_lat: -6.9, delivery_lng: 39.3,
+                agent_vehicle_type: "bicycle"
+            }
+        ]);
+        routingService.getRoute.mockResolvedValue({
+            distanceKm: 3.2, durationMinutes: 14, provider: "osrm", degraded: false
+        });
+
+        const result = await deliveryService.updateAgentLocation(5, -6.8, 39.2);
+
+        expect(routingService.getRoute).toHaveBeenCalledWith({
+            originLat: -6.8, originLng: 39.2, destLat: -6.9, destLng: 39.3, vehicleType: "bicycle"
+        });
+        expect(result).toEqual([
+            { orderId: 1, distance_remaining_km: 3.2, eta_minutes: 14, routing_provider: "osrm", degraded: false }
+        ]);
     });
 });
 
@@ -333,15 +557,18 @@ describe("delivery.service.acceptOffer", () => {
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.acceptOffer.mockResolvedValue(true);
         orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, order_number: "ORD-1" });
-        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({ fee: 3000, distanceKm: 4 });
+        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({
+            fee: 3000, distanceKm: 4, durationMinutes: 9, routingProvider: "osrm"
+        });
 
         const result = await deliveryService.acceptOffer(200, 50);
 
-        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 50, 3000, 4);
+        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 50, 3000, 4, 9, "osrm");
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({ userId: 5, type: "delivery_assigned" })
         );
         expect(socket.emitToOrder).toHaveBeenCalledWith(1, "delivery:assigned", { orderId: 1, agentId: 50 });
+        expect(socket.emitToAdmins).toHaveBeenCalledWith("dispatch:delivery_assigned", { orderId: 1, agentId: 50 });
         expect(result).toEqual({ orderId: 1, deliveryId: 1 });
     });
 
@@ -355,7 +582,7 @@ describe("delivery.service.acceptOffer", () => {
         await deliveryService.acceptOffer(200, 50);
 
         expect(deliveryPricingService.calculateDeliveryFee).not.toHaveBeenCalled();
-        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 50, 2500, null);
+        expect(deliveryRepository.create).toHaveBeenCalledWith(1, 50, 2500, null, null, null);
         expect(notificationService.notify).not.toHaveBeenCalled();
     });
 });

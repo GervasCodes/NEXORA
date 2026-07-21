@@ -131,3 +131,37 @@ exports.captureOrder = async (paypalOrderId) => {
         raw: data
     };
 };
+
+// Refund leg (Phase 2 - Refund Automation). Refunds a previously
+// captured payment via PayPal's documented Payments v2 API
+// (POST /v2/payments/captures/{capture_id}/refund). captureId is the
+// value stored as payments.transaction_reference for a PayPal payment
+// (see captureOrder() above / payment.service.js). Omitting `amount`
+// in the request body means "refund the full captured amount" per
+// PayPal's API - pass amountUsd for a partial refund.
+exports.refundCapture = async (captureId, amountUsd = null) => {
+    const accessToken = await getAccessToken();
+
+    const body = amountUsd
+        ? { amount: { currency_code: "USD", value: Number(amountUsd).toFixed(2) } }
+        : {};
+
+    const response = await fetch(`${baseUrl()}/v2/payments/captures/${captureId}/refund`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+
+    const succeeded = response.ok && (data.status === "COMPLETED" || data.status === "PENDING");
+
+    return {
+        success: succeeded,
+        refundReference: data.id || null,
+        error: succeeded ? null : (data.message || data.details?.[0]?.description || "PayPal refund failed")
+    };
+};

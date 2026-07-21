@@ -97,12 +97,84 @@ exports.createOrderItem = async (orderId, productId, sellerId, overrides = {}) =
     return { id: result.insertId };
 };
 
+// Phase 3 addition - used by orders.checkout.db.test.js to seed a buyer's
+// cart directly (bypassing cart.service, since these tests care about
+// order.service.checkout's own DB writes, not how the cart got items).
+exports.createCartItem = async (userId, productId, quantity = 1) => {
+    const [result] = await db.query(
+        "INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)",
+        [userId, productId, quantity]
+    );
+    return { id: result.insertId };
+};
+
+// Phase 3 addition - used by refund.autoRefundForDispute.db.test.js
+// (and reusable by future dispute-flow tests) to seed a completed
+// payment row for an order.
+exports.createPayment = async (orderId, overrides = {}) => {
+    const [result] = await db.query(
+        `INSERT INTO payments (order_id, method, status, amount, transaction_reference)
+        VALUES (?, ?, ?, ?, ?)`,
+        [
+            orderId,
+            overrides.method || "mobile_money",
+            overrides.status || "completed",
+            overrides.amount ?? 1000,
+            overrides.transaction_reference ?? null
+        ]
+    );
+    return { id: result.insertId };
+};
+
+// Phase 3 addition - used by refund.autoRefundForDispute.db.test.js to
+// seed a resolved (refund_full/refund_partial) dispute directly, since
+// those tests exercise refund.service against a dispute that's already
+// past the resolution step (dispute.service.resolveDispute's own DB
+// writes are covered separately by tests/unit/dispute).
+exports.createDispute = async (orderId, buyerId, sellerId, overrides = {}) => {
+    const disputeNumber = overrides.dispute_number || unique("DSP");
+
+    const [result] = await db.query(
+        `INSERT INTO disputes
+        (dispute_number, order_id, buyer_id, seller_id, type, status, subject, description,
+         resolution, refund_amount, resolved_by, resolved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            disputeNumber,
+            orderId,
+            buyerId,
+            sellerId ?? null,
+            overrides.type || "damaged_item",
+            overrides.status || "resolved",
+            overrides.subject || "Item arrived damaged",
+            overrides.description || "The item was damaged in transit.",
+            overrides.resolution || "refund_full",
+            overrides.refund_amount ?? 1000,
+            overrides.resolved_by ?? null,
+            overrides.resolved_at === undefined ? new Date() : overrides.resolved_at
+        ]
+    );
+
+    return { id: result.insertId, disputeNumber };
+};
+
 // Deletes in FK-safe (child-before-parent) order. Truncate isn't used
 // since these tables have foreign keys to users/products that would
 // need FK checks disabled - plain DELETE keeps this safe by default and
 // this suite's fixture volume per test is small enough that it's fast.
 exports.resetTables = async () => {
     const tables = [
+        // Phase 3 additions - children of orders/disputes/users that the
+        // new checkout/refund/login db-integration tests write to.
+        "refunds",
+        "dispute_history",
+        "dispute_messages",
+        "dispute_evidence",
+        "disputes",
+        "payments",
+        "cart_items",
+        "otp_codes",
+        // Pre-existing (Phase 2 and earlier).
         "wallet_transactions",
         "withdrawal_requests",
         "seller_wallets",

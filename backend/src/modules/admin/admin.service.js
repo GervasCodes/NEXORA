@@ -75,6 +75,41 @@ exports.listAllOrders = async () => {
     return adminRepository.findAllOrders();
 };
 
+// --- Dispatch dashboard (Phase 6) ---
+//
+// One combined read for the admin dispatch board: every in-flight
+// delivery (with a computed delay flag - see admin.repository's
+// findActiveDeliveries), every online agent (idle or busy), and a
+// summary count block so the frontend doesn't need to derive totals
+// itself. The socket layer (delivery.service.js / socket.js) pushes
+// live updates into the "admins" room on top of this initial snapshot -
+// see docs/API.md for the event list.
+exports.getDispatchOverview = async () => {
+    const [deliveries, agents] = await Promise.all([
+        adminRepository.findActiveDeliveries(),
+        adminRepository.findOnlineAgents()
+    ]);
+
+    const normalizedDeliveries = deliveries.map((d) => ({
+        ...d,
+        is_delayed: !!d.is_delayed
+    }));
+
+    const delayed = normalizedDeliveries.filter((d) => d.is_delayed);
+
+    return {
+        deliveries: normalizedDeliveries,
+        agents,
+        delayed,
+        summary: {
+            active_deliveries: normalizedDeliveries.length,
+            delayed_deliveries: delayed.length,
+            online_agents: agents.length,
+            idle_agents: agents.filter((a) => Number(a.active_delivery_count) === 0).length
+        }
+    };
+};
+
 exports.getDashboard = async () => {
     const { userCounts, orderCounts, revenue, productCounts } =
         await adminRepository.getDashboardStats();

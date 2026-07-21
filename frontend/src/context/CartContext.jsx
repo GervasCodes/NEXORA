@@ -23,7 +23,7 @@ export function CartProvider({ children }) {
             setItems(data.data.items);
             setTotal(data.data.total);
         } catch (error) {
-            
+            console.error("Failed to refresh cart:", error);
         } finally {
             setLoading(false);
         }

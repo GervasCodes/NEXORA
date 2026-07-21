@@ -112,3 +112,100 @@ already worked unchanged.
 
 **Migration required:** run `node database/migrate.js` before deploying
 this build.
+
+## Phase 1 — Live order tracking (floating widget + full tracking page)
+
+Replaces the always-on, fixed 260px map that used to sit inline on the
+order-detail page with a lightweight floating widget, and moves the real
+map to a new dedicated full-screen page opened by tapping it.
+
+**Why:** the old map mounted a full Leaflet instance (tiles, markers)
+on every order-detail page load the moment an agent was assigned, whether
+or not the buyer actually looked at it. The widget shows status/ETA/a
+progress bar with zero map-tile cost, and the real map only ever renders
+once someone opens `/orders/:id/tracking`.
+
+Backend:
+- `database/migrations/037_delivery_timeline_timestamps.sql` — adds
+  `picked_up_at` / `in_transit_at` to `deliveries`, alongside the existing
+  `assigned_at` / `delivered_at`, so the new delivery timeline can show a
+  real time per step instead of just the current status.
+- `backend/src/utils/eta.js` — new: straight-line distance -> ETA minutes,
+  using a per-vehicle-type average speed (`orderStatus.js`'s new
+  `VEHICLE_AVERAGE_SPEED_KMH`). This is intentionally the same shape
+  Phase 5 (road routing) will keep, swapping in a real OSRM duration and
+  falling back to this when OSRM is unreachable.
+- `backend/src/modules/delivery/delivery.repository.js` —
+  `findByOrderIdWithAgent` now also returns the agent's live position, the
+  seller's pickup pin, and the agent's phone number; `updateStatus` now
+  stamps `picked_up_at`/`in_transit_at`; new `findAgentLocation`.
+- `backend/src/modules/delivery/delivery.service.js` — `getDelivery` now
+  returns `pickup`, `destination`, `distance_remaining_km`, and
+  `eta_minutes` (computed from the agent's current position, or the
+  pickup pin before the order's been collected); new
+  `getLastKnownAgentPosition`, used to backfill a socket that just joined
+  an order's tracking room.
+- `backend/src/socket/socket.js` — `join_order_tracking` now immediately
+  pushes the agent's last known position to the joining socket instead of
+  waiting for their next location ping; `agent:position` broadcasts now
+  carry a `timestamp` (used by the frontend to interpolate against real
+  elapsed time); explicit `pingInterval`/`pingTimeout` so a dead
+  connection is detected in ~25s; also fixes a pre-existing bug where
+  `chat.service.js` called `socket.emitMessageDeleted`, which didn't
+  exist — message deletions were silently never broadcast live (caught by
+  its own try/catch) until now.
+- `backend/src/modules/dispute/dispute.service.js` — unrelated
+  pre-existing bug fix found while getting the test suite green:
+  `resolveDispute` referenced an undefined `resolutionNote` instead of the
+  actual `resolution_note` param, which threw on every real resolution
+  call (masked in production by nothing — this one wasn't caught).
+
+Frontend:
+- `frontend/src/components/TrackingWidget.jsx` — new floating widget:
+  vehicle icon + pulse dot, status line, progress bar, ETA. Tapping
+  navigates to `/orders/:id/tracking`.
+- `frontend/src/pages/OrderTrackingPage.jsx` — new full-screen tracking
+  page: live map, ETA/distance-remaining stats, delivery timeline,
+  courier details card with message/call actions.
+- `frontend/src/components/DeliveryTrackingMap.jsx` — rewritten from a
+  self-contained widget (owned its own socket subscription) into a
+  presentational map (pickup/destination/agent markers + a straight-line
+  route polyline, `fitAll`/`height` props), now only mounted on the full
+  tracking page.
+- `frontend/src/components/DeliveryStatusTimeline.jsx`,
+  `frontend/src/components/CourierDetailsCard.jsx` — new.
+- `frontend/src/hooks/useSmoothPosition.js` — new: requestAnimationFrame-
+  driven position interpolation with ease-out, so marker movement stays
+  smooth even when position ticks arrive at an uneven cadence (a plain
+  fixed-duration CSS transition doesn't handle that well).
+- `frontend/src/utils/geo.js` — new: client-side mirror of the backend's
+  haversine/ETA math (for recomputing between ticks without a round trip)
+  plus `bearingDegrees` and `progressPercent`.
+- `frontend/src/context/SocketContext.jsx` — explicit reconnection config
+  (infinite retries, capped exponential backoff) instead of relying on
+  socket.io's implicit defaults; exposes a granular `connectionState`
+  (`connecting` / `connected` / `reconnecting` / `disconnected`) instead
+  of just a boolean, so the widget/tracking page can show "Reconnecting…"
+  rather than silently going stale.
+- `frontend/src/utils/mapConfig.js` — new `pickupIcon`.
+- `frontend/src/context/LanguageContext.jsx` — new `delivery.tracking.*`
+  keys (en + sw) for the widget, full tracking page, timeline steps, and
+  courier details.
+- `frontend/src/pages/OrderDetail.jsx`, `frontend/src/App.jsx` — swapped
+  the inline map for `<TrackingWidget>`; added the
+  `/orders/:id/tracking` route.
+
+Tests added: `backend/tests/unit/utils/eta.test.js`,
+`backend/tests/unit/delivery/delivery.service.test.js` (new
+distance/ETA/`getLastKnownAgentPosition` cases),
+`frontend/tests/utils/geo.test.js`,
+`frontend/tests/hooks/useSmoothPosition.test.jsx`,
+`frontend/tests/components/TrackingWidget.test.jsx`.
+
+**Migration required:** run `node database/migrate.js` before deploying
+this build (adds migration 037).
+
+**Not done in this phase:** the route line on the full tracking page is
+still a straight line between pickup and destination — real road-shaped
+routing is Phase 5. Distance/ETA are still straight-line-based for the
+same reason.

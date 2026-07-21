@@ -45,6 +45,41 @@ exports.initiate = async (phone, amount, meta = {}) => {
     };
 };
 
+// Refund leg — MalipoPay has no dedicated "reverse this collection"
+// endpoint in the commonly documented API, so a refund here is a payout
+// (disbursement) back to the buyer's own phone number for the refunded
+// amount. Functionally correct for mobile money (the buyer gets their
+// money back on the same wallet), but confirm against your dashboard
+// whether a true collection-reversal endpoint exists before relying on
+// this path for large volumes — a reversal (if available) would avoid
+// float/settlement timing issues that a fresh disbursement can have.
+exports.refund = async (phone, amount, meta = {}) => {
+    const response = await fetch(`${BASE_URL}/payout/disbursement`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            apiToken: API_TOKEN
+        },
+        body: JSON.stringify({
+            reference: meta.reference || `NEXORA-REFUND-${Date.now()}`,
+            description: meta.description || "NEXORA dispute refund",
+            amount,
+            phoneNumber: phone
+        })
+    });
+
+    if (!response.ok) {
+        return { success: false, transactionReference: null };
+    }
+
+    const data = await response.json();
+
+    return {
+        success: Boolean(data.success ?? data.status === "success" ?? data.status === "SUCCESS"),
+        transactionReference: data.reference || data.transactionReference || data.data?.reference || null
+    };
+};
+
 // Payout / seller-withdrawal leg — used when an admin approves a wallet
 // withdrawal (see wallet.service.js processWithdrawal) instead of paying
 // the seller manually outside the app.

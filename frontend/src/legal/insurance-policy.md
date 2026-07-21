@@ -47,8 +47,8 @@ transit, public liability, or courier insurance), which this policy does not rep
 There's no separate insurance claim form — the dispute process **is** the claim
 process:
 
-1. Open a dispute from the relevant order (`damaged`, `delayed`, `defective`,
-   `wrong_item`, `missing`, or `other`).
+1. Open a dispute from the relevant order (`damaged_item`, `delayed_delivery`,
+   `defective_product`, `wrong_item`, `missing_delivery`, or `other`).
 2. Attach photo evidence and a description.
 3. Respond to any follow-up messages from the Seller or admin.
 4. An admin resolves the case as a full refund, partial refund, replacement,
@@ -66,7 +66,7 @@ accident and third-party liability cover for delivery work.
 
 ## 6. Payment-processor-level protection
 
-Some payment methods offered at checkout (e.g. card payments processed through Stripe,
+Some payment methods offered at checkout (e.g. card payments processed through Snippe,
 or PayPal) carry their own buyer-protection programs independent of NEXORA. Where
 available, a Buyer may also have recourse directly through their payment provider;
 using that recourse instead of, or in addition to, NEXORA's dispute process is the

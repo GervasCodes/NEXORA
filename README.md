@@ -1,5 +1,232 @@
 # NEXORA
 
+## Phase 8 — Legal & Translation Review
+
+Reviewed all five legal documents (`frontend/src/legal/*.md`) for internal
+consistency and accuracy against the actual system, and both Swahili
+translation catalogs (`backend/src/i18n/locales/sw.js`,
+`frontend/src/context/LanguageContext.jsx`) for completeness and quality.
+Full findings in `LEGAL_TRANSLATION_REVIEW.md`.
+
+**Legal document fixes:**
+
+- **`stripe.provider.js` was still on disk**, unreferenced by any code path,
+  despite the Phase 7 entry below and the root `CHANGED_FILES.md` already
+  claiming it had been deleted. Confirmed still fully dead and deleted it —
+  this also fixes the two legal docs (next item) that were describing Stripe
+  as if it were still a live payment option.
+- **Stale "Stripe" references** in `privacy-policy.md` and
+  `insurance-policy.md` (payment-processor lists) replaced with **Snippe**,
+  Stripe's actual replacement per the Phase 1 changelog entry further down
+  this file.
+- **Dispute-type codes** shown in backticks across `terms-of-service.md`,
+  `delivery-liability-policy.md`, and `insurance-policy.md` didn't match the
+  real `disputes.type` ENUM (docs used `damaged`/`delayed`/`defective`/
+  `missing`; the schema uses `damaged_item`/`delayed_delivery`/
+  `defective_product`/`missing_delivery`) — corrected in all three documents.
+- **`vendor-agreement.md` §6** pointed to "Section 7 of the Insurance Policy"
+  for coverage information; Insurance Policy §7 is "Future changes," not
+  coverage — corrected the reference to §2 ("What is protected, by whom").
+
+**Translation fixes:**
+
+- **`auth.roleLabel`** (`LanguageContext.jsx`) was the incomplete Swahili
+  fragment `"Nataka ku"` (a bare verb prefix, no verb) rendered standalone
+  above the role dropdown in `Register.jsx` — fixed to
+  `"Nataka kufanya nini"`.
+- **`cart.empty`** (`LanguageContext.jsx`) used a contracted spoken-register
+  form (`"ki tupu"`) — fixed to the standard written `"kiko tupu"`.
+
+**Checks that passed with no issues**: full key parity and `{placeholder}`
+token parity in both locale catalogs (77/77 backend keys, 114/114 frontend
+keys), no untranslated strings, consistent domain terminology, and every
+other internal legal cross-reference resolved correctly.
+
+**Tests added**: a locale-catalog parity suite in
+`backend/tests/unit/i18n/i18n.test.js` and a new
+`frontend/tests/context/LanguageContext.test.jsx`, both checking for missing
+keys, extra keys, and placeholder mismatches between English and Swahili, so
+future translation drift fails a test instead of shipping silently.
+`DICTIONARY` is now exported from `LanguageContext.jsx` to make the frontend
+test possible.
+
+**Not fixed, flagged for a native speaker / counsel**: no legal document has
+a Swahili translation at all; `terms-of-service.md` §5 refers to a
+"Dispute Resolution Policy" as if it were a separate document (it's actually
+ToS §6 itself); `auth.termsPrefix`'s Swahili text drops the "NEXORA's"
+possessive present in English (fixing well requires a `Register.jsx`
+restructure, not just a string edit). See `LEGAL_TRANSLATION_REVIEW.md` for
+full detail on each.
+
+**What remains**: this was a text/consistency review, not a legal-sufficiency
+one — the documents' own "Template notice" banners (governing-law
+jurisdiction, commission rate, evidence time windows) still need qualified
+counsel, as before.
+
+## Phase 7 — Payment Provider Cleanup
+
+Audited every payment provider under `backend/src/modules/payment/providers/`
+against how (or whether) each is actually called from `payment.service.js`,
+`payment.controller.js`, and `payment.routes.js`.
+
+**Findings:**
+
+- **`stripe.provider.js` — dead code, removed.** Not required by
+  `payment.service.js`, not routed to by `payment.controller.js`/
+  `payment.routes.js`, no webhook route registered for it, no `stripe`
+  npm dependency in `backend/package.json` (so setting
+  `STRIPE_SECRET_KEY` would have crashed at runtime with a
+  module-not-found error — a latent landmine, not a working fallback).
+  This confirms and completes what an earlier "Phase 1 — Payments:
+  Stripe removed, Snippe added" changelog entry further down this file
+  already documented as done: the file had survived as an orphan on
+  disk despite the ENUMs (`payment_method`/`payments.method`, migration
+  `030_snippe_payment_gateway.sql`) no longer accepting `'stripe'`. It's
+  now actually deleted.
+- **Selcom, MalipoPay — complete, no action needed.** Both fully
+  implement the shape `mobileMoney.provider.js` (the router every
+  caller actually talks to) expects: `isConfigured`, `initiate`,
+  `refund`, `disburse`. Their in-file comments flagging "confirm the
+  exact endpoint path/field names against your onboarding docs before
+  going live" are honest caution about an unverified third-party API
+  shape, not missing functionality — normal for an integration built
+  without sandbox access. Left as-is.
+- **PayPal, Snippe — complete, no action needed.** Both are full
+  REST implementations (no SDK dependency, plain `fetch`) covering
+  order creation/checkout-session, capture/webhook handling, and (for
+  Snippe) refunds. Same "confirm against real docs" caveat as above,
+  same reasoning for leaving them as-is.
+- **`simulate.provider.js` — correct, no action needed.** Dev-only
+  fallback, explicitly guarded out of production by
+  `mobileMoney.provider.js`'s `resolveProvider()`.
+- **`backend/.env`** (local-only, already `.gitignore`d and not
+  tracked in this git history) holds provider credentials — confirmed
+  it's excluded from version control as it should be; no change made.
+
+**Removed files**: `backend/src/modules/payment/providers/stripe.provider.js`.
+
+**Modified files**: `docs/REFUNDS.md` (provider-coverage table's Stripe
+row updated from "not wired up" to "removed"), `REMAINING_WORK.md`.
+
+**Migration required:** none — the ENUMs already excluded `'stripe'`
+as of migration 030.
+
+**What remains / a note on verification**: this was a code-reading
+audit, not a live-sandbox one — no network access in this environment
+to actually hit Selcom/MalipoPay/PayPal/Snippe's real APIs and confirm
+field names, so their "confirm before going live" caveats stand exactly
+as they were. Nothing to run/build for a deletion-only change beyond
+the existing test suite (`payment.service.test.js` has no `stripe`
+references to begin with, so nothing needed updating there).
+
+## Phase 6 — Dispatch Dashboard (Admin)
+
+Adds an admin-facing dispatch dashboard: active deliveries, online
+delivery agents, per-delivery status, and automatic delayed-delivery
+flagging, updated live over the existing Socket.IO connection instead
+of polling.
+
+- **`GET /admin/dispatch`** (new, admin/super_admin only) — one combined
+  read returning `{ deliveries, agents, delayed, summary }`:
+  - `deliveries` — every delivery not yet `delivered`/`failed`, each with
+    an `is_delayed` flag computed in SQL by comparing elapsed time since
+    `assigned_at` against the road-routing ETA snapshot taken at
+    assignment (`estimated_duration_minutes` — see
+    `delivery.repository.js`'s `create`, which already documented this
+    as the intended use for that column).
+  - `agents` — every currently online delivery agent, with their live
+    position and how many active deliveries they're carrying.
+  - `summary` — `active_deliveries`, `delayed_deliveries`,
+    `online_agents`, `idle_agents` counts.
+- **Real-time updates**, all broadcast to the existing Socket.IO
+  `"admins"` room (already joined automatically by admin/super_admin
+  sockets — see `socket.js`), no new socket auth/rooms needed:
+  - `dispatch:delivery_assigned` — a delivery was claimed manually or via
+    an accepted matching offer.
+  - `dispatch:delivery_status` — a delivery's status changed (picked up,
+    in transit, delivered, failed).
+  - `dispatch:agent_status` — an agent went online/offline.
+  - `dispatch:agent_position` — an agent's live location ping, mirrored
+    from the same `agent:location` handler that already updates order-
+    tracking rooms.
+- **Frontend**: new `frontend/src/pages/admin/AdminDispatch.jsx`
+  ("Dispatch" tab in the admin nav) — loads the REST snapshot, then
+  listens for the events above; delivery/status events trigger a fresh
+  REST refresh (so the delayed-flag/summary counts, which are computed
+  server-side, never drift), while agent position pings just patch that
+  one agent's coordinates in place.
+
+**New/changed API surface**: one new endpoint (`GET /admin/dispatch`)
+and four new Socket.IO events, all listed above. No existing endpoint,
+event, or response shape changed.
+
+**Migration required:** none — reuses existing `deliveries`/`users`
+columns.
+
+**Modified files**: `backend/src/modules/admin/admin.repository.js`,
+`admin.service.js`, `admin.controller.js`, `admin.routes.js`,
+`backend/src/modules/delivery/delivery.service.js`,
+`backend/src/socket/socket.js`, `frontend/src/components/AdminLayout.jsx`,
+`frontend/src/App.jsx`, plus their tests.
+
+**Created files**: `frontend/src/pages/admin/AdminDispatch.jsx`.
+
+**What was completed**: the endpoint, live events, and dashboard page
+described above, plus unit test coverage for the new
+`admin.service.getDispatchOverview` and the new `emitToAdmins` calls in
+`delivery.service.js`.
+
+**What remains / a note on verification**: no `node_modules` and no
+network access in this environment, so this is syntax-checked
+(`node --check` on every changed backend file) but not
+execution-verified — no real MySQL instance to run the SQL against, no
+browser to click through the dashboard, no way to `npm install` and run
+Jest/Vitest here. Recommend running the existing `npm test` (backend)
+suite and manually exercising the dashboard against a real dev
+environment before merging. The dashboard currently re-fetches the full
+`GET /admin/dispatch` snapshot on every delivery/status/agent-status
+event rather than patching state incrementally — fine at the scale this
+app is likely to run at, but worth revisiting if the active-delivery
+count grows large enough for that to be wasteful.
+
+## Phase 5A — Routing Foundation
+
+Adds a standalone routing abstraction layer as the foundation for the
+rest of Phase 5 (road distance/ETA/pricing). Nothing in the app calls it
+yet — this phase is entirely additive and changes no existing behavior.
+
+- `backend/src/services/routing/routing.service.js` — public
+  `getRoute({ originLat, originLng, destLat, destLng, vehicleType })` API.
+  Tries the configured primary provider first (OSRM by default) and
+  automatically falls back to the existing straight-line
+  (`haversineKm` + `estimateEtaMinutes`) estimate if it fails, times out,
+  or is disabled — see `docs/ROUTING.md`.
+- `backend/src/services/routing/providers/osrm.provider.js` — calls a
+  real OSRM instance over HTTP (`/route/v1/{profile}/...`), maps
+  delivery `vehicleType` to an OSRM profile, and converts OSRM's
+  meters/seconds to the app's existing km/minutes convention.
+- `backend/src/services/routing/providers/fallback.provider.js` — the
+  same `getRoute` interface, backed by the pre-existing straight-line
+  math. Used automatically when OSRM is unavailable, or directly when
+  `ROUTING_PROVIDER=fallback`.
+- `backend/src/config/routing.js` — env-var-driven config
+  (`ROUTING_PROVIDER`, `OSRM_BASE_URL`, `OSRM_PROFILE`,
+  `OSRM_TIMEOUT_MS`, `ROUTING_FALLBACK_ENABLED`), every value optional
+  with a working default (OSRM's public demo server).
+
+**New environment variables** (all optional, see `backend/.env` for the
+full annotated list): `ROUTING_PROVIDER`, `OSRM_BASE_URL`, `OSRM_PROFILE`,
+`OSRM_TIMEOUT_MS`, `ROUTING_FALLBACK_ENABLED`.
+
+**New/changed API surface**: none — this phase adds no routes and
+touches no existing call site. `deliveryPricing.service.js` and
+`delivery.service.js` still use `haversineKm`/`estimateEtaMinutes`
+directly, unchanged; Phase 5B switches them over to `routing.service.js`.
+
+**Migration required:** none.
+
+**Full detail:** see `docs/ROUTING.md`.
+
 ## Phase 10 — Testing
 
 Adds an automated test suite (Jest + Supertest) and a CI workflow to the
@@ -117,6 +344,27 @@ see `jest.config.js`'s `collectCoverageFrom`. Actual achieved coverage
 across those files is **89% statements / 80% branches / 74% functions /
 89% lines** (117 tests, all passing). The threshold is intentionally
 narrower than "the whole backend" right now — see **What remains**.
+
+### Linting (Phase 5E)
+
+Neither `backend/` nor `frontend/` had any lint tooling configured
+before Phase 5E. Both now have a minimal ESLint 8 setup
+(`.eslintrc.json` in each) and an `npm run lint` script:
+
+- **`backend`** — `eslint:recommended`, Node/CommonJS/Jest globals.
+  `npm run lint` passes with zero errors across the whole `backend/`
+  tree.
+- **`frontend`** — `eslint:recommended` + `plugin:react/recommended` +
+  `plugin:react-hooks/recommended`. `react/no-unescaped-entities` is
+  turned off (it flags plain apostrophes/quotes in JSX text, which
+  aren't bugs and are pervasive throughout the existing UI copy — not
+  worth a repo-wide rewrite to satisfy a purely stylistic rule).
+  `npm run lint` reports two pre-existing issues, both unrelated to
+  Phase 5 and left as-is to keep this phase's diff scoped to
+  routing/pricing/delivery: an empty `catch` block in
+  `src/context/CartContext.jsx` (`no-empty`), and a `react-hooks/
+  exhaustive-deps` warning in `src/pages/Account.jsx`. See
+  `PHASE_5_REPORT.md` for details.
 
 ### CI/CD (`.github/workflows/ci.yml`)
 

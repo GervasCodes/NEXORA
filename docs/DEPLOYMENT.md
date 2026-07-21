@@ -10,8 +10,9 @@ both a local/dev environment and a production environment.
 - A Cloudinary account (for product/store image uploads)
 - An SMTP account for transactional email (optional — the app degrades
   gracefully to "log and continue" if email isn't configured)
-- Mobile money merchant credentials, **if** you intend to accept real mobile
-  money payments (see section 5 — this is not wired up yet)
+- Merchant/API credentials for whichever payment providers you intend to
+  accept live traffic on (Selcom and/or MalipoPay for direct mobile money,
+  Snippe for hosted card/mobile-money/QR checkout, PayPal) — see section 5
 
 ## 2. Database setup
 
@@ -98,55 +99,75 @@ Vercel, Netlify, etc.), pointed at the backend's public URL.
 
 ## 5. Before accepting real payments
 
-`backend/src/modules/payment/providers/mobileMoney.provider.js` is the
-single place mobile money calls go through. It has three modes:
+`backend/src/modules/payment/providers/mobileMoney.provider.js` is a
+**router**, not a placeholder: it dispatches to a real, complete provider
+implementation based on `MOBILE_MONEY_PROVIDER` in `.env`.
 
-- **Configured** (all four `MOBILE_MONEY_*` vars set) → calls the real
-  provider via `callRealProvider`, which is currently a **placeholder
-  request/response shape** — every provider (M-Pesa, Tigo Pesa, Airtel
-  Money, or an aggregator) has its own API contract, so you'll need to
-  replace the body of that function with the real integration once you've
-  picked a provider.
-- **Unconfigured + `NODE_ENV` not `production`** → simulates a successful
-  payment (with a loud, unmissable `SIMULATED-...` log banner) so you can
-  build/test checkout without real credentials.
+- `MOBILE_MONEY_PROVIDER=selcom` → `selcom.provider.js` (needs
+  `MOBILE_MONEY_API_BASE_URL`, `MOBILE_MONEY_API_KEY`,
+  `MOBILE_MONEY_API_SECRET`, `MOBILE_MONEY_VENDOR_ID`)
+- `MOBILE_MONEY_PROVIDER=malipopay` → `malipopay.provider.js` (needs
+  `MOBILE_MONEY_API_BASE_URL`, `MOBILE_MONEY_API_KEY`)
+- Both providers implement `initiate`/`disburse`/webhook verification for
+  real, and each has a working inbound webhook route
+  (`POST /api/v1/payments/webhooks/selcom`,
+  `POST /api/v1/payments/webhooks/malipopay`), guarded by
+  `webhookAuth.middleware.js`.
+- **Unconfigured + `NODE_ENV` not `production`** → falls back to
+  `simulate.provider.js` (a loud, unmissable `SIMULATED-...` log banner) so
+  you can build/test checkout without real credentials.
 - **Unconfigured + `NODE_ENV=production`** → **throws**, and the payment is
-  recorded as failed rather than silently succeeding. This is intentional:
-  it makes it impossible to accidentally deploy to production still in
-  "always succeeds" mode.
+  recorded as failed rather than silently succeeding — you cannot
+  accidentally ship production still in "always succeeds" mode.
+
+Separately, `snippe.provider.js` and `paypal.provider.js` are independent,
+complete payment methods (Snippe is a hosted checkout covering
+card/mobile-money/QR; needs `SNIPPE_SECRET_KEY`, `SNIPPE_WEBHOOK_SECRET`,
+`SNIPPE_API_BASE_URL`; PayPal needs the standard PayPal REST credentials
+plus `PAYPAL_MODE=live` when you're ready). Both verify their own inbound
+webhooks with a raw-body signature check.
 
 Before going live:
 
-1. Get merchant/API credentials from your provider.
-2. Set `MOBILE_MONEY_API_BASE_URL`, `MOBILE_MONEY_API_KEY`,
-   `MOBILE_MONEY_API_SECRET`, `MOBILE_MONEY_MERCHANT_CODE` in `backend/.env`.
-3. Replace `callRealProvider`'s request/response mapping with the real
-   provider's API.
-4. Add a webhook/callback route if the provider confirms payment
-   asynchronously (most mobile money APIs do) — see the `TODO` comment at
-   the top of `mobileMoney.provider.js`.
+1. Pick a mobile money provider (Selcom and/or MalipoPay), get its
+   merchant/API credentials, and set the vars above in `backend/.env`.
+2. If you want Snippe and/or PayPal as additional checkout options, get
+   their credentials and set those vars too.
+3. Point each provider's webhook URL (in their merchant dashboard) at your
+   deployed `POST /api/v1/payments/webhooks/<provider>` route.
+4. Confirm `NODE_ENV=production` is set — this is what turns off payment
+   simulation.
 
-Cash on Delivery (`confirmCashOnDelivery`) doesn't depend on this and is
-safe to use as-is.
+Cash on Delivery (`confirmCashOnDelivery`) doesn't depend on any of this and
+is safe to use as-is.
 
 ## 6. Pre-launch checklist
 
 - [ ] Migrations applied and `npm run migrate:status` in `database/` shows
-      nothing pending
+      nothing pending (39 migrations as of this report)
 - [ ] Initial admin account created and its password changed after first login
 - [ ] `JWT_SECRET` is a long random value, unique to this environment
 - [ ] `CORS_ORIGIN` set to your real domain(s), not left as `*`
-- [ ] Cloudinary and SMTP credentials set (SMTP can be left blank if you're
-      okay with emails being skipped — see `sendEmail.js`)
-- [ ] Real mobile money provider wired in (section 5) — until then, `NODE_ENV=production`
-      makes mobile money fail closed rather than silently simulate, but you
-      should still disable/hide it at checkout until it's real
-- [x] The `/db-test` debug route now requires an authenticated admin — no
-      further action needed, listed here as a record of the fix
+- [ ] Cloudinary credentials set for image uploads
+- [ ] Brevo API key set for transactional email (OTP login, notifications) —
+      email is sent via Brevo's HTTPS API, not SMTP
+- [ ] At least one real payment provider configured and its webhook URL
+      registered with the provider (section 5) — until then,
+      `NODE_ENV=production` makes payments fail closed rather than silently
+      simulate, but you should still disable/hide unconfigured methods at
+      checkout
+- [ ] `MOBILE_MONEY_PROVIDER`, `SNIPPE_*`, `PAYPAL_*` env vars set for
+      whichever providers you enabled
 - [ ] Regular database backups configured (`database/backups/` exists as a
       placeholder but nothing populates it automatically yet)
-- [ ] No automated tests exist yet for auth, checkout, or payment flows —
-      consider adding at least smoke coverage for those before launch
+- [x] Automated test coverage exists and passes: 390 backend unit tests, 15
+      backend integration tests, and 101 frontend tests as of this report
+      (`cd backend && npm test`, `cd frontend && npm test`) — still
+      recommended to add the DB-integration suite (`npm run test:db`)
+      against a real MySQL instance in CI before each deploy
+- [ ] Road-routing provider (OSRM) reachable in production if you want
+      real road distance/ETA instead of the straight-line fallback (see
+      `docs/ROUTING.md`)
 
 ## 7. Running everything together (local dev)
 

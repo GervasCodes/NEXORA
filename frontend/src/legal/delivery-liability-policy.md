@@ -30,7 +30,7 @@ problem generally follows whoever had custody when it happened:
 | Damage occurred after the order was marked delivered | **Buyer**, unless there's clear evidence the item was already compromised at delivery (e.g. a delivery-time photo showing damage) | Generally not eligible for refund; Buyers should inspect on arrival and report immediately. |
 | Cause can't be determined from available evidence | Reviewed case-by-case by an admin, weighing packaging quality, photos, and delivery notes | Admin discretion — may split responsibility with a partial refund. |
 
-A dispute filed as `damaged` should be opened with photo evidence as soon as possible
+A dispute filed as `damaged_item` should be opened with photo evidence as soon as possible
 after delivery — evidence quality is the main input into which row above applies.
 
 ## 4. Delayed deliveries — attribution rules

@@ -3,6 +3,7 @@ const disputeRepository = require("./dispute.repository");
 const orderRepository = require("../order/order.repository");
 const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
+const refundService = require("../refund/refund.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
 const generateDisputeNumber = () => {
@@ -283,6 +284,20 @@ exports.resolveDispute = async (disputeId, adminId, { resolution, resolution_not
     if (needsRefundAmount && dispute.seller_id) {
         await reverseSellerEarnings(dispute.seller_id, refundAmount, disputeId).catch((err) =>
             console.error("dispute wallet reversal error:", err)
+        );
+    }
+
+    // Push the buyer's money back automatically (Phase 2 - Refund
+    // Automation). Fire-and-forget, same pattern as the wallet reversal
+    // above and notifyResolution() below - the admin's resolve request
+    // shouldn't block on a payment-gateway round trip. refund.service.js
+    // handles idempotency (one refund per dispute), retries, and audit
+    // logging on its own; a failure here just leaves the refund in
+    // 'failed'/'manual_required' for an admin to retry from the refunds
+    // dashboard, it never breaks the dispute resolution itself.
+    if (needsRefundAmount) {
+        refundService.autoRefundForDispute({ dispute, amount: refundAmount, requestedBy: adminId }).catch((err) =>
+            console.error("dispute auto-refund error:", err)
         );
     }
 

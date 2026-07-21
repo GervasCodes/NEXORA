@@ -97,6 +97,32 @@ exports.initiate = async (phone, amount, meta = {}) => {
     };
 };
 
+// Refund leg — same caveat as MalipoPay's: Selcom's real API may expose
+// a dedicated order-reversal/refund endpoint distinct from a generic
+// payout. This uses the payout leg (money back to the buyer's own
+// msisdn) as the practical default since it requires no additional
+// endpoint discovery; swap the path below if/when Selcom confirms a
+// true reversal endpoint for your vendor account.
+exports.refund = async (phone, amount, meta = {}) => {
+    const fields = {
+        transid: meta.reference || `NEXORA-REFUND-${Date.now()}`,
+        vendor: VENDOR_ID,
+        amount,
+        msisdn: phone
+    };
+
+    const { ok, data } = await signedRequest("/payout/process", fields);
+
+    if (!ok) {
+        return { success: false, transactionReference: null };
+    }
+
+    return {
+        success: data?.resultcode === "000" || data?.result === "SUCCESS",
+        transactionReference: data?.reference || fields.transid
+    };
+};
+
 exports.disburse = async (phone, amount, meta = {}) => {
     // Selcom's payout leg for sending money out (e.g. Qwiksend-style)
     // requires a PIN for the float account in addition to the signed

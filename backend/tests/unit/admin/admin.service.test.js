@@ -296,3 +296,49 @@ describe("admin.service admin management", () => {
         expect(adminRepository.revokeAdmin).toHaveBeenCalledWith(1);
     });
 });
+
+describe("admin.service.getDispatchOverview (Phase 6 dispatch dashboard)", () => {
+    it("combines active deliveries and online agents into one summary", async () => {
+        adminRepository.findActiveDeliveries.mockResolvedValue([
+            { id: 1, order_id: 10, status: "in_transit", is_delayed: 1 },
+            { id: 2, order_id: 11, status: "assigned", is_delayed: 0 }
+        ]);
+        adminRepository.findOnlineAgents.mockResolvedValue([
+            { id: 5, first_name: "Amina", active_delivery_count: 1 },
+            { id: 6, first_name: "Juma", active_delivery_count: 0 }
+        ]);
+
+        const result = await adminService.getDispatchOverview();
+
+        expect(result.deliveries).toHaveLength(2);
+        expect(result.deliveries[0].is_delayed).toBe(true);
+        expect(result.deliveries[1].is_delayed).toBe(false);
+        expect(result.delayed).toEqual([expect.objectContaining({ id: 1, is_delayed: true })]);
+        expect(result.agents).toHaveLength(2);
+        expect(result.summary).toEqual({
+            active_deliveries: 2,
+            delayed_deliveries: 1,
+            online_agents: 2,
+            idle_agents: 1
+        });
+    });
+
+    it("returns zeroed-out summary counts when nothing is active", async () => {
+        adminRepository.findActiveDeliveries.mockResolvedValue([]);
+        adminRepository.findOnlineAgents.mockResolvedValue([]);
+
+        const result = await adminService.getDispatchOverview();
+
+        expect(result).toEqual({
+            deliveries: [],
+            agents: [],
+            delayed: [],
+            summary: {
+                active_deliveries: 0,
+                delayed_deliveries: 0,
+                online_agents: 0,
+                idle_agents: 0
+            }
+        });
+    });
+});

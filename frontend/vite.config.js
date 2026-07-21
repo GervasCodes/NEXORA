@@ -14,7 +14,17 @@ export default defineConfig({
         coverage: {
             provider: "v8",
             reporter: ["text", "html"],
-            include: ["src/utils/**", "src/context/**"]
+            include: [
+                "src/utils/**",
+                "src/context/**",
+                "src/hooks/**",
+                "src/components/TrackingWidget.jsx",
+                "src/components/DeliveryStatusTimeline.jsx",
+                "src/pages/Cart.jsx",
+                "src/pages/Checkout.jsx",
+                "src/pages/Login.jsx",
+                "src/pages/OrderTrackingPage.jsx"
+            ]
         }
     }
 });

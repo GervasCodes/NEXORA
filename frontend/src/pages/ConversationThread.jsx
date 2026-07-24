@@ -243,7 +243,7 @@ export default function ConversationThread() {
                 <div ref={bottomRef} />
             </div>
 
-            {error && <p className="text-coral text-sm mb-2">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-2">{error}</p>}
 
             <form onSubmit={handleSend} className="flex gap-2 border-t border-line pt-4">
                 <input

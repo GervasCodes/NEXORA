@@ -61,7 +61,7 @@ export default function SellerWallet() {
     };
 
     if (loading) return <p className="text-ash">Loading your wallet…</p>;
-    if (error) return <p className="text-coral text-sm">{error}</p>;
+    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!wallet) return null;
 
     return (
@@ -70,9 +70,21 @@ export default function SellerWallet() {
             <p className="text-ash text-sm mb-8">Your earnings after platform commission, ready to withdraw.</p>
 
             <div className="border border-line rounded-lg p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
-                <div>
-                    <p className="text-xs text-ash mb-1">Available balance</p>
-                    <p className="price text-3xl font-medium">{formatMoney(wallet.balance)}</p>
+                <div className="flex flex-wrap gap-8">
+                    <div>
+                        <p className="text-xs text-ash mb-1">Available balance</p>
+                        <p className="price text-3xl font-medium">{formatMoney(wallet.balance)}</p>
+                    </div>
+                    {wallet.heldBalance > 0 && (
+                        <div>
+                            <p className="text-xs text-ash mb-1">Pending release</p>
+                            <p className="price text-3xl font-medium text-ash">{formatMoney(wallet.heldBalance)}</p>
+                            <p className="text-xs text-ash mt-1 max-w-xs">
+                                Held until the order is delivered and the dispute window
+                                passes, then released here automatically.
+                            </p>
+                        </div>
+                    )}
                 </div>
                 <button
                     onClick={() => setShowForm((s) => !s)}
@@ -84,7 +96,7 @@ export default function SellerWallet() {
 
             {showForm && (
                 <form onSubmit={submitWithdrawal} className="border border-line rounded-lg p-4 mb-10 space-y-3">
-                    {formError && <p className="text-coral text-sm">{formError}</p>}
+                    {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
                     <div>
                         <label className="text-xs text-ash block mb-1">Amount (TZS)</label>

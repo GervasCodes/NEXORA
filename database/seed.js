@@ -20,11 +20,13 @@ const mysql = require("mysql2/promise");
 require("dotenv").config({ path: path.join(__dirname, "..", "backend", ".env") });
 
 const CATEGORIES = [
-    { name: "Electronics", slug: "electronics", description: "Phones, computers, and accessories" },
-    { name: "Fashion", slug: "fashion", description: "Clothing, shoes, and accessories" },
-    { name: "Home & Living", slug: "home-living", description: "Furniture, decor, and household goods" },
-    { name: "Health & Beauty", slug: "health-beauty", description: "Personal care and wellness products" },
-    { name: "Groceries", slug: "groceries", description: "Food and everyday essentials" }
+    { name: "Phones & Electronics", slug: "phones-electronics", description: "Phones, computers, and accessories", display_order: 1 },
+    { name: "Fashion & Beauty", slug: "fashion-beauty", description: "Clothing, shoes, accessories, and personal care", display_order: 2 },
+    { name: "Home & Living", slug: "home-living", description: "Furniture, decor, and household goods", display_order: 3 },
+    { name: "Groceries & Food", slug: "groceries-food", description: "Food and everyday essentials", display_order: 4 },
+    { name: "Vehicles & Transport", slug: "vehicles-transport", description: "Cars, motorcycles, parts, and accessories", display_order: 5 },
+    { name: "Services", slug: "services", description: "Local services from trusted sellers", display_order: 6 },
+    { name: "Sports & Outdoors", slug: "sports-outdoors", description: "Sporting goods, fitness, and outdoor gear", display_order: 7 }
 ];
 
 // Same SSL handling as backend/src/config/db.js - see the comment there.
@@ -65,8 +67,8 @@ async function seedCategories(connection) {
         }
 
         await connection.query(
-            "INSERT INTO categories (name, slug, description) VALUES (?, ?, ?)",
-            [category.name, category.slug, category.description]
+            "INSERT INTO categories (name, slug, description, display_order) VALUES (?, ?, ?, ?)",
+            [category.name, category.slug, category.description, category.display_order || 0]
         );
         console.log(`Created category "${category.name}".`);
     }

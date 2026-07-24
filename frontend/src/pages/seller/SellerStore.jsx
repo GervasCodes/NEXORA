@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import LocationPicker from "../../components/LocationPicker";
+import { STORE_THEMES } from "../../utils/storeThemes";
 
 export default function SellerStore() {
     const { profile, refreshProfile } = useOutletContext();
@@ -10,13 +11,18 @@ export default function SellerStore() {
     const [form, setForm] = useState({
         store_name: profile.store_name || "",
         store_description: profile.store_description || "",
+        store_tagline: profile.store_tagline || "",
         store_type_id: profile.store_type_id || "",
         business_email: profile.business_email || "",
         business_phone: profile.business_phone || "",
         country: profile.country || "",
         region: profile.region || "",
         city: profile.city || "",
-        address: profile.address || ""
+        address: profile.address || "",
+        store_theme: profile.store_theme || "default",
+        social_instagram: profile.social_instagram || "",
+        social_facebook: profile.social_facebook || "",
+        social_whatsapp: profile.social_whatsapp || ""
     });
     const [pickupPin, setPickupPin] = useState(
         profile.pickup_lat != null && profile.pickup_lng != null
@@ -127,6 +133,16 @@ export default function SellerStore() {
                 </div>
 
                 <div>
+                    <label className="block text-sm mb-1">Store tagline</label>
+                    <p className="text-xs text-ash mb-2">
+                        A short line shown right under your store name — e.g. "Fresh flavors, delivered fast".
+                    </p>
+                    <input maxLength={150} value={form.store_tagline} onChange={update("store_tagline")}
+                        placeholder="Optional"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                </div>
+
+                <div>
                     <label className="block text-sm mb-1">Store description</label>
                     <textarea rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
@@ -141,6 +157,52 @@ export default function SellerStore() {
                             <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                     </select>
+                </div>
+
+                <div>
+                    <label className="block text-sm mb-1">Store theme</label>
+                    <p className="text-xs text-ash mb-2">
+                        Sets the accent color on your public store page.
+                    </p>
+                    <div className="flex flex-wrap gap-2.5">
+                        {STORE_THEMES.map((theme) => (
+                            <button
+                                key={theme.key}
+                                type="button"
+                                onClick={() => setForm({ ...form, store_theme: theme.key })}
+                                title={theme.label}
+                                aria-label={theme.label}
+                                aria-pressed={form.store_theme === theme.key}
+                                className={`w-9 h-9 rounded-full ${theme.swatch} flex items-center justify-center ring-offset-2 ring-offset-paper transition-shadow ${
+                                    form.store_theme === theme.key ? "ring-2 ring-ink" : ""
+                                }`}
+                            >
+                                {form.store_theme === theme.key && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-paper">
+                                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm mb-1">Social links</label>
+                    <p className="text-xs text-ash mb-2">
+                        Shown as icons on your public store page. Leave any blank to hide it.
+                    </p>
+                    <div className="space-y-2">
+                        <input value={form.social_instagram} onChange={update("social_instagram")}
+                            placeholder="Instagram (@handle or link)" maxLength={150}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        <input value={form.social_facebook} onChange={update("social_facebook")}
+                            placeholder="Facebook (page name or link)" maxLength={150}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        <input value={form.social_whatsapp} onChange={update("social_whatsapp")}
+                            placeholder="WhatsApp number" maxLength={20}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -192,7 +254,7 @@ export default function SellerStore() {
                     />
                 </div>
 
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">Store settings saved.</p>}
 
                 <button type="submit" disabled={submitting}

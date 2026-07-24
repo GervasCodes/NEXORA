@@ -43,3 +43,19 @@ exports.reviewIdValidation = [
 exports.productIdValidation = [
     param("productId").isInt({ gt: 0 }).withMessage("Invalid product")
 ];
+
+exports.sellerIdValidation = [
+    param("sellerId").isInt({ gt: 0 }).withMessage("Invalid store")
+];
+
+// Phase 6C - seller reply to a review.
+exports.replyValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid review"),
+
+    body("reply")
+        .notEmpty()
+        .withMessage("Reply is required")
+        .isString()
+        .isLength({ max: 1000 })
+        .withMessage("Reply is too long")
+];

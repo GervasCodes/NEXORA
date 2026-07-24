@@ -98,10 +98,27 @@ module.exports = {
 
         "wallet.credited.title": "Pochi imeongezwa fedha",
         "wallet.credited.message": "Pochi yako imeongezwa fedha kwa ajili ya agizo #{orderId}.",
+        "wallet.released.title": "Mapato yaliyoshikiliwa yametolewa",
+        "wallet.released.message": "Baadhi ya mapato yako yaliyoshikiliwa yamemaliza kipindi cha kusubiri na sasa yanapatikana kutolewa.",
         "withdrawal.status.title": "Utoaji {status}",
         "withdrawal.rejected.message": "Ombi lako la kutoa {amount} limekataliwa na kurejeshwa kwenye pochi yako.{note}",
         "withdrawal.status.message": "Ombi lako la kutoa {amount} sasa ni \"{status}\".",
-        "withdrawal.note": " Kumbuka: {note}"
+        "withdrawal.note": " Kumbuka: {note}",
+
+        "sponsorship.started.title": "Kampeni ya udhamini imeanza",
+        "sponsorship.started.message": "Kampeni yako ya udhamini ya siku {days} kwa \"{productName}\" sasa inaonekana (kiasi {amount} kimetozwa kwenye pochi yako).",
+        "sponsorship.expired.title": "Kampeni ya udhamini imekamilika",
+        "sponsorship.expired.message": "Kampeni yako ya udhamini kwa \"{productName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji.",
+
+        "featuredStore.started.title": "Kampeni ya kuonyeshwa duka imeanza",
+        "featuredStore.started.message": "Kampeni yako ya kuonyeshwa duka ya siku {days} katika \"{categoryName}\" sasa inaonekana (kiasi {amount} kimetozwa kwenye pochi yako).",
+        "featuredStore.expired.title": "Kampeni ya kuonyeshwa duka imekamilika",
+        "featuredStore.expired.message": "Kampeni yako ya kuonyeshwa duka katika \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji.",
+
+        "departmentSponsorship.started.title": "Kampeni ya udhamini wa idara imeanza",
+        "departmentSponsorship.started.message": "Kampeni yako ya udhamini ya siku {days} kwa idara \"{categoryName}\" kwenye ukurasa wa nyumbani sasa inaonekana (kiasi {amount} kimetozwa kwenye pochi yako).",
+        "departmentSponsorship.expired.title": "Kampeni ya udhamini wa idara imekamilika",
+        "departmentSponsorship.expired.message": "Kampeni yako ya udhamini wa idara \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji."
     },
 
     email: {

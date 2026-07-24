@@ -101,7 +101,7 @@ export default function AdminDispatch() {
                 </span>
             </div>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                 <SummaryCard label="Active deliveries" value={summary?.active_deliveries ?? 0} />

@@ -64,7 +64,7 @@ export default function ForgotPassword() {
                         />
                     </div>
 
-                    {error && <p className="text-coral text-sm">{error}</p>}
+                    {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                     <button
                         type="submit"
@@ -103,7 +103,7 @@ export default function ForgotPassword() {
                     </div>
 
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
-                    {error && <p className="text-coral text-sm">{error}</p>}
+                    {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                     <button
                         type="submit"

@@ -2,9 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
+import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../utils/recentSearches";
 
 const DEBOUNCE_MS = 250;
 const MIN_CHARS = 2;
+
+// Wraps the part of `text` that matches `query` (case-insensitive) in a
+// <mark>, so someone scanning a dropdown of five suggestions can see at a
+// glance *why* each one matched instead of re-reading every title in full.
+function HighlightMatch({ text, query }) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return text;
+
+    const index = text.toLowerCase().indexOf(trimmedQuery.toLowerCase());
+    if (index === -1) return text;
+
+    return (
+        <>
+            {text.slice(0, index)}
+            <mark className="bg-mango/40 text-ink rounded-sm">{text.slice(index, index + trimmedQuery.length)}</mark>
+            {text.slice(index + trimmedQuery.length)}
+        </>
+    );
+}
 
 // Web Speech API support is inconsistent across browsers (notably weak/
 // absent on iOS Safari) - this is why the mic button only ever renders
@@ -19,11 +40,13 @@ const SpeechRecognitionAPI =
 export default function SearchBox({ placeholder, submitLabel, inputClassName, onNavigate }) {
     const navigate = useNavigate();
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const [value, setValue] = useState("");
     const [suggestions, setSuggestions] = useState([]);
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
     const [listening, setListening] = useState(false);
+    const [recent, setRecent] = useState(() => getRecentSearches());
     const containerRef = useRef(null);
     const debounceRef = useRef(null);
     const recognitionRef = useRef(null);
@@ -61,19 +84,29 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
     const goToResults = (term) => {
         setOpen(false);
         onNavigate?.();
-        navigate(term.trim() ? `/?search=${encodeURIComponent(term.trim())}` : "/");
+        const trimmed = term.trim();
+        if (trimmed) setRecent(addRecentSearch(trimmed));
+        navigate(trimmed ? `/?search=${encodeURIComponent(trimmed)}` : "/");
     };
 
-    const goToProduct = (slug) => {
+    const goToProduct = (slug, matchedTerm) => {
         setOpen(false);
         onNavigate?.();
+        if (matchedTerm?.trim()) setRecent(addRecentSearch(matchedTerm.trim()));
         navigate(`/products/${slug}`);
+    };
+
+    const handleClearRecent = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearRecentSearches();
+        setRecent([]);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (activeIndex >= 0 && suggestions[activeIndex]) {
-            goToProduct(suggestions[activeIndex].slug);
+            goToProduct(suggestions[activeIndex].slug, value);
         } else {
             goToResults(value);
         }
@@ -125,7 +158,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                 <input
                     value={value}
                     onChange={(e) => { setValue(e.target.value); setActiveIndex(-1); }}
-                    onFocus={() => suggestions.length > 0 && setOpen(true)}
+                    onFocus={() => (suggestions.length > 0 || (value.trim().length === 0 && recent.length > 0)) && setOpen(true)}
                     onKeyDown={handleKeyDown}
                     type="text"
                     role="combobox"
@@ -155,22 +188,46 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                 </button>
             </form>
 
-            {open && suggestions.length > 0 && (
+            {open && value.trim().length === 0 && recent.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-line/60">
+                        <span className="text-xs uppercase tracking-wide text-ash">{t("search.recent")}</span>
+                        <button type="button" onMouseDown={handleClearRecent} className="text-xs text-teal hover:underline">
+                            {t("search.clearRecent")}
+                        </button>
+                    </div>
+                    {recent.map((term) => (
+                        <button
+                            key={term}
+                            type="button"
+                            onMouseDown={() => { setValue(term); goToResults(term); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-line/40 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-3.5 h-3.5 text-ash shrink-0">
+                                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+                            </svg>
+                            <span className="truncate">{term}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {open && suggestions.length > 0 && value.trim().length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
                     {suggestions.map((p, i) => (
                         <button
                             key={p.id}
                             type="button"
-                            onMouseDown={() => goToProduct(p.slug)}
+                            onMouseDown={() => goToProduct(p.slug, value)}
                             className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 i === activeIndex ? "bg-line/60" : "hover:bg-line/40"
                             }`}
                         >
                             <div className="w-9 h-9 rounded bg-line/40 shrink-0 overflow-hidden">
-                                {p.image_url && <img src={p.image_url} alt="" className="w-full h-full object-cover" />}
+                                {p.image_url && <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm text-ink truncate">{p.name}</p>
+                                <p className="text-sm text-ink truncate"><HighlightMatch text={p.name} query={value} /></p>
                                 <p className="text-xs text-ash truncate">{p.store_name}</p>
                             </div>
                             <span className="price text-xs text-ink shrink-0">{format(p.discount_price || p.price)}</span>

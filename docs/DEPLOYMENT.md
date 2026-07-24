@@ -8,8 +8,10 @@ both a local/dev environment and a production environment.
 - Node.js 18+ and npm
 - MySQL 8+ (or MariaDB 10.6+)
 - A Cloudinary account (for product/store image uploads)
-- An SMTP account for transactional email (optional — the app degrades
-  gracefully to "log and continue" if email isn't configured)
+- A Brevo account and API key for transactional email (OTP login, account
+  notifications) — sent over Brevo's HTTPS API, not SMTP. Optional in
+  non-production: the app degrades gracefully to "log and continue" if it
+  isn't configured
 - Merchant/API credentials for whichever payment providers you intend to
   accept live traffic on (Selcom and/or MalipoPay for direct mobile money,
   Snippe for hosted card/mobile-money/QR checkout, PayPal) — see section 5

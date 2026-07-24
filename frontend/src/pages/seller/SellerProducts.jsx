@@ -43,7 +43,7 @@ export default function SellerProducts() {
                 {products.map((p) => (
                     <li key={p.id} className="py-4 flex items-center gap-4">
                         <div className="w-14 h-14 bg-line/40 rounded-md overflow-hidden shrink-0">
-                            {p.image_url && <img src={p.image_url} alt="" className="w-full h-full object-cover" />}
+                            {p.image_url && <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
                         </div>
 
                         <div className="flex-1 min-w-0">

@@ -48,7 +48,7 @@ export default function Cart() {
                     >
                         <div className="w-20 h-20 bg-line/40 rounded-md overflow-hidden shrink-0 transition-transform duration-300 hover:scale-105">
                             {item.image_url && (
-                                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                                <img src={item.image_url} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             )}
                         </div>
 

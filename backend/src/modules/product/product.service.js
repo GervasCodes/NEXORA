@@ -1,5 +1,7 @@
 const productRepository = require("./product.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = require("../../utils/productFilters");
+const { parseSort } = require("../../utils/productSort");
 
 exports.createProduct = async (sellerId, data) => {
 
@@ -31,10 +33,17 @@ exports.createProduct = async (sellerId, data) => {
 exports.listProducts = async (query) => {
     const page = Math.max(1, parseInt(query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 12));
+    const { min, max } = parsePriceRange(query.min_price, query.max_price);
 
     const { rows, total } = await productRepository.findAll({
         categoryId: query.category_id || null,
         search: query.search || null,
+        minPrice: min,
+        maxPrice: max,
+        sellerId: parseSellerId(query.seller_id),
+        region: parseLocation(query.region),
+        minRating: parseMinRating(query.min_rating),
+        sort: parseSort(query.sort),
         page,
         limit
     });
@@ -50,6 +59,22 @@ exports.listProducts = async (query) => {
     };
 };
 
+// Filter-dropdown data (Phase 3A): every seller with at least one active
+// product, optionally narrowed to a single category/department.
+exports.listFilterSellers = async (query) => {
+    return productRepository.findFilterSellers({
+        categoryId: query.category_id || null
+    });
+};
+
+// Filter-dropdown data (Phase 3B): every region with at least one active
+// product, optionally narrowed to a single category/department.
+exports.listFilterRegions = async (query) => {
+    return productRepository.findFilterRegions({
+        categoryId: query.category_id || null
+    });
+};
+
 exports.getProductBySlug = async (slug) => {
     const product = await productRepository.findBySlug(slug);
 
@@ -57,9 +82,15 @@ exports.getProductBySlug = async (slug) => {
         throw new Error("Product not found");
     }
 
-    const images = await productRepository.findImagesByProductId(product.id);
+    // Images, videos (Phase 6A), and audio (Phase 6B) all load together
+    // since the product-detail page needs all three on first render.
+    const [images, videos, audio] = await Promise.all([
+        productRepository.findImagesByProductId(product.id),
+        productRepository.findVideosByProductId(product.id),
+        productRepository.findAudioByProductId(product.id)
+    ]);
 
-    return { ...product, images };
+    return { ...product, images, videos, audio };
 };
 
 exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
@@ -86,6 +117,60 @@ exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
     return { imageUrl: result.secure_url, isPrimary: primary };
 };
 
+// Phase 6A - Product Videos. Same ownership check as addProductImage,
+// plus a small per-product cap (unlike photos, which have no cap) -
+// video is the most storage/bandwidth-expensive media type a seller can
+// upload here, so a hard ceiling keeps one listing from growing an
+// unbounded video library.
+const MAX_VIDEOS_PER_PRODUCT = 3;
+
+exports.addProductVideo = async (sellerId, productId, file) => {
+    const product = await productRepository.findById(productId);
+
+    if (!product || product.seller_id !== sellerId) {
+        throw new Error("Product not found");
+    }
+
+    const existingCount = await productRepository.countExistingVideos(productId);
+
+    if (existingCount >= MAX_VIDEOS_PER_PRODUCT) {
+        throw new Error(`A product can have at most ${MAX_VIDEOS_PER_PRODUCT} videos`);
+    }
+
+    const result = await uploadToCloudinary(file.buffer, "products/videos", "video");
+
+    await productRepository.addProductVideo(productId, result.secure_url, existingCount);
+
+    return { videoUrl: result.secure_url };
+};
+
+// Phase 6B - Product Audio. Same ownership check and per-product cap
+// pattern as addProductVideo. Cloudinary has no separate "audio"
+// resource type of its own - audio files are uploaded as resourceType
+// "video" too (Cloudinary's own docs: audio is handled by the same
+// video pipeline), so this reuses uploadToCloudinary exactly as-is.
+const MAX_AUDIO_PER_PRODUCT = 3;
+
+exports.addProductAudio = async (sellerId, productId, file) => {
+    const product = await productRepository.findById(productId);
+
+    if (!product || product.seller_id !== sellerId) {
+        throw new Error("Product not found");
+    }
+
+    const existingCount = await productRepository.countExistingAudio(productId);
+
+    if (existingCount >= MAX_AUDIO_PER_PRODUCT) {
+        throw new Error(`A product can have at most ${MAX_AUDIO_PER_PRODUCT} audio clips`);
+    }
+
+    const result = await uploadToCloudinary(file.buffer, "products/audio", "video");
+
+    await productRepository.addProductAudio(productId, result.secure_url, existingCount);
+
+    return { audioUrl: result.secure_url };
+};
+
 exports.getMyProducts = async (sellerId) => {
     return productRepository.findAllBySeller(sellerId);
 };
@@ -97,9 +182,13 @@ exports.getMyProductById = async (sellerId, productId) => {
         throw new Error("Product not found");
     }
 
-    const images = await productRepository.findImagesByProductId(productId);
+    const [images, videos, audio] = await Promise.all([
+        productRepository.findImagesByProductId(productId),
+        productRepository.findVideosByProductId(productId),
+        productRepository.findAudioByProductId(productId)
+    ]);
 
-    return { ...product, images };
+    return { ...product, images, videos, audio };
 };
 
 exports.updateProduct = async (sellerId, productId, data) => {

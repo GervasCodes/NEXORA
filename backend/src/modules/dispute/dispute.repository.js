@@ -30,6 +30,18 @@ exports.findOpenByOrderAndItem = async (orderId, orderItemId) => {
     return rows[0];
 };
 
+// Every dispute filed against this order, item-specific or whole-order,
+// in any status. Used by wallet.service.js#releaseEligibleEarnings
+// (Phase 9D) to decide whether a held order_item is safe to release -
+// see the dispute-freeze / closed-by-refund rules there.
+exports.findByOrderId = async (orderId) => {
+    const [rows] = await db.query(
+        "SELECT id, order_item_id, status, resolution FROM disputes WHERE order_id = ?",
+        [orderId]
+    );
+    return rows;
+};
+
 exports.findByBuyer = async (buyerId) => {
     const [rows] = await db.query(
         `SELECT d.id, d.dispute_number, d.order_id, d.type, d.status, d.subject,

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import api from "../api/client";
+import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
+import RatingBreakdown from "../components/RatingBreakdown";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -15,10 +16,29 @@ export default function ProductDetail() {
 
     const [product, setProduct] = useState(null);
     const [reviews, setReviews] = useState(null);
+    const [reviewSort, setReviewSort] = useState("newest");
     const [activeImage, setActiveImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [status, setStatus] = useState("");
     const [loading, setLoading] = useState(true);
+
+    // Phase 6C - review submission. There was previously no way for a
+    // buyer to write a review anywhere in the frontend even though the
+    // backend has always supported it; this is the minimal form that
+    // makes the rest of this phase's "enhanced" review features
+    // (photos, seller replies, sorting) actually reachable.
+    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState("");
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [reviewError, setReviewError] = useState("");
+    const [justSubmittedId, setJustSubmittedId] = useState(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+    // Kept in sync with the backend's MAX_PHOTOS_PER_REVIEW
+    // (review.service.js), same reasoning SellerProductForm.jsx's
+    // MAX_VIDEOS/MAX_AUDIO constants already give for their caps.
+    const MAX_REVIEW_PHOTOS = 5;
 
     useEffect(() => {
         setLoading(true);
@@ -28,10 +48,53 @@ export default function ProductDetail() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    useEffect(() => {
+    const loadReviews = () => {
         if (!product) return;
-        api.get(`/reviews/product/${product.id}`).then(({ data }) => setReviews(data.data)).catch(() => {});
-    }, [product]);
+        api.get(`/reviews/product/${product.id}`, { params: { sort: reviewSort } })
+            .then(({ data }) => setReviews(data.data))
+            .catch(() => {});
+    };
+
+    useEffect(loadReviews, [product, reviewSort]);
+
+    const handleReviewSubmit = async (e) => {
+        e.preventDefault();
+        setSubmittingReview(true);
+        setReviewError("");
+        try {
+            const { data } = await api.post("/reviews", {
+                product_id: product.id,
+                rating: reviewRating,
+                comment: reviewComment
+            });
+            setJustSubmittedId(data.data.reviewId);
+            setReviewComment("");
+            loadReviews();
+        } catch (err) {
+            setReviewError(extractErrorMessage(err));
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const handleReviewPhotoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !justSubmittedId) return;
+
+        setUploadingPhoto(true);
+        setReviewError("");
+        try {
+            const body = new FormData();
+            body.append("photo", file);
+            await api.post(`/reviews/${justSubmittedId}/photos`, body);
+            loadReviews();
+        } catch (err) {
+            setReviewError(extractErrorMessage(err));
+        } finally {
+            setUploadingPhoto(false);
+            e.target.value = "";
+        }
+    };
 
     const handleAddToCart = async () => {
         if (!user) {
@@ -112,11 +175,35 @@ export default function ProductDetail() {
                             ))}
                         </div>
                     )}
+                    {product.videos?.length > 0 && (
+                        <div className="mt-6">
+                            <h2 className="font-display text-lg mb-3">Product video{product.videos.length > 1 ? "s" : ""}</h2>
+                            <div className="space-y-3">
+                                {product.videos.map((vid) => (
+                                    <video key={vid.id} src={vid.video_url} controls
+                                        className="w-full rounded-lg border border-line" />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {product.audio?.length > 0 && (
+                        <div className="mt-6">
+                            <h2 className="font-display text-lg mb-3">Product audio</h2>
+                            <div className="space-y-3">
+                                {product.audio.map((clip) => (
+                                    <audio key={clip.id} src={clip.audio_url} controls className="w-full" />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div>
                     <p className="text-xs uppercase tracking-wide text-ash mb-2">
-                        {product.store_name} {product.is_verified ? "· ✓ Verified store" : ""}
+                        <Link to={`/stores/${product.store_slug}`} className="hover:underline hover:text-ink">
+                            {product.store_name}
+                        </Link>
+                        {product.is_verified ? " · ✓ Verified store" : ""}
                     </p>
                     <h1 className="font-display text-3xl mb-3">{product.name}</h1>
 
@@ -179,7 +266,91 @@ export default function ProductDetail() {
             </div>
 
             <section className="mt-16 max-w-2xl">
-                <h2 className="font-display text-xl mb-4">Reviews</h2>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-1">
+                    <h2 className="font-display text-xl">Reviews</h2>
+                    {reviews?.review_count > 0 && (
+                        <select
+                            value={reviewSort}
+                            onChange={(e) => setReviewSort(e.target.value)}
+                            className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring"
+                        >
+                            <option value="newest">Newest</option>
+                            <option value="highest">Highest rated</option>
+                            <option value="lowest">Lowest rated</option>
+                        </select>
+                    )}
+                </div>
+
+                <RatingBreakdown breakdown={reviews?.rating_breakdown} reviewCount={reviews?.review_count} />
+
+                {user?.role === "buyer" && !showReviewForm && (
+                    <button
+                        onClick={() => setShowReviewForm(true)}
+                        className="text-sm text-teal hover:underline mb-4"
+                    >
+                        Write a review
+                    </button>
+                )}
+
+                {showReviewForm && !justSubmittedId && (
+                    <form onSubmit={handleReviewSubmit} className="border border-line rounded-lg p-4 mb-6">
+                        <label className="block text-sm mb-1">Rating</label>
+                        <select
+                            value={reviewRating}
+                            onChange={(e) => setReviewRating(Number(e.target.value))}
+                            className="border border-line rounded-md px-3 py-2 text-sm mb-3 focus-ring"
+                        >
+                            {[5, 4, 3, 2, 1].map((n) => (
+                                <option key={n} value={n}>{n} star{n === 1 ? "" : "s"}</option>
+                            ))}
+                        </select>
+                        <label className="block text-sm mb-1">Comment (optional)</label>
+                        <textarea
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                            maxLength={1000}
+                            rows={3}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm mb-3 focus-ring"
+                        />
+                        {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
+                        <div className="flex gap-3">
+                            <button
+                                type="submit"
+                                disabled={submittingReview}
+                                className="bg-mango text-abyss px-5 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-50"
+                            >
+                                {submittingReview ? "Submitting…" : "Submit review"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowReviewForm(false)}
+                                className="text-sm text-ash hover:underline"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {justSubmittedId && (
+                    <div className="border border-line rounded-lg p-4 mb-6">
+                        <p className="text-sm text-teal mb-3">Thanks for your review!</p>
+                        {(() => {
+                            const submitted = reviews?.reviews?.find((r) => r.id === justSubmittedId);
+                            const photoCount = submitted?.photos?.length || 0;
+                            return photoCount < MAX_REVIEW_PHOTOS ? (
+                                <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                                    {uploadingPhoto ? "Uploading…" : "+ Add a photo"}
+                                    <input type="file" accept="image/*" onChange={handleReviewPhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                                </label>
+                            ) : (
+                                <p className="text-ash text-xs">Maximum of {MAX_REVIEW_PHOTOS} photos per review.</p>
+                            );
+                        })()}
+                        {reviewError && <p className="text-sm text-coral mt-3">{reviewError}</p>}
+                    </div>
+                )}
+
                 {!reviews?.reviews?.length && <p className="text-ash text-sm">No reviews yet.</p>}
                 <ul className="space-y-4">
                     {reviews?.reviews?.map((r) => (
@@ -190,6 +361,25 @@ export default function ProductDetail() {
                             </div>
                             <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
                             {r.comment && <p className="text-sm text-ink/80">{r.comment}</p>}
+                            {r.photos?.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {r.photos.map((photo) => (
+                                        <img
+                                            key={photo.id}
+                                            src={photo.photo_url}
+                                            alt=""
+                                            loading="lazy"
+                                            className="w-16 h-16 rounded-md object-cover border border-line"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            {r.seller_reply && (
+                                <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
+                                    <p className="text-xs font-medium text-ink mb-0.5">Seller response</p>
+                                    <p className="text-xs text-ink/80">{r.seller_reply}</p>
+                                </div>
+                            )}
                         </li>
                     ))}
                 </ul>

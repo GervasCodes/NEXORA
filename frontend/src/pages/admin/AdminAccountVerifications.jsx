@@ -122,7 +122,7 @@ export default function AdminAccountVerifications() {
                 </select>
             </div>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
             {loading && <p className="text-ash text-sm">Loading…</p>}
 
             {!loading && rows.length === 0 && (

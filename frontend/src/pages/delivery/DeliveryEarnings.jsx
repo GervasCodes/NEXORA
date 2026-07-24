@@ -16,7 +16,7 @@ export default function DeliveryEarnings() {
     }, []);
 
     if (loading) return <p className="text-ash">Loading your earnings…</p>;
-    if (error) return <p className="text-coral text-sm">{error}</p>;
+    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!dashboard) return null;
 
     const { totalEarnings, totalDeliveries, todayEarnings, weekEarnings, monthEarnings, dailyBreakdown, recent } = dashboard;

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
 import { useAuth } from "./AuthContext";
 
@@ -23,10 +23,10 @@ export function WishlistProvider({ children }) {
 
     useEffect(refresh, [refresh]);
 
-    const isSaved = (productId) => ids.has(productId);
+    const isSaved = useCallback((productId) => ids.has(productId), [ids]);
 
     
-    const toggle = async (productId) => {
+    const toggle = useCallback(async (productId) => {
         const alreadySaved = ids.has(productId);
         setIds((prev) => {
             const next = new Set(prev);
@@ -43,10 +43,15 @@ export function WishlistProvider({ children }) {
         } catch {
             refresh();
         }
-    };
+    }, [ids, refresh]);
+
+    const value = useMemo(
+        () => ({ ids, loaded, isSaved, toggle, refresh }),
+        [ids, loaded, isSaved, toggle, refresh]
+    );
 
     return (
-        <WishlistContext.Provider value={{ ids, loaded, isSaved, toggle, refresh }}>
+        <WishlistContext.Provider value={value}>
             {children}
         </WishlistContext.Provider>
     );

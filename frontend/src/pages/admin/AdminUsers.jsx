@@ -32,7 +32,7 @@ export default function AdminUsers() {
     return (
         <div>
             <h1 className="font-display text-2xl mb-6">Users</h1>
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {users.map((u) => (

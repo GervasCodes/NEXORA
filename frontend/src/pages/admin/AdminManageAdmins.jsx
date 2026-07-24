@@ -74,7 +74,7 @@ export default function AdminManageAdmins() {
     return (
         <div>
             <h1 className="font-display text-2xl mb-6">Admins</h1>
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <form onSubmit={handleCreate} className="grid sm:grid-cols-2 gap-3 max-w-xl mb-10 border border-line rounded-lg p-5">
                 <h2 className="font-display text-lg sm:col-span-2 mb-1">Add a new admin</h2>

@@ -15,7 +15,10 @@ import AdminLayout from "./components/AdminLayout";
 
 
 const Home = lazy(() => import("./pages/Home"));
+const DepartmentPage = lazy(() => import("./pages/DepartmentPage"));
+const BrowseProducts = lazy(() => import("./pages/BrowseProducts"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const StorePage = lazy(() => import("./pages/StorePage"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -37,11 +40,16 @@ const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts"));
 const SellerProductForm = lazy(() => import("./pages/seller/SellerProductForm"));
+const SellerCollections = lazy(() => import("./pages/seller/SellerCollections"));
 const SellerOrders = lazy(() => import("./pages/seller/SellerOrders"));
+const SellerReviews = lazy(() => import("./pages/seller/SellerReviews"));
 const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"));
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
+const SellerSponsorship = lazy(() => import("./pages/seller/SellerSponsorship"));
+const SellerFeaturedStore = lazy(() => import("./pages/seller/SellerFeaturedStore"));
+const SellerDepartmentSponsorship = lazy(() => import("./pages/seller/SellerDepartmentSponsorship"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 
 const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"));
@@ -59,6 +67,9 @@ const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
+const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
+const AdminFeaturedStores = lazy(() => import("./pages/admin/AdminFeaturedStores"));
+const AdminDepartmentSponsorship = lazy(() => import("./pages/admin/AdminDepartmentSponsorship"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
@@ -81,7 +92,10 @@ export default function App() {
                 <Suspense fallback={<PageLoader />}>
                     <Routes>
                         <Route path="/" element={<Home />} />
+                        <Route path="/departments/:slug" element={<DepartmentPage />} />
+                        <Route path="/products" element={<BrowseProducts />} />
                         <Route path="/products/:slug" element={<ProductDetail />} />
+                        <Route path="/stores/:slug" element={<StorePage />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -108,11 +122,16 @@ export default function App() {
                             <Route path="products" element={<SellerProducts />} />
                             <Route path="products/new" element={<SellerProductForm />} />
                             <Route path="products/:id/edit" element={<SellerProductForm />} />
+                            <Route path="collections" element={<SellerCollections />} />
                             <Route path="orders" element={<SellerOrders />} />
+                            <Route path="reviews" element={<SellerReviews />} />
                             <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
                             <Route path="wallet" element={<SellerWallet />} />
+                            <Route path="sponsorship" element={<SellerSponsorship />} />
+                            <Route path="featured-store" element={<SellerFeaturedStore />} />
+                            <Route path="department-sponsorship" element={<SellerDepartmentSponsorship />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                         </Route>
 
@@ -134,6 +153,9 @@ export default function App() {
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
+                            <Route path="sponsorship" element={<AdminSponsorship />} />
+                            <Route path="featured-stores" element={<AdminFeaturedStores />} />
+                            <Route path="department-sponsorship" element={<AdminDepartmentSponsorship />} />
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />

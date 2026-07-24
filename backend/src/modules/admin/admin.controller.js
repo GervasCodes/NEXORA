@@ -102,6 +102,28 @@ exports.activateProduct = async (req, res) => {
     }
 };
 
+exports.sponsorProduct = async (req, res) => {
+    try {
+        await adminService.setProductSponsored(req.params.id, true);
+
+        return res.json({ success: true, message: "Product sponsored" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.unsponsorProduct = async (req, res) => {
+    try {
+        await adminService.setProductSponsored(req.params.id, false);
+
+        return res.json({ success: true, message: "Product unsponsored" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.listOrders = async (req, res) => {
     try {
         const orders = await adminService.listAllOrders();
@@ -170,6 +192,39 @@ exports.updateSettings = async (req, res) => {
     }
 };
 
+exports.listSponsorshipCampaigns = async (req, res) => {
+    try {
+        const campaigns = await adminService.listSponsorshipCampaigns();
+
+        return res.json({ success: true, data: campaigns });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.listFeaturedStoreCampaigns = async (req, res) => {
+    try {
+        const campaigns = await adminService.listFeaturedStoreCampaigns();
+
+        return res.json({ success: true, data: campaigns });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.listDepartmentSponsorshipCampaigns = async (req, res) => {
+    try {
+        const campaigns = await adminService.listDepartmentSponsorshipCampaigns();
+
+        return res.json({ success: true, data: campaigns });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // --- Seller withdrawal requests ---
 
 exports.listWithdrawals = async (req, res) => {
@@ -210,6 +265,19 @@ exports.markWithdrawalPaid = async (req, res) => {
         const result = await adminService.markWithdrawalPaid(req.params.id, req.body.admin_note);
 
         return res.json({ success: true, message: "Withdrawal marked as paid", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// --- Escrow manual release (Phase 9D) ---
+
+exports.releaseOrderEscrow = async (req, res) => {
+    try {
+        const result = await adminService.releaseOrderEscrow(req.params.id);
+
+        return res.json({ success: true, message: "Held earnings released for this order", data: result });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

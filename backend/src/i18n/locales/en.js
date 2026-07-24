@@ -98,10 +98,27 @@ module.exports = {
 
         "wallet.credited.title": "Wallet credited",
         "wallet.credited.message": "Your wallet has been credited for order #{orderId}.",
+        "wallet.released.title": "Held earnings released",
+        "wallet.released.message": "Some of your held earnings have cleared the escrow hold period and are now available to withdraw.",
         "withdrawal.status.title": "Withdrawal {status}",
         "withdrawal.rejected.message": "Your withdrawal request of {amount} was rejected and refunded to your wallet.{note}",
         "withdrawal.status.message": "Your withdrawal request of {amount} is now \"{status}\".",
-        "withdrawal.note": " Note: {note}"
+        "withdrawal.note": " Note: {note}",
+
+        "sponsorship.started.title": "Sponsorship campaign started",
+        "sponsorship.started.message": "Your {days}-day sponsorship campaign for \"{productName}\" is now live ({amount} charged to your wallet).",
+        "sponsorship.expired.title": "Sponsorship campaign ended",
+        "sponsorship.expired.message": "Your sponsorship campaign for \"{productName}\" has ended. Start a new one any time from your seller dashboard.",
+
+        "featuredStore.started.title": "Featured store campaign started",
+        "featuredStore.started.message": "Your {days}-day featured placement in \"{categoryName}\" is now live ({amount} charged to your wallet).",
+        "featuredStore.expired.title": "Featured store campaign ended",
+        "featuredStore.expired.message": "Your featured store campaign in \"{categoryName}\" has ended. Start a new one any time from your seller dashboard.",
+
+        "departmentSponsorship.started.title": "Department sponsorship started",
+        "departmentSponsorship.started.message": "Your {days}-day sponsorship of \"{categoryName}\" on the homepage is now live ({amount} charged to your wallet).",
+        "departmentSponsorship.expired.title": "Department sponsorship ended",
+        "departmentSponsorship.expired.message": "Your sponsorship of \"{categoryName}\" has ended. Start a new one any time from your seller dashboard."
     },
 
     email: {

@@ -166,6 +166,111 @@ exports.removeDeliveryAgent = async (req, res) => {
     }
 };
 
+// --- Seller collections (Phase 7C) ---
+
+exports.getCollections = async (req, res) => {
+    try {
+        const collections = await sellerService.getCollections(req.user.id);
+
+        return res.json({
+            success: true,
+            data: collections
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.createCollection = async (req, res) => {
+    try {
+        const collection = await sellerService.createCollection(req.user.id, req.body.name);
+
+        return res.status(201).json({
+            success: true,
+            message: "Collection created",
+            data: collection
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.deleteCollection = async (req, res) => {
+    try {
+        await sellerService.deleteCollection(req.user.id, req.params.id);
+
+        return res.json({
+            success: true,
+            message: "Collection deleted"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.getCollectionProducts = async (req, res) => {
+    try {
+        const products = await sellerService.getCollectionProducts(req.user.id, req.params.id);
+
+        return res.json({
+            success: true,
+            data: products
+        });
+
+    } catch (error) {
+        return res.status(404).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.addProductToCollection = async (req, res) => {
+    try {
+        await sellerService.addProductToCollection(req.user.id, req.params.id, req.body.product_id);
+
+        return res.status(201).json({
+            success: true,
+            message: "Product added to collection"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.removeProductFromCollection = async (req, res) => {
+    try {
+        await sellerService.removeProductFromCollection(req.user.id, req.params.id, req.params.productId);
+
+        return res.json({
+            success: true,
+            message: "Product removed from collection"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 // --- Verification fee (paid "Verified Seller" badge) ---
 
 exports.payVerificationFee = async (req, res) => {

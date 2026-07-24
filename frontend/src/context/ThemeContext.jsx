@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 
 const ThemeContext = createContext(null);
 
@@ -51,8 +51,14 @@ export function ThemeProvider({ children }) {
         setTheme(profileTheme);
     }, [setTheme]);
 
+    const isDark = resolveIsDark(theme);
+    const value = useMemo(
+        () => ({ theme, setTheme, syncFromProfile, isDark }),
+        [theme, setTheme, syncFromProfile, isDark]
+    );
+
     return (
-        <ThemeContext.Provider value={{ theme, setTheme, syncFromProfile, isDark: resolveIsDark(theme) }}>
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );

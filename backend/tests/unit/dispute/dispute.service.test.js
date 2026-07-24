@@ -25,6 +25,13 @@ const fullDisputeStubs = () => {
 beforeEach(() => {
     notificationService.notify.mockResolvedValue(undefined);
     fullDisputeStubs();
+    // Escrow (Phase 9C): reverseSellerEarnings reverses held_balance
+    // first, then balance. Default to "nothing held" so existing
+    // refund-reversal tests below (written before escrow existed) keep
+    // exercising the pre-9C "reverse it all from balance" path
+    // unchanged; tests that specifically exercise the held-balance split
+    // override this.
+    walletRepository.getWalletForUpdate.mockResolvedValue({ held_balance: 0 });
 });
 
 describe("dispute.service.createDispute", () => {
@@ -365,6 +372,50 @@ describe("dispute.service.resolveDispute", () => {
         );
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({ userId: 10, messageKey: "notifications.dispute.resolved.sellerMessage" })
+        );
+    });
+
+    it("reverses from held_balance first when the order's earnings are still fully held (escrowed, not yet released)", async () => {
+        disputeRepository.findById.mockResolvedValue({
+            id: 1, status: "open", buyer_id: 5, seller_id: 10, dispute_number: "DSP-1", order_id: 1
+        });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, total_amount: "15000.00" });
+        walletRepository.getWalletForUpdate.mockResolvedValue({ held_balance: 20000 });
+        walletRepository.incrementHeldBalance.mockResolvedValue(5000);
+
+        await disputeService.resolveDispute(1, 99, { resolution: "refund_full", resolution_note: "confirmed damaged" });
+
+        expect(walletRepository.incrementHeldBalance).toHaveBeenCalledWith(10, -15000, connection);
+        expect(walletRepository.incrementBalance).not.toHaveBeenCalled();
+        expect(walletRepository.insertTransaction).toHaveBeenCalledWith(
+            expect.objectContaining({ sellerId: 10, type: "debit", amount: 15000, referenceType: "dispute" }),
+            connection
+        );
+    });
+
+    it("splits the reversal across held and available balance when held funds only cover part of the refund", async () => {
+        disputeRepository.findById.mockResolvedValue({
+            id: 1, status: "open", buyer_id: 5, seller_id: 10, dispute_number: "DSP-1", order_id: 1
+        });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, total_amount: "15000.00" });
+        // Only 4000 still held (e.g. some of this order's items already
+        // released); the remaining 11000 of the refund has to come out
+        // of the seller's already-withdrawable balance.
+        walletRepository.getWalletForUpdate.mockResolvedValue({ held_balance: 4000 });
+        walletRepository.incrementHeldBalance.mockResolvedValue(0);
+        walletRepository.incrementBalance.mockResolvedValue(-1000);
+
+        await disputeService.resolveDispute(1, 99, { resolution: "refund_full", resolution_note: "confirmed damaged" });
+
+        expect(walletRepository.incrementHeldBalance).toHaveBeenCalledWith(10, -4000, connection);
+        expect(walletRepository.incrementBalance).toHaveBeenCalledWith(10, -11000, connection);
+        expect(walletRepository.insertTransaction).toHaveBeenCalledWith(
+            expect.objectContaining({ sellerId: 10, type: "debit", amount: 4000, referenceType: "dispute" }),
+            connection
+        );
+        expect(walletRepository.insertTransaction).toHaveBeenCalledWith(
+            expect.objectContaining({ sellerId: 10, type: "debit", amount: 11000, referenceType: "dispute" }),
+            connection
         );
     });
 

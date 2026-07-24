@@ -189,6 +189,15 @@ describe("admin.service settings & withdrawal passthroughs", () => {
         await adminService.markWithdrawalPaid(1, "paid via bank transfer");
         expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "paid", "paid via bank transfer");
     });
+
+    it("releaseOrderEscrow (Phase 9D) delegates to walletService.releaseOrderEarnings", async () => {
+        walletService.releaseOrderEarnings.mockResolvedValue({ released: 1, closedByDispute: 0, frozen: 0, amountReleased: 900 });
+
+        await expect(adminService.releaseOrderEscrow(42)).resolves.toEqual({
+            released: 1, closedByDispute: 0, frozen: 0, amountReleased: 900
+        });
+        expect(walletService.releaseOrderEarnings).toHaveBeenCalledWith(42);
+    });
 });
 
 describe("admin.service admin management", () => {

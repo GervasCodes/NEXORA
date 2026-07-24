@@ -340,6 +340,22 @@ exports.rejectDispute = async (disputeId, adminId, { resolution_note }) => {
 
 // ---- Internal helpers -------------------------------------------------------
 
+// A refund reverses money the seller was already credited for this
+// order's items. As of Phase 9C, that credit could be sitting in either
+// wallet column depending on how far along it is: still `held_balance`
+// (order paid by an escrowed method, not yet released - see
+// wallet.service.js#creditSellersForOrder) or already-withdrawable
+// `balance` (Cash on Delivery, which was never held, or an escrowed
+// order whose hold period already elapsed). Reverse from `held_balance`
+// first, spilling any remainder into `balance` - this is a correct,
+// order-agnostic strategy because it reverses money from wherever it
+// currently sits in the seller's wallet, not from a specific order's
+// entry. `balance` can still go negative if the spillover exceeds it
+// (same as before this phase - no floor check here, unlike
+// requestWithdrawal's explicit balance check), but reversing held funds
+// first means that only happens once a seller's *already-released*
+// earnings are outrun, which is a meaningfully smaller window than
+// today's "immediately withdrawable the moment payment clears."
 async function reverseSellerEarnings(sellerId, amount, disputeId) {
     const connection = await db.getConnection();
 
@@ -347,19 +363,38 @@ async function reverseSellerEarnings(sellerId, amount, disputeId) {
         await connection.beginTransaction();
 
         await walletRepository.ensureWallet(sellerId, connection);
-        await walletRepository.getWalletForUpdate(sellerId, connection);
+        const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
 
-        const balanceAfter = await walletRepository.incrementBalance(sellerId, -amount, connection);
+        const heldReversal = Math.min(amount, Math.max(Number(wallet.held_balance), 0));
+        const balanceReversal = Number((amount - heldReversal).toFixed(2));
 
-        await walletRepository.insertTransaction({
-            sellerId,
-            type: "debit",
-            amount,
-            balanceAfter,
-            referenceType: "dispute",
-            referenceId: disputeId,
-            description: `Refund issued for dispute #${disputeId} - earnings reversed`
-        }, connection);
+        if (heldReversal > 0) {
+            const heldAfter = await walletRepository.incrementHeldBalance(sellerId, -heldReversal, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId,
+                type: "debit",
+                amount: heldReversal,
+                balanceAfter: heldAfter,
+                referenceType: "dispute",
+                referenceId: disputeId,
+                description: `Refund issued for dispute #${disputeId} - held earnings reversed`
+            }, connection);
+        }
+
+        if (balanceReversal > 0) {
+            const balanceAfter = await walletRepository.incrementBalance(sellerId, -balanceReversal, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId,
+                type: "debit",
+                amount: balanceReversal,
+                balanceAfter,
+                referenceType: "dispute",
+                referenceId: disputeId,
+                description: `Refund issued for dispute #${disputeId} - earnings reversed`
+            }, connection);
+        }
 
         await connection.commit();
     } catch (error) {

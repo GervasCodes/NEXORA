@@ -65,7 +65,7 @@ export default function SellerSetup() {
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                 </div>
 
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
                     className="w-full bg-mango text-abyss py-2.5 rounded-md font-semibold hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">

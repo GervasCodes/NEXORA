@@ -36,7 +36,7 @@ export default function DeliveryAvailable() {
     return (
         <div>
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {orders.length === 0 && (
                 <p className="text-ash text-sm">No orders ready for pickup right now. Check back soon.</p>

@@ -6,6 +6,8 @@ export default function IncomingOfferModal() {
     const [offer, setOffer] = useState(null);
     const [msLeft, setMsLeft] = useState(0);
     const tickRef = useRef(null);
+    const acceptRef = useRef(null);
+    const lastFocusedRef = useRef(null);
 
     useEffect(() => {
         if (!socket) return;
@@ -40,18 +42,47 @@ export default function IncomingOfferModal() {
         return () => clearInterval(tickRef.current);
     }, [offer]);
 
-    if (!offer) return null;
-
     const respond = (accept) => {
         socket.emit("delivery:offer:respond", { offerId: offer.offerId, accept });
         setOffer(null);
     };
 
+    // Rider-facing offers pop up over whatever the rider is doing (map,
+    // list, another form) and are time-boxed, so keyboard/screen-reader
+    // users need the same affordances a sighted mouse user gets for free:
+    // focus lands on the primary action, Escape mirrors clicking Decline,
+    // and focus returns to wherever it was once the dialog closes instead
+    // of silently dropping to <body>.
+    useEffect(() => {
+        if (!offer) return;
+
+        lastFocusedRef.current = document.activeElement;
+        acceptRef.current?.focus();
+
+        const handleKeyDown = (e) => {
+            if (e.key === "Escape") respond(false);
+        };
+        document.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.removeEventListener("keydown", handleKeyDown);
+            lastFocusedRef.current?.focus?.();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [offer]);
+
+    if (!offer) return null;
+
     return (
         <div className="fixed inset-0 z-50 bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4">
-            <div className="glass-strong rounded-xl max-w-sm w-full p-6">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="incoming-offer-title"
+                className="glass-strong rounded-xl max-w-sm w-full p-6"
+            >
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">New delivery nearby</p>
-                <p className="font-display text-xl mb-1">{offer.orderNumber}</p>
+                <p id="incoming-offer-title" className="font-display text-xl mb-1">{offer.orderNumber}</p>
                 <p className="text-sm text-ink/80 mb-1">
                     {offer.shippingAddress}, {offer.shippingCity}
                 </p>
@@ -66,11 +97,11 @@ export default function IncomingOfferModal() {
 
                 <div className="flex gap-3">
                     <button onClick={() => respond(false)}
-                        className="flex-1 border border-line py-2.5 rounded-md text-sm font-medium hover:border-coral hover:text-coral transition-colors">
+                        className="flex-1 border border-line py-2.5 rounded-md text-sm font-medium hover:border-coral hover:text-coral transition-colors focus-ring">
                         Decline
                     </button>
-                    <button onClick={() => respond(true)}
-                        className="flex-1 bg-mango text-abyss py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                    <button ref={acceptRef} onClick={() => respond(true)}
+                        className="flex-1 bg-mango text-abyss py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring">
                         Accept ({Math.ceil(msLeft / 1000)}s)
                     </button>
                 </div>

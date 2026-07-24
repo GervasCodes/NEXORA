@@ -350,7 +350,7 @@ export default function Account() {
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
 
-                        {status.delete && <p className="text-coral text-sm">{status.delete.message}</p>}
+                        {status.delete && <p role="alert" className="text-coral text-sm">{status.delete.message}</p>}
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "delete"}

@@ -13,6 +13,7 @@ const sellerRoutes = require("./modules/seller/seller.routes");
 const productRoutes = require("./modules/product/product.routes");
 const categoryRoutes = require("./modules/category/category.routes");
 const storeTypeRoutes = require("./modules/storeType/storeType.routes");
+const storeRoutes = require("./modules/store/store.routes");
 const cartRoutes = require("./modules/cart/cart.routes");
 const orderRoutes = require("./modules/order/order.routes");
 const paymentRoutes = require("./modules/payment/payment.routes");
@@ -28,6 +29,9 @@ const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
 const wishlistRoutes = require("./modules/wishlist/wishlist.routes");
 const disputeRoutes = require("./modules/dispute/dispute.routes");
+const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
+const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
+const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -197,10 +201,29 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);
+// Must be mounted BEFORE /api/v1/seller: it is a more specific prefix
+// of that path, and Express falls through an unmatched router to the
+// next app.use() rather than stopping - same reasoning (and same fix)
+// as /api/v1/admin/account-verifications vs /api/v1/admin further
+// below. Every route in this module already requires authorize("seller")
+// + requireApprovedSeller itself (sponsorship.routes.js), so nothing
+// here relies on sellerRoutes running first.
+app.use("/api/v1/seller/sponsorship", sponsorshipRoutes);
+// Same reasoning as the sponsorship mount immediately above: a more
+// specific prefix of /api/v1/seller must be mounted first. Every route
+// in this module already requires authorize("seller") +
+// requireApprovedSeller itself (featuredStore.routes.js).
+app.use("/api/v1/seller/featured-store", featuredStoreRoutes);
+// Same reasoning as the two mounts immediately above: a more specific
+// prefix of /api/v1/seller must be mounted first. Every route in this
+// module already requires authorize("seller") + requireApprovedSeller
+// itself (departmentSponsorship.routes.js).
+app.use("/api/v1/seller/department-sponsorship", departmentSponsorshipRoutes);
 app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/store-types", storeTypeRoutes);
+app.use("/api/v1/stores", storeRoutes);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payments", paymentRoutes);

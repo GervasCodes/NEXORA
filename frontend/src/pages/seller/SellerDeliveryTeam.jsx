@@ -74,7 +74,7 @@ export default function SellerDeliveryTeam() {
                 </button>
             </form>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {roster.length === 0 ? (
                 <p className="text-ash text-sm">No agents added yet.</p>

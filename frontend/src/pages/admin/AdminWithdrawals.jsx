@@ -46,7 +46,7 @@ export default function AdminWithdrawals() {
             <h1 className="font-display text-2xl mb-1">Withdrawal requests</h1>
             <p className="text-ash text-sm mb-8">Seller payout requests from their wallet balance.</p>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="space-y-4">
                 {withdrawals.map((w) => (

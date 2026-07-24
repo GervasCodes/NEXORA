@@ -80,7 +80,7 @@ export default function DeliveryAgentRating({ orderId, existingRating, onRated }
                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring mb-3 bg-paper"
             />
 
-            {error && <p className="text-coral text-sm mb-3">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
 
             <button
                 type="submit"

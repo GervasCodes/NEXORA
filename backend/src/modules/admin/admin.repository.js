@@ -50,7 +50,7 @@ exports.setSellerVerified = async (userId, isVerified) => {
 // --- Products ---
 exports.findAllProducts = async () => {
     const [rows] = await db.query(
-        `SELECT p.id, p.name, p.slug, p.price, p.stock, p.is_active, p.created_at,
+        `SELECT p.id, p.name, p.slug, p.price, p.stock, p.is_active, p.is_sponsored, p.created_at,
                 sp.store_name
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
@@ -67,6 +67,13 @@ exports.findProductById = async (productId) => {
 
 exports.setProductActive = async (productId, isActive) => {
     await db.query("UPDATE products SET is_active = ? WHERE id = ?", [isActive, productId]);
+};
+
+// Phase 2C's "Sponsored products" department section. Just the display
+// placement flag - the campaign/budget/payment system behind it is a
+// separate, later piece of work (Phase 8A).
+exports.setProductSponsored = async (productId, isSponsored) => {
+    await db.query("UPDATE products SET is_sponsored = ? WHERE id = ?", [isSponsored, productId]);
 };
 
 // --- Orders (platform-wide view) ---

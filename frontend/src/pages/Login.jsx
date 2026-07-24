@@ -82,7 +82,7 @@ export default function Login() {
                         />
                     </div>
 
-                    {error && <p className="text-coral text-sm">{error}</p>}
+                    {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
 
                     <button
@@ -140,7 +140,7 @@ export default function Login() {
                     />
                 </div>
 
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                 <button
                     type="submit"

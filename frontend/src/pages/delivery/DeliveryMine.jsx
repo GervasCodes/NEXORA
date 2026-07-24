@@ -48,7 +48,7 @@ export default function DeliveryMine() {
 
     return (
         <div>
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="space-y-4">
                 {deliveries.map((d) => (

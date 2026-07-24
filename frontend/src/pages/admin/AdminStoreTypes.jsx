@@ -90,7 +90,7 @@ export default function AdminStoreTypes() {
                 )}
             </form>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {storeTypes.map((t) => (

@@ -161,7 +161,7 @@ export default function Checkout() {
                 </div>
 
                 {error && (
-                    <p key={errorTick} className="text-coral text-sm animate-slide-down">
+                    <p key={errorTick} role="alert" className="text-coral text-sm animate-slide-down">
                         {error}
                     </p>
                 )}

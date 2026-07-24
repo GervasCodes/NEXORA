@@ -59,7 +59,7 @@ export default function SellerAnalytics() {
         );
     }
 
-    if (error) return <p className="text-coral text-sm">{error}</p>;
+    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!analytics) return null;
 
     const { totals, commissionRate, statusBreakdown, dailySales, topProducts, repeatCustomers } = analytics;

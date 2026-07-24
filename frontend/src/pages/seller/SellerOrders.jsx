@@ -52,7 +52,7 @@ export default function SellerOrders() {
         <div>
             <h1 className="font-display text-2xl mb-6">Orders</h1>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {orders.length === 0 && <p className="text-ash text-sm">No orders yet.</p>}
 

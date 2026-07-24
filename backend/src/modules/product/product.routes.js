@@ -5,12 +5,20 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
 const upload = require("../../middleware/upload.middleware");
+const uploadVideo = require("../../middleware/uploadVideo.middleware");
+const uploadAudio = require("../../middleware/uploadAudio.middleware");
 const { createProductValidation } = require("./product.validator");
 
 const productController = require("./product.controller");
 
 // Public
 router.get("/", productController.listProducts);
+
+// Must come before "/:slug" - otherwise "filters" would be matched as a
+// product slug instead.
+router.get("/filters/sellers", productController.listFilterSellers);
+router.get("/filters/regions", productController.listFilterRegions);
+
 router.get("/:slug", productController.getProductBySlug);
 
 router.post(
@@ -29,6 +37,24 @@ router.post(
     requireApprovedSeller,
     upload.single("image"),
     productController.uploadProductImage
+);
+
+router.post(
+    "/:id/videos",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    uploadVideo.single("video"),
+    productController.uploadProductVideo
+);
+
+router.post(
+    "/:id/audio",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    uploadAudio.single("audio"),
+    productController.uploadProductAudio
 );
 
 router.get(

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "./AuthContext";
 
@@ -65,10 +65,13 @@ export function CartProvider({ children }) {
 
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
+    const value = useMemo(
+        () => ({ items, total, itemCount, loading, addToCart, updateQuantity, removeFromCart, refresh }),
+        [items, total, itemCount, loading, addToCart, updateQuantity, removeFromCart, refresh]
+    );
+
     return (
-        <CartContext.Provider
-            value={{ items, total, itemCount, loading, addToCart, updateQuantity, removeFromCart, refresh }}
-        >
+        <CartContext.Provider value={value}>
             {children}
         </CartContext.Provider>
     );

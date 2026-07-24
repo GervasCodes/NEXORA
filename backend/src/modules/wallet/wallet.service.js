@@ -1,5 +1,7 @@
 const db = require("../../config/db");
 const walletRepository = require("./wallet.repository");
+const orderRepository = require("../order/order.repository");
+const disputeRepository = require("../dispute/dispute.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 const fraudService = require("../fraud/fraud.service");
@@ -10,6 +12,21 @@ const fraudService = require("../fraud/fraud.service");
 // seller's wallet with their net amount. Idempotent: only touches
 // order_items rows that haven't been credited yet, so it's safe to call
 // more than once for the same order.
+//
+// Escrow (Phase 9C): which wallet column gets credited depends on the
+// order's payment method. For mobile money / Snippe / PayPal, the
+// platform actually holds the buyer's money from the moment the provider
+// webhook confirms payment - so the seller's earnings go into
+// `held_balance` (not withdrawable) and stay there until Phase 9D's
+// release job (delivered + escrow_hold_days elapsed, no open dispute)
+// moves them into `balance`. Cash on Delivery is different: the seller
+// already has the cash in hand by the time `confirmCashOnDelivery` can
+// even run (it requires the order to already be `delivered`), so there
+// is no platform-held money to hold back - COD earnings go straight to
+// `balance`, exactly as every payment method did before this phase, and
+// the corresponding order_items rows are marked `wallet_released = TRUE`
+// immediately so Phase 9D's release job never picks them up. See
+// docs/ESCROW_ANALYSIS.md section 3.2 for the reasoning.
 exports.creditSellersForOrder = async (orderId) => {
     const connection = await db.getConnection();
 
@@ -23,6 +40,9 @@ exports.creditSellersForOrder = async (orderId) => {
             return;
         }
 
+        const order = await orderRepository.findOrderById(orderId);
+        const isEscrowed = order && order.payment_method !== "cash_on_delivery";
+
         const commissionRate = await settingsService.getCommissionRate();
 
         // Group this order's uncredited items by seller so a multi-vendor
@@ -33,7 +53,9 @@ exports.creditSellersForOrder = async (orderId) => {
             const commissionAmount = Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
             const netAmount = Number((sellerSubtotal - commissionAmount).toFixed(2));
 
-            await walletRepository.markItemCredited(item.id, commissionRate, commissionAmount, netAmount, connection);
+            await walletRepository.markItemCredited(
+                item.id, commissionRate, commissionAmount, netAmount, !isEscrowed, connection
+            );
 
             const existing = bySeller.get(item.seller_id) || 0;
             bySeller.set(item.seller_id, existing + netAmount);
@@ -43,17 +65,31 @@ exports.creditSellersForOrder = async (orderId) => {
             await walletRepository.ensureWallet(sellerId, connection);
             await walletRepository.getWalletForUpdate(sellerId, connection);
 
-            const balanceAfter = await walletRepository.incrementBalance(sellerId, netAmount, connection);
+            if (isEscrowed) {
+                const heldAfter = await walletRepository.incrementHeldBalance(sellerId, netAmount, connection);
 
-            await walletRepository.insertTransaction({
-                sellerId,
-                type: "credit",
-                amount: netAmount,
-                balanceAfter,
-                referenceType: "order",
-                referenceId: orderId,
-                description: `Sale earnings for order #${orderId} (${commissionRate}% platform commission deducted)`
-            }, connection);
+                await walletRepository.insertTransaction({
+                    sellerId,
+                    type: "credit",
+                    amount: netAmount,
+                    balanceAfter: heldAfter,
+                    referenceType: "order",
+                    referenceId: orderId,
+                    description: `Sale earnings for order #${orderId} held pending release (${commissionRate}% platform commission deducted)`
+                }, connection);
+            } else {
+                const balanceAfter = await walletRepository.incrementBalance(sellerId, netAmount, connection);
+
+                await walletRepository.insertTransaction({
+                    sellerId,
+                    type: "credit",
+                    amount: netAmount,
+                    balanceAfter,
+                    referenceType: "order",
+                    referenceId: orderId,
+                    description: `Sale earnings for order #${orderId} (${commissionRate}% platform commission deducted)`
+                }, connection);
+            }
         }
 
         await connection.commit();
@@ -86,8 +122,147 @@ exports.getWalletSummary = async (sellerId) => {
 
     return {
         balance: Number(wallet.balance),
+        heldBalance: Number(wallet.held_balance),
         transactions
     };
+};
+
+// ---- Escrow release (Phase 9D) ---------------------------------------------
+
+const OPEN_DISPUTE_STATUSES = ["open", "under_review"];
+const REFUND_RESOLUTIONS = ["refund_full", "refund_partial"];
+
+// Shared by the release job (scans every eligible item platform-wide)
+// and the admin manual early-release action (one order's items) - see
+// docs/ESCROW_ANALYSIS.md section 3.4. Items are grouped by order so
+// each order's disputes are fetched once, then the same rule is applied
+// to every item, closing the precision gap flagged in the Phase 9C
+// README (an item's held earnings may have already been reversed by a
+// dispute refund, which is pooled against the seller's wallet rather
+// than tied to a specific order_item):
+//
+//  - an open/under_review dispute against the item, or against the whole
+//    order (order_item_id is null for a whole-order dispute), freezes
+//    it - skip, it's picked up again on a later run once the dispute
+//    closes.
+//  - a dispute already resolved with a refund has already reversed this
+//    item's earnings out of held_balance via
+//    dispute.service.js#reverseSellerEarnings - there's nothing left to
+//    release, so just close the item out (wallet_released = TRUE) with
+//    no wallet movement, so the release job stops rescanning it.
+//  - anything else (no dispute at all, or one resolved without a
+//    refund - rejected, or resolved with replacement/compensation/
+//    no_action) is a normal release: move the item's net amount from
+//    held_balance to balance and mark it released.
+const releaseItems = async (items) => {
+    const summary = { released: 0, closedByDispute: 0, frozen: 0, amountReleased: 0 };
+    if (items.length === 0) {
+        return summary;
+    }
+
+    const disputesByOrder = new Map();
+    const getOrderDisputes = async (orderId) => {
+        if (!disputesByOrder.has(orderId)) {
+            disputesByOrder.set(orderId, await disputeRepository.findByOrderId(orderId));
+        }
+        return disputesByOrder.get(orderId);
+    };
+
+    const releasedSellerIds = new Set();
+
+    for (const item of items) {
+        const disputes = await getOrderDisputes(item.order_id);
+        const relevant = disputes.filter(
+            (d) => d.order_item_id === item.id || d.order_item_id === null
+        );
+
+        if (relevant.some((d) => OPEN_DISPUTE_STATUSES.includes(d.status))) {
+            summary.frozen += 1;
+            continue;
+        }
+
+        const closedByRefund = relevant.some(
+            (d) => d.status === "resolved" && REFUND_RESOLUTIONS.includes(d.resolution)
+        );
+
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            if (closedByRefund) {
+                await walletRepository.markItemReleased(item.id, connection);
+                await connection.commit();
+                summary.closedByDispute += 1;
+                continue;
+            }
+
+            await walletRepository.ensureWallet(item.seller_id, connection);
+            await walletRepository.getWalletForUpdate(item.seller_id, connection);
+
+            const netAmount = Number(item.seller_net_amount);
+            await walletRepository.incrementHeldBalance(item.seller_id, -netAmount, connection);
+            const balanceAfter = await walletRepository.incrementBalance(item.seller_id, netAmount, connection);
+            await walletRepository.markItemReleased(item.id, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId: item.seller_id,
+                type: "credit",
+                amount: netAmount,
+                balanceAfter,
+                referenceType: "escrow_release",
+                referenceId: item.order_id,
+                description: `Held earnings released for order #${item.order_id}`
+            }, connection);
+
+            await connection.commit();
+
+            summary.released += 1;
+            summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
+            releasedSellerIds.add(item.seller_id);
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    }
+
+    for (const sellerId of releasedSellerIds) {
+        notificationService.notify({
+            userId: sellerId,
+            type: "wallet_release",
+            titleKey: "notifications.wallet.released.title",
+            messageKey: "notifications.wallet.released.message",
+            withEmail: false
+        }).catch((err) => console.error("wallet release notify error:", err));
+    }
+
+    return summary;
+};
+
+// Called by jobs/escrowRelease.job.js. Scans every held, credited,
+// unreleased item whose order is delivered and past
+// settings.escrow_hold_days, and releases whatever the dispute rule
+// above allows.
+exports.releaseEligibleEarnings = async () => {
+    const holdDays = await settingsService.getEscrowHoldDays();
+    const items = await walletRepository.findReleasableItems(holdDays);
+    return releaseItems(items);
+};
+
+// Admin manual early release for one order (docs/ESCROW_ANALYSIS.md
+// section 3.4 - e.g. a buyer has confirmed receipt, or an admin wants to
+// close out a stale/edge-case order). Bypasses the delivered/hold-days
+// timing gate entirely, but still respects the dispute-freeze rule above
+// - an admin can't use this to release funds out from under an open
+// dispute.
+exports.releaseOrderEarnings = async (orderId) => {
+    const items = await walletRepository.findReleasableItemsForOrder(orderId);
+    if (items.length === 0) {
+        throw new Error("No held earnings are eligible for release on this order");
+    }
+    return releaseItems(items);
 };
 
 exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails) => {

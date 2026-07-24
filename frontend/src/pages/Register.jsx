@@ -243,7 +243,7 @@ export default function Register() {
                         </div>
                     )}
 
-                    {error && <p className="text-coral text-sm">{error}</p>}
+                    {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                     <div className="flex gap-3 pt-2">
                         <button
@@ -363,7 +363,7 @@ export default function Register() {
                     </label>
                 </div>
 
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
                     className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">

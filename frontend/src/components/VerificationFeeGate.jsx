@@ -144,7 +144,7 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
                 A one-time fee of {formatMoney(requiredFee)} unlocks Analytics and the paid Verified Seller badge.
             </p>
 
-            {error && <p className="text-coral text-sm mb-3">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
             {message && <p className="text-teal text-sm mb-3">{message}</p>}
 
             {awaitingConfirmation && (

@@ -15,7 +15,7 @@ export default function DeliveryRatings() {
     }, []);
 
     if (loading) return <p className="text-ash">Loading your ratings…</p>;
-    if (error) return <p className="text-coral text-sm">{error}</p>;
+    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!summary) return null;
 
     const { average_rating, rating_count, ratings } = summary;

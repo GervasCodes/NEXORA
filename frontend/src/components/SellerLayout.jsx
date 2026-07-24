@@ -8,8 +8,13 @@ const tabs = [
     { to: "/seller", label: "Overview", end: true },
     { to: "/seller/analytics", label: "Analytics" },
     { to: "/seller/wallet", label: "Wallet" },
+    { to: "/seller/sponsorship", label: "Sponsorship" },
+    { to: "/seller/featured-store", label: "Featured stores" },
+    { to: "/seller/department-sponsorship", label: "Department sponsorship" },
     { to: "/seller/products", label: "Products" },
+    { to: "/seller/collections", label: "Collections" },
     { to: "/seller/orders", label: "Orders" },
+    { to: "/seller/reviews", label: "Reviews" },
     { to: "/seller/delivery-team", label: "Delivery team" },
     { to: "/seller/disputes", label: "Disputes" },
     { to: "/seller/store", label: "Store settings" }

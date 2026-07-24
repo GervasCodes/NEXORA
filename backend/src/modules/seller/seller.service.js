@@ -2,6 +2,7 @@ const sellerRepository = require("./seller.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 const authRepository = require("../auth/auth.repository");
+const productRepository = require("../product/product.repository");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
@@ -125,6 +126,71 @@ exports.removeAgentFromRoster = async (sellerId, agentId) => {
 
     if (!affectedRows) {
         throw new Error("That agent isn't in your roster");
+    }
+};
+
+// --- Seller collections (Phase 7C) ---
+
+exports.getCollections = async (sellerId) => {
+    return sellerRepository.findCollections(sellerId);
+};
+
+exports.createCollection = async (sellerId, name) => {
+    const id = await sellerRepository.createCollection(sellerId, name);
+    return { id, name };
+};
+
+exports.deleteCollection = async (sellerId, collectionId) => {
+    const affectedRows = await sellerRepository.deleteCollection(sellerId, collectionId);
+
+    if (!affectedRows) {
+        throw new Error("Collection not found");
+    }
+};
+
+exports.getCollectionProducts = async (sellerId, collectionId) => {
+    const collection = await sellerRepository.findCollectionById(sellerId, collectionId);
+
+    if (!collection) {
+        throw new Error("Collection not found");
+    }
+
+    return sellerRepository.findProductsInCollection(collectionId);
+};
+
+exports.addProductToCollection = async (sellerId, collectionId, productId) => {
+    const collection = await sellerRepository.findCollectionById(sellerId, collectionId);
+
+    if (!collection) {
+        throw new Error("Collection not found");
+    }
+
+    const product = await productRepository.findById(productId);
+
+    if (!product || product.seller_id !== sellerId) {
+        throw new Error("Product not found in your catalog");
+    }
+
+    const alreadyIn = await sellerRepository.isProductInCollection(collectionId, productId);
+
+    if (alreadyIn) {
+        throw new Error("That product is already in this collection");
+    }
+
+    await sellerRepository.addProductToCollection(collectionId, productId);
+};
+
+exports.removeProductFromCollection = async (sellerId, collectionId, productId) => {
+    const collection = await sellerRepository.findCollectionById(sellerId, collectionId);
+
+    if (!collection) {
+        throw new Error("Collection not found");
+    }
+
+    const affectedRows = await sellerRepository.removeProductFromCollection(collectionId, productId);
+
+    if (!affectedRows) {
+        throw new Error("That product isn't in this collection");
     }
 };
 

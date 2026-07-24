@@ -12,6 +12,8 @@ const {
     createSellerValidation,
     updateSellerValidation,
     addDeliveryAgentValidation,
+    createCollectionValidation,
+    addCollectionProductValidation,
     payVerificationFeeValidation
 } = require("./seller.validator");
 
@@ -85,6 +87,58 @@ router.delete(
     authMiddleware,
     authorize("seller"),
     sellerController.removeDeliveryAgent
+);
+
+// --- Seller collections (Phase 7C) ---
+// Same auth shape as the delivery-agents routes above - authenticated,
+// approved-seller-not-required (a seller can organize their own catalog
+// into shelves before or after approval, same as managing products
+// themselves doesn't gate on requireApprovedSeller for reads).
+
+router.get(
+    "/collections",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.getCollections
+);
+
+router.post(
+    "/collections",
+    authMiddleware,
+    authorize("seller"),
+    createCollectionValidation,
+    validationMiddleware,
+    sellerController.createCollection
+);
+
+router.delete(
+    "/collections/:id",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.deleteCollection
+);
+
+router.get(
+    "/collections/:id/products",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.getCollectionProducts
+);
+
+router.post(
+    "/collections/:id/products",
+    authMiddleware,
+    authorize("seller"),
+    addCollectionProductValidation,
+    validationMiddleware,
+    sellerController.addProductToCollection
+);
+
+router.delete(
+    "/collections/:id/products/:productId",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.removeProductFromCollection
 );
 
 // Account approval (requireApprovedSeller) is enforced here; the paid

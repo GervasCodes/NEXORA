@@ -15,7 +15,11 @@ export default function SellerProductForm() {
     const [categories, setCategories] = useState([]);
     const [form, setForm] = useState(emptyForm);
     const [images, setImages] = useState([]);
+    const [videos, setVideos] = useState([]);
+    const [audio, setAudio] = useState([]);
     const [uploading, setUploading] = useState(false);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
+    const [uploadingAudio, setUploadingAudio] = useState(false);
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [savedId, setSavedId] = useState(isEdit ? id : null);
@@ -39,6 +43,8 @@ export default function SellerProductForm() {
                 category_id: p.category_id || ""
             });
             setImages(p.images || []);
+            setVideos(p.videos || []);
+            setAudio(p.audio || []);
         });
     }, [id, isEdit]);
 
@@ -79,6 +85,53 @@ export default function SellerProductForm() {
             setError(extractErrorMessage(err));
         } finally {
             setUploading(false);
+            e.target.value = "";
+        }
+    };
+
+    // Kept in sync with the backend's MAX_VIDEOS_PER_PRODUCT
+    // (product.service.js) so the "+ Add video" control disappears
+    // instead of letting a seller pick a file only to have it rejected.
+    const MAX_VIDEOS = 3;
+
+    const handleVideoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !savedId) return;
+
+        setUploadingVideo(true);
+        setError("");
+        try {
+            const body = new FormData();
+            body.append("video", file);
+            const { data } = await api.post(`/products/${savedId}/videos`, body);
+            setVideos([...videos, { video_url: data.data.videoUrl }]);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setUploadingVideo(false);
+            e.target.value = "";
+        }
+    };
+
+    // Kept in sync with the backend's MAX_AUDIO_PER_PRODUCT
+    // (product.service.js), same reasoning as MAX_VIDEOS above.
+    const MAX_AUDIO = 3;
+
+    const handleAudioUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !savedId) return;
+
+        setUploadingAudio(true);
+        setError("");
+        try {
+            const body = new FormData();
+            body.append("audio", file);
+            const { data } = await api.post(`/products/${savedId}/audio`, body);
+            setAudio([...audio, { audio_url: data.data.audioUrl }]);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setUploadingAudio(false);
             e.target.value = "";
         }
     };
@@ -147,7 +200,7 @@ export default function SellerProductForm() {
                     </div>
                 </div>
 
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
                     className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
@@ -171,6 +224,41 @@ export default function SellerProductForm() {
                         {uploading ? "Uploading…" : "+ Add photo"}
                         <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} className="hidden" />
                     </label>
+
+                    <h2 className="font-display text-lg mb-3 mt-8">Videos</h2>
+
+                    <div className="flex flex-wrap gap-3 mb-4">
+                        {videos.map((vid, i) => (
+                            <video key={i} src={vid.video_url} controls
+                                className="w-40 h-24 rounded-md border border-line object-cover" />
+                        ))}
+                    </div>
+
+                    {videos.length < MAX_VIDEOS ? (
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {uploadingVideo ? "Uploading…" : "+ Add video"}
+                            <input type="file" accept="video/*" onChange={handleVideoUpload} disabled={uploadingVideo} className="hidden" />
+                        </label>
+                    ) : (
+                        <p className="text-ash text-xs">Maximum of {MAX_VIDEOS} videos per product.</p>
+                    )}
+
+                    <h2 className="font-display text-lg mb-3 mt-8">Audio</h2>
+
+                    <div className="flex flex-col gap-2 mb-4">
+                        {audio.map((clip, i) => (
+                            <audio key={i} src={clip.audio_url} controls className="w-full" />
+                        ))}
+                    </div>
+
+                    {audio.length < MAX_AUDIO ? (
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {uploadingAudio ? "Uploading…" : "+ Add audio"}
+                            <input type="file" accept="audio/*" onChange={handleAudioUpload} disabled={uploadingAudio} className="hidden" />
+                        </label>
+                    ) : (
+                        <p className="text-ash text-xs">Maximum of {MAX_AUDIO} audio clips per product.</p>
+                    )}
 
                     {!isEdit && (
                         <p className="mt-6">

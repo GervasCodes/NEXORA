@@ -2,6 +2,9 @@ const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
 const walletService = require("../wallet/wallet.service");
+const sponsorshipService = require("../sponsorship/sponsorship.service");
+const featuredStoreService = require("../featuredStore/featuredStore.service");
+const departmentSponsorshipService = require("../departmentSponsorship/departmentSponsorship.service");
 
 exports.listUsers = async () => {
     return adminRepository.findAllUsers();
@@ -69,6 +72,16 @@ exports.setProductActive = async (productId, isActive) => {
         messageParams: { productName: product.name },
         withEmail: true
     });
+};
+
+exports.setProductSponsored = async (productId, isSponsored) => {
+    const product = await adminRepository.findProductById(productId);
+
+    if (!product) {
+        throw new Error("Product not found");
+    }
+
+    await adminRepository.setProductSponsored(productId, isSponsored);
 };
 
 exports.listAllOrders = async () => {
@@ -242,6 +255,29 @@ exports.updateSettings = async (data) => {
     return settingsService.updateSettings(data);
 };
 
+// --- Sponsorship campaigns (Phase 8A - read-only oversight; the manual
+// sponsor/unsponsor toggle above stays the separate, free lever for
+// admin curation) ---
+exports.listSponsorshipCampaigns = async () => {
+    return sponsorshipService.listAllCampaigns();
+};
+
+// --- Featured store campaigns (Phase 8B - read-only oversight; there is
+// no manual free toggle equivalent here, since a store's featured
+// placement is scoped per department and derived live from this table -
+// see category.repository.js#findFeaturedStoresByCategory) ---
+exports.listFeaturedStoreCampaigns = async () => {
+    return featuredStoreService.listAllCampaigns();
+};
+
+// --- Department sponsorship campaigns (Phase 8C - read-only oversight;
+// same reasoning as Featured Stores above - a department's homepage
+// placement is derived live from this table, see
+// category.repository.js#findAllActiveWithSponsorship) ---
+exports.listDepartmentSponsorshipCampaigns = async () => {
+    return departmentSponsorshipService.listAllCampaigns();
+};
+
 // --- Seller withdrawal requests ---
 
 exports.listWithdrawals = async () => {
@@ -258,6 +294,17 @@ exports.rejectWithdrawal = async (withdrawalId, adminNote) => {
 
 exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
+};
+
+// --- Escrow manual release (Phase 9D - docs/ESCROW_ANALYSIS.md section
+// 3.4). Bypasses the normal delivered + escrow_hold_days timing gate for
+// one order (e.g. a buyer has confirmed receipt, or an admin wants to
+// close out a stale/edge-case order), but still respects the same
+// dispute-freeze rule the scheduled release job uses - see
+// walletService.releaseOrderEarnings. ---
+
+exports.releaseOrderEscrow = async (orderId) => {
+    return walletService.releaseOrderEarnings(orderId);
 };
 
 // Old seller document-verification review methods lived here

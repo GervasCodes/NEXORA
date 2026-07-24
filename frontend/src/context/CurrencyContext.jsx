@@ -55,9 +55,25 @@ export function CurrencyProvider({ children }) {
         })}`;
     }, [currency]);
 
+    // Inverse of `format`'s conversion: turns an amount typed in the
+    // currently-selected display currency back into TZS, the unit prices
+    // are always stored/filtered in on the backend (Phase 3A's price
+    // filter). Returns null for empty/invalid input so callers can treat
+    // "not a number" the same as "not provided".
+    const toTzs = useCallback((amountInCurrency) => {
+        if (amountInCurrency === "" || amountInCurrency === null || amountInCurrency === undefined) {
+            return null;
+        }
+
+        const value = Number(amountInCurrency);
+        if (!Number.isFinite(value)) return null;
+
+        return value / RATES_PER_TZS[currency];
+    }, [currency]);
+
     const value = useMemo(
-        () => ({ currency, setCurrency, syncFromProfile, format }),
-        [currency, setCurrency, syncFromProfile, format]
+        () => ({ currency, setCurrency, syncFromProfile, format, toTzs }),
+        [currency, setCurrency, syncFromProfile, format, toTzs]
     );
 
     return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

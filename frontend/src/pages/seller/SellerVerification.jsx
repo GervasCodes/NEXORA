@@ -134,7 +134,7 @@ export default function SellerVerification() {
                 </p>
             )}
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
 
             {canSubmit && (

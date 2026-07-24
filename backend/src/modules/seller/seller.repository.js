@@ -50,7 +50,8 @@ exports.update = async (userId, data) => {
     const allowed = [
         "store_name", "store_description", "business_email",
         "business_phone", "country", "region", "city", "address", "store_type_id",
-        "pickup_lat", "pickup_lng"
+        "pickup_lat", "pickup_lng", "store_theme",
+        "store_tagline", "social_instagram", "social_facebook", "social_whatsapp"
     ];
 
     for (const key of allowed) {
@@ -126,6 +127,101 @@ exports.removeFromRoster = async (sellerId, agentId) => {
     const [result] = await db.query(
         "DELETE FROM seller_delivery_agents WHERE seller_id = ? AND agent_id = ?",
         [sellerId, agentId]
+    );
+    return result.affectedRows;
+};
+
+// --- Seller collections (Phase 7C) ---
+// Same "seller's own roster of something" shape as the delivery-agent
+// functions above, applied to product shelves instead of hired agents.
+
+exports.createCollection = async (sellerId, name) => {
+    const [[{ nextOrder }]] = await db.query(
+        "SELECT COALESCE(MAX(display_order), -1) + 1 AS nextOrder FROM seller_collections WHERE seller_id = ?",
+        [sellerId]
+    );
+
+    const [result] = await db.query(
+        "INSERT INTO seller_collections (seller_id, name, display_order) VALUES (?, ?, ?)",
+        [sellerId, name, nextOrder]
+    );
+
+    return result.insertId;
+};
+
+// A seller's own collections plus how many products sit in each - enough
+// for the management list without a second round trip per collection.
+exports.findCollections = async (sellerId) => {
+    const [rows] = await db.query(
+        `SELECT sc.id, sc.name, sc.display_order,
+            (SELECT COUNT(*) FROM seller_collection_products scp WHERE scp.collection_id = sc.id) AS product_count
+        FROM seller_collections sc
+        WHERE sc.seller_id = ?
+        ORDER BY sc.display_order ASC, sc.id ASC`,
+        [sellerId]
+    );
+    return rows;
+};
+
+// Ownership check shared by add/remove-product and delete below - a
+// collection only belongs to the seller who created it.
+exports.findCollectionById = async (sellerId, collectionId) => {
+    const [rows] = await db.query(
+        "SELECT id, seller_id, name FROM seller_collections WHERE id = ? AND seller_id = ?",
+        [collectionId, sellerId]
+    );
+    return rows[0];
+};
+
+exports.deleteCollection = async (sellerId, collectionId) => {
+    const [result] = await db.query(
+        "DELETE FROM seller_collections WHERE id = ? AND seller_id = ?",
+        [collectionId, sellerId]
+    );
+    return result.affectedRows;
+};
+
+exports.findProductsInCollection = async (collectionId) => {
+    const [rows] = await db.query(
+        `SELECT p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.is_active,
+            (
+                SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = p.id AND pi.is_primary = 1
+                LIMIT 1
+            ) AS image_url
+        FROM seller_collection_products scp
+        JOIN products p ON p.id = scp.product_id
+        WHERE scp.collection_id = ?
+        ORDER BY scp.display_order ASC, scp.id ASC`,
+        [collectionId]
+    );
+    return rows;
+};
+
+exports.isProductInCollection = async (collectionId, productId) => {
+    const [rows] = await db.query(
+        "SELECT id FROM seller_collection_products WHERE collection_id = ? AND product_id = ?",
+        [collectionId, productId]
+    );
+    return rows.length > 0;
+};
+
+exports.addProductToCollection = async (collectionId, productId) => {
+    const [[{ nextOrder }]] = await db.query(
+        "SELECT COALESCE(MAX(display_order), -1) + 1 AS nextOrder FROM seller_collection_products WHERE collection_id = ?",
+        [collectionId]
+    );
+
+    await db.query(
+        "INSERT INTO seller_collection_products (collection_id, product_id, display_order) VALUES (?, ?, ?)",
+        [collectionId, productId, nextOrder]
+    );
+};
+
+exports.removeProductFromCollection = async (collectionId, productId) => {
+    const [result] = await db.query(
+        "DELETE FROM seller_collection_products WHERE collection_id = ? AND product_id = ?",
+        [collectionId, productId]
     );
     return result.affectedRows;
 };

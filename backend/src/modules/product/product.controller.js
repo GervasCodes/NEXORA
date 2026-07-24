@@ -49,6 +49,40 @@ exports.listProducts = async (req, res) => {
     }
 };
 
+exports.listFilterSellers = async (req, res) => {
+    try {
+        const sellers = await productService.listFilterSellers(req.query);
+
+        return res.json({
+            success: true,
+            data: sellers
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.listFilterRegions = async (req, res) => {
+    try {
+        const regions = await productService.listFilterRegions(req.query);
+
+        return res.json({
+            success: true,
+            data: regions
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getProductBySlug = async (req, res) => {
     try {
         const product = await productService.getProductBySlug(req.params.slug);
@@ -85,6 +119,64 @@ exports.uploadProductImage = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Image uploaded",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.uploadProductVideo = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "A video file is required"
+            });
+        }
+
+        const result = await productService.addProductVideo(
+            req.user.id,
+            req.params.id,
+            req.file
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Video uploaded",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.uploadProductAudio = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "An audio file is required"
+            });
+        }
+
+        const result = await productService.addProductAudio(
+            req.user.id,
+            req.params.id,
+            req.file
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Audio uploaded",
             data: result
         });
 

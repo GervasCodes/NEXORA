@@ -70,7 +70,7 @@ export default function AdminVerifications() {
     return (
         <div>
             <h1 className="font-display text-2xl mb-6">Seller verifications</h1>
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {pending.length === 0 && <p className="text-ash text-sm">No pending verification requests.</p>}
 

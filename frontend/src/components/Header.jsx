@@ -40,6 +40,18 @@ export default function Header() {
         setMenuOpen(false);
     }, [user]);
 
+    // Keyboard users get the same "back out of the drawer" affordance a
+    // mouse user gets by tapping elsewhere - only listens while the
+    // drawer is actually open, so it costs nothing the rest of the time.
+    useEffect(() => {
+        if (!menuOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === "Escape") setMenuOpen(false);
+        };
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [menuOpen]);
+
     const handleSignOut = () => {
         setMenuOpen(false);
         logout();
@@ -66,6 +78,10 @@ export default function Header() {
                 {/* Desktop nav - hidden below md, so it never has to squeeze
                     (and overflow off-screen) below that width. */}
                 <nav className="hidden md:flex items-center gap-5 text-sm ml-auto">
+                    <Link to="/products" className="text-paper/80 hover:text-azure-light transition-colors">
+                        {t("nav.browse")}
+                    </Link>
+
                     {links.map((link) => (
                         <Link
                             key={link.to}
@@ -127,6 +143,7 @@ export default function Header() {
                         onClick={() => setMenuOpen((v) => !v)}
                         aria-label="Menu"
                         aria-expanded={menuOpen}
+                        aria-controls="mobile-nav-drawer"
                         className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-paper/90 hover:text-azure-light focus-ring"
                     >
                         {menuOpen ? (
@@ -154,8 +171,16 @@ export default function Header() {
             {/* Mobile drawer - every nav item, always reachable regardless
                 of screen width or orientation. */}
             {menuOpen && (
-                <div className="md:hidden glass-strong text-ink border-t border-line/60 px-4 py-3">
+                <div id="mobile-nav-drawer" className="md:hidden glass-strong text-ink border-t border-line/60 px-4 py-3">
                     <nav className="flex flex-col divide-y divide-line/60">
+                        <Link
+                            to="/products"
+                            onClick={() => setMenuOpen(false)}
+                            className="py-3 flex items-center justify-between text-sm font-medium hover:text-teal transition-colors"
+                        >
+                            {t("nav.browse")}
+                        </Link>
+
                         {links.map((link) => (
                             <Link
                                 key={link.to}

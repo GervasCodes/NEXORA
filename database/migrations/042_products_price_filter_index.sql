@@ -1,0 +1,19 @@
+-- Migration 042: index to support Phase 3A's price-range filter.
+-- Run after 041_products_sponsored_flag.sql.
+--
+-- The public listing query (product.repository.js findAll) always
+-- filters `is_active = 1` and, as of Phase 3A, can additionally filter
+-- on price (via COALESCE(discount_price, price), see
+-- utils/productFilters.js). Without an index covering that, a price
+-- filter falls back to a full scan of every active product. This
+-- composite index lets MySQL narrow by is_active first and then range-
+-- scan on price, the same pairing idx_products_active_created (migration
+-- 022) already does for the default created_at sort.
+--
+-- Not indexing discount_price separately: the query always reads
+-- whichever of the two columns applies via COALESCE, and MySQL can't use
+-- an index through that expression - this index still helps the common
+-- case (products without an active discount) and the remaining sellers
+-- fall back to the is_active-only scan the query already had before this
+-- migration, so this is a strict improvement with no regression.
+CREATE INDEX idx_products_active_price ON products (is_active, price);

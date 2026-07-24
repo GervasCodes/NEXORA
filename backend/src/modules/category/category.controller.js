@@ -34,11 +34,52 @@ exports.listForAdmin = async (req, res) => {
     }
 };
 
+exports.listDepartments = async (req, res) => {
+    try {
+        const departments = await categoryService.listDepartments();
+
+        return res.json({
+            success: true,
+            data: departments
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.getDepartment = async (req, res) => {
+    try {
+        const department = await categoryService.getDepartmentBySlug(req.params.slug);
+
+        if (!department) {
+            return res.status(404).json({
+                success: false,
+                message: "Department not found"
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: department
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.createCategory = async (req, res) => {
     try {
-        const { name, description } = req.body;
+        const { name, description, display_order } = req.body;
 
-        const result = await categoryService.createCategory(name, description);
+        const result = await categoryService.createCategory(name, description, display_order);
 
         return res.status(201).json({
             success: true,
@@ -56,13 +97,31 @@ exports.createCategory = async (req, res) => {
 
 exports.updateCategory = async (req, res) => {
     try {
-        const { name, description } = req.body;
+        const { name, description, display_order } = req.body;
 
-        await categoryService.updateCategory(req.params.id, name, description);
+        await categoryService.updateCategory(req.params.id, name, description, display_order);
 
         return res.json({
             success: true,
             message: "Category updated"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.uploadCover = async (req, res) => {
+    try {
+        const coverUrl = await categoryService.uploadCoverImage(req.params.id, req.file);
+
+        return res.json({
+            success: true,
+            message: "Cover image uploaded",
+            data: { coverUrl }
         });
 
     } catch (error) {

@@ -13,10 +13,36 @@ const statusStyles = {
 export default function AdminOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [releasing, setReleasing] = useState(null);
+    const [releaseNotes, setReleaseNotes] = useState({});
 
     useEffect(() => {
         api.get("/admin/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
     }, []);
+
+    // Phase 9D manual early release - bypasses the normal delivered +
+    // escrow_hold_days timing gate for one order, but the backend still
+    // refuses to release anything covered by an open dispute. See
+    // docs/ESCROW_ANALYSIS.md section 3.4.
+    const releaseEscrow = async (orderId) => {
+        setReleasing(orderId);
+        setReleaseNotes((notes) => ({ ...notes, [orderId]: "" }));
+        try {
+            const { data } = await api.put(`/admin/orders/${orderId}/release-escrow`);
+            const { released, closedByDispute, frozen } = data.data;
+            setReleaseNotes((notes) => ({
+                ...notes,
+                [orderId]: `Released ${released} item(s)${closedByDispute ? `, closed ${closedByDispute}` : ""}${frozen ? `, ${frozen} frozen by an open dispute` : ""}.`
+            }));
+        } catch (err) {
+            setReleaseNotes((notes) => ({
+                ...notes,
+                [orderId]: err.response?.data?.message || "Couldn't release this order's held earnings."
+            }));
+        } finally {
+            setReleasing(null);
+        }
+    };
 
     if (loading) return <p className="text-ash">Loading orders…</p>;
 
@@ -43,6 +69,21 @@ export default function AdminOrders() {
                         <span className="text-xs text-ash capitalize">{o.payment_status}</span>
 
                         <p className="price text-sm font-medium">{formatMoney(o.total_amount)}</p>
+
+                        {o.status === "delivered" && (
+                            <div className="w-full sm:w-auto text-right">
+                                <button
+                                    onClick={() => releaseEscrow(o.id)}
+                                    disabled={releasing === o.id}
+                                    className="text-xs font-medium text-teal hover:underline disabled:opacity-50"
+                                >
+                                    {releasing === o.id ? "Releasing…" : "Release held earnings"}
+                                </button>
+                                {releaseNotes[o.id] && (
+                                    <p className="text-xs text-ash mt-1">{releaseNotes[o.id]}</p>
+                                )}
+                            </div>
+                        )}
                     </li>
                 ))}
             </ul>

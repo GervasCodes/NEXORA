@@ -19,7 +19,34 @@ const DEFAULTS = {
     // below. Only used when both the seller's pickup pin and the order's
     // delivery pin are set; rider_delivery_fee above remains the fallback
     // whenever either pin is missing.
-    delivery_distance_bands: JSON.stringify(DEFAULT_BANDS)
+    delivery_distance_bands: JSON.stringify(DEFAULT_BANDS),
+    // Flat cost (TZS) a seller pays per day to sponsor one of their own
+    // products (migration 051, Phase 8A). Admin-editable like every other
+    // rate above; a running campaign snapshots the rate that applied when
+    // it was purchased (sponsorship_campaigns.daily_rate), so changing
+    // this later never rewrites what a seller already paid.
+    sponsorship_daily_rate: "5000",
+    // Flat cost (TZS) a seller pays per day to have their store featured
+    // in one department's "Featured stores" row (migration 052, Phase
+    // 8B). Priced above sponsorship_daily_rate by default since it
+    // promotes the whole store's placement, not one product. A running
+    // campaign snapshots the rate that applied when purchased
+    // (store_featured_campaigns.daily_rate), same reasoning as
+    // sponsorship_daily_rate above.
+    featured_store_daily_rate: "8000",
+    // Flat cost (TZS) a seller pays per day to sponsor an entire department
+    // on the homepage grid (migration 053, Phase 8C). Priced above
+    // featured_store_daily_rate since it's homepage-wide visibility, not a
+    // placement within a department a shopper has already opened. A
+    // running campaign snapshots the rate that applied when purchased
+    // (department_sponsorship_campaigns.daily_rate), same reasoning as the
+    // two rates above.
+    department_sponsorship_daily_rate: "12000",
+    // Days after delivery, with no open dispute, before a seller's held
+    // order earnings become withdrawable (migration 054, Phase 9B). Not
+    // read anywhere yet - Phase 9D's release job is the first caller of
+    // getEscrowHoldDays() below.
+    escrow_hold_days: "5"
 };
 
 // platform_settings is read on nearly every order (commission),
@@ -89,6 +116,34 @@ exports.getDeliveryDistanceBands = async () => {
     return parseBandsConfig(map.delivery_distance_bands);
 };
 
+// Flat cost (TZS) a seller currently pays per day to sponsor one product.
+exports.getSponsorshipDailyRate = async () => {
+    const map = await getCachedAll();
+    return Number(map.sponsorship_daily_rate);
+};
+
+// Flat cost (TZS) a seller currently pays per day to have their store
+// featured in one department.
+exports.getFeaturedStoreDailyRate = async () => {
+    const map = await getCachedAll();
+    return Number(map.featured_store_daily_rate);
+};
+
+// Flat cost (TZS) a seller currently pays per day to sponsor an entire
+// department on the homepage grid.
+exports.getDepartmentSponsorshipDailyRate = async () => {
+    const map = await getCachedAll();
+    return Number(map.department_sponsorship_daily_rate);
+};
+
+// Days after delivery, with no open dispute, before a seller's held
+// order earnings become withdrawable. Unused until Phase 9D's release
+// job calls this.
+exports.getEscrowHoldDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.escrow_hold_days);
+};
+
 exports.updateSettings = async (data) => {
     if (data.commission_rate !== undefined) {
         await settingsRepository.upsert("commission_rate", String(data.commission_rate));
@@ -104,6 +159,18 @@ exports.updateSettings = async (data) => {
     }
     if (data.delivery_distance_bands !== undefined) {
         await settingsRepository.upsert("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
+    }
+    if (data.sponsorship_daily_rate !== undefined) {
+        await settingsRepository.upsert("sponsorship_daily_rate", String(data.sponsorship_daily_rate));
+    }
+    if (data.featured_store_daily_rate !== undefined) {
+        await settingsRepository.upsert("featured_store_daily_rate", String(data.featured_store_daily_rate));
+    }
+    if (data.department_sponsorship_daily_rate !== undefined) {
+        await settingsRepository.upsert("department_sponsorship_daily_rate", String(data.department_sponsorship_daily_rate));
+    }
+    if (data.escrow_hold_days !== undefined) {
+        await settingsRepository.upsert("escrow_hold_days", String(data.escrow_hold_days));
     }
     invalidateCache();
     return exports.getAll();

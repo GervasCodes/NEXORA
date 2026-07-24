@@ -31,7 +31,7 @@ export default function AdminSellers() {
     return (
         <div>
             <h1 className="font-display text-2xl mb-6">Sellers</h1>
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {sellers.length === 0 && <p className="text-ash text-sm">No stores yet.</p>}
 

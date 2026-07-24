@@ -46,7 +46,7 @@ export default function AdminFraud() {
             </p>
 
             {loading && <p className="text-ash">Loading…</p>}
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {!loading && flags.length === 0 && (
                 <p className="text-ash text-sm">No open flags right now.</p>

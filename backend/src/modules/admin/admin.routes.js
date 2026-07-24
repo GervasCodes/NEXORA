@@ -11,6 +11,7 @@ const {
     userIdValidation,
     productIdValidation,
     withdrawalIdValidation,
+    orderIdValidation,
     updateSettingsValidation,
     createAdminValidation,
     updateAdminPermissionsValidation
@@ -40,11 +41,40 @@ router.put("/sellers/:id/unverify", userIdValidation, validationMiddleware, admi
 router.get("/products", adminController.listProducts);
 router.put("/products/:id/deactivate", productIdValidation, validationMiddleware, adminController.deactivateProduct);
 router.put("/products/:id/activate", productIdValidation, validationMiddleware, adminController.activateProduct);
+router.put("/products/:id/sponsor", productIdValidation, validationMiddleware, adminController.sponsorProduct);
+router.put("/products/:id/unsponsor", productIdValidation, validationMiddleware, adminController.unsponsorProduct);
 
 router.get("/orders", adminController.listOrders);
 
+// Manual early release of one order's held seller earnings (Phase 9D) -
+// see docs/ESCROW_ANALYSIS.md section 3.4. Bypasses the normal
+// delivered + escrow_hold_days timing gate; still respects the
+// dispute-freeze rule (adminService.releaseOrderEscrow -> walletService
+// .releaseOrderEarnings).
+router.put("/orders/:id/release-escrow", orderIdValidation, validationMiddleware, adminController.releaseOrderEscrow);
+
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);
+
+// Read-only oversight of seller-paid sponsorship campaigns (Phase 8A).
+// The manual sponsor/unsponsor toggle above (/products/:id/sponsor) stays
+// the separate, free lever for admin curation - this is just visibility
+// into what sellers are actually paying for.
+router.get("/sponsorship-campaigns", adminController.listSponsorshipCampaigns);
+
+// Read-only oversight of seller-paid featured-store campaigns (Phase 8B).
+// There is no manual free toggle equivalent here - a store's featured
+// placement is scoped per department and derived live from the
+// store_featured_campaigns table (see
+// category.repository.js#findFeaturedStoresByCategory).
+router.get("/featured-store-campaigns", adminController.listFeaturedStoreCampaigns);
+
+// Read-only oversight of seller-paid department-sponsorship campaigns
+// (Phase 8C). Same reasoning as Featured Stores above - a department's
+// homepage placement is derived live from the
+// department_sponsorship_campaigns table (see
+// category.repository.js#findAllActiveWithSponsorship).
+router.get("/department-sponsorship-campaigns", adminController.listDepartmentSponsorshipCampaigns);
 
 router.get("/withdrawals", adminController.listWithdrawals);
 router.put("/withdrawals/:id/approve", withdrawalIdValidation, validationMiddleware, adminController.approveWithdrawal);

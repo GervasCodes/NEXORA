@@ -8,6 +8,9 @@ export default function AdminSettings() {
     const [riderFee, setRiderFee] = useState("");
     const [verificationFee, setVerificationFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
+    const [sponsorshipRate, setSponsorshipRate] = useState("");
+    const [featuredStoreRate, setFeaturedStoreRate] = useState("");
+    const [departmentSponsorshipRate, setDepartmentSponsorshipRate] = useState("");
     const [bands, setBands] = useState([]);
     const [perKmBeyond, setPerKmBeyond] = useState("");
     const [saving, setSaving] = useState(false);
@@ -22,6 +25,9 @@ export default function AdminSettings() {
                 setRiderFee(data.data.rider_delivery_fee);
                 setVerificationFee(data.data.seller_verification_fee);
                 setUsdRate(data.data.usd_exchange_rate);
+                setSponsorshipRate(data.data.sponsorship_daily_rate);
+                setFeaturedStoreRate(data.data.featured_store_daily_rate);
+                setDepartmentSponsorshipRate(data.data.department_sponsorship_daily_rate);
 
                 const parsed = typeof data.data.delivery_distance_bands === "string"
                     ? JSON.parse(data.data.delivery_distance_bands)
@@ -59,6 +65,9 @@ export default function AdminSettings() {
                 rider_delivery_fee: Number(riderFee),
                 seller_verification_fee: Number(verificationFee),
                 usd_exchange_rate: Number(usdRate),
+                sponsorship_daily_rate: Number(sponsorshipRate),
+                featured_store_daily_rate: Number(featuredStoreRate),
+                department_sponsorship_daily_rate: Number(departmentSponsorshipRate),
                 delivery_distance_bands: {
                     bands: bands
                         .map((b) => ({ up_to_km: Number(b.up_to_km), fee: Number(b.fee) }))
@@ -76,7 +85,7 @@ export default function AdminSettings() {
     };
 
     if (loading) return <p className="text-ash">Loading settings…</p>;
-    if (!settings) return <p className="text-coral text-sm">{error}</p>;
+    if (!settings) return <p role="alert" className="text-coral text-sm">{error}</p>;
 
     return (
         <div>
@@ -86,7 +95,7 @@ export default function AdminSettings() {
             </p>
 
             <form onSubmit={save} className="border border-line rounded-lg p-6 max-w-md space-y-4">
-                {error && <p className="text-coral text-sm">{error}</p>}
+                {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">Settings saved.</p>}
 
                 <div>
@@ -213,6 +222,59 @@ export default function AdminSettings() {
                     <p className="text-xs text-ash mt-1">
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
                         Snippe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-1">Sponsorship daily rate (TZS)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        required
+                        value={sponsorshipRate}
+                        onChange={(e) => setSponsorshipRate(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">
+                        What a seller pays per day to sponsor one product (Sponsorship page). A running
+                        campaign keeps the rate it was purchased at even if you change this later.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-1">Featured store daily rate (TZS)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        required
+                        value={featuredStoreRate}
+                        onChange={(e) => setFeaturedStoreRate(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">
+                        What a seller pays per day to rank first in a department's Featured stores row
+                        (Featured stores page). A running campaign keeps the rate it was purchased at
+                        even if you change this later.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-xs text-ash block mb-1">Department sponsorship daily rate (TZS)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        required
+                        value={departmentSponsorshipRate}
+                        onChange={(e) => setDepartmentSponsorshipRate(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">
+                        What a seller pays per day to bump a department to the front of the homepage
+                        "Shop by department" grid (Department sponsorship page). A running campaign
+                        keeps the rate it was purchased at even if you change this later.
                     </p>
                 </div>
 

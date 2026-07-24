@@ -57,7 +57,7 @@ export default function Messages() {
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <h1 className="font-display text-3xl mb-8">Messages</h1>
 
-            {error && <p className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {conversations.map((c) => (

@@ -244,7 +244,7 @@ export default function DisputeDetail() {
                     <div className="grid grid-cols-3 gap-2">
                         {dispute.evidence.map((ev) => (
                             <a key={ev.id} href={ev.file_url} target="_blank" rel="noreferrer" className="block aspect-square rounded-md overflow-hidden border border-line">
-                                <img src={ev.file_url} alt="Evidence" className="w-full h-full object-cover" />
+                                <img src={ev.file_url} alt="Evidence" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             </a>
                         ))}
                     </div>

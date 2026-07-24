@@ -1,0 +1,18 @@
+-- Migration 043: index to support Phase 3B's location (region) filter.
+-- Run after 042_products_price_filter_index.sql.
+--
+-- The public listing query (product.repository.js findAll) already
+-- always joins products to seller_profiles (sp.user_id = p.seller_id) to
+-- surface the store name/verified badge. As of Phase 3B, that join can
+-- additionally be filtered on `sp.region = ?` (see
+-- utils/productFilters.js#buildLocationRatingConditions), and the new
+-- `GET /products/filters/regions` dropdown-data endpoint scans the same
+-- column for DISTINCT values. Without an index, both fall back to a full
+-- scan of seller_profiles - small today, but no reason to let it grow
+-- into a bottleneck.
+--
+-- Plain single-column index, not composite with is_verified/user_id:
+-- the join to seller_profiles is always on its PRIMARY KEY-backed
+-- user_id/UNIQUE column already, so this index only needs to help the
+-- *region* half of the lookup.
+CREATE INDEX idx_seller_profiles_region ON seller_profiles (region);

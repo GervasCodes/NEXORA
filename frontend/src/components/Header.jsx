@@ -61,7 +61,7 @@ export default function Header() {
     const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
     return (
-        <header className="glass-dark text-paper sticky top-0 z-40">
+        <header className="glass-dark text-frost sticky top-0 z-40">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-4 sm:gap-6">
                 <Link to="/" className="flex items-center gap-2 shrink-0" onClick={() => setMenuOpen(false)}>
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
@@ -78,7 +78,7 @@ export default function Header() {
                 {/* Desktop nav - hidden below md, so it never has to squeeze
                     (and overflow off-screen) below that width. */}
                 <nav className="hidden md:flex items-center gap-5 text-sm ml-auto">
-                    <Link to="/products" className="text-paper/80 hover:text-azure-light transition-colors">
+                    <Link to="/products" className="text-frost/80 hover:text-azure-light transition-colors">
                         {t("nav.browse")}
                     </Link>
 
@@ -86,7 +86,7 @@ export default function Header() {
                         <Link
                             key={link.to}
                             to={link.to}
-                            className="relative text-paper/80 hover:text-azure-light transition-colors"
+                            className="relative text-frost/80 hover:text-azure-light transition-colors"
                         >
                             {link.label}
                             {link.to === "/cart" && itemCount > 0 && (
@@ -100,12 +100,12 @@ export default function Header() {
                     {user && <NotificationBell />}
 
                     {user ? (
-                        <button onClick={handleSignOut} className="text-paper/80 hover:text-azure-light transition-colors">
+                        <button onClick={handleSignOut} className="text-frost/80 hover:text-azure-light transition-colors">
                             {t("nav.signOut")}
                         </button>
                     ) : (
                         <>
-                            <Link to="/login" className="text-paper/80 hover:text-azure-light transition-colors">
+                            <Link to="/login" className="text-frost/80 hover:text-azure-light transition-colors">
                                 {t("nav.signIn")}
                             </Link>
                             <Link
@@ -125,7 +125,7 @@ export default function Header() {
                     {user && <NotificationBell />}
 
                     {user?.role === "buyer" && (
-                        <Link to="/cart" className="relative text-paper/90 shrink-0" aria-label={t("nav.cart")}>
+                        <Link to="/cart" className="relative text-frost/90 shrink-0" aria-label={t("nav.cart")}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-6 h-6">
                                 <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
                                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
@@ -144,7 +144,7 @@ export default function Header() {
                         aria-label="Menu"
                         aria-expanded={menuOpen}
                         aria-controls="mobile-nav-drawer"
-                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-paper/90 hover:text-azure-light focus-ring"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-frost/90 hover:text-azure-light focus-ring"
                     >
                         {menuOpen ? (
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">

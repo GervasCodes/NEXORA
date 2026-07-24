@@ -29,7 +29,10 @@ export default {
                 teal: withOpacity("--color-teal"),
                 coral: withOpacity("--color-coral"),
                 ash: withOpacity("--color-ash"),
-                line: withOpacity("--color-line")
+                line: withOpacity("--color-line"),
+                // Fixed light color for fixed-dark surfaces - see the
+                // comment on --color-frost in index.css.
+                frost: withOpacity("--color-frost")
             },
             fontFamily: {
                 display: ["Fraunces", "serif"],
@@ -57,6 +60,14 @@ export default {
                     "0%": { opacity: "0", transform: "scale(0.5)" },
                     "60%": { opacity: "1", transform: "scale(1.15)" },
                     "100%": { opacity: "1", transform: "scale(1)" }
+                },
+                // Gentle bob for "Coming Soon" style empty/placeholder screens
+                // (currently just the disabled Services department - see
+                // ComingSoon.jsx). Small enough to feel alive without being
+                // distracting on a page with no other content.
+                float: {
+                    "0%, 100%": { transform: "translateY(0)" },
+                    "50%": { transform: "translateY(-10px)" }
                 }
             },
             animation: {
@@ -66,7 +77,8 @@ export default {
                 "scale-in": "scaleIn 0.2s cubic-bezier(0.16,1,0.3,1) both",
                 shimmer: "shimmer 1.6s ease-in-out infinite",
                 "ring-once": "ringOnce 0.6s ease-in-out 1",
-                "pop-in": "popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both"
+                "pop-in": "popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
+                float: "float 3.2s ease-in-out infinite"
             }
         }
     },

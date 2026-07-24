@@ -1,8 +1,4 @@
-// Phase 6C - Enhanced Reviews. Renders the {5: n, 4: n, ...} shape
-// review.service.js's buildRatingBreakdown produces as a 5-row bar
-// chart. Shared by ProductDetail.jsx and StorePage.jsx (both already
-// share ProductFilters/ProductGrid the same way) instead of being
-// duplicated inline in each page.
+
 export default function RatingBreakdown({ breakdown, reviewCount }) {
     if (!reviewCount) return null;
 

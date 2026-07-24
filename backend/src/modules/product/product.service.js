@@ -1,9 +1,26 @@
 const productRepository = require("./product.repository");
+const categoryRepository = require("../category/category.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = require("../../utils/productFilters");
 const { parseSort } = require("../../utils/productSort");
 
+// Guards createProduct/updateProduct against a category_id for a disabled
+// department (e.g. Services - see migration 055). The dropdown that feeds
+// this (SellerProductForm.jsx -> GET /categories) already excludes
+// inactive categories, so this only bites a direct/stale API call - but
+// it's the authoritative check, not the UI hiding the option.
+const assertCategoryIsActive = async (categoryId) => {
+    const category = await categoryRepository.findById(categoryId);
+    if (!category || !category.is_active) {
+        throw Object.assign(new Error("Selected category is not available"), {
+            code: "CATEGORY_UNAVAILABLE",
+            status: 400
+        });
+    }
+};
+
 exports.createProduct = async (sellerId, data) => {
+    await assertCategoryIsActive(data.category_id);
 
     const slug = data.name
         .toLowerCase()
@@ -196,6 +213,10 @@ exports.updateProduct = async (sellerId, productId, data) => {
 
     if (!product || product.seller_id !== sellerId) {
         throw new Error("Product not found");
+    }
+
+    if (data.category_id) {
+        await assertCategoryIsActive(data.category_id);
     }
 
     await productRepository.update(productId, data);

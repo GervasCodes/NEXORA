@@ -25,7 +25,11 @@ const CATEGORIES = [
     { name: "Home & Living", slug: "home-living", description: "Furniture, decor, and household goods", display_order: 3 },
     { name: "Groceries & Food", slug: "groceries-food", description: "Food and everyday essentials", display_order: 4 },
     { name: "Vehicles & Transport", slug: "vehicles-transport", description: "Cars, motorcycles, parts, and accessories", display_order: 5 },
-    { name: "Services", slug: "services", description: "Local services from trusted sellers", display_order: 6 },
+    // Disabled: the Services feature hasn't been built yet (Phase 1 of the
+    // Services/Dark-Mode/Deletion plan) - see migration 055. Kept in this
+    // list (rather than removed) so display_order/slug stay reserved for
+    // when it's redesigned.
+    { name: "Services", slug: "services", description: "Local services from trusted sellers", display_order: 6, is_active: false },
     { name: "Sports & Outdoors", slug: "sports-outdoors", description: "Sporting goods, fitness, and outdoor gear", display_order: 7 }
 ];
 
@@ -67,8 +71,8 @@ async function seedCategories(connection) {
         }
 
         await connection.query(
-            "INSERT INTO categories (name, slug, description, display_order) VALUES (?, ?, ?, ?)",
-            [category.name, category.slug, category.description, category.display_order || 0]
+            "INSERT INTO categories (name, slug, description, display_order, is_active) VALUES (?, ?, ?, ?, ?)",
+            [category.name, category.slug, category.description, category.display_order || 0, category.is_active !== false]
         );
         console.log(`Created category "${category.name}".`);
     }

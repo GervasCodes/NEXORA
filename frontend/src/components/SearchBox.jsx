@@ -8,9 +8,7 @@ import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../util
 const DEBOUNCE_MS = 250;
 const MIN_CHARS = 2;
 
-// Wraps the part of `text` that matches `query` (case-insensitive) in a
-// <mark>, so someone scanning a dropdown of five suggestions can see at a
-// glance *why* each one matched instead of re-reading every title in full.
+
 function HighlightMatch({ text, query }) {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return text;
@@ -27,16 +25,11 @@ function HighlightMatch({ text, query }) {
     );
 }
 
-// Web Speech API support is inconsistent across browsers (notably weak/
-// absent on iOS Safari) - this is why the mic button only ever renders
-// when SpeechRecognition actually exists, rather than always showing it
-// and failing silently or erroring on unsupported devices.
+
 const SpeechRecognitionAPI =
     typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-// Debounced live suggestions as you type, reusing the same /products
-// endpoint the full search results page already hits (limit=5, cheapest
-// possible extra load on the backend - no new endpoint needed).
+
 export default function SearchBox({ placeholder, submitLabel, inputClassName, onNavigate }) {
     const navigate = useNavigate();
     const { format } = useCurrency();

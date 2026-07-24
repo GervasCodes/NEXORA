@@ -54,15 +54,7 @@ export default function OrderDetail() {
 
     useEffect(load, [id]);
 
-    // Handles the buyer landing back here after Snippe/PayPal:
-    //   ?payment=success        - Snippe: the webhook already confirmed the
-    //                             payment server-side by the time the buyer's
-    //                             browser gets here in most cases, but we
-    //                             still reload the order to pick that up.
-    //   ?payment=cancelled      - buyer backed out on Snippe/PayPal's site.
-    //   ?payment=paypal_return  - PayPal redirects back with ?token=<paypal
-    //                             order id>; THIS is what actually captures
-    //                             the funds - never trust the redirect alone.
+    
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const payment = params.get("payment");

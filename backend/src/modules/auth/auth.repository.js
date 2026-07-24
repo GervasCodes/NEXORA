@@ -24,6 +24,20 @@ exports.findByPhone = async (phone) => {
     return rows[0];
 };
 
+// Deliberately narrow (2 columns, primary-key lookup) - auth.middleware.js
+// calls this on every authenticated request, so it needs to stay cheap.
+// Exists so a deleted (or admin-deactivated) account's already-issued,
+// still-unexpired token (7 days - see utils/generateToken.js) stops
+// working immediately, the same way requireApprovedSeller.middleware.js
+// never trusts the JWT for verification status either.
+exports.findAccountStatusById = async (id) => {
+    const [rows] = await db.query(
+        "SELECT is_active, deleted_at FROM users WHERE id = ?",
+        [id]
+    );
+    return rows[0];
+};
+
 // Every function below takes an optional `conn` (a checked-out
 // transaction connection from db.getConnection()). Pass one when the
 // call needs to be part of an all-or-nothing transaction (registration);

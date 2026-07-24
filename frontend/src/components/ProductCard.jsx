@@ -6,28 +6,7 @@ import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
 
-// Phase 4A: `layout` ("grid" | "list") lets one card component serve both
-// the tiled catalog (ProductGrid's default, ProductRow's horizontal strip)
-// and a denser list view (ProductGrid's list toggle) without callers
-// needing to know the difference - same data, same Link target, same
-// actions, just arranged differently. Grid stays the default so every
-// existing call site (ProductRow, any page not yet passing `layout`)
-// renders exactly as before.
-//
-// The media block (image, save button, verified badge), the store/
-// location line, and the price/rating/stock row are shared between both
-// layouts so 4C (extra actions) can extend either without duplicating
-// this markup. Rating and the verified badge already existed before
-// Phase 4B; 4B added `product.region` to the store line - it's the
-// seller's free-text region (set in Store settings), so it's simply
-// omitted when a seller hasn't set one, same as the "Location" filter
-// dropdown already handles a missing region.
-//
-// Phase 4C adds the second buyer-only quick action: "Add to cart",
-// reusing `CartContext.addToCart` (already used by ProductDetail) so the
-// card doesn't reimplement cart logic - it just calls the same function.
-// Follows the save button's existing convention of only rendering for
-// `user?.role === "buyer"` rather than introducing a new visibility rule.
+
 function ProductCard({ product, layout = "grid" }) {
     const { format } = useCurrency();
     const { user } = useAuth();
@@ -46,10 +25,7 @@ function ProductCard({ product, layout = "grid" }) {
         wishlist?.toggle(product.id);
     };
 
-    // Card grid has no room for ProductDetail's inline status line, so
-    // feedback goes through the app's existing toast system instead -
-    // ToastProvider already wraps the whole app (see main.jsx), it just
-    // wasn't used from this component before.
+   
     const handleAddToCart = async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -106,7 +82,7 @@ function ProductCard({ product, layout = "grid" }) {
             )}
 
             {product.is_verified === 1 || product.is_verified === true ? (
-                <span className="absolute top-2 left-2 bg-teal text-paper text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                <span className="absolute top-2 left-2 bg-teal text-frost text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex items-center gap-0.5">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                         <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
                     </svg>
@@ -161,13 +137,8 @@ function ProductCard({ product, layout = "grid" }) {
         </div>
     );
 
-    // Phase 4C: buyer-only, mirrors the save button's visibility rule.
-    // Hidden (not just disabled) for out-of-stock items in the list
-    // layout where a bare disabled button would sit oddly next to the
-    // "Out of stock" text already shown by ratingAndStock; in the grid
-    // layout it's shown disabled instead, since a vanished button there
-    // would shift the price row up in a way that reads as a layout bug
-    // rather than an intentional absence.
+   
+    
     const addToCartButton = user?.role === "buyer" && (isList ? stock > 0 : true) && (
         <button
             type="button"

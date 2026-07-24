@@ -148,7 +148,7 @@ export default function NewDispute() {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60"
+                        className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                     >
                         {submitting ? "Submitting…" : "Submit dispute"}
                     </button>

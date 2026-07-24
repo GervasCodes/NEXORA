@@ -14,6 +14,32 @@ exports.listUsers = async (req, res) => {
     }
 };
 
+exports.listDeletedUsers = async (req, res) => {
+    try {
+        const users = await adminService.listDeletedUsers();
+
+        return res.json({ success: true, data: users });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase 4 - Permanent Account Removal. Irreversible: erases the
+// account's PII and deletes/scrubs its data per
+// adminService.permanentlyDeleteUser's doc comment. Only reachable by a
+// super admin - see admin.routes.js.
+exports.permanentlyDeleteUser = async (req, res) => {
+    try {
+        await adminService.permanentlyDeleteUser(req.params.id, req.user.id);
+
+        return res.json({ success: true, message: "Account permanently deleted" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.deactivateUser = async (req, res) => {
     try {
         await adminService.setUserActive(req.params.id, false);

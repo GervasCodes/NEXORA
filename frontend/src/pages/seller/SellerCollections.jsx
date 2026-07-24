@@ -2,14 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 
-// Phase 7C - Seller Collections. Lets a seller group their own products
-// into named shelves (e.g. "New Arrivals", "Bestsellers") that show up
-// as their own row on the public store page (see StorePage.jsx). Follows
-// SellerDeliveryTeam.jsx's existing shape for "a seller's own roster of
-// something": a create form, a list with a remove/delete action, and the
-// same loading/error/busyId conventions - applied here to two levels
-// (collections themselves, then products within a selected collection)
-// instead of one.
+
 export default function SellerCollections() {
     const [collections, setCollections] = useState([]);
     const [loading, setLoading] = useState(true);

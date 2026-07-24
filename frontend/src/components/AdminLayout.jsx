@@ -40,6 +40,7 @@ const groups = [
         label: "Trust & safety",
         tabs: [
             { to: "/admin/users", label: "Users" },
+            { to: "/admin/deleted-accounts", label: "Deleted accounts" },
             { to: "/admin/sellers", label: "Sellers" },
             { to: "/admin/account-verifications", label: "Verifications" },
             { to: "/admin/disputes", label: "Disputes" },

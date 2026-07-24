@@ -8,12 +8,7 @@ import { formatDate } from "../utils/format";
 
 const POLL_INTERVAL_MS = 30000;
 
-// Bell icon + dropdown feed for the backend's notification module
-// (GET /notifications, /unread-count, PUT /:id/read, /read-all) - this
-// previously had no frontend surface at all. Polls rather than opening a
-// dedicated socket channel: notifications are inherently low-frequency
-// (order/dispute/wallet events), so a 30s poll is plenty fresh without
-// adding another realtime connection on top of the chat/tracking sockets.
+
 export default function NotificationBell() {
     const { user } = useAuth();
     const { t, language } = useLanguage();
@@ -110,7 +105,7 @@ export default function NotificationBell() {
                 onClick={() => setOpen((v) => !v)}
                 aria-label={t("notifications.title")}
                 aria-expanded={open}
-                className={`relative text-paper/90 hover:text-azure-light transition-colors shrink-0 ${justBumped ? "animate-ring-once" : ""}`}
+                className={`relative text-frost/90 hover:text-azure-light transition-colors shrink-0 ${justBumped ? "animate-ring-once" : ""}`}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-6 h-6">
                     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -60,6 +60,7 @@ const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminDeletedAccounts = lazy(() => import("./pages/admin/AdminDeletedAccounts"));
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
@@ -146,6 +147,7 @@ export default function App() {
                             <Route index element={<AdminDashboard />} />
                             <Route path="dispatch" element={<AdminDispatch />} />
                             <Route path="users" element={<AdminUsers />} />
+                            <Route path="deleted-accounts" element={<AdminDeletedAccounts />} />
                             <Route path="sellers" element={<AdminSellers />} />
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="categories" element={<AdminCategories />} />

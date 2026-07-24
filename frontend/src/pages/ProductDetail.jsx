@@ -22,11 +22,7 @@ export default function ProductDetail() {
     const [status, setStatus] = useState("");
     const [loading, setLoading] = useState(true);
 
-    // Phase 6C - review submission. There was previously no way for a
-    // buyer to write a review anywhere in the frontend even though the
-    // backend has always supported it; this is the minimal form that
-    // makes the rest of this phase's "enhanced" review features
-    // (photos, seller replies, sorting) actually reachable.
+   
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [reviewRating, setReviewRating] = useState(5);
     const [reviewComment, setReviewComment] = useState("");
@@ -35,9 +31,7 @@ export default function ProductDetail() {
     const [justSubmittedId, setJustSubmittedId] = useState(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-    // Kept in sync with the backend's MAX_PHOTOS_PER_REVIEW
-    // (review.service.js), same reasoning SellerProductForm.jsx's
-    // MAX_VIDEOS/MAX_AUDIO constants already give for their caps.
+    
     const MAX_REVIEW_PHOTOS = 5;
 
     useEffect(() => {

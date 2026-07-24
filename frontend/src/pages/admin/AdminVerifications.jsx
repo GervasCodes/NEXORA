@@ -99,7 +99,7 @@ export default function AdminVerifications() {
                             <button
                                 onClick={() => approve(s.user_id)}
                                 disabled={busyId === s.user_id}
-                                className="text-xs bg-teal text-paper px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                                className="text-xs bg-teal text-frost px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
                             >
                                 Approve
                             </button>

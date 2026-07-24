@@ -5,6 +5,14 @@ import ProductGrid from "../components/ProductGrid";
 import ProductRow from "../components/ProductRow";
 import FeaturedStoreCard from "../components/FeaturedStoreCard";
 import ProductFilters from "../components/ProductFilters";
+import ComingSoon from "../components/ComingSoon";
+
+// Departments disabled until their feature is redesigned. The backend
+// already excludes these from the homepage grid and category dropdowns
+// (categories.is_active = 0 - see migration 055), so this route would
+// otherwise just show a generic "not found" error; showing Coming Soon
+// instead is friendlier for anyone who still has the link/bookmark.
+const DISABLED_DEPARTMENTS = ["services"];
 
 // Flow: Homepage -> Department -> Products.
 export default function DepartmentPage() {
@@ -15,6 +23,11 @@ export default function DepartmentPage() {
     const [filters, setFilters] = useState({});
 
     useEffect(() => {
+        if (DISABLED_DEPARTMENTS.includes(slug)) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError("");
         setFilters({});
@@ -30,6 +43,10 @@ export default function DepartmentPage() {
             })
             .finally(() => setLoading(false));
     }, [slug]);
+
+    if (DISABLED_DEPARTMENTS.includes(slug)) {
+        return <ComingSoon />;
+    }
 
     if (loading) {
         return (
@@ -51,17 +68,17 @@ export default function DepartmentPage() {
     return (
         <div>
             <div
-                className="bg-abyss text-paper relative overflow-hidden bg-cover bg-center"
+                className="bg-abyss text-frost relative overflow-hidden bg-cover bg-center"
                 style={department.cover_image_url ? { backgroundImage: `url(${department.cover_image_url})` } : undefined}
             >
                 <div className="absolute inset-0 bg-abyss/70" />
                 <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-                    <Link to="/" className="text-paper/70 hover:text-paper text-xs">← All departments</Link>
+                    <Link to="/" className="text-frost/70 hover:text-frost text-xs">← All departments</Link>
                     <h1 className="font-display text-3xl sm:text-4xl mt-2 mb-2">{department.name}</h1>
                     {department.description && (
-                        <p className="text-paper/70 text-sm max-w-lg mb-2">{department.description}</p>
+                        <p className="text-frost/70 text-sm max-w-lg mb-2">{department.description}</p>
                     )}
-                    <p className="text-paper/60 text-xs">
+                    <p className="text-frost/60 text-xs">
                         {department.productCount} {department.productCount === 1 ? "product" : "products"}
                         {department.newCount > 0 ? ` · ${department.newCount} new this week` : ""}
                     </p>

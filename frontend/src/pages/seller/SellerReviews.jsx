@@ -3,12 +3,7 @@ import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 
-// Phase 6C - Enhanced Reviews. Reuses the existing public
-// GET /reviews/store/:sellerId endpoint (same data StorePage.jsx shows
-// buyers) rather than a new seller-only listing route, since a seller's
-// own reviews are exactly the public store reviews scoped to their own
-// user_id - reply drafting is the only seller-only piece, handled by the
-// new POST /reviews/:id/reply route.
+
 export default function SellerReviews() {
     const { profile } = useOutletContext();
 

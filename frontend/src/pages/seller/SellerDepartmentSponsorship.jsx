@@ -8,21 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8C - Department Sponsorship. The homepage "Shop by department"
-// grid (Phase 1B/1C, Home.jsx + DepartmentCard.jsx) has always ordered
-// departments organically by display_order
-// (category.repository.js#findAllActive). This adds a paid way to bump a
-// department to the very front of that grid for a fixed number of days at
-// the platform's current daily rate, charged from a seller's own wallet
-// balance - the broadest of the three placement tiers this project adds
-// (product-level Sponsorship, store-level Featured Stores, and this,
-// department-level, all the way up on the homepage before a shopper has
-// even picked a department). Like Featured Stores and unlike Sponsorship,
-// there's no shared flag to flip - the homepage ranking query itself
-// checks for a live campaign, and because several different sellers can
-// each be active in the same department, more than one seller may have an
-// active campaign for it at once; the department simply counts as
-// sponsored as long as any of them are running.
+
 export default function SellerDepartmentSponsorship() {
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);

@@ -36,31 +36,14 @@ function ProductCardSkeleton({ layout }) {
     );
 }
 
-// Grid vs. list container classes, shared between the loading skeletons
-// and the real results so the two never visually mismatch mid-fetch.
+
 function containerClass(layout) {
     return layout === "list"
         ? "flex flex-col gap-3"
         : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
 }
 
-// Product listing with fetch, pagination, and infinite scroll baked in.
-// Shared by Home (search results) and DepartmentPage (department feed) so
-// the two stay in sync instead of maintaining two copies of this logic.
-//
-// `params` is forwarded as-is to GET /products (e.g. { search } or
-// { category_id }) alongside limit/page.
-//
-// `onResults(total)` (optional) reports the total match count after the
-// *initial* fetch for the current params - added so Home.jsx can show a
-// "123 results for ..." count without duplicating the fetch itself.
-// `emptyAction` (optional) renders below the built-in empty-state text,
-// e.g. a "browse departments" link for a zero-result search.
-//
-// Phase 4A: a grid/list view toggle lives here (not per-page) so every
-// consumer gets it for free and the choice - persisted in localStorage -
-// stays consistent as a shopper moves between Home, a department, and
-// the full catalog.
+
 export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, emptyAction }) {
     const { t } = useLanguage();
     const [products, setProducts] = useState([]);

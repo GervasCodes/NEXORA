@@ -89,7 +89,7 @@ exports.deleteAccount = async (req, res) => {
     try {
         await accountService.deleteAccount(req.user.id, req.body.password);
 
-        return res.json({ success: true, message: "Your account has been permanently deleted." });
+        return res.json({ success: true, message: "Your account has been deleted and can no longer be logged into." });
 
     } catch (error) {
         return res.status(error.status || 400).json({

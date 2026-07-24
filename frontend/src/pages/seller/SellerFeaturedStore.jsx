@@ -8,17 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8B - Featured Stores. The "Featured stores" row on each
-// department page (Phase 2C) has always ranked sellers organically -
-// verified status, then rating, then catalog size
-// (category.repository.js#findFeaturedStoresByCategory). This adds a
-// paid way to rank first in that row for one department: a seller pays
-// out of their own wallet balance (same pool SellerWallet.jsx shows) to
-// be featured for a fixed number of days at the platform's current
-// daily rate. Unlike Sponsored Products (Phase 8A), there's no shared
-// flag to flip - the ranking query itself checks for a live campaign, so
-// a campaign here can't be "sponsored" the way a product can be toggled
-// for free; it's paid placement only.
+
 export default function SellerFeaturedStore() {
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);

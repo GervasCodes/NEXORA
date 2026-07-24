@@ -12,11 +12,7 @@ function ClickToPlace({ onPick }) {
     return null;
 }
 
-// Controlled-ish: reports { lat, lng } up via onChange whenever the buyer
-// clicks the map. Parent (Checkout.jsx / SellerStore.jsx) owns whether a
-// pin has been placed. label/placedHint/emptyHint let callers other than
-// checkout (e.g. a seller's pickup pin) reuse this with wording that
-// makes sense for them.
+
 export default function LocationPicker({
     value,
     onChange,

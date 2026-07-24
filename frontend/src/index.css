@@ -17,6 +17,18 @@
     --color-coral: 228 87 46;
     --color-ash: 107 114 128;
     --color-line: 227 230 236;
+    /* Fixed light color for text/icons/dividers placed on surfaces that
+       DON'T invert with the theme - the Header/Footer (.glass-dark),
+       hero banners (bg-abyss), and teal badges all keep the same near-
+       black/saturated background in both light and dark mode. `paper`
+       is the wrong token there: it's designed to invert (white in light
+       mode, near-black in dark mode), so pairing it with a fixed-dark
+       background reads great in light mode but goes to ~1:1 contrast
+       (invisible) in dark mode once paper turns near-black too. `frost`
+       intentionally has no .dark override below - it stays this same
+       near-white value in both themes. See ComingSoon.jsx/README for
+       the audit that found this.  */
+    --color-frost: 247 248 251;
 }
 
 .dark {
@@ -82,7 +94,7 @@ body {
     backdrop-filter: blur(16px) saturate(160%);
     -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid rgb(var(--color-ink) / 0.08);
-    box-shadow: 0 8px 32px rgb(var(--color-abyss) / 0.12), inset 0 1px 0 rgb(var(--color-paper) / 0.6);
+    box-shadow: 0 8px 32px rgb(var(--color-abyss) / 0.12), inset 0 1px 0 rgb(var(--color-frost) / 0.6);
 }
 
 .glass-dark {
@@ -98,7 +110,29 @@ body {
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid rgb(var(--color-ink) / 0.1);
-    box-shadow: 0 12px 40px rgb(var(--color-abyss) / 0.18), inset 0 1px 0 rgb(var(--color-paper) / 0.7);
+    box-shadow: 0 12px 40px rgb(var(--color-abyss) / 0.18), inset 0 1px 0 rgb(var(--color-frost) / 0.7);
+}
+
+/* Dark mode: the shadow recipes above are tuned for a light page, where
+   a soft, wide, low-opacity shadow reads as gentle elevation. On an
+   already near-black page (dark-mode `paper`), that same shadow either
+   disappears entirely or - once alpha is raised to compensate - turns
+   into a heavy, muddy halo, since it's the same near-black `abyss` tint
+   in both themes with nothing lighter around it to soften the edge.
+   Dark UIs conventionally rely on a tighter, higher-contrast shadow
+   plus a crisp highlight instead of a big soft one, so this pulls the
+   spread in and leans on the (now-fixed, see above) `frost` inset
+   highlight to carry the separation instead. */
+.dark .glass {
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(var(--color-frost) / 0.08);
+}
+
+.dark .glass-strong {
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(var(--color-frost) / 0.1);
+}
+
+.dark .glass-dark {
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 
 

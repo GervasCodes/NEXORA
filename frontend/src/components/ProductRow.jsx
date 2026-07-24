@@ -1,9 +1,6 @@
 import ProductCard from "./ProductCard";
 
-// Compact horizontal-scroll product strip - used for "Trending" and
-// "Recently added" preview rows above the full paginated ProductGrid.
-// Reuses ProductCard as-is rather than a bespoke row layout, so these
-// previews look/behave identically to every other product tile in the app.
+
 export default function ProductRow({ title, products }) {
     if (!products || products.length === 0) return null;
 

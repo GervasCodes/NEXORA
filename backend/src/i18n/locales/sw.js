@@ -23,7 +23,8 @@ module.exports = {
         REAUTH_EXPIRED: "Uthibitisho wako umeisha muda wake. Tafadhali thibitisha tena kwa msimbo mpya.",
         INVALID_CREDENTIALS: "Barua pepe au nenosiri si sahihi",
         NOTIFICATION_NOT_FOUND: "Arifa haikupatikana",
-        TERMS_NOT_ACCEPTED: "Lazima ukubali Masharti ya Huduma na Sera ya Faragha ili kuunda akaunti"
+        TERMS_NOT_ACCEPTED: "Lazima ukubali Masharti ya Huduma na Sera ya Faragha ili kuunda akaunti",
+        CATEGORY_UNAVAILABLE: "Kundi ulilochagua halipatikani"
     },
 
     labels: {

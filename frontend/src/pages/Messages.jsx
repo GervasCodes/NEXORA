@@ -66,7 +66,7 @@ export default function Messages() {
                             to={`/messages/${c.id}`}
                             className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"
                         >
-                            <div className="w-10 h-10 rounded-full bg-abyss text-paper flex items-center justify-center font-display text-sm shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-abyss text-frost flex items-center justify-center font-display text-sm shrink-0">
                                 {otherPartyName(c).charAt(0).toUpperCase()}
                             </div>
 

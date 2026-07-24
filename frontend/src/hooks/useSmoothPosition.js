@@ -2,12 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 const DEFAULT_ANIMATION_MS = 2500; // typical agent:location ping interval
 
-// Takes the latest known { lat, lng, timestamp } and returns a position
-// that glides toward it over time, re-rendering on every animation frame.
-// This is what makes "Add smooth marker movement" true even when ticks
-// arrive at an uneven cadence (a dropped ping, a burst of two close
-// together, etc.) - a plain CSS transition alone assumes a fixed
-// duration and looks wrong when the real gap between ticks varies.
+
 export default function useSmoothPosition(target, animationMs = DEFAULT_ANIMATION_MS) {
     const [display, setDisplay] = useState(target || null);
     const fromRef = useRef(target || null);

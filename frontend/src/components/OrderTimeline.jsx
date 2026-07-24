@@ -41,7 +41,7 @@ export default function OrderTimeline({ status }) {
                                 )}
                                 <div
                                     className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-500 ${
-                                        done ? "bg-teal text-paper scale-100" : "bg-line text-ash scale-90"
+                                        done ? "bg-teal text-frost scale-100" : "bg-line text-ash scale-90"
                                     }`}
                                 >
                                     {done ? "✓" : i + 1}

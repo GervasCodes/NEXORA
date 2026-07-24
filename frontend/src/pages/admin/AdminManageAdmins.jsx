@@ -102,7 +102,7 @@ export default function AdminManageAdmins() {
                 </select>
 
                 <button type="submit" disabled={creating}
-                    className="sm:col-span-2 bg-ink text-paper py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60">
+                    className="sm:col-span-2 bg-ink text-paper py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                     {creating ? "Creating…" : "Create admin"}
                 </button>
             </form>

@@ -22,12 +22,7 @@ const timeSince = (isoString) => {
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
 };
 
-// Admin-only, real-time dispatch board (Phase 6). Loads an initial
-// snapshot over REST (GET /admin/dispatch - see admin.service.js's
-// getDispatchOverview), then layers live updates on top via the shared
-// socket connection joined to the "admins" room (see socket.js) -
-// dispatch:delivery_assigned / dispatch:delivery_status /
-// dispatch:agent_status / dispatch:agent_position.
+
 export default function AdminDispatch() {
     const { socket, connected, connectionState } = useSocket();
     const [deliveries, setDeliveries] = useState([]);
@@ -54,12 +49,7 @@ export default function AdminDispatch() {
         loadOverview();
     }, []);
 
-    // Live updates. Rather than patch every field of every event type in
-    // by hand, a matching event just triggers a fresh REST fetch - the
-    // dispatch board isn't so high-frequency (a handful of admins, a few
-    // dozen active deliveries at most) that this is wasteful, and it
-    // guarantees the delayed-flag/summary counts (computed server-side)
-    // never drift out of sync with what actually changed.
+    
     useEffect(() => {
         if (!socket || !connected) return;
 

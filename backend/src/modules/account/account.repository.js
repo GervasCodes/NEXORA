@@ -73,12 +73,14 @@ exports.updatePassword = async (userId, hashedPassword) => {
     await db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId]);
 };
 
-// --- Account deletion ---
-// Removes genuinely personal/ephemeral data outright, and scrubs
-// identifying fields from the user row. We deliberately don't hard-delete
-// the users row itself: orders, reviews, notifications, and chat history
-// reference it, and hard-deleting would either violate those foreign keys
-// or silently destroy other people's order/financial history.
+// --- Account deletion (Phase 3 - soft delete) ---
+// This is the *soft* delete step: it locks the account and clears out
+// genuinely ephemeral/session data, but deliberately leaves the user's
+// name, email, phone, and seller profile untouched, so an admin can still
+// see who the account belonged to in the Deleted Accounts section before
+// deciding to permanently remove it. Scrubbing/erasing that identifying
+// data, plus deleting related records, documents, and Cloudinary assets,
+// is Phase 4 (Permanent Account Removal)'s job - not this one.
 exports.deleteCartItems = async (userId, executor = db) => {
     await executor.query("DELETE FROM cart_items WHERE user_id = ?", [userId]);
 };
@@ -87,25 +89,25 @@ exports.deletePushSubscriptions = async (userId, executor = db) => {
     await executor.query("DELETE FROM push_subscriptions WHERE user_id = ?", [userId]);
 };
 
-exports.scrubSellerProfile = async (userId, executor = db) => {
-    await executor.query(
-        `UPDATE seller_profiles
-        SET store_description = NULL, business_email = NULL, business_phone = NULL,
-            address = NULL
-        WHERE user_id = ?`,
-        [userId]
-    );
+// A deleted seller shouldn't keep an active-looking storefront up for
+// buyers to browse and buy from while the account can no longer log in
+// to manage it - so their listings are taken down the same way an
+// admin-moderated listing would be (products.is_active). Harmless no-op
+// for buyer/delivery_agent accounts, which have no rows here.
+exports.deactivateSellerListings = async (userId, executor = db) => {
     await executor.query("UPDATE products SET is_active = FALSE WHERE seller_id = ?", [userId]);
 };
 
-exports.anonymizeUser = async (userId, hashedRandomPassword, executor = db) => {
+// Marks the account deleted and locks it out (reusing the same is_active
+// gate login.service.js/auth.middleware.js already check on every
+// login/request), and randomizes the password hash so the old password
+// can never be used again even if is_active were ever flipped back by
+// mistake. Name/email/phone are intentionally left as-is - see the
+// module comment above.
+exports.softDeleteUser = async (userId, hashedRandomPassword, executor = db) => {
     await executor.query(
         `UPDATE users
-        SET first_name = 'Deleted', last_name = 'User',
-            email = CONCAT('deleted-user-', id, '@nexora.invalid'),
-            phone = CONCAT('deleted-', id),
-            password = ?,
-            is_active = FALSE
+        SET is_active = FALSE, deleted_at = NOW(), password = ?
         WHERE id = ?`,
         [hashedRandomPassword, userId]
     );

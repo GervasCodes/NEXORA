@@ -33,7 +33,7 @@ export default function DepartmentCard({ department, index }) {
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <span className="font-display text-3xl text-paper/90">{department.name.charAt(0)}</span>
+                        <span className="font-display text-3xl text-frost/90">{department.name.charAt(0)}</span>
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
@@ -42,13 +42,13 @@ export default function DepartmentCard({ department, index }) {
                         Sponsored
                     </span>
                 ) : department.newCount > 0 && (
-                    <span className="absolute top-2 right-2 bg-teal text-paper text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full">
+                    <span className="absolute top-2 right-2 bg-teal text-frost text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full">
                         {department.newCount} new
                     </span>
                 )}
                 <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="font-display text-lg text-paper leading-tight mb-0.5">{department.name}</h3>
-                    <p className="text-paper/75 text-xs">
+                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5">{department.name}</h3>
+                    <p className="text-frost/75 text-xs">
                         {department.productCount} {department.productCount === 1 ? "product" : "products"}
                     </p>
                 </div>

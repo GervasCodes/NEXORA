@@ -389,7 +389,7 @@ export default function DisputeDetail() {
                         <button
                             type="submit"
                             disabled={!message.trim() || busy === "message"}
-                            className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60"
+                            className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                         >
                             {busy === "message" ? "Sending…" : "Send"}
                         </button>

@@ -1,10 +1,4 @@
-// Phase 7B (Branding). Sellers can type either a bare handle
-// ("@storename", "storename") or a full URL into the Instagram/Facebook
-// fields on SellerStore.jsx - see migration 049's comment for why the
-// backend validates only length, not shape. This module is the one place
-// that turns whatever they typed into a clickable href, so StorePage.jsx
-// doesn't need its own parsing logic and a future second consumer (e.g.
-// a seller directory card) doesn't have to duplicate it.
+
 
 const toInstagramUrl = (value) => {
     const trimmed = value.trim();
@@ -23,10 +17,7 @@ const toWhatsappUrl = (value) => {
     return `https://wa.me/${digits}`;
 };
 
-// Returns only the links that are actually set, each with the label/href
-// StorePage.jsx needs to render an icon link - so the page can just map
-// over the result instead of repeating three near-identical `{store.x &&
-// ...}` blocks.
+
 export function getSocialLinks(store) {
     const links = [];
 

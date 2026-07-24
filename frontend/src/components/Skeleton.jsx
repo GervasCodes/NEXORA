@@ -1,15 +1,9 @@
-// Reusable shimmering placeholder shown while data loads, instead of a
-// bare "Loading…" string. Cheap: the shimmer is a pure CSS background-
-// position animation (see .skeleton in index.css), so rendering a dozen
-// of these has no measurable perf cost, even on low-end mobile.
+
 export default function Skeleton({ className = "", ...rest }) {
     return <div className={`skeleton animate-shimmer rounded-md ${className}`} {...rest} />;
 }
 
-// A row shaped like a cart/order line item: thumbnail + two text lines +
-// a trailing price. Used by Cart.jsx / Orders.jsx loading states so the
-// skeleton actually resembles the content it's about to be replaced by,
-// which reduces layout shift and feels faster than a spinner.
+
 export function SkeletonRow({ delayClass = "" }) {
     return (
         <li className={`py-5 flex gap-4 items-center animate-fade-in ${delayClass}`}>

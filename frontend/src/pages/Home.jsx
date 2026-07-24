@@ -14,9 +14,7 @@ function DepartmentCardSkeleton() {
     );
 }
 
-// Homepage department-discovery grid. Shown when there's no search - the
-// default landing view. Each card links to its own /departments/:slug
-// page (see Phase 2A's DepartmentPage).
+
 function DepartmentDiscovery() {
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -67,7 +65,7 @@ export default function Home() {
     return (
         <div>
             {!search && (
-                <div className="bg-abyss text-paper relative overflow-hidden">
+                <div className="bg-abyss text-frost relative overflow-hidden">
                     <div
                         className="absolute inset-0 opacity-40"
                         style={{
@@ -79,7 +77,7 @@ export default function Home() {
                         <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
                             Everything you need, from sellers you trust.
                         </h1>
-                        <p className="text-paper/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
+                        <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
                             Shop thousands of products from local vendors, with delivery tracked door to door.
                         </p>
 
@@ -89,7 +87,7 @@ export default function Home() {
                                 { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
                                 { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
                             ].map((item) => (
-                                <div key={item.label} className="flex items-center gap-2 text-paper/70 text-xs sm:text-sm">
+                                <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
                                         <path d={item.icon} />
                                     </svg>

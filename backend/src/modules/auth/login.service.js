@@ -25,6 +25,15 @@ exports.login = async (email, password) => {
     }
 
     if (user.is_active === 0) {
+        // deleted_at set -> the account holder deleted their own account
+        // (account.service.js#deleteAccount); anything else with
+        // is_active = 0 was deactivated by an admin instead. Different
+        // causes, so a different message - "contact support" would be
+        // misleading (and mildly alarming) for someone who deleted their
+        // own account on purpose.
+        if (user.deleted_at) {
+            throw new Error("This account has been deleted.");
+        }
         throw new Error("This account has been deactivated. Please contact support");
     }
 

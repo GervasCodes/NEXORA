@@ -23,7 +23,8 @@ module.exports = {
         REAUTH_EXPIRED: "Your verification expired. Please verify with a new code.",
         INVALID_CREDENTIALS: "Invalid email or password",
         NOTIFICATION_NOT_FOUND: "Notification not found",
-        TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account"
+        TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account",
+        CATEGORY_UNAVAILABLE: "Selected category is not available"
     },
 
     labels: {

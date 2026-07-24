@@ -231,7 +231,7 @@ export default function ConversationThread() {
                                     m.is_deleted
                                         ? "italic text-ash bg-line/30 rounded-bl-sm"
                                         : mine
-                                            ? "bg-abyss text-paper rounded-br-sm"
+                                            ? "bg-abyss text-frost rounded-br-sm"
                                             : "bg-line/50 text-ink rounded-bl-sm"
                                 }`}
                             >

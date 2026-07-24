@@ -2,11 +2,7 @@ import { useState } from "react";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 
-// Phase 3A: product-first discovery, alongside the department-first
-// discovery Phase 1B/2A already built. Same ProductGrid used everywhere
-// else, with no category/search filter by default - the full active
-// catalog, mixed across every department and seller, newest first -
-// narrowed by the optional price/seller filters below.
+
 export default function BrowseProducts() {
     const [filters, setFilters] = useState({});
 

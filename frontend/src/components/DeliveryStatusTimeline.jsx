@@ -3,13 +3,7 @@ import { formatDate } from "../utils/format";
 
 const STEPS = ["assigned", "picked_up", "in_transit", "delivered"];
 
-// Real timestamps per step (migration 037 added picked_up_at/in_transit_at
-// alongside the existing assigned_at/delivered_at) - so unlike
-// OrderTimeline (which only knows the *current* order status), this
-// shows *when* each delivery step actually happened, wherever that data
-// exists. A delivery created before the migration simply won't have
-// picked_up_at/in_transit_at - its step still marks as done, just
-// without a time underneath.
+
 export default function DeliveryStatusTimeline({ delivery }) {
     const { t } = useLanguage();
 
@@ -50,7 +44,7 @@ export default function DeliveryStatusTimeline({ delivery }) {
                                 )}
                                 <div
                                     className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-500 ${
-                                        done ? "bg-teal text-paper" : "bg-line text-ash"
+                                        done ? "bg-teal text-frost" : "bg-line text-ash"
                                     }`}
                                 >
                                     {done ? "✓" : i + 1}

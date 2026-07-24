@@ -70,13 +70,7 @@ function ApprovedDeliveryLayout() {
 export default function DeliveryLayout() {
     const { user } = useAuth();
 
-    // Base account-level gate: set during registration, reviewed by an
-    // admin. Going online, browsing available orders, claiming
-    // deliveries, and viewing earnings all stay hidden until this is
-    // "approved" - see requireApprovedDeliveryAgent.middleware.js for the
-    // matching API-side gate. useAgentShift() (geolocation, push
-    // subscription, online-status polling) only mounts once approved, so
-    // a pending agent isn't prompted for location access for nothing.
+    
     if (user?.account_verification_status !== "approved") {
         return (
             <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">

@@ -8,11 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8A - read-only view of every seller-paid sponsorship campaign,
-// for oversight. Deliberately separate from the manual sponsor/unsponsor
-// toggle on AdminProducts.jsx (Phase 2C/041) - that free, admin-driven
-// toggle isn't touched or replaced by this page; this is just visibility
-// into what sellers are actually paying for.
+
 export default function AdminSponsorship() {
     const [campaigns, setCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);

@@ -8,12 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8A - Sponsored Products. The real campaign/budget/payment system
-// behind the is_sponsored display flag admin can already toggle for free
-// on AdminProducts.jsx (Phase 2C/041). A seller pays out of their own
-// wallet balance (same pool SellerWallet.jsx shows) to sponsor one of
-// their own active products for a fixed number of days at the
-// platform's current daily rate.
+
 export default function SellerSponsorship() {
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);

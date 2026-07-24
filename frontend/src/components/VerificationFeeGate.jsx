@@ -3,17 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { formatMoney } from "../utils/format";
 
-// Shown in place of a seller feature (currently just Analytics) when the
-// one-time verification fee hasn't been paid yet. Reaching this at all
-// means the account is already approved - see
-// requireVerificationFeePaid.middleware.js on the API side and
-// SellerLayout, which handles the earlier "account not yet approved"
-// gate before any of this is ever rendered.
-//
-// Offers all three payment options the platform supports for this fee
-// (mobile money, Snippe, PayPal) - the old standalone Seller
-// Verification page only offered mobile money; the other two existed on
-// the backend since Phase 2 but had no frontend surface until now.
+
 export default function VerificationFeeGate({ requiredFee, onPaid, returnPath }) {
     const [phone, setPhone] = useState("");
     const [error, setError] = useState("");

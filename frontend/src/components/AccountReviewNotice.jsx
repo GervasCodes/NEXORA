@@ -1,8 +1,4 @@
-// Shown in place of the seller/delivery dashboard while an account is
-// pending, or has been rejected. Every seller/delivery-specific feature
-// (products, orders, analytics, wallet, going online, claiming orders)
-// stays hidden behind this until account_verification_status is
-// "approved" - see SellerLayout.jsx / DeliveryLayout.jsx.
+
 export default function AccountReviewNotice({ status, rejectionReason, roleLabel = "account" }) {
     if (status === "rejected") {
         return (

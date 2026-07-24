@@ -1,0 +1,24 @@
+-- Migration 055: disable the Services department (Phase 1 of the
+-- Services/Dark-Mode/Deletion implementation plan).
+--
+-- The Services department was seeded (migration/seed.js) but the feature
+-- behind it was never built - there's no service-listing flow distinct
+-- from a physical product. Rather than deleting the row (which would
+-- orphan any product already tagged with it), flip the existing
+-- `is_active` flag categories already support (see category.repository.js
+-- setActive, used by AdminCategories.jsx). This is the same flag admins
+-- use to hide any other department, so no new mechanism is introduced:
+--   - excluded from findAllActive -> disappears from the homepage
+--     department grid AND the `GET /categories` dropdown that
+--     SellerProductForm.jsx uses, so sellers can no longer tag new
+--     products "Services".
+--   - excluded from findAllActiveWithSponsorship -> same, for the
+--     sponsorship-aware homepage query.
+--   - getDepartmentBySlug returns null for an inactive category, so the
+--     backend already refuses to serve it - the frontend special-cases
+--     the /departments/services route instead of calling that endpoint
+--     at all (see DepartmentPage.jsx), showing a Coming Soon screen.
+--
+-- Safe to re-run: a no-op if the row is already inactive or doesn't exist
+-- (fresh installs where seed.js inserts it as inactive directly).
+UPDATE categories SET is_active = 0 WHERE slug = 'services';

@@ -27,8 +27,7 @@ export default function AdminProducts() {
         }
     };
 
-    // Phase 2C "Sponsored products" placement - just the display flag.
-    // The campaign/budget system behind it is Phase 8A's job.
+   
     const toggleSponsored = async (product) => {
         setBusyId(product.id);
         setError("");

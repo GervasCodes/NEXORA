@@ -92,11 +92,16 @@ exports.changePassword = async (userId, reauthToken, newPassword) => {
     await accountRepository.updatePassword(userId, hashed);
 };
 
-// Permanently deletes what can safely be deleted, and scrubs personally
-// identifying fields from everything else so the account can never be
-// logged into again and no longer carries the person's real name, email,
-// or phone number - while preserving the referential integrity of orders,
-// reviews, and chat history that other users still rely on.
+// Phase 3 - Soft Account Deletion.
+// Locks the account out immediately (can never log in or use an
+// already-issued session again - see login.service.js and
+// auth.middleware.js) and takes down any storefront listings, but
+// deliberately stops short of erasing the person's name, email, phone,
+// or seller profile. That's Phase 4 (Permanent Account Removal)'s job,
+// triggered separately by an admin from the Deleted Accounts section -
+// this step only needs to be reversible-in-principle-but-not-in-practice
+// (admin.service.js#setUserActive refuses to reactivate a deleted
+// account) long enough for that review to happen.
 exports.deleteAccount = async (userId, password) => {
     const account = await accountRepository.findAuthById(userId);
 
@@ -116,11 +121,11 @@ exports.deleteAccount = async (userId, password) => {
 
         await accountRepository.deleteCartItems(userId, connection);
         await accountRepository.deletePushSubscriptions(userId, connection);
-        await accountRepository.scrubSellerProfile(userId, connection);
+        await accountRepository.deactivateSellerListings(userId, connection);
 
         const randomPassword = crypto.randomBytes(32).toString("hex");
         const hashedRandomPassword = await hashPassword(randomPassword);
-        await accountRepository.anonymizeUser(userId, hashedRandomPassword, connection);
+        await accountRepository.softDeleteUser(userId, hashedRandomPassword, connection);
 
         await connection.commit();
 

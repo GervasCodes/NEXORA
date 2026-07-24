@@ -74,12 +74,7 @@ export function AuthProvider({ children }) {
         });
     }, []);
 
-    // All the functions above are already stable via useCallback([]), so
-    // the only thing that should ever make this object change is `user`
-    // itself - without useMemo, every render of AuthProvider (which sits
-    // near the root, so this is often) handed every consumer in the tree
-    // a brand-new object and forced them all to re-render regardless of
-    // whether anything they actually read had changed.
+    
     const value = useMemo(
         () => ({ user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser }),
         [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser]

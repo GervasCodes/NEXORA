@@ -47,12 +47,7 @@ export default function IncomingOfferModal() {
         setOffer(null);
     };
 
-    // Rider-facing offers pop up over whatever the rider is doing (map,
-    // list, another form) and are time-boxed, so keyboard/screen-reader
-    // users need the same affordances a sighted mouse user gets for free:
-    // focus lands on the primary action, Escape mirrors clicking Decline,
-    // and focus returns to wherever it was once the dialog closes instead
-    // of silently dropping to <body>.
+    
     useEffect(() => {
         if (!offer) return;
 

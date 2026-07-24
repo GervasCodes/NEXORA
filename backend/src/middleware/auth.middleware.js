@@ -1,7 +1,8 @@
 const jwt = require("jsonwebtoken");
 const { t, resolveLocale } = require("../i18n");
+const authRepository = require("../modules/auth/auth.repository");
 
-module.exports = (req, res, next) => {
+module.exports = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
@@ -23,6 +24,24 @@ module.exports = (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 message: t(req.locale, "common.invalidToken")
+            });
+        }
+
+        // Phase 3 (Soft Account Deletion): a session token stays valid for
+        // 7 days (utils/generateToken.js) regardless of what happens to the
+        // account afterward, so blocking login alone isn't enough - a
+        // still-unexpired token from before the account was deleted (or
+        // admin-deactivated) would otherwise keep working for the rest of
+        // its 7 days. Re-check fresh from the database on every request
+        // instead of trusting the JWT for this, same reasoning
+        // requireApprovedSeller.middleware.js already uses for
+        // verification status.
+        const status = await authRepository.findAccountStatusById(decoded.id);
+
+        if (!status || !status.is_active) {
+            return res.status(401).json({
+                success: false,
+                message: t(req.locale, "common.unauthorized")
             });
         }
 

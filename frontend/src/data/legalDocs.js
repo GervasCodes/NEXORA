@@ -1,10 +1,4 @@
-// Registry of NEXORA's legal/policy documents.
-// Each entry's `content` is the raw markdown source imported from
-// src/legal/*.md via Vite's `?raw` import, rendered by <MarkdownLite />.
-//
-// To add a new policy: drop a .md file in src/legal/, import it below,
-// and add an entry here — the /legal/:slug route and footer links pick
-// it up automatically via LEGAL_DOCS / LEGAL_DOC_LIST.
+
 
 import termsOfService from "../legal/terms-of-service.md?raw";
 import privacyPolicy from "../legal/privacy-policy.md?raw";

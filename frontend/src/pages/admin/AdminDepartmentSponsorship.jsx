@@ -8,15 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8C - read-only view of every seller-paid department-sponsorship
-// campaign, for oversight. There's no manual free toggle to compare
-// against here (unlike AdminSponsorship.jsx / the Products page's Sponsor
-// toggle) - a department's homepage placement is entirely derived from
-// this table, live, at request time
-// (category.repository.js#findAllActiveWithSponsorship). More than one
-// seller can have an active campaign for the same department at once
-// (several sellers can be active in one department); each shows as its
-// own row here.
+
 export default function AdminDepartmentSponsorship() {
     const [campaigns, setCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);

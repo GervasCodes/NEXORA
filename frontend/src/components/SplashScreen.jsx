@@ -84,7 +84,7 @@ export default function SplashScreen({ onDone }) {
                 onError={finish}
                 className="absolute inset-0 z-10 w-full h-full object-contain"
             />
-            <p className="absolute z-20 left-1/2 -translate-x-1/2 bottom-8 text-paper/70 text-xs mt-8 tracking-wide drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
+            <p className="absolute z-20 left-1/2 -translate-x-1/2 bottom-8 text-frost/70 text-xs mt-8 tracking-wide drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
                 Tap to skip
             </p>
         </div>

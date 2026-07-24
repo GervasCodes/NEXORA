@@ -3,15 +3,10 @@ import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 
-// Ratings a shopper can filter by, highest first - "4 stars & up" style,
-// not an exact-match dropdown, so there's no point offering more than
-// this (a "5 & up" option already exists as "only 5 stars").
+
 const RATING_OPTIONS = [4, 3, 2, 1];
 
-// Phase 3C: sort options, matching the fixed whitelist
-// utils/productSort.js accepts on the backend. Ordered the way a
-// shopper would expect to see them in a "Sort by" dropdown, not
-// alphabetically or by backend key name.
+
 const SORT_OPTIONS = [
     { value: "newest", labelKey: "filters.sortNewest" },
     { value: "price_low", labelKey: "filters.sortPriceLow" },
@@ -19,41 +14,7 @@ const SORT_OPTIONS = [
     { value: "rating", labelKey: "filters.sortRating" }
 ];
 
-// Phase 3A: price range + seller/store filters. Phase 3B: location
-// (region) + minimum-rating filters, added the same way. Phase 3C: a
-// "Sort by" dropdown, also added the same way. Shared by BrowseProducts,
-// DepartmentPage, and Home's search results - anywhere ProductGrid is
-// used against the public `/products` listing.
-//
-// Renders its own price inputs (in whatever currency the shopper has
-// selected, converted to TZS before being reported), a seller dropdown
-// (populated from GET /products/filters/sellers), a region dropdown
-// (populated from GET /products/filters/regions), a rating dropdown, and
-// a sort dropdown (fixed options, no fetch needed) - the two data-driven
-// dropdowns are optionally scoped to `categoryId` so a department page
-// only offers options that actually apply within it.
-//
-// Reports changes via `onChange({ min_price, max_price, seller_id,
-// region, min_rating, sort })` - only defined keys are included, so the
-// parent can spread the result straight into ProductGrid's `params`
-// alongside `search`/`category_id` without needing to know which
-// filters are currently active.
-//
-// "Clear filters" (see `hasActiveFilters`/`handleClear` below) resets
-// price/seller/region/rating but deliberately leaves sort alone: sort is
-// a display preference for how to view whatever's showing, not a filter
-// that narrows the result set, so clearing filters shouldn't also throw
-// away a shopper's chosen sort order.
-//
-// Phase 5C: `singleStore` hides the seller and region dropdowns and
-// skips fetching their options entirely. Both exist to narrow a
-// multi-seller listing down to one store/area - on a store page every
-// product already belongs to the same seller and (since region comes
-// from that seller's own profile) the same region, so both dropdowns
-// would only ever offer a single, already-applied option. The caller
-// is expected to supply `seller_id` itself (StorePage.jsx merges it
-// into ProductGrid's `params` the same way DepartmentPage merges
-// `category_id`) rather than this component managing it.
+
 export default function ProductFilters({ categoryId, onChange, singleStore }) {
     const { currency, toTzs } = useCurrency();
     const { t } = useLanguage();

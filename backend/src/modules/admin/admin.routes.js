@@ -34,6 +34,23 @@ router.get("/users", adminController.listUsers);
 router.put("/users/:id/deactivate", userIdValidation, validationMiddleware, adminController.deactivateUser);
 router.put("/users/:id/activate", userIdValidation, validationMiddleware, adminController.activateUser);
 
+// Phase 3 - Soft Account Deletion: accounts the user deleted themselves,
+// separated out from the regular Users list above (see
+// admin.repository.js#findAllUsers). Read-only here; permanently
+// removing one is Phase 4.
+router.get("/deleted-users", adminController.listDeletedUsers);
+
+// Phase 4 - Permanent Account Removal. Irreversible, so gated the same
+// way admin-management actions are (requireSuperAdmin), not just regular
+// admin access like the rest of this file.
+router.delete(
+    "/deleted-users/:id",
+    requireSuperAdmin,
+    userIdValidation,
+    validationMiddleware,
+    adminController.permanentlyDeleteUser
+);
+
 router.get("/sellers", adminController.listSellers);
 router.put("/sellers/:id/verify", userIdValidation, validationMiddleware, adminController.verifySeller);
 router.put("/sellers/:id/unverify", userIdValidation, validationMiddleware, adminController.unverifySeller);

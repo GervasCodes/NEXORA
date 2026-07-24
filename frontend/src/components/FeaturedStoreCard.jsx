@@ -1,14 +1,6 @@
 import { Link } from "react-router-dom";
 
-// Featured store tile for the department page. Phase 5A added the public
-// store profile page this links to - no other change needed here, per the
-// plan this component's own comment left for that phase.
-//
-// Phase 8B: `store.is_featured` (from findFeaturedStoresByCategory's new
-// store_featured_campaigns join) marks a store with a currently-active,
-// paid campaign for this exact department - shown as a small "Featured"
-// badge so it reads as a distinct, purchased placement rather than
-// looking identical to an organically-ranked row.
+
 export default function FeaturedStoreCard({ store }) {
     return (
         <Link

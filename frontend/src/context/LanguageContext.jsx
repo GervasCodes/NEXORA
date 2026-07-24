@@ -8,10 +8,7 @@ export const LANGUAGES = [
     { code: "sw", label: "Kiswahili" }
 ];
 
-// Keys are grouped by feature area (nav, common, auth, cart, checkout,
-// orders, notifications, delivery, footer...). Every key added to "en"
-// should also be added to "sw" - if a key is ever missing in "sw", `t()`
-// below falls back to the English text so nothing renders blank.
+
 export const DICTIONARY = {
     en: {
         "nav.dashboard": "Dashboard",
@@ -350,10 +347,7 @@ export function LanguageProvider({ children }) {
         setLanguage(profileLanguage);
     }, [setLanguage]);
 
-    // Falls back to the key's English text (or the key itself) so
-    // untranslated strings never render blank. Accepts an optional
-    // params object for simple {placeholder} interpolation, e.g.
-    // t("orders.vendorsBadge", { count: 3 }).
+   
     const t = useCallback((key, params) => {
         const template = DICTIONARY[language]?.[key] || DICTIONARY.en[key] || key;
         if (!params) return template;

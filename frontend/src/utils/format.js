@@ -19,9 +19,7 @@ export const formatShortDate = (dateString) => {
     });
 };
 
-// Phase 5B: "Member since" on the public store page wants month + year,
-// not a full day - the exact day a store was set up isn't a meaningful
-// trust signal, how long it's been around is.
+
 export const formatMonthYear = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-GB", {
         month: "short",

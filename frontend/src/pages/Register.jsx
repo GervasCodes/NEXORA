@@ -16,12 +16,7 @@ const initialForm = {
     terms_accepted: false
 };
 
-// Which document fields each role needs before an account can be
-// created. Buyers need none - registration stays a single fast step for
-// them. Sellers and delivery agents are routed into a second step that
-// collects these before the account is ever submitted to the server;
-// see auth.service.js#register on the backend for how "no account until
-// documents are uploaded and validated" is enforced.
+
 const REQUIRED_DOCS = {
     seller: [
         { field: "owner_photo", label: "Owner photo / selfie", hint: "A clear photo of your face." },
@@ -57,9 +52,7 @@ export default function Register() {
     const needsDocuments = form.role === "seller" || form.role === "delivery_agent";
     const requiredDocs = REQUIRED_DOCS[form.role] || [];
 
-    // Step 1 -> step 2 for seller/delivery_agent ("immediately redirect
-    // them to a document submission form before account creation").
-    // Buyers skip straight to submitting, since they need no documents.
+    
     const handleAccountStepSubmit = (e) => {
         e.preventDefault();
         setError("");
@@ -107,10 +100,7 @@ export default function Register() {
         submitRegistration();
     };
 
-    // Combine the selected country dial code with the locally-entered
-    // number (e.g. "+255" + "712345678") into the single "phone" field
-    // the backend expects (see auth.validator.js#registerValidation and
-    // the users.phone column).
+    
     const buildFullPhone = () => `${countryDial}${form.phone.trim().replace(/[^\d]/g, "")}`;
 
     const submitRegistration = async () => {

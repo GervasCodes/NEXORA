@@ -1,8 +1,4 @@
-// Mirrors backend/src/utils/geo.js + eta.js. Kept client-side too so the
-// widget/tracking page can recompute distance-remaining and ETA on every
-// "agent:position" tick locally, without a round trip to the API - the
-// backend copy is still the source of truth returned by GET /delivery/:id
-// on first load and after any status change.
+
 
 export const haversineKm = (lat1, lng1, lat2, lng2) => {
     if ([lat1, lng1, lat2, lng2].some((v) => v == null || Number.isNaN(Number(v)))) return null;
@@ -41,9 +37,7 @@ export const estimateEtaMinutes = (distanceKm, vehicleType) => {
     return Math.max(Math.round(hours * 60), Number(distanceKm) > 0 ? 1 : 0);
 };
 
-// Bearing in degrees (0 = north, clockwise) from point A to point B - used
-// to rotate the courier marker/icon so it visibly points the direction
-// of travel instead of always facing the same way.
+
 export const bearingDegrees = (lat1, lng1, lat2, lng2) => {
     if ([lat1, lng1, lat2, lng2].some((v) => v == null || Number.isNaN(Number(v)))) return null;
 
@@ -59,10 +53,7 @@ export const bearingDegrees = (lat1, lng1, lat2, lng2) => {
     return (toDeg(Math.atan2(y, x)) + 360) % 360;
 };
 
-// 0-100 progress along the pickup -> destination line, based on how much
-// of the *original* pickup-to-destination distance is left. Used by the
-// floating widget's progress bar. Clamped so a straight-line shortcut
-// (agent slightly off the direct line) never reads as >100% or <0%.
+
 export const progressPercent = (totalKm, remainingKm) => {
     if (!totalKm || remainingKm == null) return null;
     const pct = ((totalKm - remainingKm) / totalKm) * 100;

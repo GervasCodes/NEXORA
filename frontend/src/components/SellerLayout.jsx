@@ -27,10 +27,7 @@ export default function SellerLayout() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Base account-level gate: set during registration, reviewed by an
-    // admin. Nothing seller-specific (store setup, products, orders,
-    // analytics, wallet) is reachable until this is "approved" - see
-    // requireApprovedSeller.middleware.js for the matching API-side gate.
+  
     const isApproved = user?.account_verification_status === "approved";
 
     const loadProfile = () => {

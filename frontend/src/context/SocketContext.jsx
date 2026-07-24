@@ -10,10 +10,7 @@ const getSocketUrl = () => {
     return apiUrl.replace(/\/api\/v1\/?$/, "");
 };
 
-// "connected"    - live, everything works
-// "connecting"   - first-ever connection attempt hasn't completed yet
-// "reconnecting" - was connected, dropped, socket.io is retrying
-// "disconnected" - not authenticated, or the socket was closed on purpose
+
 export function SocketProvider({ children }) {
     const { user } = useAuth();
     const socketRef = useRef(null);
@@ -34,12 +31,7 @@ export function SocketProvider({ children }) {
         const socket = io(getSocketUrl(), {
             auth: { token },
             transports: ["websocket", "polling"],
-            // Retry indefinitely with capped exponential backoff, rather
-            // than relying on socket.io's defaults implicitly - a
-            // delivery can run for 30+ minutes, during which an agent's
-            // or buyer's connection may drop repeatedly (elevators,
-            // patchy mobile data, a phone sleeping); giving up after a
-            // handful of tries would silently strand the tracking UI.
+           
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
@@ -56,9 +48,7 @@ export function SocketProvider({ children }) {
 
         socket.on("disconnect", (reason) => {
             setConnected(false);
-            // "io client disconnect" means *we* called .disconnect() (e.g.
-            // logging out) - socket.io won't auto-retry that on its own,
-            // so it's a true "disconnected", not a drop to recover from.
+            
             setConnectionState(reason === "io client disconnect" ? "disconnected" : "reconnecting");
         });
 

@@ -1,3 +1,4 @@
+const db = require("../../config/db");
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
@@ -5,9 +6,143 @@ const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
 const departmentSponsorshipService = require("../departmentSponsorship/departmentSponsorship.service");
+const auditService = require("../audit/audit.service");
+const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
 
 exports.listUsers = async () => {
     return adminRepository.findAllUsers();
+};
+
+// Phase 3 - Deleted Accounts section. permanentlyDeleteUser below (Phase
+// 4) is what an admin calls from here to actually erase one.
+exports.listDeletedUsers = async () => {
+    return adminRepository.findAllDeletedUsers();
+};
+
+// Phase 4 - Permanent Account Removal.
+//
+// Runs against an account that already went through Phase 3's soft
+// delete (deleted_at set). Erases every identifying field, deletes
+// whatever data/documents/Cloudinary assets are safe to remove outright,
+// and leaves the users row itself as a permanently-anonymized tombstone
+// - see migration 057 and admin.repository.js's "Permanent Account
+// Removal" section for the full reasoning on why the row can't just be
+// dropped (orders/reviews/disputes/etc. reference it without cascade).
+//
+// What this deletes entirely (DB rows + Cloudinary assets):
+//   - account_verification_documents (ID photos, business registration)
+//   - products that were never actually ordered, and their images/
+//     videos/audio (a product with real order history is left alone -
+//     see findNeverOrderedProductIds)
+//   - seller_profiles' logo/banner images (row itself is scrubbed, not
+//     dropped - see scrubSellerProfile)
+//   - wishlist_items, otp_codes, notifications, seller_collections,
+//     seller_delivery_agents links, delivery_offers (as agent) - all
+//     purely personal/operational bookkeeping with no other party
+//     depending on them
+// What this scrubs but keeps (financial/legal record, or another
+// party's data depends on it):
+//   - orders, order_items, payments, wallet_transactions,
+//     withdrawal_requests, agent_earnings, disputes + evidence/messages,
+//     reviews + review_photos, delivery_ratings, audit_logs, fraud_flags,
+//     sponsorship/featured-store/department-sponsorship campaigns
+//   - conversations (kept for the other participant); the deleted
+//     account's own messages are tombstoned via the existing "delete
+//     message" mechanism (is_deleted/deleted_at), not removed
+//   - the users row and seller_profiles row (PII scrubbed, not dropped)
+exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
+    const user = await adminRepository.findUserForPermanentDeletion(userId);
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    if (!user.deleted_at) {
+        throw new Error("Only an account the user has already deleted themselves can be permanently removed.");
+    }
+
+    if (user.permanently_deleted_at) {
+        throw new Error("This account has already been permanently deleted.");
+    }
+
+    // Gather every Cloudinary asset URL up front, before anything is
+    // deleted from the database - once the account_verification_documents
+    // /product rows are gone, there's no way to look their URLs back up.
+    const verificationDocUrls = await adminRepository.findAccountVerificationDocumentUrls(userId);
+
+    const sellerAssets = await adminRepository.findSellerLogoAndBanner(userId);
+    const sellerAssetUrls = sellerAssets
+        ? [sellerAssets.store_logo, sellerAssets.store_banner].filter(Boolean)
+        : [];
+
+    const neverOrderedProductIds = await adminRepository.findNeverOrderedProductIds(userId);
+    const productMediaUrls = await adminRepository.findProductMediaUrls(neverOrderedProductIds);
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        await adminRepository.deleteAccountVerificationDocuments(userId, connection);
+
+        if (sellerAssets) {
+            await adminRepository.scrubSellerProfile(userId, connection);
+        }
+
+        await adminRepository.deleteProducts(neverOrderedProductIds, connection);
+        await adminRepository.deleteSellerCollections(userId, connection);
+
+        await adminRepository.deleteWishlistItems(userId, connection);
+        await adminRepository.deleteOtpCodes(userId, connection);
+        await adminRepository.deleteNotifications(userId, connection);
+        await adminRepository.deleteSellerDeliveryAgentLinks(userId, connection);
+        await adminRepository.deleteDeliveryOffersForAgent(userId, connection);
+        await adminRepository.tombstoneSentMessages(userId, connection);
+
+        await adminRepository.scrubUserPII(userId, connection);
+
+        await connection.commit();
+
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+
+    } finally {
+        connection.release();
+    }
+
+    // Cloudinary cleanup happens after the transaction commits, not
+    // inside it - Cloudinary isn't transactional, and the DB state (the
+    // part that actually matters for correctness/re-running this safely)
+    // is already durably erased at this point. Best-effort: a leftover
+    // asset from a failed delete is logged, not fatal - see
+    // cloudinaryDelete.js.
+    const failedDeletes = await deleteManyFromCloudinary([
+        ...verificationDocUrls,
+        ...sellerAssetUrls,
+        ...productMediaUrls
+    ]);
+
+    auditService.log({
+        userId: actorAdminId,
+        eventType: "account_permanently_deleted",
+        description: `Admin permanently deleted account #${userId}`,
+        metadata: {
+            target_user_id: Number(userId),
+            role: user.role,
+            products_deleted: neverOrderedProductIds.length,
+            cloudinary_assets_deleted:
+                verificationDocUrls.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
+            cloudinary_assets_failed: failedDeletes.length
+        }
+    });
+
+    if (failedDeletes.length) {
+        console.error(
+            `[admin] permanentlyDeleteUser(${userId}): ${failedDeletes.length} Cloudinary asset(s) failed to delete`,
+            failedDeletes
+        );
+    }
 };
 
 exports.setUserActive = async (userId, isActive) => {
@@ -15,6 +150,14 @@ exports.setUserActive = async (userId, isActive) => {
 
     if (!user) {
         throw new Error("User not found");
+    }
+
+    // A self-deleted account (deleted_at set) is not reversible through
+    // this lever - it never shows up in the regular Users list this
+    // action is called from anyway (see findAllUsers), but the guard
+    // stays here too in case it's ever called directly.
+    if (user.deleted_at) {
+        throw new Error("This account has been deleted and can no longer be reactivated.");
     }
 
     await adminRepository.setUserActive(userId, isActive);

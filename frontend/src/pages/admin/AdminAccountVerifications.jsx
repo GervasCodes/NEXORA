@@ -19,10 +19,7 @@ const STATUS_TABS = [
     { value: "rejected", label: "Rejected" }
 ];
 
-// Reviews the verification documents (owner photo, National/Voter ID,
-// driver's license for delivery agents) submitted as part of
-// registration itself - distinct from the separate "Verifications" page,
-// which handles the optional paid Verified Seller badge.
+
 export default function AdminAccountVerifications() {
     const [status, setStatus] = useState("pending");
     const [role, setRole] = useState("");
@@ -156,7 +153,7 @@ export default function AdminAccountVerifications() {
                                 <button
                                     onClick={() => approve(r.id)}
                                     disabled={busyId === r.id}
-                                    className="text-xs bg-teal text-paper px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                                    className="text-xs bg-teal text-frost px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
                                 >
                                     Approve
                                 </button>

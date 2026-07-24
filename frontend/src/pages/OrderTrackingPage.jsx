@@ -20,11 +20,7 @@ export default function OrderTrackingPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [rawAgentPos, setRawAgentPos] = useState(null);
-    // Phase 5C: road-routing distance/ETA pushed live by the backend with
-    // every "agent:position" tick (see delivery.service.js's
-    // updateAgentLocation) - the same OSRM-backed routing service GET
-    // /delivery/:id uses, so this page no longer needs to approximate it
-    // with a client-side straight-line calculation between ticks.
+    
     const [liveEta, setLiveEta] = useState(null);
 
     const load = useCallback(() => {
@@ -67,11 +63,7 @@ export default function OrderTrackingPage() {
         const refreshDelivery = () => {
             api.get(`/delivery/${id}`).then(({ data }) => setDelivery(data.data)).catch(() => {});
         };
-        // A status transition (e.g. picked up -> in transit) changes where
-        // the ETA is measured from, so the road-routing ETA carried on this
-        // event is applied immediately - the refetch below still runs to
-        // pick up everything else the status change affects (timeline,
-        // notes, timestamps).
+        
         const handleStatus = (payload) => {
             if (String(payload.orderId) === String(id)) {
                 setLiveEta({
@@ -94,9 +86,7 @@ export default function OrderTrackingPage() {
         };
     }, [socket, connected, id]);
 
-    // Smoothly interpolated for the map marker. The raw value (no easing)
-    // is used for the distance/ETA numbers below, so those figures update
-    // immediately on each tick rather than trailing the animation.
+  
     const smoothAgentPos = useSmoothPosition(rawAgentPos);
 
     const handleMessageAgent = async () => {

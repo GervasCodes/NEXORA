@@ -13,11 +13,7 @@ const VEHICLE_EMOJI = {
     truck: "🚚"
 };
 
-// Shown on the order-detail page in place of the old always-on inline
-// map. Deliberately doesn't mount a Leaflet map instance itself - that's
-// the single biggest "map performance" win for Phase 1: an order page
-// showing this widget costs nothing map-tile-wise, and the real map only
-// ever renders once you actually open the full tracking page.
+
 export default function TrackingWidget({ orderId, delivery, destination }) {
     const { t } = useLanguage();
     const { socket, connected, connectionState } = useSocket();
@@ -29,11 +25,7 @@ export default function TrackingWidget({ orderId, delivery, destination }) {
             : null
     );
 
-    // Phase 5C: the backend now pushes a road-routing distance/ETA with
-    // every "agent:position" tick (see delivery.service.js's
-    // updateAgentLocation), computed via the same OSRM-backed routing
-    // service the tracking REST endpoint uses - so this only needs to
-    // hold onto whatever the server last sent, never recompute it.
+  
     const [liveEta, setLiveEta] = useState(null);
 
     useEffect(() => {

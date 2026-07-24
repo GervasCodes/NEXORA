@@ -1,11 +1,31 @@
 const db = require("../../config/db");
 
 // --- Users ---
+// Deleted accounts (deleted_at set - see migration 056) are deliberately
+// excluded here: they get their own read-only Deleted Accounts section
+// (findAllDeletedUsers below) instead of showing up in this list with a
+// misleading "Activate" button next to them.
 exports.findAllUsers = async () => {
     const [rows] = await db.query(
         `SELECT id, first_name, last_name, email, phone, role, is_active, created_at
         FROM users
+        WHERE deleted_at IS NULL
         ORDER BY created_at DESC`
+    );
+    return rows;
+};
+
+// Every account a user has soft-deleted for themselves (Phase 3 -
+// account.service.js#deleteAccount). permanently_deleted_at distinguishes
+// ones still awaiting review from ones an admin has already permanently
+// removed (Phase 4 - see permanentlyDeleteUser below).
+exports.findAllDeletedUsers = async () => {
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, email, phone, role, deleted_at,
+                permanently_deleted_at, created_at
+        FROM users
+        WHERE deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC`
     );
     return rows;
 };
@@ -20,6 +40,9 @@ exports.setUserActive = async (userId, isActive) => {
 };
 
 // --- Sellers ---
+// Same deleted_at exclusion as findAllUsers above - a deleted seller's
+// profile still exists (Phase 4 will decide what happens to it), but it
+// belongs in the Deleted Accounts section, not the regular Sellers list.
 exports.findAllSellers = async () => {
     const [rows] = await db.query(
         `SELECT sp.id AS profile_id, sp.user_id, sp.store_name, sp.store_slug,
@@ -27,6 +50,7 @@ exports.findAllSellers = async () => {
                 u.first_name, u.last_name, u.email, u.is_active
         FROM seller_profiles sp
         JOIN users u ON u.id = sp.user_id
+        WHERE u.deleted_at IS NULL
         ORDER BY sp.is_verified ASC, sp.id DESC`
     );
     return rows;
@@ -282,6 +306,205 @@ exports.updateAdminLevel = async (userId, adminLevel) => {
 exports.revokeAdmin = async (userId) => {
     await db.query(
         "UPDATE users SET role = 'buyer', admin_level = NULL WHERE id = ? AND role = 'admin'",
+        [userId]
+    );
+};
+
+// --- Permanent Account Removal (Phase 4) ---
+// See migration 057 and admin.service.js#permanentlyDeleteUser for the
+// full reasoning. Short version: `users(id)` is referenced by orders,
+// order_items, reviews, disputes, delivery_ratings, conversations/
+// messages, wallet_transactions, etc. without ON DELETE CASCADE, on
+// purpose, so financial/legal history survives an account's deletion -
+// an actual `DELETE FROM users` would fail with a foreign key error for
+// any account with real activity. These helpers instead erase every
+// identifying field on the row and delete only the data that's genuinely
+// safe to remove outright, leaving the row itself as an anonymized
+// tombstone other tables can keep pointing at.
+
+exports.findUserForPermanentDeletion = async (userId) => {
+    const [rows] = await db.query(
+        `SELECT id, role, deleted_at, permanently_deleted_at
+        FROM users WHERE id = ?`,
+        [userId]
+    );
+    return rows[0];
+};
+
+// --- Verification documents (owner photo / national ID / voter ID /
+// driver's license - the most sensitive Cloudinary assets on the
+// platform). Always safe to remove outright: nothing else references
+// account_verification_documents, and account_verification_history
+// (the audit trail of submit/approve/reject events) is kept separately
+// and untouched, same reasoning as audit_logs surviving deletion.
+exports.findAccountVerificationDocumentUrls = async (userId, executor = db) => {
+    const [rows] = await executor.query(
+        "SELECT file_url FROM account_verification_documents WHERE user_id = ?",
+        [userId]
+    );
+    return rows.map((r) => r.file_url);
+};
+
+exports.deleteAccountVerificationDocuments = async (userId, executor = db) => {
+    await executor.query(
+        "DELETE FROM account_verification_documents WHERE user_id = ?",
+        [userId]
+    );
+};
+
+// --- Seller profile ---
+// The storefront itself (seller_profiles row) has to stay - products,
+// orders, reviews, disputes, and wallet history all hang off it, and
+// store_slug/business fields aren't safe to just null out (store_name/
+// store_slug are NOT NULL and store_slug is UNIQUE) - so this scrubs
+// every identifying/contact field to an anonymized placeholder instead,
+// the same "erase, don't drop the row" approach as the users row itself.
+exports.findSellerLogoAndBanner = async (userId, executor = db) => {
+    const [rows] = await executor.query(
+        "SELECT store_logo, store_banner FROM seller_profiles WHERE user_id = ?",
+        [userId]
+    );
+    return rows[0] || null;
+};
+
+exports.scrubSellerProfile = async (userId, executor = db) => {
+    await executor.query(
+        `UPDATE seller_profiles
+        SET store_name = 'Deleted Store',
+            store_slug = CONCAT('deleted-store-', user_id),
+            store_description = NULL,
+            store_tagline = NULL,
+            store_logo = NULL,
+            store_banner = NULL,
+            business_email = NULL,
+            business_phone = NULL,
+            address = NULL,
+            pickup_lat = NULL,
+            pickup_lng = NULL,
+            social_instagram = NULL,
+            social_facebook = NULL,
+            social_whatsapp = NULL
+        WHERE user_id = ?`,
+        [userId]
+    );
+};
+
+// --- Products that never had a single order ---
+// A product with real order_items can't be deleted (order_items.product_id
+// has no ON DELETE clause - see migration 006) and shouldn't be: a
+// buyer's Order History still needs to show what they actually bought.
+// Genuinely orphaned listings (never sold) have no such dependency and
+// are removed entirely, cascading to their own product_images/
+// product_videos/product_audio/reviews/wishlist rows.
+exports.findNeverOrderedProductIds = async (userId, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT p.id FROM products p
+        WHERE p.seller_id = ?
+        AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id)`,
+        [userId]
+    );
+    return rows.map((r) => r.id);
+};
+
+exports.findProductMediaUrls = async (productIds, executor = db) => {
+    if (!productIds.length) return [];
+
+    const [images] = await executor.query(
+        `SELECT image_url AS url FROM product_images WHERE product_id IN (?)`,
+        [productIds]
+    );
+    const [videos] = await executor.query(
+        `SELECT video_url AS url FROM product_videos WHERE product_id IN (?)`,
+        [productIds]
+    );
+    const [audio] = await executor.query(
+        `SELECT audio_url AS url FROM product_audio WHERE product_id IN (?)`,
+        [productIds]
+    );
+
+    return [...images, ...videos, ...audio].map((r) => r.url);
+};
+
+// product_images/product_videos/product_audio/reviews/review_photos
+// (via reviews) and wishlist_items all cascade from products(id) - see
+// migrations 004, 023, 044, 045, 046 - so deleting the product rows here
+// is enough to clean up every dependent row in one statement each.
+exports.deleteProducts = async (productIds, executor = db) => {
+    if (!productIds.length) return;
+    await executor.query("DELETE FROM products WHERE id IN (?)", [productIds]);
+};
+
+// --- Purely personal, no other party depends on these ---
+exports.deleteWishlistItems = async (userId, executor = db) => {
+    await executor.query("DELETE FROM wishlist_items WHERE user_id = ?", [userId]);
+};
+
+exports.deleteOtpCodes = async (userId, executor = db) => {
+    await executor.query("DELETE FROM otp_codes WHERE user_id = ?", [userId]);
+};
+
+exports.deleteNotifications = async (userId, executor = db) => {
+    await executor.query("DELETE FROM notifications WHERE user_id = ?", [userId]);
+};
+
+// A seller's curated storefront collections (seller_collections) and a
+// seller's chosen roster of hired delivery agents (seller_delivery_agents,
+// both directions - the account being deleted might be the seller who
+// hired agents, or an agent someone else hired) are pure store-management
+// bookkeeping with no cross-party record-keeping value once the account
+// is gone. seller_collection_products cascades from seller_collections(id).
+exports.deleteSellerCollections = async (userId, executor = db) => {
+    await executor.query("DELETE FROM seller_collections WHERE seller_id = ?", [userId]);
+};
+
+exports.deleteSellerDeliveryAgentLinks = async (userId, executor = db) => {
+    await executor.query(
+        "DELETE FROM seller_delivery_agents WHERE seller_id = ? OR agent_id = ?",
+        [userId, userId]
+    );
+};
+
+// Dispatch offers (offered/accepted/declined/expired) for a delivery
+// agent - resolved-or-stale operational rows, not a record either party
+// needs after the fact (the resulting delivery, if any, is the durable
+// record - deliveries.agent_id is untouched here).
+exports.deleteDeliveryOffersForAgent = async (userId, executor = db) => {
+    await executor.query("DELETE FROM delivery_offers WHERE agent_id = ?", [userId]);
+};
+
+// --- Chat content ---
+// Conversations/messages stay (the other participant's thread shouldn't
+// vanish), but the deleted account's own message text is scrubbed using
+// the same tombstone mechanism "delete message" already uses (migration
+// 021) - the bubble renders as "This message was deleted" instead of
+// leaking their old message content.
+exports.tombstoneSentMessages = async (userId, executor = db) => {
+    await executor.query(
+        `UPDATE messages
+        SET is_deleted = TRUE, deleted_at = NOW()
+        WHERE sender_id = ? AND is_deleted = FALSE`,
+        [userId]
+    );
+};
+
+// --- The users row itself ---
+// Final step: erase every remaining identifying field. email/phone are
+// UNIQUE NOT NULL, so they get a placeholder that can never collide
+// rather than NULL. password was already randomized at soft-delete time
+// (Phase 3) and is left as-is.
+exports.scrubUserPII = async (userId, executor = db) => {
+    await executor.query(
+        `UPDATE users
+        SET first_name = 'Deleted',
+            last_name = 'User',
+            email = CONCAT('deleted-user-', id, '@deleted.nexora'),
+            phone = CONCAT('deleted-', id),
+            current_lat = NULL,
+            current_lng = NULL,
+            vehicle_type = NULL,
+            vehicle_plate_number = NULL,
+            permanently_deleted_at = NOW()
+        WHERE id = ?`,
         [userId]
     );
 };

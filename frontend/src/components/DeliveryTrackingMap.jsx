@@ -22,20 +22,7 @@ function FollowAgent({ agentPos }) {
     return null;
 }
 
-// Real Leaflet map for the full-screen tracking page (see
-// pages/OrderTrackingPage.jsx). Renders the pickup pin, destination pin,
-// a straight-line route between them (see Phase 5 for real road
-// routing), and the agent's live, smoothly-interpolated position -
-// `agentPos` is expected to already be the smoothed value from
-// hooks/useSmoothPosition, this component just renders whatever it's
-// given. Also used standalone in tests.
-//
-// Marker glide: Leaflet positions markers with an inline
-// `transform: translate3d(...)` that a global CSS rule
-// (.leaflet-marker-icon { transition: transform ... }, see index.css)
-// turns into a visual glide on its own - combined with the JS-side
-// easing in useSmoothPosition, movement stays smooth even when position
-// ticks arrive at an uneven cadence.
+
 export default function DeliveryTrackingMap({ agentPos, pickup, destination, height = 260, fitAll = false }) {
     const { t } = useLanguage();
 

@@ -8,12 +8,7 @@ const STATUS_STYLES = {
     cancelled: "bg-coral/10 text-coral"
 };
 
-// Phase 8B - read-only view of every seller-paid featured-store campaign,
-// for oversight. There's no manual free toggle to compare against here
-// (unlike AdminSponsorship.jsx / the Products page's Sponsor toggle) -
-// a store's featured placement in a department is entirely derived from
-// this table, live, at request time
-// (category.repository.js#findFeaturedStoresByCategory).
+
 export default function AdminFeaturedStores() {
     const [campaigns, setCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);

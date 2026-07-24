@@ -206,7 +206,7 @@ export default function Account() {
                     )}
 
                     <button type="submit" disabled={busy === "profile"}
-                        className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60">
+                        className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                         {busy === "profile" ? t("common.saving") : t("common.save") + " profile"}
                     </button>
                 </form>
@@ -265,7 +265,7 @@ export default function Account() {
 
                 {pwdStep === "idle" && (
                     <button onClick={requestPasswordOtp} disabled={busy === "password"}
-                        className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60">
+                        className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                         {busy === "password" ? "Sending code…" : t("account.changePasswordButton")}
                     </button>
                 )}
@@ -287,7 +287,7 @@ export default function Account() {
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "password" || pwdCode.length !== 6}
-                                className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60">
+                                className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                                 {busy === "password" ? "Verifying…" : "Verify code"}
                             </button>
                             <button type="button" onClick={cancelPasswordChange}
@@ -313,7 +313,7 @@ export default function Account() {
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "password"}
-                                className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:bg-abyss transition-colors disabled:opacity-60">
+                                className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                                 {busy === "password" ? "Updating…" : "Set new password"}
                             </button>
                             <button type="button" onClick={cancelPasswordChange}
@@ -333,7 +333,8 @@ export default function Account() {
             <section className="border border-coral/30 rounded-lg p-5">
                 <h2 className="font-display text-lg mb-1 text-coral">{t("account.deleteAccount")}</h2>
                 <p className="text-ash text-sm mb-4">
-                    This permanently deletes your personal data and deactivates your account. This can't be undone.
+                    This deletes your account: you'll be signed out everywhere and won't be able to log back in.
+                    This can't be undone.
                 </p>
 
                 {!confirmDelete ? (
@@ -355,7 +356,7 @@ export default function Account() {
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "delete"}
                                 className="bg-coral text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
-                                {busy === "delete" ? "Deleting…" : "Permanently delete"}
+                                {busy === "delete" ? "Deleting…" : "Delete account"}
                             </button>
                             <button type="button" onClick={() => setConfirmDelete(false)}
                                 className="text-sm border border-line px-4 py-2 rounded-md hover:border-ink transition-colors">

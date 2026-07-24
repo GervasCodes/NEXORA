@@ -9,57 +9,7 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
 
-// Phase 5A: the store profile page's first slice - identity and branding
-// only (name, logo, banner, description, store type, general location).
-// Phase 5B added trust info (verified badge, store-wide rating, member
-// since) below. Phase 5C added the store's product catalog beneath that -
-// the same ProductFilters/ProductGrid pair BrowseProducts and
-// DepartmentPage already use against the public GET /products listing,
-// scoped to this store via `seller_id` instead of `category_id`, so
-// pagination, infinite scroll, price/rating filters, sorting, and the
-// grid/list view toggle all come for free instead of being rebuilt here.
-// Phase 5D adds the three remaining pieces named in its title: an "About"
-// heading over the description paragraph 5A already rendered, a Delivery
-// info line driven by the new `has_pickup_pin` flag, and a paginated
-// Reviews section pulling from the new GET /reviews/store/:sellerId
-// endpoint (a store-scoped sibling of the GET /reviews/product/:productId
-// call ProductDetail.jsx already makes). Loading/not-found states follow
-// ProductDetail.jsx's existing pattern for a page fetched by slug.
-//
-// Phase 7A (Store Themes) swaps the hardcoded `text-teal`/`bg-teal`
-// accents below for `theme.text`/`theme.bg`, derived from the seller's
-// chosen `store_theme` via utils/storeThemes.js. Only accent color
-// changes - layout, copy, and every non-accent color (ink/ash/paper/
-// mango star ratings) are untouched.
-//
-// Phase 7B (Branding) adds two more seller-controlled display fields
-// from utils/socialLinks.js: `store_tagline`, a short line rendered right
-// under the store name, and up to three social icon links (Instagram/
-// Facebook/WhatsApp) rendered under the location/rating line. Both are
-// entirely optional - a store with neither renders exactly as it did
-// before this phase.
-//
-// Phase 7C (Seller Collections) adds an optional row of shelves above
-// the "Products" catalog heading: GET /stores/:slug/collections returns
-// each of the seller's named collections that still has at least one
-// active product, each already shaped like the product-listing rows
-// ProductGrid/ProductRow already know how to render - so each collection
-// is just `<ProductRow title={c.name} products={c.products} />`, reusing
-// the same horizontal-scroll strip Home.jsx already uses for "Trending"/
-// "Recently added". A store with no collections renders nothing new.
-//
-// Phase 7D (Verification & Trust) adds a "Trust & safety" section
-// spelling out what the page's two independent trust signals actually
-// mean: the existing paid "Verified Seller" badge (`is_verified`, shown
-// as a compact pill next to the store name since Phase 5B) and the new
-// `identity_verified` flag (NEXORA reviewed this seller's identity
-// documents before their account could sell at all - a check every
-// operating seller has already passed, but never previously shown to
-// buyers). Renders only the rows that apply, and not at all when neither
-// is true.
 
-// Three fixed icons for the social links row - not a general-purpose icon
-// set, just the one per platform getSocialLinks can ever return.
 function SocialIcon({ name }) {
     if (name === "instagram") {
         return (
@@ -85,13 +35,7 @@ function SocialIcon({ name }) {
     );
 }
 
-// A second fixed icon, alongside SocialIcon above - Phase 7D's "Identity
-// Verified" row needs its own glyph, distinct from the header's existing
-// checkmark-in-a-shield "Verified Seller" badge, so the two rows in the
-// Trust & safety section don't look like duplicates of one signal.
-// Reuses the exact checkmark-shield path the header's compact "Verified"
-// pill already renders (see the badge markup further down) - same glyph,
-// just sized for a Trust & safety row instead of a small inline pill.
+
 function VerifiedIcon({ className = "" }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-5 h-5 shrink-0 mt-0.5 ${className}`}>
@@ -135,23 +79,14 @@ export default function StorePage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    // Phase 7C - a separate, independent fetch (like reviews below), so a
-    // store with zero collections (the common case, before any seller
-    // opts into this feature) never blocks or delays anything else on the
-    // page. Failure just leaves the row list empty rather than surfacing
-    // an error - collections are a bonus display, not core store data.
+   
     useEffect(() => {
         api.get(`/stores/${slug}/collections`)
             .then(({ data }) => setCollections(data.data || []))
             .catch(() => setCollections([]));
     }, [slug]);
 
-    // Reviews are fetched once we know the store's user_id (needed for
-    // the /reviews/store/:sellerId path), separately from the store
-    // profile fetch above - same two-call pattern 5C's catalog fetch
-    // already established for this page. Resets back to page 1 whenever
-    // the store itself changes (i.e. a fresh slug) or the sort changes
-    // (Phase 6C).
+    
     useEffect(() => {
         if (!store?.user_id) return;
 
@@ -228,7 +163,7 @@ export default function StorePage() {
                         <div className="flex items-center gap-1.5">
                             <h1 className="font-display text-2xl sm:text-3xl truncate">{store.store_name}</h1>
                             {isVerified && (
-                                <span className={`${theme.bg} text-paper text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0`}>
+                                <span className={`${theme.bg} ${theme.badgeText} text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0`}>
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                                         <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
                                     </svg>

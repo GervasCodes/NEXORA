@@ -62,14 +62,18 @@ export default function SplashScreen({ onDone }) {
                 style={{ background: "radial-gradient(circle, #1D4ED8 0%, transparent 70%)", animationDelay: "1s" }}
             />
 
-            {/* Full-bleed, edge-to-edge on every device - the same launch
-                feel as opening Instagram or TikTok, not a centered card.
-                `absolute inset-0 w-full h-full` fills the exact box the
-                parent already sized to `100dvh`/`100dvw` (safe-area aware),
-                and `object-cover` crops to fill that box completely rather
-                than letterboxing like `object-contain` did - there is no
-                visible edge or background peeking around the video on any
-                screen size or aspect ratio. */}
+            {/* Full-bleed container - the same launch feel as opening
+                Instagram or TikTok, not a centered card. `absolute inset-0
+                w-full h-full` fills the exact box the parent already sized
+                to `100dvh`/`100dvw` (safe-area aware). `object-contain`
+                (not `object-cover`) means the whole clip is always shown -
+                nothing is cropped off the edges - so any wordmark/text
+                baked into the video stays fully readable on every aspect
+                ratio (tall phones, wide desktops, tablets) instead of
+                being clipped when the video's ratio doesn't match the
+                viewport. The ambient glow behind it fills whatever
+                letterbox space is left, so there's still no bare/dead
+                background showing around the video. */}
             <video
                 ref={videoRef}
                 src="/brand/nexora-intro.mp4"
@@ -78,7 +82,7 @@ export default function SplashScreen({ onDone }) {
                 playsInline
                 onEnded={finish}
                 onError={finish}
-                className="absolute inset-0 z-10 w-full h-full object-cover"
+                className="absolute inset-0 z-10 w-full h-full object-contain"
             />
             <p className="absolute z-20 left-1/2 -translate-x-1/2 bottom-8 text-paper/70 text-xs mt-8 tracking-wide drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
                 Tap to skip

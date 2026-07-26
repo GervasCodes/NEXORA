@@ -158,6 +158,24 @@ exports.createDispute = async (orderId, buyerId, sellerId, overrides = {}) => {
     return { id: result.insertId, disputeNumber };
 };
 
+// Phase 6 additions - used by admin.accountManagement.db.test.js and
+// chat.messaging.db.test.js.
+exports.createConversation = async (buyerId, sellerId, overrides = {}) => {
+    const [result] = await db.query(
+        "INSERT INTO conversations (buyer_id, seller_id, product_id) VALUES (?, ?, ?)",
+        [buyerId, sellerId, overrides.product_id ?? null]
+    );
+    return { id: result.insertId };
+};
+
+exports.createMessage = async (conversationId, senderId, overrides = {}) => {
+    const [result] = await db.query(
+        "INSERT INTO messages (conversation_id, sender_id, message) VALUES (?, ?, ?)",
+        [conversationId, senderId, overrides.message || "Hello there"]
+    );
+    return { id: result.insertId };
+};
+
 // Deletes in FK-safe (child-before-parent) order. Truncate isn't used
 // since these tables have foreign keys to users/products that would
 // need FK checks disabled - plain DELETE keeps this safe by default and
@@ -201,6 +219,41 @@ exports.resetTables = async () => {
     }
 };
 
+// adminNotificationService.notify() / notificationService.notify() calls
+// throughout the codebase are fire-and-forget (the callers - suspendUser,
+// unsuspendUser, permanentlyDeleteUser, chat.service#sendMessage - never
+// await them, and notify() itself doesn't return a promise), so the row
+// they write can land a moment after the calling service function already
+// resolved. Polls briefly instead of assuming either a fixed sleep or an
+// immediate write - a fixed sleep is either too slow (adds real time to
+// every run) or, worse, occasionally too short (flaky).
+exports.waitForRows = async (query, params, { timeoutMs = 2000, intervalMs = 50 } = {}) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const [rows] = await db.query(query, params);
+        if (rows.length > 0) return rows;
+        if (Date.now() > deadline) return rows;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+};
+
 exports.closePool = async () => {
     await db.end();
+};
+
+// admin.service.js's suspendUser/unsuspendUser/permanentlyDeleteUser and
+// chat.service.js's sendMessage all call their respective notification
+// service's notify() without awaiting it (deliberately - the calling
+// request shouldn't block on a socket broadcast/web-push/email send).
+// That means the notifications/admin_notifications row it writes can
+// land a moment after the service call above it already resolved. Polls
+// briefly instead of assuming either a fixed sleep or an immediate write.
+exports.waitForRows = async (query, params, { timeoutMs = 2000, intervalMs = 50 } = {}) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const [rows] = await db.query(query, params);
+        if (rows.length > 0) return rows;
+        if (Date.now() > deadline) return rows;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
 };

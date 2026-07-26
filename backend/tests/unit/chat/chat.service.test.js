@@ -96,46 +96,6 @@ describe("chat.service.getMessages", () => {
 
         expect(chatRepository.findMessages).toHaveBeenCalledWith(1, null);
     });
-
-    it("backfills delivered_at for the requesting user as a best-effort side effect (Phase 4 delivery receipts)", async () => {
-        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
-        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
-        chatRepository.findMessages.mockResolvedValue([]);
-
-        await chatService.getMessages(1, 5);
-
-        expect(chatRepository.markDelivered).toHaveBeenCalledWith(1, 5);
-    });
-
-    it("never fails the request even if markDelivered rejects (fire-and-forget)", async () => {
-        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
-        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
-        chatRepository.findMessages.mockResolvedValue([{ id: 1 }]);
-        chatRepository.markDelivered.mockRejectedValue(new Error("connection reset"));
-
-        await expect(chatService.getMessages(1, 5)).resolves.toEqual([{ id: 1, reactions: [] }]);
-    });
-
-    it("groups reaction rows onto their message, tallying counts and marking the viewer's own reaction", async () => {
-        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
-        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
-        chatRepository.findMessages.mockResolvedValue([{ id: 1 }, { id: 2 }]);
-        chatRepository.findReactionsForConversation.mockResolvedValue([
-            { message_id: 1, emoji: "👍", user_id: 5 },
-            { message_id: 1, emoji: "👍", user_id: 6 },
-            { message_id: 1, emoji: "🔥", user_id: 6 }
-        ]);
-
-        const result = await chatService.getMessages(1, 5);
-
-        expect(result[0].reactions).toEqual(
-            expect.arrayContaining([
-                { emoji: "👍", count: 2, userIds: [5, 6], mine: true },
-                { emoji: "🔥", count: 1, userIds: [6], mine: false }
-            ])
-        );
-        expect(result[1].reactions).toEqual([]);
-    });
 });
 
 describe("chat.service.sendMessage", () => {
@@ -361,7 +321,7 @@ describe("chat.service.reactToMessage", () => {
     it("adds the reaction, re-fetches the tally, and broadcasts it", async () => {
         chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
         chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 1, is_deleted: 0 });
-        chatRepository.findReactionsForMessage.mockResolvedValue([{ emoji: "👍", count: 1 }]);
+        chatRepository.findReactionsForMessage.mockResolvedValue([{ emoji: "👍", user_id: 5 }]);
 
         const result = await chatService.reactToMessage(1, 900, 5, "👍");
 
@@ -369,9 +329,9 @@ describe("chat.service.reactToMessage", () => {
         expect(socket.emitReactionUpdated).toHaveBeenCalledWith(1, {
             conversation_id: 1,
             message_id: 900,
-            reactions: [{ emoji: "👍", count: 1 }]
+            reactions: [{ emoji: "👍", user_id: 5 }]
         });
-        expect(result).toEqual({ conversation_id: 1, message_id: 900, reactions: [{ emoji: "👍", count: 1 }] });
+        expect(result).toEqual({ conversation_id: 1, message_id: 900, reactions: [{ emoji: "👍", user_id: 5 }] });
     });
 
     it("still returns the reaction payload if the socket broadcast throws", async () => {

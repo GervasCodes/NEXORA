@@ -35,7 +35,6 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
                     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                     <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
                 <input
                     autoFocus
                     value={query}

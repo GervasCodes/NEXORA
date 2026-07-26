@@ -164,6 +164,16 @@ exports.createDispute = async (orderId, buyerId, sellerId, overrides = {}) => {
 // this suite's fixture volume per test is small enough that it's fast.
 exports.resetTables = async () => {
     const tables = [
+        // Phase 6 additions - children of users/conversations that the
+        // admin account-management and messaging db-integration tests
+        // write to. Deleted first since they're the deepest children.
+        "audit_logs",
+        "admin_notifications",
+        "notifications",
+        "message_reactions",
+        "messages",
+        "conversations",
+        "seller_profiles",
         // Phase 3 additions - children of orders/disputes/users that the
         // new checkout/refund/login db-integration tests write to.
         "refunds",

@@ -1,4 +1,14 @@
 const chatRepository = require("./chat.repository");
+const notificationService = require("../notification/notification.service");
+const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+
+// Buckets a multer mimetype into the ENUM stored on messages.attachment_type.
+const attachmentTypeFor = (mimetype) => {
+    if (mimetype.startsWith("image/")) return "image";
+    if (mimetype.startsWith("video/")) return "video";
+    if (mimetype.startsWith("audio/")) return "audio";
+    return "file";
+};
 
 // Start (or resume) a conversation. Always called with a buyer_id + the
 // other party's id/role; the controller works out which one is "me".
@@ -53,24 +63,59 @@ exports.assertParticipant = async (conversationId, userId) => {
     return conversation;
 };
 
+// Groups a flat list of reaction rows ({message_id, emoji, user_id}) into
+// { [messageId]: [{ emoji, count, userIds, mine }] } - shared by
+// getMessages() and searchMessages() result shaping.
+const groupReactions = (rows, viewerId) => {
+    const byMessage = {};
+    for (const row of rows) {
+        const bucket = (byMessage[row.message_id] ||= {});
+        const entry = (bucket[row.emoji] ||= { emoji: row.emoji, count: 0, userIds: [], mine: false });
+        entry.count += 1;
+        entry.userIds.push(row.user_id);
+        if (row.user_id === viewerId) entry.mine = true;
+    }
+    const result = {};
+    for (const [messageId, emojis] of Object.entries(byMessage)) {
+        result[messageId] = Object.values(emojis);
+    }
+    return result;
+};
+
 exports.getMessages = async (conversationId, userId) => {
     const conversation = await exports.assertParticipant(conversationId, userId);
     const clearedColumn = chatRepository.clearedColumnFor(conversation, userId);
     const clearedAt = clearedColumn ? conversation[clearedColumn] : null;
-    return chatRepository.findMessages(conversationId, clearedAt);
+
+    const [messages, reactionRows] = await Promise.all([
+        chatRepository.findMessages(conversationId, clearedAt),
+        chatRepository.findReactionsForConversation(conversationId, clearedAt)
+    ]);
+
+    // Best-effort: opening a conversation is when the recipient's client
+    // "has" any not-yet-delivered messages, so this is where delivered_at
+    // gets backfilled for anyone who wasn't live in the socket room when
+    // the message was originally sent (offline/backgrounded case).
+    chatRepository.markDelivered(conversationId, userId).catch(() => {});
+
+    const reactionsByMessage = groupReactions(reactionRows, userId);
+    return messages.map((m) => ({ ...m, reactions: reactionsByMessage[m.id] || [] }));
 };
 
-exports.sendMessage = async (conversationId, senderId, message) => {
-    if (!message || !message.trim()) {
+exports.sendMessage = async (conversationId, senderId, message, attachment) => {
+    const text = (message || "").trim();
+
+    if (!text && !attachment) {
         throw new Error("Message cannot be empty");
     }
 
-    await exports.assertParticipant(conversationId, senderId);
+    const conversation = await exports.assertParticipant(conversationId, senderId);
 
     const messageId = await chatRepository.createMessage(
         conversationId,
         senderId,
-        message.trim()
+        text,
+        attachment
     );
 
     await chatRepository.touchConversation(conversationId);
@@ -79,8 +124,15 @@ exports.sendMessage = async (conversationId, senderId, message) => {
         id: messageId,
         conversation_id: conversationId,
         sender_id: senderId,
-        message: message.trim(),
+        message: text,
+        attachment_url: attachment?.url || null,
+        attachment_type: attachment?.type || null,
+        attachment_name: attachment?.name || null,
+        attachment_size: attachment?.size || null,
         is_read: false,
+        delivered_at: null,
+        read_at: null,
+        reactions: [],
         created_at: new Date()
     };
 
@@ -93,12 +145,142 @@ exports.sendMessage = async (conversationId, senderId, message) => {
         // Socket layer being unavailable should never break message sending
     }
 
+    // Notify whichever other participant(s) exist on this conversation -
+    // buyer/seller/delivery_agent, whichever of the three isn't the sender.
+    // This is what makes a message reach someone whose tab is closed or
+    // backgrounded (the emitNewMessage above only reaches a tab that's
+    // actually joined this conversation's socket room right now): it writes
+    // a normal notification row (shows in the bell) and, via
+    // notificationService.notify, fires the same real-time socket +
+    // web-push fan-out every other event type in the app already uses.
+    const recipientIds = [conversation.buyer_id, conversation.seller_id, conversation.delivery_agent_id].filter(
+        (id) => id && id !== senderId
+    );
+    const attachmentLabel = { image: "📷 Photo", video: "🎥 Video", audio: "🎵 Audio", file: "📎 File" }[
+        attachment?.type
+    ];
+    const preview = text
+        ? (text.length > 120 ? `${text.slice(0, 117)}...` : text)
+        : (attachmentLabel || "New message");
+    recipientIds.forEach((recipientId) => {
+        notificationService
+            .notify({
+                userId: recipientId,
+                type: "message",
+                titleKey: "message.new.title",
+                messageKey: "message.new.message",
+                messageParams: { preview },
+                url: `/messages/${conversationId}`
+            })
+            .catch((error) => console.error("Message notification error:", error.message));
+    });
+
     return saved;
+};
+
+// Uploads the file then delegates to sendMessage so attachments go
+// through the exact same broadcast/notify path as a text message -
+// an attachment message is just a message with a caption attached to it.
+exports.sendAttachment = async (conversationId, senderId, file, caption) => {
+    if (!file) {
+        throw new Error("No file uploaded");
+    }
+
+    const resourceType = file.mimetype.startsWith("video/") || file.mimetype.startsWith("audio/")
+        ? "video" // Cloudinary treats audio uploads under the "video" resource type
+        : file.mimetype.startsWith("image/")
+            ? "image"
+            : "raw";
+
+    const result = await uploadToCloudinary(file.buffer, "nexora/chat", resourceType);
+
+    const attachment = {
+        url: result.secure_url,
+        type: attachmentTypeFor(file.mimetype),
+        name: file.originalname,
+        size: file.size
+    };
+
+    return exports.sendMessage(conversationId, senderId, caption, attachment);
 };
 
 exports.markAsRead = async (conversationId, userId) => {
     await exports.assertParticipant(conversationId, userId);
     await chatRepository.markMessagesRead(conversationId, userId);
+
+    // Lets the sender's open thread flip their sent messages'
+    // checkmarks to "read" live, instead of only on their next fetch.
+    try {
+        const socket = require("../../socket/socket");
+        socket.emitMessagesRead(conversationId, { conversation_id: Number(conversationId), reader_id: userId });
+    } catch (error) {
+        // Socket layer being unavailable should never break read receipts
+    }
+};
+
+// A short, curated set is enforced here (rather than accepting any
+// string) so a reaction always renders as a single emoji glyph and
+// can't be used to smuggle arbitrary text into what's meant to be a
+// lightweight, non-conversational reaction.
+const ALLOWED_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"];
+
+exports.reactToMessage = async (conversationId, messageId, userId, emoji) => {
+    if (!ALLOWED_REACTIONS.includes(emoji)) {
+        throw new Error("That reaction isn't supported");
+    }
+
+    await exports.assertParticipant(conversationId, userId);
+
+    const message = await chatRepository.findMessageById(messageId);
+    if (!message || String(message.conversation_id) !== String(conversationId) || message.is_deleted) {
+        throw new Error("Message not found");
+    }
+
+    await chatRepository.addReaction(messageId, userId, emoji);
+    const reactions = await chatRepository.findReactionsForMessage(messageId);
+
+    const payload = { conversation_id: Number(conversationId), message_id: Number(messageId), reactions };
+    try {
+        const socket = require("../../socket/socket");
+        socket.emitReactionUpdated(conversationId, payload);
+    } catch (error) {
+        // Socket layer being unavailable should never break reactions
+    }
+
+    return payload;
+};
+
+exports.removeReaction = async (conversationId, messageId, userId, emoji) => {
+    await exports.assertParticipant(conversationId, userId);
+
+    const message = await chatRepository.findMessageById(messageId);
+    if (!message || String(message.conversation_id) !== String(conversationId)) {
+        throw new Error("Message not found");
+    }
+
+    await chatRepository.removeReaction(messageId, userId, emoji);
+    const reactions = await chatRepository.findReactionsForMessage(messageId);
+
+    const payload = { conversation_id: Number(conversationId), message_id: Number(messageId), reactions };
+    try {
+        const socket = require("../../socket/socket");
+        socket.emitReactionUpdated(conversationId, payload);
+    } catch (error) {
+        // Socket layer being unavailable should never break reactions
+    }
+
+    return payload;
+};
+
+exports.searchMessages = async (conversationId, userId, query) => {
+    const trimmed = (query || "").trim();
+    if (!trimmed) return [];
+
+    const conversation = await exports.assertParticipant(conversationId, userId);
+    const clearedColumn = chatRepository.clearedColumnFor(conversation, userId);
+    const clearedAt = clearedColumn ? conversation[clearedColumn] : null;
+
+    return chatRepository.searchMessages(conversationId, trimmed, clearedAt);
 };
 
 // "Delete message" - sender only, delete-for-everyone. The bubble stays

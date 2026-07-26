@@ -51,6 +51,7 @@ const groups = [
         label: "Platform",
         tabs: [
             { to: "/admin/admins", label: "Admins" },
+            { to: "/admin/audit-logs", label: "Audit logs" },
             { to: "/admin/settings", label: "Settings" }
         ]
     }

@@ -10,6 +10,7 @@ export default function Messages() {
     const [confirmingId, setConfirmingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [error, setError] = useState("");
+    const [query, setQuery] = useState("");
 
     useEffect(() => {
         api.get("/chat/conversations")
@@ -23,6 +24,16 @@ export default function Messages() {
             ? `${c.seller_first_name} ${c.seller_last_name}`
             : `${c.buyer_first_name} ${c.buyer_last_name}`;
     };
+
+    const filtered = conversations.filter((c) => {
+        const q = query.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            otherPartyName(c).toLowerCase().includes(q) ||
+            (c.product_name || "").toLowerCase().includes(q) ||
+            (c.last_message || "").toLowerCase().includes(q)
+        );
+    });
 
     const handleDeleteConversation = async (conversationId) => {
         setDeletingId(conversationId);
@@ -55,13 +66,36 @@ export default function Messages() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-            <h1 className="font-display text-3xl mb-8">Messages</h1>
+            <h1 className="font-display text-3xl mb-6">Messages</h1>
+
+            <div className="relative mb-6">
+                <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-ash pointer-events-none"
+                >
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                    <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search conversations…"
+                    className="w-full border border-line rounded-full pl-9 pr-4 py-2 text-sm focus-ring"
+                />
+            </div>
 
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
+            {query.trim() && filtered.length === 0 && (
+                <p className="text-ash text-sm text-center py-10">No conversations match "{query.trim()}".</p>
+            )}
+
             <ul className="divide-y divide-line border-y border-line">
-                {conversations.map((c) => (
-                    <li key={c.id} className="group relative">
+                {filtered.map((c, i) => (
+                    <li key={c.id} className="group relative animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                         <Link
                             to={`/messages/${c.id}`}
                             className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"

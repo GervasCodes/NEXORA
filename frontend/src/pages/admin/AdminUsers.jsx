@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
 import { formatDate } from "../../utils/format";
 
 export default function AdminUsers() {
+    const { user: currentUser } = useAuth();
+    const isSuperAdmin = currentUser?.admin_level === "super_admin";
+
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
@@ -14,11 +18,58 @@ export default function AdminUsers() {
 
     useEffect(load, []);
 
-    const toggleActive = async (user) => {
+    const handleSuspend = async (user) => {
+        const reason = window.prompt(
+            `Why are you suspending ${user.first_name} ${user.last_name}? This is shown to the user and kept on record.`
+        );
+
+        if (reason === null) return;
+        if (!reason.trim()) {
+            window.alert("A reason is required to suspend an account.");
+            return;
+        }
+
         setBusyId(user.id);
         setError("");
         try {
-            await api.put(`/admin/users/${user.id}/${user.is_active ? "deactivate" : "activate"}`);
+            await api.put(`/admin/users/${user.id}/suspend`, { reason: reason.trim() });
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleUnsuspend = async (user) => {
+        setBusyId(user.id);
+        setError("");
+        try {
+            await api.put(`/admin/users/${user.id}/unsuspend`);
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handlePermanentDelete = async (user) => {
+        const typed = window.prompt(
+            `This permanently erases ${user.first_name} ${user.last_name}'s personal data, deletes their documents and Cloudinary assets, and can't be undone.\n\n` +
+            `Type this account's email address to confirm:\n${user.email}`
+        );
+
+        if (typed === null) return;
+        if (typed.trim().toLowerCase() !== user.email.toLowerCase()) {
+            window.alert("That didn't match the account's email. Nothing was deleted.");
+            return;
+        }
+
+        setBusyId(user.id);
+        setError("");
+        try {
+            await api.delete(`/admin/users/${user.id}`);
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -40,6 +91,13 @@ export default function AdminUsers() {
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{u.first_name} {u.last_name}</p>
                             <p className="text-xs text-ash truncate">{u.email} · {u.phone}</p>
+                            {u.suspended_at && (
+                                <p className="text-xs text-coral truncate mt-0.5">
+                                    Suspended {formatDate(u.suspended_at)}
+                                    {u.suspended_by_name && ` by ${u.suspended_by_name}`}
+                                    {u.suspension_reason && ` — "${u.suspension_reason}"`}
+                                </p>
+                            )}
                         </div>
 
                         <span className="text-xs px-2 py-1 rounded-full bg-line text-ash capitalize">
@@ -49,16 +107,26 @@ export default function AdminUsers() {
                         <p className="text-xs text-ash">{formatDate(u.created_at)}</p>
 
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${u.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
-                            {u.is_active ? "Active" : "Deactivated"}
+                            {u.is_active ? "Active" : "Suspended"}
                         </span>
 
                         <button
-                            onClick={() => toggleActive(u)}
+                            onClick={() => (u.is_active ? handleSuspend(u) : handleUnsuspend(u))}
                             disabled={busyId === u.id}
                             className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
                         >
-                            {u.is_active ? "Deactivate" : "Activate"}
+                            {u.is_active ? "Suspend" : "Unsuspend"}
                         </button>
+
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => handlePermanentDelete(u)}
+                                disabled={busyId === u.id}
+                                className="text-xs font-medium px-3 py-1.5 rounded-md border border-coral text-coral hover:bg-coral hover:text-white transition-colors disabled:opacity-50"
+                            >
+                                {busyId === u.id ? "Deleting…" : "Permanently delete"}
+                            </button>
+                        )}
                     </li>
                 ))}
             </ul>

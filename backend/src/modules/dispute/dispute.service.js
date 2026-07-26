@@ -3,6 +3,7 @@ const disputeRepository = require("./dispute.repository");
 const orderRepository = require("../order/order.repository");
 const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 const refundService = require("../refund/refund.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
@@ -120,6 +121,20 @@ exports.createDispute = async (buyerId, { order_id, order_item_id, type, subject
             withEmail: true
         }).catch((err) => console.error("dispute create seller notify error:", err));
     }
+
+    // Disputes are currently the only reporting/ticketing mechanism
+    // NEXORA has (there's no separate "report a user/listing" or
+    // support-ticket feature yet) - this is the "reports, tickets,
+    // abuse reports" event category from the Phase 2 notification list.
+    adminNotificationService.notify({
+        type: "report_submitted",
+        category: "moderation",
+        severity: "info",
+        title: "New dispute filed",
+        message: `Dispute ${disputeNumber} filed against order ${order.order_number}: ${TYPE_LABELS[type]}.`,
+        metadata: { dispute_id: disputeId, dispute_number: disputeNumber, order_id, type },
+        relatedUserId: buyerId
+    });
 
     return getFullDispute(disputeId);
 };

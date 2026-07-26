@@ -7,10 +7,14 @@ const db = require("../../config/db");
 // misleading "Activate" button next to them.
 exports.findAllUsers = async () => {
     const [rows] = await db.query(
-        `SELECT id, first_name, last_name, email, phone, role, is_active, created_at
-        FROM users
-        WHERE deleted_at IS NULL
-        ORDER BY created_at DESC`
+        `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role, u.is_active,
+                u.suspended_at, u.suspension_reason, u.suspended_by,
+                CONCAT(a.first_name, ' ', a.last_name) AS suspended_by_name,
+                u.created_at
+        FROM users u
+        LEFT JOIN users a ON a.id = u.suspended_by
+        WHERE u.deleted_at IS NULL
+        ORDER BY u.created_at DESC`
     );
     return rows;
 };
@@ -35,8 +39,27 @@ exports.findUserById = async (userId) => {
     return rows[0];
 };
 
-exports.setUserActive = async (userId, isActive) => {
-    await db.query("UPDATE users SET is_active = ? WHERE id = ?", [isActive, userId]);
+// Suspend/Unsuspend replace the old bare is_active toggle (see migration
+// 058). is_active still blocks login/API access (auth.middleware.js,
+// login.service.js) - suspended_at/suspension_reason/suspended_by are the
+// bookkeeping the old toggle never had, same pattern as deleted_at for
+// self-deletion.
+exports.suspendUser = async (userId, reason, adminId) => {
+    await db.query(
+        `UPDATE users
+        SET is_active = FALSE, suspended_at = NOW(), suspension_reason = ?, suspended_by = ?
+        WHERE id = ?`,
+        [reason, adminId, userId]
+    );
+};
+
+exports.unsuspendUser = async (userId) => {
+    await db.query(
+        `UPDATE users
+        SET is_active = TRUE, suspended_at = NULL, suspension_reason = NULL, suspended_by = NULL
+        WHERE id = ?`,
+        [userId]
+    );
 };
 
 // --- Sellers ---
@@ -324,7 +347,7 @@ exports.revokeAdmin = async (userId) => {
 
 exports.findUserForPermanentDeletion = async (userId) => {
     const [rows] = await db.query(
-        `SELECT id, role, deleted_at, permanently_deleted_at
+        `SELECT id, first_name, last_name, email, role, deleted_at, permanently_deleted_at
         FROM users WHERE id = ?`,
         [userId]
     );

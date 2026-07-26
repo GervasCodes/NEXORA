@@ -23,6 +23,21 @@ exports.emitMessageDeleted = (conversationId, payload) => {
     io.to(`conversation:${conversationId}`).emit("message_deleted", payload);
 };
 
+// Phase 4: lets the sender's open thread flip their sent bubbles from
+// "delivered" to "read" live, without waiting for a page refresh.
+exports.emitMessagesRead = (conversationId, payload) => {
+    if (!io) return;
+    io.to(`conversation:${conversationId}`).emit("messages_read", payload);
+};
+
+// Phase 4: broadcasts the full up-to-date reaction list for one message
+// whenever anyone adds/removes a reaction, so every open thread stays in
+// sync (rather than each client guessing at the delta).
+exports.emitReactionUpdated = (conversationId, payload) => {
+    if (!io) return;
+    io.to(`conversation:${conversationId}`).emit("reaction_updated", payload);
+};
+
 // Every authenticated socket auto-joins `user:{id}` on connect (see below),
 // so any backend module can push an event straight to one person without
 // needing to know their socket id — used for delivery offers, assignment
@@ -108,6 +123,35 @@ if (
 
         socket.on("leave_conversation", (conversationId) => {
             socket.leave(`conversation:${conversationId}`);
+        });
+
+        // Phase 4: typing indicator. Purely ephemeral - never touches the
+        // database, just relayed to whoever else is in the room right
+        // now. The client is responsible for debouncing "start" while the
+        // user types and firing "stop" on blur/send/idle timeout; the
+        // server trusts that and just forwards it, since a stale
+        // indicator only costs a few extra seconds of "typing…" on the
+        // other end, not a correctness issue worth guarding server-side.
+        socket.on("typing_start", async (conversationId) => {
+            try {
+                await chatService.assertParticipant(conversationId, socket.user.id);
+                socket.to(`conversation:${conversationId}`).emit("typing", {
+                    conversation_id: Number(conversationId),
+                    user_id: socket.user.id,
+                    is_typing: true
+                });
+            } catch (error) {
+                // Not a participant (or conversation gone) - silently ignore,
+                // this is a best-effort UX signal, not worth an error toast.
+            }
+        });
+
+        socket.on("typing_stop", (conversationId) => {
+            socket.to(`conversation:${conversationId}`).emit("typing", {
+                conversation_id: Number(conversationId),
+                user_id: socket.user.id,
+                is_typing: false
+            });
         });
 
         socket.on("send_message", async ({ conversationId, message }) => {

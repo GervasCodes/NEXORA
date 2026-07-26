@@ -1,6 +1,7 @@
 const adminService = require("./admin.service");
 const fraudService = require("../fraud/fraud.service");
 const auditRepository = require("../audit/audit.repository");
+const { EVENT_TYPE_GROUPS } = require("../audit/audit.constants");
 const refundService = require("../refund/refund.service");
 
 exports.listUsers = async (req, res) => {
@@ -25,10 +26,13 @@ exports.listDeletedUsers = async (req, res) => {
     }
 };
 
-// Phase 4 - Permanent Account Removal. Irreversible: erases the
-// account's PII and deletes/scrubs its data per
-// adminService.permanentlyDeleteUser's doc comment. Only reachable by a
-// super admin - see admin.routes.js.
+// Permanent Account Removal. Irreversible: erases the account's PII and
+// deletes/scrubs its data per adminService.permanentlyDeleteUser's doc
+// comment. Works directly on any account (active, suspended, or already
+// self-deleted) as of Phase 1 of the Admin Account Control plan - only
+// reachable by a super admin, see admin.routes.js. Mounted at both
+// DELETE /admin/users/:id (direct, from the main Users list) and
+// DELETE /admin/deleted-users/:id (from the Deleted Accounts review list).
 exports.permanentlyDeleteUser = async (req, res) => {
     try {
         await adminService.permanentlyDeleteUser(req.params.id, req.user.id);
@@ -40,22 +44,27 @@ exports.permanentlyDeleteUser = async (req, res) => {
     }
 };
 
-exports.deactivateUser = async (req, res) => {
+// Phase 1 (Admin Account Control) - replaces the old deactivate/activate
+// toggle. Suspending requires a reason (validated in admin.validator.js);
+// admin.service.js#suspendUser records it along with the acting admin and
+// a timestamp, and login.service.js/auth.middleware.js block the account
+// immediately, showing it the full-screen suspended page.
+exports.suspendUser = async (req, res) => {
     try {
-        await adminService.setUserActive(req.params.id, false);
+        await adminService.suspendUser(req.params.id, req.body.reason, req.user.id);
 
-        return res.json({ success: true, message: "User deactivated" });
+        return res.json({ success: true, message: "User suspended" });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
 
-exports.activateUser = async (req, res) => {
+exports.unsuspendUser = async (req, res) => {
     try {
-        await adminService.setUserActive(req.params.id, true);
+        await adminService.unsuspendUser(req.params.id, req.user.id);
 
-        return res.json({ success: true, message: "User activated" });
+        return res.json({ success: true, message: "User unsuspended" });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -330,7 +339,7 @@ exports.listAdmins = async (req, res) => {
 
 exports.createAdmin = async (req, res) => {
     try {
-        const result = await adminService.addAdmin(req.body);
+        const result = await adminService.addAdmin(req.body, req.user.id);
 
         return res.status(201).json({ success: true, message: "Admin account created", data: result });
 
@@ -341,7 +350,7 @@ exports.createAdmin = async (req, res) => {
 
 exports.updateAdminPermissions = async (req, res) => {
     try {
-        await adminService.updateAdminPermissions(req.params.id, req.body.admin_level);
+        await adminService.updateAdminPermissions(req.params.id, req.body.admin_level, req.user.id);
 
         return res.json({ success: true, message: "Admin permissions updated" });
 
@@ -427,17 +436,43 @@ exports.retryRefund = async (req, res) => {
 // logins, failed logins, registrations, orders, and payments for
 // troubleshooting/security review without needing direct DB access.
 // Optional ?event_type= / ?user_id= / ?limit= query filters.
+// Phase 5 - Audit Logs. `event_type` accepts either one specific event
+// type (e.g. "account_suspended") or one of the grouped `category` names
+// from audit.constants.js (e.g. "admin" for every admin-management event
+// at once) - category takes precedence if both are somehow sent.
+// `admin_actions_only=true` narrows to events whose actor is an
+// admin/super_admin (suspensions, unsuspensions, deletions, permission
+// changes, and admin logins), matching the Phase 5 requirement to be
+// able to see admin logins/actions specifically. `q` is free text over
+// the description, the actor's name/email, and the metadata JSON (so a
+// target user id or a suspension reason both match).
 exports.listAuditLogs = async (req, res) => {
     try {
-        const { event_type, user_id, limit } = req.query;
+        const { category, event_type, user_id, date_from, date_to, q, admin_actions_only, page, page_size } = req.query;
 
-        const logs = await auditRepository.findRecent({
-            eventType: event_type,
+        let eventTypes;
+        if (category && EVENT_TYPE_GROUPS[category]) {
+            eventTypes = EVENT_TYPE_GROUPS[category];
+        } else if (event_type) {
+            eventTypes = [event_type];
+        }
+
+        const result = await auditRepository.search({
+            eventTypes,
             userId: user_id ? Number(user_id) : undefined,
-            limit: limit ? Number(limit) : undefined
+            dateFrom: date_from || undefined,
+            dateTo: date_to || undefined,
+            q,
+            adminActorsOnly: admin_actions_only === "true",
+            page: page ? Number(page) : undefined,
+            pageSize: page_size ? Number(page_size) : undefined
         });
 
-        return res.json({ success: true, data: logs });
+        return res.json({
+            success: true,
+            data: result.rows,
+            meta: { total: result.total, page: result.page, totalPages: result.totalPages }
+        });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

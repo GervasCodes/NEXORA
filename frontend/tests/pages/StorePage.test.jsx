@@ -288,7 +288,7 @@ describe("StorePage reviews (Phase 5D)", () => {
         renderPage();
 
         await waitFor(() =>
-            expect(api.get).toHaveBeenCalledWith("/reviews/store/42", { params: { page: 1 } })
+            expect(api.get).toHaveBeenCalledWith("/reviews/store/42", { params: { page: 1, sort: "newest" } })
         );
     });
 

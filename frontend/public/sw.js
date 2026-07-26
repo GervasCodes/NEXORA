@@ -182,26 +182,36 @@ self.addEventListener("push", (event) => {
         body: data.body || "",
         icon: "/apple-touch-icon.png",
         badge: "/favicon-32.png",
-        data: { orderId: data.orderId, offerId: data.offerId },
-        tag: data.offerId ? `offer-${data.offerId}` : undefined
+        // `url` (Phase 3) is where the OS notification should navigate to
+        // on click - notification.service.js/adminNotification.service.js
+        // set it per-event (an order, a conversation thread, etc). Kept
+        // alongside orderId/offerId so the existing delivery-offer push
+        // (which doesn't set url) still works unchanged.
+        data: { orderId: data.orderId, offerId: data.offerId, url: data.url },
+        tag: data.offerId ? `offer-${data.offerId}` : data.notificationId ? `notification-${data.notificationId}` : undefined
     };
 
     event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Clicking the OS notification focuses an existing NEXORA tab if one's
-// open, otherwise opens the delivery-available page.
+// Clicking the OS notification focuses an existing NEXORA tab (navigating
+// it to the notification's target page) if one's open, otherwise opens a
+// new tab straight to that page. Falls back to the delivery-offer page for
+// the one push type (agent nearby-order offers) that predates `url`.
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
+
+    const targetPath = event.notification.data?.url || "/delivery";
 
     event.waitUntil(
         clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
             for (const client of clientList) {
                 if (client.url.includes(self.location.origin) && "focus" in client) {
+                    client.postMessage({ type: "notification-click", url: targetPath });
                     return client.focus();
                 }
             }
-            return clients.openWindow("/delivery");
+            return clients.openWindow(targetPath);
         })
     );
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { formatDate } from "../utils/format";
@@ -11,6 +12,7 @@ const POLL_INTERVAL_MS = 30000;
 
 export default function NotificationBell() {
     const { user } = useAuth();
+    const { socket } = useSocket();
     const { t, language } = useLanguage();
     const toast = useToast();
     const navigate = useNavigate();
@@ -56,6 +58,27 @@ export default function NotificationBell() {
         // the account's chosen language changes, since notification text is
         // rendered server-side in that language.
     }, [user, language, fetchUnread]);
+
+    // Real-time: the poll above is just a safety net for missed events (a
+    // dropped connection, a tab that was asleep) - this is what makes the
+    // bell update the instant notification.service.js's notify() fires,
+    // without waiting up to POLL_INTERVAL_MS.
+    useEffect(() => {
+        if (!user || !socket) return undefined;
+
+        const handleNew = (notification) => {
+            prevUnreadRef.current += 1;
+            setUnread((c) => c + 1);
+            setJustBumped(true);
+            // Only splice into the visible list if the panel's open and
+            // already loaded - otherwise the next `open` -> fetchList()
+            // will pick it up naturally.
+            setItems((prev) => (prev.length > 0 || open ? [notification, ...prev] : prev));
+        };
+
+        socket.on("notification:new", handleNew);
+        return () => socket.off("notification:new", handleNew);
+    }, [user, socket, open]);
 
     useEffect(() => {
         if (open) fetchList();

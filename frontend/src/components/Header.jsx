@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
+import AdminNotificationBell from "./AdminNotificationBell";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -98,6 +99,7 @@ export default function Header() {
                     ))}
 
                     {user && <NotificationBell />}
+                    {user?.role === "admin" && <AdminNotificationBell />}
 
                     {user ? (
                         <button onClick={handleSignOut} className="text-frost/80 hover:text-azure-light transition-colors">
@@ -123,6 +125,7 @@ export default function Header() {
                     fixes buttons being unreachable in portrait mode. */}
                 <div className="flex items-center gap-3 ml-auto md:hidden">
                     {user && <NotificationBell />}
+                    {user?.role === "admin" && <AdminNotificationBell />}
 
                     {user?.role === "buyer" && (
                         <Link to="/cart" className="relative text-frost/90 shrink-0" aria-label={t("nav.cart")}>

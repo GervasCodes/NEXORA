@@ -7,6 +7,8 @@ const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
 const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/shortLivedToken");
 const appError = require("../../utils/appError");
+const auditService = require("../audit/audit.service");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 
 const REAUTH_TYP = "pwd_reauth";
 const REAUTH_EXPIRY = "10m";
@@ -97,11 +99,12 @@ exports.changePassword = async (userId, reauthToken, newPassword) => {
 // already-issued session again - see login.service.js and
 // auth.middleware.js) and takes down any storefront listings, but
 // deliberately stops short of erasing the person's name, email, phone,
-// or seller profile. That's Phase 4 (Permanent Account Removal)'s job,
-// triggered separately by an admin from the Deleted Accounts section -
-// this step only needs to be reversible-in-principle-but-not-in-practice
-// (admin.service.js#setUserActive refuses to reactivate a deleted
-// account) long enough for that review to happen.
+// or seller profile. That's Permanent Account Removal's job, triggered
+// separately by an admin (from the Deleted Accounts section, or directly
+// from the main Users list) - this step only needs to be
+// reversible-in-principle-but-not-in-practice
+// (admin.service.js#suspendUser/unsuspendUser both refuse to act on a
+// self-deleted account) long enough for that review to happen.
 exports.deleteAccount = async (userId, password) => {
     const account = await accountRepository.findAuthById(userId);
 
@@ -113,6 +116,13 @@ exports.deleteAccount = async (userId, password) => {
     if (!match) {
         throw appError("INCORRECT_PASSWORD", 401);
     }
+
+    // Fetched before the transaction so the admin notification/audit log
+    // below has an email/role to show - by design (see migration 056)
+    // deleteAccount doesn't scrub these itself, but grabbing them now
+    // avoids a second query racing anything else that might touch the
+    // row after commit.
+    const profile = await accountRepository.findById(userId);
 
     const connection = await db.getConnection();
 
@@ -136,4 +146,23 @@ exports.deleteAccount = async (userId, password) => {
     } finally {
         connection.release();
     }
+
+    auditService.log({
+        userId,
+        eventType: "user_account_deleted",
+        description: `User self-deleted their account (#${userId})`,
+        metadata: { role: profile?.role }
+    });
+
+    adminNotificationService.notify({
+        type: "user_account_deleted",
+        category: "account",
+        severity: "info",
+        title: "Account self-deleted",
+        message: profile
+            ? `${profile.first_name} ${profile.last_name} (${profile.email}) deleted their own account. It's awaiting permanent removal review.`
+            : `Account #${userId} deleted their own account. It's awaiting permanent removal review.`,
+        metadata: { role: profile?.role },
+        relatedUserId: userId
+    });
 };

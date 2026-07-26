@@ -23,6 +23,7 @@ const notificationRoutes = require("./modules/notification/notification.routes")
 const chatRoutes = require("./modules/chat/chat.routes");
 const pushRoutes = require("./modules/push/push.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
+const adminNotificationRoutes = require("./modules/adminNotification/adminNotification.routes");
 const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
@@ -241,6 +242,7 @@ app.use("/api/v1/push", pushRoutes);
 // route accidentally added to admin.routes.js matching this path would
 // silently shadow this router entirely.
 app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
+app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);

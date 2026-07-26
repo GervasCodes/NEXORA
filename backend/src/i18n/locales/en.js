@@ -24,7 +24,8 @@ module.exports = {
         INVALID_CREDENTIALS: "Invalid email or password",
         NOTIFICATION_NOT_FOUND: "Notification not found",
         TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account",
-        CATEGORY_UNAVAILABLE: "Selected category is not available"
+        CATEGORY_UNAVAILABLE: "Selected category is not available",
+        ACCOUNT_SUSPENDED: "This account has been suspended."
     },
 
     labels: {
@@ -46,15 +47,18 @@ module.exports = {
     },
 
     notifications: {
+        "message.new.title": "New message",
+        "message.new.message": "{preview}",
+
         "verification.approved.title": "Verification approved",
         "verification.approved.message": "Your {role} account has been verified. You now have full access to {role} features.",
         "verification.rejected.title": "Verification rejected",
         "verification.rejected.message": "Your {role} account verification was rejected: {reason}. Please contact support.",
 
-        "account.reactivated.title": "Account reactivated",
-        "account.reactivated.message": "Your account has been reactivated. Welcome back!",
-        "account.deactivated.title": "Account deactivated",
-        "account.deactivated.message": "Your account has been deactivated. Contact support if you believe this is a mistake.",
+        "account.unsuspended.title": "Account reinstated",
+        "account.unsuspended.message": "Your account has been reinstated. Welcome back!",
+        "account.suspended.title": "Account suspended",
+        "account.suspended.message": "Your account has been suspended: {reason}. Contact support if you believe this is a mistake.",
 
         "seller.storeVerified.title": "Store verified",
         "seller.storeVerified.message": "Congratulations! \"{storeName}\" has been verified.",

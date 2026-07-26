@@ -9,6 +9,7 @@ const adminController = require("./admin.controller");
 const requireSuperAdmin = require("../../middleware/requireSuperAdmin.middleware");
 const {
     userIdValidation,
+    suspendUserValidation,
     productIdValidation,
     withdrawalIdValidation,
     orderIdValidation,
@@ -31,18 +32,34 @@ router.get("/refunds/:id", adminController.getRefund);
 router.post("/refunds/:id/retry", adminController.retryRefund);
 
 router.get("/users", adminController.listUsers);
-router.put("/users/:id/deactivate", userIdValidation, validationMiddleware, adminController.deactivateUser);
-router.put("/users/:id/activate", userIdValidation, validationMiddleware, adminController.activateUser);
+
+// Suspend/Unsuspend (Phase 1 - Admin Account Control). Replaces the old
+// bare deactivate/activate toggle - suspending requires a reason, and
+// records the acting admin + a timestamp (migration 058).
+router.put("/users/:id/suspend", suspendUserValidation, validationMiddleware, adminController.suspendUser);
+router.put("/users/:id/unsuspend", userIdValidation, validationMiddleware, adminController.unsuspendUser);
+
+// Permanent Account Removal, called directly from the main Users list.
+// Irreversible, so gated the same way admin-management actions are
+// (requireSuperAdmin), not just regular admin access like the rest of
+// this file. Works on any account regardless of suspension/self-deletion
+// status - see adminService.permanentlyDeleteUser.
+router.delete(
+    "/users/:id",
+    requireSuperAdmin,
+    userIdValidation,
+    validationMiddleware,
+    adminController.permanentlyDeleteUser
+);
 
 // Phase 3 - Soft Account Deletion: accounts the user deleted themselves,
 // separated out from the regular Users list above (see
 // admin.repository.js#findAllUsers). Read-only here; permanently
-// removing one is Phase 4.
+// removing one uses the same action as above.
 router.get("/deleted-users", adminController.listDeletedUsers);
 
-// Phase 4 - Permanent Account Removal. Irreversible, so gated the same
-// way admin-management actions are (requireSuperAdmin), not just regular
-// admin access like the rest of this file.
+// Same permanent-deletion action as /users/:id above, reachable from the
+// Deleted Accounts review list too.
 router.delete(
     "/deleted-users/:id",
     requireSuperAdmin,

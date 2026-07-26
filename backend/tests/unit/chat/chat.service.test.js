@@ -1,10 +1,22 @@
 jest.mock("../../../src/modules/chat/chat.repository");
 jest.mock("../../../src/socket/socket");
+jest.mock("../../../src/utils/cloudinaryUpload");
 
 const chatRepository = require("../../../src/modules/chat/chat.repository");
 const socket = require("../../../src/socket/socket");
+const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
 
 const chatService = require("../../../src/modules/chat/chat.service");
+
+// getMessages() fires markDelivered() and chains .catch() onto it without
+// awaiting - the auto-mock otherwise resolves to `undefined` (not a
+// Promise), which throws "Cannot read properties of undefined (reading
+// 'catch')" the moment getMessages runs, in every test regardless of
+// what it's actually asserting on.
+beforeEach(() => {
+    chatRepository.markDelivered.mockResolvedValue(undefined);
+    chatRepository.findReactionsForConversation.mockResolvedValue([]);
+});
 
 describe("chat.service.startConversation", () => {
     it("rejects starting a conversation with yourself", async () => {
@@ -72,7 +84,7 @@ describe("chat.service.getMessages", () => {
         const result = await chatService.getMessages(1, 5);
 
         expect(chatRepository.findMessages).toHaveBeenCalledWith(1, "2026-07-01");
-        expect(result).toEqual([{ id: 1 }]);
+        expect(result).toEqual([{ id: 1, reactions: [] }]);
     });
 
     it("passes null clearedAt when the user has never cleared the conversation", async () => {
@@ -83,6 +95,46 @@ describe("chat.service.getMessages", () => {
         await chatService.getMessages(1, 5);
 
         expect(chatRepository.findMessages).toHaveBeenCalledWith(1, null);
+    });
+
+    it("backfills delivered_at for the requesting user as a best-effort side effect (Phase 4 delivery receipts)", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
+        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
+        chatRepository.findMessages.mockResolvedValue([]);
+
+        await chatService.getMessages(1, 5);
+
+        expect(chatRepository.markDelivered).toHaveBeenCalledWith(1, 5);
+    });
+
+    it("never fails the request even if markDelivered rejects (fire-and-forget)", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
+        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
+        chatRepository.findMessages.mockResolvedValue([{ id: 1 }]);
+        chatRepository.markDelivered.mockRejectedValue(new Error("connection reset"));
+
+        await expect(chatService.getMessages(1, 5)).resolves.toEqual([{ id: 1, reactions: [] }]);
+    });
+
+    it("groups reaction rows onto their message, tallying counts and marking the viewer's own reaction", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, buyer_cleared_at: null });
+        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
+        chatRepository.findMessages.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+        chatRepository.findReactionsForConversation.mockResolvedValue([
+            { message_id: 1, emoji: "👍", user_id: 5 },
+            { message_id: 1, emoji: "👍", user_id: 6 },
+            { message_id: 1, emoji: "🔥", user_id: 6 }
+        ]);
+
+        const result = await chatService.getMessages(1, 5);
+
+        expect(result[0].reactions).toEqual(
+            expect.arrayContaining([
+                { emoji: "👍", count: 2, userIds: [5, 6], mine: true },
+                { emoji: "🔥", count: 1, userIds: [6], mine: false }
+            ])
+        );
+        expect(result[1].reactions).toEqual([]);
     });
 });
 
@@ -103,7 +155,7 @@ describe("chat.service.sendMessage", () => {
 
         const result = await chatService.sendMessage(1, 5, "  hello there  ");
 
-        expect(chatRepository.createMessage).toHaveBeenCalledWith(1, 5, "hello there");
+        expect(chatRepository.createMessage).toHaveBeenCalledWith(1, 5, "hello there", undefined);
         expect(chatRepository.touchConversation).toHaveBeenCalledWith(1);
         expect(socket.emitNewMessage).toHaveBeenCalledWith(1, expect.objectContaining({
             id: 500, conversation_id: 1, sender_id: 5, message: "hello there"
@@ -208,5 +260,179 @@ describe("chat.service.deleteConversation", () => {
 
         expect(chatRepository.setDeletedAt).toHaveBeenCalledWith(1, "buyer_deleted_at");
         expect(chatRepository.setClearedAt).toHaveBeenCalledWith(1, "buyer_cleared_at");
+    });
+});
+
+describe("chat.service.getMyConversations", () => {
+    it("delegates straight to the repository for the given user", async () => {
+        chatRepository.findConversationsByUser.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+        const result = await chatService.getMyConversations(7);
+
+        expect(chatRepository.findConversationsByUser).toHaveBeenCalledWith(7);
+        expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+    });
+});
+
+describe("chat.service.sendAttachment", () => {
+    it("rejects when no file was uploaded", async () => {
+        await expect(chatService.sendAttachment(1, 5, null, "caption")).rejects.toThrow("No file uploaded");
+        expect(uploadToCloudinary).not.toHaveBeenCalled();
+    });
+
+    it("uploads an image to Cloudinary and sends it as a message with the resolved attachment fields", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.createMessage.mockResolvedValue(700);
+        uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn.example.com/photo.jpg" });
+
+        const file = { mimetype: "image/png", originalname: "photo.png", size: 2048, buffer: Buffer.from("x") };
+        const result = await chatService.sendAttachment(1, 5, file, "check this out");
+
+        expect(uploadToCloudinary).toHaveBeenCalledWith(file.buffer, "nexora/chat", "image");
+        expect(chatRepository.createMessage).toHaveBeenCalledWith(
+            1,
+            5,
+            "check this out",
+            expect.objectContaining({
+                url: "https://cdn.example.com/photo.jpg",
+                type: "image",
+                name: "photo.png",
+                size: 2048
+            })
+        );
+        expect(result).toEqual(expect.objectContaining({ id: 700, attachment_type: "image" }));
+    });
+
+    it("routes audio uploads through Cloudinary's video resource type but tags the message attachment as audio", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.createMessage.mockResolvedValue(701);
+        uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn.example.com/voice.mp3" });
+
+        const file = { mimetype: "audio/mpeg", originalname: "voice.mp3", size: 512, buffer: Buffer.from("x") };
+        await chatService.sendAttachment(1, 5, file, "");
+
+        expect(uploadToCloudinary).toHaveBeenCalledWith(file.buffer, "nexora/chat", "video");
+        expect(chatRepository.createMessage).toHaveBeenCalledWith(
+            1, 5, "", expect.objectContaining({ type: "audio" })
+        );
+    });
+
+    it("falls back to the raw resource type for generic files", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.createMessage.mockResolvedValue(702);
+        uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn.example.com/doc.pdf" });
+
+        const file = { mimetype: "application/pdf", originalname: "doc.pdf", size: 1024, buffer: Buffer.from("x") };
+        await chatService.sendAttachment(1, 5, file, "");
+
+        expect(uploadToCloudinary).toHaveBeenCalledWith(file.buffer, "nexora/chat", "raw");
+        expect(chatRepository.createMessage).toHaveBeenCalledWith(
+            1, 5, "", expect.objectContaining({ type: "file" })
+        );
+    });
+});
+
+describe("chat.service.reactToMessage", () => {
+    it("rejects an emoji outside the allowed reaction set", async () => {
+        await expect(chatService.reactToMessage(1, 900, 5, "🤡")).rejects.toThrow(
+            "That reaction isn't supported"
+        );
+        expect(chatRepository.addReaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-participant", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 999, seller_id: 998 });
+        await expect(chatService.reactToMessage(1, 900, 5, "👍")).rejects.toThrow("Conversation not found");
+    });
+
+    it("rejects reacting to a message that doesn't exist, belongs to another conversation, or was deleted", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+
+        chatRepository.findMessageById.mockResolvedValue(undefined);
+        await expect(chatService.reactToMessage(1, 900, 5, "👍")).rejects.toThrow("Message not found");
+
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 2 });
+        await expect(chatService.reactToMessage(1, 900, 5, "👍")).rejects.toThrow("Message not found");
+
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 1, is_deleted: 1 });
+        await expect(chatService.reactToMessage(1, 900, 5, "👍")).rejects.toThrow("Message not found");
+    });
+
+    it("adds the reaction, re-fetches the tally, and broadcasts it", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 1, is_deleted: 0 });
+        chatRepository.findReactionsForMessage.mockResolvedValue([{ emoji: "👍", count: 1 }]);
+
+        const result = await chatService.reactToMessage(1, 900, 5, "👍");
+
+        expect(chatRepository.addReaction).toHaveBeenCalledWith(900, 5, "👍");
+        expect(socket.emitReactionUpdated).toHaveBeenCalledWith(1, {
+            conversation_id: 1,
+            message_id: 900,
+            reactions: [{ emoji: "👍", count: 1 }]
+        });
+        expect(result).toEqual({ conversation_id: 1, message_id: 900, reactions: [{ emoji: "👍", count: 1 }] });
+    });
+
+    it("still returns the reaction payload if the socket broadcast throws", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 1, is_deleted: 0 });
+        chatRepository.findReactionsForMessage.mockResolvedValue([]);
+        socket.emitReactionUpdated.mockImplementation(() => { throw new Error("socket down"); });
+
+        await expect(chatService.reactToMessage(1, 900, 5, "👍")).resolves.toEqual(
+            expect.objectContaining({ message_id: 900 })
+        );
+    });
+});
+
+describe("chat.service.removeReaction", () => {
+    it("rejects when the message doesn't exist or belongs to a different conversation", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 2 });
+
+        await expect(chatService.removeReaction(1, 900, 5, "👍")).rejects.toThrow("Message not found");
+        expect(chatRepository.removeReaction).not.toHaveBeenCalled();
+    });
+
+    it("removes the reaction and broadcasts the updated tally", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.findMessageById.mockResolvedValue({ id: 900, conversation_id: 1 });
+        chatRepository.findReactionsForMessage.mockResolvedValue([]);
+
+        const result = await chatService.removeReaction(1, 900, 5, "👍");
+
+        expect(chatRepository.removeReaction).toHaveBeenCalledWith(900, 5, "👍");
+        expect(socket.emitReactionUpdated).toHaveBeenCalledWith(1, {
+            conversation_id: 1, message_id: 900, reactions: []
+        });
+        expect(result).toEqual({ conversation_id: 1, message_id: 900, reactions: [] });
+    });
+});
+
+describe("chat.service.searchMessages", () => {
+    it("returns an empty array without querying the repository when the query is blank", async () => {
+        const result = await chatService.searchMessages(1, 5, "   ");
+        expect(result).toEqual([]);
+        expect(chatRepository.findConversationById).not.toHaveBeenCalled();
+        expect(chatRepository.searchMessages).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-participant", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 999, seller_id: 998 });
+        await expect(chatService.searchMessages(1, 5, "hello")).rejects.toThrow("Conversation not found");
+    });
+
+    it("trims the query and searches only messages after the requester's clear-point", async () => {
+        chatRepository.findConversationById.mockResolvedValue({
+            id: 1, buyer_id: 5, seller_id: 10, buyer_cleared_at: "2026-01-01"
+        });
+        chatRepository.clearedColumnFor.mockReturnValue("buyer_cleared_at");
+        chatRepository.searchMessages.mockResolvedValue([{ id: 5, message: "hello there" }]);
+
+        const result = await chatService.searchMessages(1, 5, "  hello  ");
+
+        expect(chatRepository.searchMessages).toHaveBeenCalledWith(1, "hello", "2026-01-01");
+        expect(result).toEqual([{ id: 5, message: "hello there" }]);
     });
 });

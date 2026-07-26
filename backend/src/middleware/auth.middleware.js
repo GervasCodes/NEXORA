@@ -39,6 +39,20 @@ module.exports = async (req, res, next) => {
         const status = await authRepository.findAccountStatusById(decoded.id);
 
         if (!status || !status.is_active) {
+            // A suspended account gets its own code + reason (rather than
+            // the generic 401 below) so the frontend can route straight to
+            // the full-screen suspended page instead of silently signing
+            // the person out as if their session had merely expired - see
+            // api/client.js's response interceptor.
+            if (status && status.suspended_at) {
+                return res.status(403).json({
+                    success: false,
+                    code: "ACCOUNT_SUSPENDED",
+                    message: t(req.locale, "errors.ACCOUNT_SUSPENDED"),
+                    data: { reason: status.suspension_reason || null }
+                });
+            }
+
             return res.status(401).json({
                 success: false,
                 message: t(req.locale, "common.unauthorized")

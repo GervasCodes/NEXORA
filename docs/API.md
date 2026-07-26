@@ -22,6 +22,7 @@ map of what exists and where, not a full OpenAPI spec.
 | Account | `/account` | `modules/account/account.routes.js` |
 | Account verification (admin) | `/admin/account-verifications` | `modules/accountVerification/accountVerification.routes.js` |
 | Admin | `/admin` | `modules/admin/admin.routes.js` |
+| Admin notifications | `/admin/notifications` | `modules/adminNotification/adminNotification.routes.js` |
 | Seller | `/seller` | `modules/seller/seller.routes.js` |
 | Seller sponsorship | `/seller/sponsorship` | `modules/sponsorship/sponsorship.routes.js` |
 | Seller featured store | `/seller/featured-store` | `modules/featuredStore/featuredStore.routes.js` |
@@ -223,6 +224,29 @@ below — the live agent-offer/dispatch system sits across both modules.
 | PUT | `/:id/read` | Mark one read |
 | DELETE | `/:id` | Delete a notification |
 
+## Admin notifications — `/admin/notifications` (admin)
+
+Phase 2 (Admin Notification Center). A single shared feed visible to
+every admin/super_admin, distinct from the per-user `/notifications`
+above — see `059_admin_notifications.sql`'s header comment for why it
+isn't just a reuse of that table.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/` | List recent, filterable by `?category=account\|moderation\|security` and `?unread_only=true`, `?limit=` |
+| GET | `/unread-count` | Shared unread count for the admin bell/badge |
+| PUT | `/read-all` | Mark every notification read |
+| PUT | `/:id/read` | Mark one read (records `read_by` / `read_at`) |
+
+Real-time: every `POST`-triggering event (see `docs/CHANGELOG.md` Phase 2
+for the full `type` list — registrations, suspensions, permanent
+deletions, admin account changes, fraud flags, disputes) fans out over
+Socket.IO to the shared `admins` room as `admin_notification:new`, and to
+any admin device with Web Push enabled (Phase 3), so an installed PWA
+gets the event even with no admin tab open. Creation is fire-and-forget
+(same pattern as `audit.service.js#log`) — a failed insert or a down
+socket/push layer never blocks the action that triggered it.
+
 ## Chat — `/chat`
 
 | Method | Path | Notes |
@@ -231,10 +255,22 @@ below — the live agent-offer/dispatch system sits across both modules.
 | GET | `/conversations` | List own conversations |
 | GET | `/conversations/:id/messages` | List messages |
 | POST | `/conversations/:id/messages` | Send a message |
-| PUT | `/conversations/:id/read` | Mark conversation read |
+| POST | `/conversations/:id/attachments` | Send an image/video/audio/file attachment (Phase 4 — Messaging Upgrade; `multipart/form-data`, field `file`, via `uploadChatAttachment.middleware`) |
+| GET | `/conversations/:id/search` | Search this conversation's messages (Phase 4; bounded `LIKE` scan, see `idx_messages_conversation_created` in `docs/DATABASE.md`) |
+| POST | `/conversations/:id/messages/:messageId/reactions` | Add an emoji reaction (Phase 4; one reactor can add several distinct emoji, not the same emoji twice) |
+| DELETE | `/conversations/:id/messages/:messageId/reactions/:emoji` | Remove own reaction (Phase 4) |
+| PUT | `/conversations/:id/read` | Mark conversation read — also stamps each message's `read_at` (Phase 4 read receipts) |
 | DELETE | `/conversations/:id/messages/:messageId` | Delete a message |
 | POST | `/conversations/:id/clear` | Clear a conversation from own view |
 | DELETE | `/conversations/:id` | Remove a conversation from own list |
+
+Delivery receipts (`messages.delivered_at`) are set server-side the first
+time the recipient has the message — either it's fetched over
+`GET .../messages` or their socket is already in the conversation's room
+when it's sent — not through a dedicated endpoint; the sender's client
+reads `delivered_at` / `read_at` off the message object to render the
+single/double/blue-double check states. See `060_messaging_upgrade.sql`
+for the underlying columns.
 
 ## Push — `/push`
 
@@ -301,12 +337,14 @@ below — the live agent-offer/dispatch system sits across both modules.
 | GET | `/analytics` | Platform analytics |
 | GET | `/fraud-flags` | List fraud flags |
 | PUT | `/fraud-flags/:id/resolve` | Resolve a fraud flag |
-| GET | `/audit-logs` | Audit log |
+| GET | `/audit-logs` | Audit log — see query params below (Phase 5) |
 | GET | `/refunds` | List refunds |
 | GET | `/refunds/:id` | Refund detail |
 | POST | `/refunds/:id/retry` | Retry a failed refund |
 | GET | `/users` | List users |
-| PUT | `/users/:id/deactivate` / `/activate` | Toggle a user account |
+| PUT | `/users/:id/suspend` | Suspend a user (body: `{ reason }`, required, non-empty) — replaces the old deactivate/activate toggle (Phase 1). Blocks login immediately (`ACCOUNT_SUSPENDED`, 403, carries `reason`) and, if the user is mid-session, blocks their next request too. Can't be used on a self-deleted account or on the acting admin's own account. |
+| PUT | `/users/:id/unsuspend` | Lift a suspension (Phase 1) |
+| DELETE | `/users/:id` *(super_admin)* | Permanently delete a user (Phase 1 — no longer requires prior self-deletion; scrubs PII, cart items, push subscriptions, deactivates any live seller listings; keeps financial/legal records per the FK architecture). Same underlying action as `DELETE /deleted-users/:id` below. |
 | GET | `/sellers` | List sellers |
 | PUT | `/sellers/:id/verify` / `/unverify` | Toggle seller verification |
 | GET | `/products` | List products |
@@ -324,6 +362,22 @@ below — the live agent-offer/dispatch system sits across both modules.
 | POST | `/admins` *(super_admin)* | Create an admin account |
 | PUT | `/admins/:id/permissions` *(super_admin)* | Update an admin's permissions |
 | DELETE | `/admins/:id` *(super_admin)* | Remove an admin |
+
+### `GET /admin/audit-logs` — query params (Phase 5)
+
+| Param | Notes |
+|---|---|
+| `category` | One of the groups in `backend/src/modules/audit/audit.constants.js` (`account`, `admin`, `auth`, `orders`, `payments`, `refunds`) — expands to that group's `event_type` list. Takes precedence over `event_type` if both are given. |
+| `event_type` | A single exact `event_type` value, when `category` isn't specific enough. |
+| `user_id` | Restrict to one actor. |
+| `date_from` / `date_to` | Date range. |
+| `q` | Free-text match against the log's `description`. |
+| `admin_actions_only` | `true` to show only events performed by an admin/super_admin actor. |
+| `page` / `page_size` | Pagination — response includes `meta.total` / `meta.page` / `meta.totalPages`. |
+
+Logging itself (`audit.service.js#log` / `#logFromRequest`) is
+fire-and-forget, same pattern as admin notifications — a failed insert
+never blocks or rolls back the action being recorded.
 
 ### `GET /admin/dispatch` — full response shape
 
@@ -386,6 +440,7 @@ Admin/super_admin sockets auto-join the `admins` room on connect (see
 | `dispatch:delivery_status` | `{ orderId, deliveryId, status }` | A delivery's status changes (picked up / in transit / delivered / failed) |
 | `dispatch:agent_status` | `{ agentId, isOnline }` | An agent goes on/off shift |
 | `dispatch:agent_position` | `{ agentId, lat, lng, timestamp }` | An online agent's location ping |
+| `admin_notification:new` | The full admin-notification row (`id`, `type`, `category`, `severity`, `title`, `message`, `related_user_id`, `is_read`, `created_at`) | A new admin-facing event fires (Phase 2 — registration, suspension, permanent deletion, admin account change, fraud flag, dispute) |
 
 The dashboard treats `dispatch:delivery_assigned` / `dispatch:delivery_status`
 / `dispatch:agent_status` as "something changed, re-fetch `GET /admin/dispatch`"
@@ -401,3 +456,10 @@ timeout — see `README-phase-10B.md` for the `IncomingOfferModal` client
 side) and live order/notification pushes. See
 `backend/src/socket/socket.js` for the authoritative event list and room
 structure.
+
+**Chat (room: `conversation:<id>`, Phase 4 — Messaging Upgrade)**: every
+socket in a conversation auto-joins its room on open. `new_message` /
+`message_deleted` / `messages_read` / `reaction_updated` fire on the
+matching REST action so every participant's UI stays live without
+polling; `typing` is emitted directly (not persisted) while a user is
+composing a reply.

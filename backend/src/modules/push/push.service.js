@@ -15,14 +15,10 @@ exports.unsubscribe = async (userId, endpoint) => {
     await pushRepository.remove(userId, endpoint);
 };
 
-// Best-effort fan-out to every device this user has subscribed from.
-// Never throws — a failed/misconfigured push should never break the
-// delivery-matching flow that triggered it.
-exports.sendToUser = async (userId, payload) => {
-    if (!isConfigured) return;
-
-    const subscriptions = await pushRepository.findByUser(userId);
-    if (subscriptions.length === 0) return;
+// Shared send loop: given a list of push_subscriptions rows, fan the same
+// payload out to all of them and clean up any the browser has invalidated.
+const sendToSubscriptions = async (subscriptions, payload) => {
+    if (!isConfigured || subscriptions.length === 0) return;
 
     const body = JSON.stringify(payload);
 
@@ -46,4 +42,22 @@ exports.sendToUser = async (userId, payload) => {
             }
         })
     );
+};
+
+// Best-effort fan-out to every device this user has subscribed from.
+// Never throws — a failed/misconfigured push should never break the
+// delivery-matching flow (or notification) that triggered it.
+exports.sendToUser = async (userId, payload) => {
+    if (!isConfigured) return;
+    const subscriptions = await pushRepository.findByUser(userId);
+    await sendToSubscriptions(subscriptions, payload);
+};
+
+// Fan-out to every admin/super_admin device with push enabled - used by
+// adminNotification.service so an installed PWA gets admin events (new
+// dispute, fraud flag, registration, etc.) even when no admin tab is open.
+exports.sendToAdmins = async (payload) => {
+    if (!isConfigured) return;
+    const subscriptions = await pushRepository.findByRoles(["admin", "super_admin"]);
+    await sendToSubscriptions(subscriptions, payload);
 };

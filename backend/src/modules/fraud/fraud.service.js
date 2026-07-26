@@ -1,4 +1,5 @@
 const fraudRepository = require("./fraud.repository");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 
 // Deliberately simple, explainable rules rather than a model - each one
 // should be something an admin reviewing a flag can immediately
@@ -56,6 +57,22 @@ async function flagOnce(entityType, entityId, ruleCode, reason, severity) {
     const alreadyFlagged = await fraudRepository.hasOpenFlag(entityType, entityId, ruleCode);
     if (alreadyFlagged) return;
     await fraudRepository.createFlag({ entityType, entityId, ruleCode, reason, severity });
+
+    // "Important security/system events" (Phase 2 event list) - a new
+    // fraud flag is exactly that. Every flag already lands in the Fraud
+    // Review queue (admin.controller.js#listFraudFlags) regardless of
+    // severity; this additionally surfaces it in the notification
+    // center so it isn't only found by an admin who happens to check
+    // that page.
+    adminNotificationService.notify({
+        type: "fraud_flag_raised",
+        category: "security",
+        severity: severity === "high" ? "critical" : "warning",
+        title: "Fraud flag raised",
+        message: reason,
+        metadata: { entity_type: entityType, entity_id: entityId, rule_code: ruleCode, fraud_severity: severity },
+        relatedUserId: entityType === "seller" ? entityId : null
+    });
 }
 
 exports.listOpenFlags = async () => fraudRepository.findOpen();

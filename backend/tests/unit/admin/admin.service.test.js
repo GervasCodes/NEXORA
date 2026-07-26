@@ -1,54 +1,40 @@
+jest.mock("../../../src/config/db", () => require("../../helpers/mockDb"));
 jest.mock("../../../src/modules/admin/admin.repository");
 jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/settings/settings.service");
 jest.mock("../../../src/modules/wallet/wallet.service");
 jest.mock("../../../src/modules/auth/auth.repository");
+jest.mock("../../../src/modules/account/account.repository");
+jest.mock("../../../src/modules/audit/audit.service");
+jest.mock("../../../src/modules/adminNotification/adminNotification.service");
+jest.mock("../../../src/utils/cloudinaryDelete");
 jest.mock("../../../src/utils/hashPassword");
 
+const db = require("../../../src/config/db");
 const adminRepository = require("../../../src/modules/admin/admin.repository");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const settingsService = require("../../../src/modules/settings/settings.service");
 const walletService = require("../../../src/modules/wallet/wallet.service");
 const authRepository = require("../../../src/modules/auth/auth.repository");
+const accountRepository = require("../../../src/modules/account/account.repository");
+const auditService = require("../../../src/modules/audit/audit.service");
+const adminNotificationService = require("../../../src/modules/adminNotification/adminNotification.service");
+const { deleteManyFromCloudinary } = require("../../../src/utils/cloudinaryDelete");
 const hashPassword = require("../../../src/utils/hashPassword");
 
 const adminService = require("../../../src/modules/admin/admin.service");
 
+const connection = db.__mockConnection;
+
 beforeEach(() => {
     notificationService.notify.mockResolvedValue(undefined);
+    accountRepository.deleteCartItems.mockResolvedValue(undefined);
+    accountRepository.deletePushSubscriptions.mockResolvedValue(undefined);
+    accountRepository.deactivateSellerListings.mockResolvedValue(undefined);
+    deleteManyFromCloudinary.mockResolvedValue([]);
 });
 
 describe("admin.service user/seller/product moderation", () => {
-    it("setUserActive rejects an unknown user", async () => {
-        adminRepository.findUserById.mockResolvedValue(undefined);
-        await expect(adminService.setUserActive(1, false)).rejects.toThrow("User not found");
-    });
-
-    it("setUserActive deactivates and notifies with the deactivated keys", async () => {
-        adminRepository.findUserById.mockResolvedValue({ id: 1 });
-        await adminService.setUserActive(1, false);
-
-        expect(adminRepository.setUserActive).toHaveBeenCalledWith(1, false);
-        expect(notificationService.notify).toHaveBeenCalledWith(
-            expect.objectContaining({
-                titleKey: "notifications.account.deactivated.title",
-                messageKey: "notifications.account.deactivated.message"
-            })
-        );
-    });
-
-    it("setUserActive reactivates and notifies with the reactivated keys", async () => {
-        adminRepository.findUserById.mockResolvedValue({ id: 1 });
-        await adminService.setUserActive(1, true);
-
-        expect(notificationService.notify).toHaveBeenCalledWith(
-            expect.objectContaining({
-                titleKey: "notifications.account.reactivated.title",
-                messageKey: "notifications.account.reactivated.message"
-            })
-        );
-    });
-
     it("setSellerVerified rejects an unknown seller profile", async () => {
         adminRepository.findSellerProfileByUserId.mockResolvedValue(undefined);
         await expect(adminService.setSellerVerified(1, true)).rejects.toThrow("Seller profile not found");
@@ -349,5 +335,279 @@ describe("admin.service.getDispatchOverview (Phase 6 dispatch dashboard)", () =>
                 idle_agents: 0
             }
         });
+    });
+});
+
+describe("admin.service.suspendUser (Admin Account Control - Phase 1)", () => {
+    const activeUser = { id: 7, first_name: "Jane", last_name: "Doe", email: "jane@b.com", deleted_at: null };
+
+    it("rejects an unknown user", async () => {
+        adminRepository.findUserById.mockResolvedValue(undefined);
+        await expect(adminService.suspendUser(7, "fraud", 1)).rejects.toThrow("User not found");
+        expect(adminRepository.suspendUser).not.toHaveBeenCalled();
+    });
+
+    it("refuses to suspend a self-deleted account", async () => {
+        adminRepository.findUserById.mockResolvedValue({ ...activeUser, deleted_at: "2026-01-01" });
+        await expect(adminService.suspendUser(7, "fraud", 1)).rejects.toThrow(
+            "This account has been deleted and can't be suspended."
+        );
+        expect(adminRepository.suspendUser).not.toHaveBeenCalled();
+    });
+
+    it("refuses to let an admin suspend their own account", async () => {
+        adminRepository.findUserById.mockResolvedValue(activeUser);
+        await expect(adminService.suspendUser(7, "fraud", 7)).rejects.toThrow(
+            "You can't suspend your own account."
+        );
+    });
+
+    it("requires a non-blank reason", async () => {
+        adminRepository.findUserById.mockResolvedValue(activeUser);
+        await expect(adminService.suspendUser(7, "   ", 1)).rejects.toThrow("A suspension reason is required.");
+        await expect(adminService.suspendUser(7, "", 1)).rejects.toThrow("A suspension reason is required.");
+        await expect(adminService.suspendUser(7, undefined, 1)).rejects.toThrow(
+            "A suspension reason is required."
+        );
+        expect(adminRepository.suspendUser).not.toHaveBeenCalled();
+    });
+
+    it("suspends the account, trims the reason, notifies the user by email, audit-logs it, and raises an admin notification", async () => {
+        adminRepository.findUserById.mockResolvedValue(activeUser);
+
+        await adminService.suspendUser(7, "  repeated chargebacks  ", 1);
+
+        expect(adminRepository.suspendUser).toHaveBeenCalledWith(7, "repeated chargebacks", 1);
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 7,
+                type: "account_status",
+                titleKey: "notifications.account.suspended.title",
+                messageKey: "notifications.account.suspended.message",
+                messageParams: { reason: "repeated chargebacks" },
+                withEmail: true
+            })
+        );
+
+        expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 1,
+                eventType: "account_suspended",
+                metadata: { target_user_id: 7, reason: "repeated chargebacks" }
+            })
+        );
+
+        expect(adminNotificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: "account_suspended",
+                category: "account",
+                severity: "warning",
+                relatedUserId: 7,
+                message: expect.stringContaining("Jane Doe (jane@b.com)")
+            })
+        );
+    });
+});
+
+describe("admin.service.unsuspendUser (Admin Account Control - Phase 1)", () => {
+    const suspendedUser = {
+        id: 7, first_name: "Jane", last_name: "Doe", email: "jane@b.com", suspended_at: "2026-01-01"
+    };
+
+    it("rejects an unknown user", async () => {
+        adminRepository.findUserById.mockResolvedValue(undefined);
+        await expect(adminService.unsuspendUser(7, 1)).rejects.toThrow("User not found");
+    });
+
+    it("rejects a user who isn't currently suspended", async () => {
+        adminRepository.findUserById.mockResolvedValue({ ...suspendedUser, suspended_at: null });
+        await expect(adminService.unsuspendUser(7, 1)).rejects.toThrow(
+            "This account is not currently suspended."
+        );
+        expect(adminRepository.unsuspendUser).not.toHaveBeenCalled();
+    });
+
+    it("unsuspends the account, notifies the user by email, and audit-logs and admin-notifies it", async () => {
+        adminRepository.findUserById.mockResolvedValue(suspendedUser);
+
+        await adminService.unsuspendUser(7, 1);
+
+        expect(adminRepository.unsuspendUser).toHaveBeenCalledWith(7);
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 7,
+                titleKey: "notifications.account.unsuspended.title",
+                messageKey: "notifications.account.unsuspended.message",
+                withEmail: true
+            })
+        );
+        expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({ eventType: "account_unsuspended", metadata: { target_user_id: 7 } })
+        );
+        expect(adminNotificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "account_unsuspended", severity: "info", relatedUserId: 7 })
+        );
+    });
+});
+
+describe("admin.service.permanentlyDeleteUser (Phase 4 - Permanent Account Removal)", () => {
+    const targetUser = {
+        id: 7, first_name: "Jane", last_name: "Doe", email: "jane@b.com", role: "buyer",
+        permanently_deleted_at: null
+    };
+
+    beforeEach(() => {
+        adminRepository.findAccountVerificationDocumentUrls.mockResolvedValue([]);
+        adminRepository.findSellerLogoAndBanner.mockResolvedValue(null);
+        adminRepository.findNeverOrderedProductIds.mockResolvedValue([]);
+        adminRepository.findProductMediaUrls.mockResolvedValue([]);
+        adminRepository.deleteWishlistItems.mockResolvedValue(undefined);
+    });
+
+    it("rejects an unknown user", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(undefined);
+        await expect(adminService.permanentlyDeleteUser(7, 1)).rejects.toThrow("User not found");
+        expect(db.getConnection).not.toHaveBeenCalled();
+    });
+
+    it("refuses to let an admin permanently delete their own account", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        await expect(adminService.permanentlyDeleteUser(7, 7)).rejects.toThrow(
+            "You can't permanently delete your own account."
+        );
+        expect(db.getConnection).not.toHaveBeenCalled();
+    });
+
+    it("refuses to re-delete an account that's already been permanently deleted", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue({
+            ...targetUser, permanently_deleted_at: "2026-01-01"
+        });
+        await expect(adminService.permanentlyDeleteUser(7, 1)).rejects.toThrow(
+            "This account has already been permanently deleted."
+        );
+        expect(db.getConnection).not.toHaveBeenCalled();
+    });
+
+    it("scrubs the account inside one transaction: verification docs, seller assets, never-ordered products, personal bookkeeping, and PII", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findSellerLogoAndBanner.mockResolvedValue({
+            store_logo: "https://res.cloudinary.com/x/image/upload/v1/logo.png",
+            store_banner: null
+        });
+        adminRepository.findNeverOrderedProductIds.mockResolvedValue([101, 102]);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(connection.beginTransaction).toHaveBeenCalled();
+        expect(adminRepository.deleteAccountVerificationDocuments).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.scrubSellerProfile).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteProducts).toHaveBeenCalledWith([101, 102], connection);
+        expect(adminRepository.deleteSellerCollections).toHaveBeenCalledWith(7, connection);
+        expect(accountRepository.deleteCartItems).toHaveBeenCalledWith(7, connection);
+        expect(accountRepository.deletePushSubscriptions).toHaveBeenCalledWith(7, connection);
+        expect(accountRepository.deactivateSellerListings).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteWishlistItems).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteOtpCodes).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteNotifications).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteSellerDeliveryAgentLinks).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.deleteDeliveryOffersForAgent).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.tombstoneSentMessages).toHaveBeenCalledWith(7, connection);
+        expect(adminRepository.scrubUserPII).toHaveBeenCalledWith(7, connection);
+        expect(connection.commit).toHaveBeenCalled();
+        expect(connection.release).toHaveBeenCalled();
+    });
+
+    it("skips scrubSellerProfile when the target never had seller assets", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findSellerLogoAndBanner.mockResolvedValue(null);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(adminRepository.scrubSellerProfile).not.toHaveBeenCalled();
+    });
+
+    it("rolls back and never scrubs PII if a step inside the transaction fails", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.deleteWishlistItems.mockRejectedValue(new Error("db exploded"));
+
+        await expect(adminService.permanentlyDeleteUser(7, 1)).rejects.toThrow("db exploded");
+
+        expect(connection.rollback).toHaveBeenCalled();
+        expect(connection.release).toHaveBeenCalled();
+        expect(adminRepository.scrubUserPII).not.toHaveBeenCalled();
+        expect(auditService.log).not.toHaveBeenCalled();
+        expect(adminNotificationService.notify).not.toHaveBeenCalled();
+    });
+
+    it("deletes the gathered Cloudinary assets only after the transaction commits", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findAccountVerificationDocumentUrls.mockResolvedValue(["https://cdn/doc.pdf"]);
+        deleteManyFromCloudinary.mockResolvedValue([]);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(deleteManyFromCloudinary).toHaveBeenCalledWith(["https://cdn/doc.pdf"]);
+        expect(connection.commit).toHaveBeenCalled();
+    });
+
+    it("audit-logs the deletion with the counts of products and Cloudinary assets removed", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findNeverOrderedProductIds.mockResolvedValue([101]);
+        adminRepository.findAccountVerificationDocumentUrls.mockResolvedValue(["https://cdn/doc.pdf"]);
+        deleteManyFromCloudinary.mockResolvedValue([]);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 1,
+                eventType: "account_permanently_deleted",
+                metadata: expect.objectContaining({
+                    target_user_id: 7,
+                    products_deleted: 1,
+                    cloudinary_assets_deleted: 1,
+                    cloudinary_assets_failed: 0
+                })
+            })
+        );
+    });
+
+    it("subtracts failed Cloudinary deletes from the audit log's success count and still commits", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findAccountVerificationDocumentUrls.mockResolvedValue(["https://cdn/doc.pdf"]);
+        deleteManyFromCloudinary.mockResolvedValue(["https://cdn/doc.pdf"]);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ cloudinary_assets_deleted: 0, cloudinary_assets_failed: 1 })
+            })
+        );
+    });
+
+    it("uses a higher severity and the admin-specific event type when the deleted account had the admin role", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue({ ...targetUser, role: "admin" });
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(adminNotificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: "admin_account_permanently_deleted",
+                severity: "critical",
+                relatedUserId: 7
+            })
+        );
+    });
+
+    it("uses the ordinary user event type and a warning severity for a non-admin account", async () => {
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(adminNotificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "user_account_permanently_deleted", severity: "warning" })
+        );
     });
 });

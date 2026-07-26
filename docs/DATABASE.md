@@ -19,7 +19,8 @@ see `backend/.env.example`.
 
 ## Schema overview
 
-54 migrations as of Phase 10D, grouped by domain. This is a map of what
+60 migrations as of Phase 7 (Documentation) of the admin/notification/
+messaging trust upgrade, grouped by domain. This is a map of what
 each migration added, not a full column reference — for exact columns,
 types, and constraints, read the migration file itself
 (`database/migrations/NNN_*.sql`), which is the single source of truth.
@@ -73,6 +74,26 @@ the same admin oversight pattern (see `docs/API.md`).
 **Payment trust system — Phase 9** (`054`)
 Escrow foundation: the columns/table backing hold-then-release payouts
 (see `docs/ESCROW_ANALYSIS.md` for the design rationale).
+
+**Admin operations, real-time & messaging trust upgrade — Phases 1–4** (`058`–`060`)
+`users.suspended_at` / `suspension_reason` / `suspended_by` (Phase 1 —
+Admin Account Control: suspend/unsuspend replaces the old bare
+deactivate/activate toggle; permanent delete no longer requires a prior
+self-deletion); `admin_notifications` (Phase 2 — a single shared
+admin-facing feed, deliberately not a reuse of the per-user
+`notifications` table — see the migration file's header comment for why);
+Phase 3 (PWA & Real-Time Notifications) added no new tables — it wires
+the existing `push_subscriptions` (`016`) and Socket.IO `admins` room
+into the new admin-notification and messaging events below; `messages`
+delivery/read-receipt columns, attachment columns, `message_reactions`,
+and a `(conversation_id, created_at)` index backing in-conversation
+search (`060` — Phase 4, Messaging Upgrade).
+
+Phase 5 (Audit Logs) added no new migration — it documents and extends
+`audit_log` (`035`, already listed above under "Order splitting &
+delivery pricing"), whose `event_type` values are now grouped for the
+admin panel's filter UI in `backend/src/modules/audit/audit.constants.js`
+rather than a schema change.
 
 ## Testing against the database
 

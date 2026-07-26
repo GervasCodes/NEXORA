@@ -79,7 +79,14 @@ exports.findConversationsByUser = async (userId) => {
                     WHEN c.delivery_agent_id = ? THEN c.agent_cleared_at
                 END AS my_cleared_at,
                 (
-                    SELECT CASE WHEN m.is_deleted THEN 'Message deleted' ELSE m.message END
+                    SELECT CASE
+                        WHEN m.is_deleted THEN 'Message deleted'
+                        WHEN m.message = '' AND m.attachment_type = 'image' THEN '📷 Photo'
+                        WHEN m.message = '' AND m.attachment_type = 'video' THEN '🎥 Video'
+                        WHEN m.message = '' AND m.attachment_type = 'audio' THEN '🎵 Audio'
+                        WHEN m.message = '' AND m.attachment_type = 'file' THEN '📎 File'
+                        ELSE m.message
+                    END
                     FROM messages m
                     WHERE m.conversation_id = c.id
                     AND (
@@ -125,11 +132,20 @@ exports.touchConversation = async (conversationId) => {
     );
 };
 
-exports.createMessage = async (conversationId, senderId, message) => {
+// `attachment` is optional: { url, type, name, size } or null/undefined.
+exports.createMessage = async (conversationId, senderId, message, attachment) => {
     const [result] = await db.query(
-        `INSERT INTO messages (conversation_id, sender_id, message)
-        VALUES (?, ?, ?)`,
-        [conversationId, senderId, message]
+        `INSERT INTO messages (conversation_id, sender_id, message, attachment_url, attachment_type, attachment_name, attachment_size)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+            conversationId,
+            senderId,
+            message || "",
+            attachment?.url || null,
+            attachment?.type || null,
+            attachment?.name || null,
+            attachment?.size || null
+        ]
     );
     return result.insertId;
 };
@@ -140,7 +156,8 @@ exports.createMessage = async (conversationId, senderId, message) => {
 // still need for order/dispute history).
 exports.findMessages = async (conversationId, clearedAt) => {
     const [rows] = await db.query(
-        `SELECT id, sender_id, message, is_read, is_deleted, created_at
+        `SELECT id, sender_id, message, attachment_url, attachment_type, attachment_name, attachment_size,
+                is_read, delivered_at, read_at, is_deleted, created_at
         FROM messages
         WHERE conversation_id = ?
         ${clearedAt ? "AND created_at > ?" : ""}
@@ -150,13 +167,82 @@ exports.findMessages = async (conversationId, clearedAt) => {
     return rows;
 };
 
+// Every reaction row for every (non-tombstoned) message in the given
+// conversation, in one query - findMessages() callers group these by
+// message_id in the service layer rather than issuing one query per
+// message.
+exports.findReactionsForConversation = async (conversationId, clearedAt) => {
+    const [rows] = await db.query(
+        `SELECT r.message_id, r.emoji, r.user_id
+        FROM message_reactions r
+        JOIN messages m ON m.id = r.message_id
+        WHERE m.conversation_id = ?
+        ${clearedAt ? "AND m.created_at > ?" : ""}`,
+        clearedAt ? [conversationId, clearedAt] : [conversationId]
+    );
+    return rows;
+};
+
 exports.markMessagesRead = async (conversationId, readerId) => {
     await db.query(
         `UPDATE messages
-        SET is_read = 1
-        WHERE conversation_id = ? AND sender_id != ?`,
+        SET is_read = 1, read_at = COALESCE(read_at, NOW()), delivered_at = COALESCE(delivered_at, NOW())
+        WHERE conversation_id = ? AND sender_id != ? AND is_read = 0`,
         [conversationId, readerId]
     );
+};
+
+// Marks messages as having reached the recipient's client, without
+// necessarily having been read yet - powers the single-check vs
+// double-check distinction in the UI. Called whenever a participant
+// fetches/opens a conversation.
+exports.markDelivered = async (conversationId, recipientId) => {
+    await db.query(
+        `UPDATE messages
+        SET delivered_at = NOW()
+        WHERE conversation_id = ? AND sender_id != ? AND delivered_at IS NULL`,
+        [conversationId, recipientId]
+    );
+};
+
+exports.addReaction = async (messageId, userId, emoji) => {
+    await db.query(
+        `INSERT IGNORE INTO message_reactions (message_id, user_id, emoji)
+        VALUES (?, ?, ?)`,
+        [messageId, userId, emoji]
+    );
+};
+
+exports.removeReaction = async (messageId, userId, emoji) => {
+    await db.query(
+        `DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`,
+        [messageId, userId, emoji]
+    );
+};
+
+exports.findReactionsForMessage = async (messageId) => {
+    const [rows] = await db.query(
+        `SELECT emoji, user_id FROM message_reactions WHERE message_id = ?`,
+        [messageId]
+    );
+    return rows;
+};
+
+// Bounded LIKE search within one conversation - see the comment on
+// idx_messages_conversation_created in migration 060 for why this isn't
+// FULLTEXT. `clearedAt` is applied the same way as findMessages(), so a
+// search never surfaces something the user has "cleared" from view.
+exports.searchMessages = async (conversationId, query, clearedAt) => {
+    const [rows] = await db.query(
+        `SELECT id, sender_id, message, attachment_url, attachment_type, attachment_name, created_at
+        FROM messages
+        WHERE conversation_id = ? AND is_deleted = 0 AND message LIKE ?
+        ${clearedAt ? "AND created_at > ?" : ""}
+        ORDER BY created_at DESC
+        LIMIT 50`,
+        clearedAt ? [conversationId, `%${query}%`, clearedAt] : [conversationId, `%${query}%`]
+    );
+    return rows;
 };
 
 exports.findMessageById = async (messageId) => {

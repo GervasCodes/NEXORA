@@ -95,6 +95,89 @@ exports.sendMessage = async (req, res) => {
     }
 };
 
+exports.sendAttachment = async (req, res) => {
+    try {
+        const saved = await chatService.sendAttachment(
+            req.params.id,
+            req.user.id,
+            req.file,
+            req.body.message
+        );
+
+        return res.status(201).json({
+            success: true,
+            data: saved
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.reactToMessage = async (req, res) => {
+    try {
+        const result = await chatService.reactToMessage(
+            req.params.id,
+            req.params.messageId,
+            req.user.id,
+            req.body.emoji
+        );
+
+        return res.status(201).json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.removeReaction = async (req, res) => {
+    try {
+        const result = await chatService.removeReaction(
+            req.params.id,
+            req.params.messageId,
+            req.user.id,
+            decodeURIComponent(req.params.emoji)
+        );
+
+        return res.json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.searchMessages = async (req, res) => {
+    try {
+        const results = await chatService.searchMessages(req.params.id, req.user.id, req.query.q);
+
+        return res.json({
+            success: true,
+            data: results
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.markAsRead = async (req, res) => {
     try {
         await chatService.markAsRead(req.params.id, req.user.id);

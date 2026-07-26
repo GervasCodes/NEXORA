@@ -1,4 +1,4 @@
-const { body, param } = require("express-validator");
+const { body, param, query } = require("express-validator");
 
 exports.startConversationValidation = [
     body("other_user_id")
@@ -39,4 +39,40 @@ exports.sendMessageValidation = [
         .withMessage("Message cannot be empty")
         .isLength({ max: 2000 })
         .withMessage("Message is too long")
+];
+
+exports.sendAttachmentValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
+
+    body("message")
+        .optional()
+        .isLength({ max: 2000 })
+        .withMessage("Caption is too long")
+];
+
+exports.reactionValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
+    param("messageId").isInt({ gt: 0 }).withMessage("Invalid message"),
+
+    body("emoji")
+        .notEmpty()
+        .withMessage("emoji is required")
+        .isLength({ max: 8 })
+        .withMessage("Invalid reaction")
+];
+
+exports.removeReactionValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
+    param("messageId").isInt({ gt: 0 }).withMessage("Invalid message"),
+    param("emoji").notEmpty().withMessage("emoji is required")
+];
+
+exports.searchValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid conversation"),
+
+    query("q")
+        .notEmpty()
+        .withMessage("Search query is required")
+        .isLength({ min: 1, max: 200 })
+        .withMessage("Invalid search query")
 ];

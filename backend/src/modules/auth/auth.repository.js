@@ -24,15 +24,18 @@ exports.findByPhone = async (phone) => {
     return rows[0];
 };
 
-// Deliberately narrow (2 columns, primary-key lookup) - auth.middleware.js
-// calls this on every authenticated request, so it needs to stay cheap.
-// Exists so a deleted (or admin-deactivated) account's already-issued,
-// still-unexpired token (7 days - see utils/generateToken.js) stops
-// working immediately, the same way requireApprovedSeller.middleware.js
-// never trusts the JWT for verification status either.
+// Deliberately narrow (columns needed for a primary-key lookup) -
+// auth.middleware.js calls this on every authenticated request, so it
+// needs to stay cheap. Exists so a deleted or suspended account's
+// already-issued, still-unexpired token (7 days - see
+// utils/generateToken.js) stops working immediately, the same way
+// requireApprovedSeller.middleware.js never trusts the JWT for
+// verification status either. suspended_at/suspension_reason let the
+// middleware tell a suspension apart from other causes of is_active =
+// FALSE and surface the reason on the full-screen suspended page.
 exports.findAccountStatusById = async (id) => {
     const [rows] = await db.query(
-        "SELECT is_active, deleted_at FROM users WHERE id = ?",
+        "SELECT is_active, deleted_at, suspended_at, suspension_reason FROM users WHERE id = ?",
         [id]
     );
     return rows[0];

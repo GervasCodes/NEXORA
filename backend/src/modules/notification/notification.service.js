@@ -1,5 +1,6 @@
 const notificationRepository = require("./notification.repository");
 const sendEmail = require("../../utils/sendEmail");
+const pushService = require("../push/push.service");
 const { t, resolveLocale } = require("../../i18n");
 
 // Reusable helper: other modules (order, payment, delivery, dispute,
@@ -41,7 +42,8 @@ exports.notify = async ({
     title,
     message,
     relatedOrderId,
-    withEmail
+    withEmail,
+    url
 }) => {
     const contact = await notificationRepository.getUserContact(userId);
     const locale = resolveLocale(contact?.language);
@@ -49,7 +51,55 @@ exports.notify = async ({
     const resolvedTitle = titleKey ? t(locale, titleKey, resolveParams(locale, titleParams)) : title;
     const resolvedMessage = messageKey ? t(locale, messageKey, resolveParams(locale, messageParams)) : message;
 
-    await notificationRepository.create(userId, type, resolvedTitle, resolvedMessage, relatedOrderId);
+    const notificationId = await notificationRepository.create(
+        userId,
+        type,
+        resolvedTitle,
+        resolvedMessage,
+        relatedOrderId
+    );
+
+    // Real-time fan-out. Every existing call site across the app (orders,
+    // disputes, wallet, sponsorship, delivery, account, accountVerification,
+    // etc.) goes through this one function, so wiring it here makes ALL of
+    // them live instead of touching each module individually.
+    //
+    // Lazy require avoids a circular dependency: socket.js requires
+    // chat.service.js at the top of the file, and chat.service.js now
+    // requires this module (to notify the other participant on a new
+    // message) - a top-level require here would resolve to socket.js's
+    // still-empty exports object mid-load.
+    const resolvedUrl = url || (relatedOrderId ? `/orders/${relatedOrderId}` : undefined);
+    try {
+        const socket = require("../../socket/socket");
+        socket.emitToUser(userId, "notification:new", {
+            id: notificationId,
+            type,
+            title: resolvedTitle,
+            message: resolvedMessage,
+            related_order_id: relatedOrderId || null,
+            is_read: false,
+            created_at: new Date(),
+            url: resolvedUrl
+        });
+    } catch (error) {
+        // Socket layer being unavailable should never break notification creation
+    }
+
+    // Web push - reaches a device even if no tab is open/focused (that's
+    // the whole point of push vs. the socket event above, which only
+    // reaches an already-connected tab). Best-effort; sendToUser never
+    // throws, but this is wrapped anyway since it's not on the critical path.
+    pushService
+        .sendToUser(userId, {
+            title: resolvedTitle,
+            body: resolvedMessage,
+            type,
+            notificationId,
+            orderId: relatedOrderId || undefined,
+            url: resolvedUrl
+        })
+        .catch((error) => console.error("Push send error (notify):", error.message));
 
     if (withEmail && contact?.email) {
         const body = `${resolvedMessage}\n\n${t(locale, "email.footer")}`;

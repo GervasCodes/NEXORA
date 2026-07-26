@@ -68,6 +68,26 @@ export default {
                 float: {
                     "0%, 100%": { transform: "translateY(0)" },
                     "50%": { transform: "translateY(-10px)" }
+                },
+                // Slow outward ripple for the SuspendedScreen lock icon -
+                // two rings offset by 1s (see SuspendedScreen.jsx) give a
+                // continuous, unhurried pulse rather than a single blip.
+                suspendRing: {
+                    "0%": { transform: "scale(0.9)", opacity: "0.5" },
+                    "100%": { transform: "scale(1.6)", opacity: "0" }
+                },
+                // Three-dot "typing…" bubble (ConversationThread.jsx) -
+                // each dot uses this with a staggered animation-delay
+                // utility so they bounce in sequence, not in unison.
+                typingDot: {
+                    "0%, 60%, 100%": { transform: "translateY(0)", opacity: "0.4" },
+                    "30%": { transform: "translateY(-4px)", opacity: "1" }
+                },
+                // Read-receipt checkmark flipping from delivered to read.
+                checkPop: {
+                    "0%": { transform: "scale(0.6)", opacity: "0" },
+                    "60%": { transform: "scale(1.2)" },
+                    "100%": { transform: "scale(1)", opacity: "1" }
                 }
             },
             animation: {
@@ -78,7 +98,10 @@ export default {
                 shimmer: "shimmer 1.6s ease-in-out infinite",
                 "ring-once": "ringOnce 0.6s ease-in-out 1",
                 "pop-in": "popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both",
-                float: "float 3.2s ease-in-out infinite"
+                float: "float 3.2s ease-in-out infinite",
+                "suspend-ring": "suspendRing 2s ease-out infinite",
+                "typing-dot": "typingDot 1.2s ease-in-out infinite",
+                "check-pop": "checkPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both"
             }
         }
     },

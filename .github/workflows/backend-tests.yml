@@ -23,6 +23,10 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
       - name: Run unit + integration suite with coverage
         working-directory: backend
         run: npm run test:coverage
@@ -106,6 +110,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
 
       - name: Run frontend test suite
         working-directory: frontend

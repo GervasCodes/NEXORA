@@ -154,3 +154,97 @@ still exists in the repo, is linked from its heading.
   everything shipped since Phase 3A (the last point at which the root
   README was updated); fixed a stale SMTP reference in
   `docs/DEPLOYMENT.md` left over from the earlier Brevo migration.
+
+# Admin, Notification & Messaging Trust Upgrade
+
+A separate, later project (its own 1–7 phase numbering, unrelated to the
+homepage/marketplace phases above). Migrations `058`–`060`.
+
+## Phase 1 — Admin Account Control
+
+- **Suspend / Unsuspend**: migration `058_admin_account_suspension.sql`
+  adds `users.suspended_at` / `suspension_reason` / `suspended_by`.
+  Replaces the old bare deactivate/activate toggle with
+  `PUT /admin/users/:id/suspend` (requires a reason) and
+  `PUT /admin/users/:id/unsuspend`. Suspending can't target a
+  self-deleted account or the acting admin's own account; both actions
+  notify the affected user and write an `audit_logs` entry. Login is
+  blocked immediately (`login.service.js`, distinct `ACCOUNT_SUSPENDED`
+  403 carrying the reason) and a still-live session is blocked on its
+  next request (`auth.middleware.js`); the frontend shows a full-screen
+  `SuspendedScreen` for both cases via a response-interceptor hook in
+  `AuthContext`.
+- **Permanent Delete (generalized)**: the existing PII-scrubbing
+  `permanentlyDeleteUser` logic no longer requires prior self-deletion —
+  it's now a standalone `DELETE /admin/users/:id` action (super admin
+  only), alongside the existing `DELETE /admin/deleted-users/:id`, both
+  calling the same service function. Now also cleans up cart items, push
+  subscriptions, and deactivates any still-live seller listings.
+- See `README-phase-1.md` for the full write-up.
+
+## Phase 2 — Admin Notifications
+
+- Migration `059_admin_notifications.sql`: `admin_notifications`, a
+  single shared feed (one row per event, one shared read state) rather
+  than a per-admin fan-out — see the migration's header comment for the
+  reasoning against reusing the per-user `notifications` table.
+- New `adminNotification` module: `GET /admin/notifications` (filterable
+  by `category` / `unread_only` / `limit`), `GET .../unread-count`,
+  `PUT .../read-all`, `PUT .../:id/read`.
+- Emits on: user registration, account suspension/unsuspension, account
+  permanent deletion, admin account created/permissions
+  changed/deleted, fraud flags raised, disputes (reports) submitted.
+  Creation is fire-and-forget, matching `audit.service.js#log`'s
+  never-block-the-real-action pattern.
+
+## Phase 3 — PWA & Real-Time Notifications
+
+- No new migration. Wires the existing `push_subscriptions` table
+  (`016_push_subscriptions.sql`) and the Socket.IO `admins` room (which
+  every admin/super_admin socket already auto-joins) into Phase 2:
+  every admin-notification event fans out over Socket.IO
+  (`admin_notification:new`) and, for admins with the PWA installed and
+  no tab open, Web Push (`pushService.sendToAdmins`).
+
+## Phase 4 — Messaging Upgrade
+
+- Migration `060_messaging_upgrade.sql`: `messages.delivered_at` /
+  `read_at` (per-message delivery + read receipts, distinct from the
+  existing conversation-level `is_read`); `messages.attachment_url` /
+  `attachment_type` / `attachment_name` / `attachment_size` (one
+  attachment per message — image, video, audio, or file; `message` text
+  becomes optional to allow an attachment with no caption);
+  `message_reactions` (WhatsApp/Slack-style emoji reactions — a reactor
+  can react with several distinct emoji but not the same emoji twice);
+  a `(conversation_id, created_at)` index backing new in-conversation
+  message search.
+- New endpoints: `POST /chat/conversations/:id/attachments`,
+  `GET /chat/conversations/:id/search`,
+  `POST` / `DELETE .../messages/:messageId/reactions[/:emoji]`.
+- New Socket.IO events in the `conversation:<id>` room:
+  `reaction_updated` alongside the existing `new_message` /
+  `message_deleted` / `messages_read` / `typing`.
+
+## Phase 5 — Audit Logs
+
+- No new migration — extends the existing `audit_log` table (`035`).
+  `backend/src/modules/audit/audit.constants.js` groups every
+  `event_type` the codebase emits into the categories the admin panel's
+  filter dropdown uses (`account`, `admin`, `auth`, `orders`,
+  `payments`, `refunds`).
+- `GET /admin/audit-logs` gains `category`, `event_type`, `user_id`,
+  `date_from`/`date_to`, free-text `q`, `admin_actions_only`, and
+  `page`/`page_size` query params (see `docs/API.md`).
+
+## Phase 6 — Automated Test Review Only
+
+- Review-only phase: existing backend/frontend automated test suites
+  were reviewed for coverage of the Phase 1–5 changes above; no
+  production code or schema changed.
+
+## Phase 7 — Documentation *(this phase)*
+
+- Brought `docs/API.md` and `docs/DATABASE.md` up to date with every
+  Phase 1–5 change above (new/changed endpoints, new tables/columns,
+  new Socket.IO events) and added this changelog section. See
+  `README-phase-7.md` for the phase write-up.

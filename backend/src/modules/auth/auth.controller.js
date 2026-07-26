@@ -4,6 +4,7 @@ const { t } = require("../../i18n");
 const loginService = require("./login.service");
 const passwordResetService = require("./passwordReset.service");
 const auditService = require("../audit/audit.service");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 
 exports.register = async (req, res) => {
     try {
@@ -23,6 +24,16 @@ exports.register = async (req, res) => {
             eventType: "user_registered",
             description: `New ${req.body.role || "buyer"} account registered`,
             metadata: { role: req.body.role || "buyer" }
+        });
+
+        adminNotificationService.notify({
+            type: "user_registered",
+            category: "account",
+            severity: "info",
+            title: "New account registered",
+            message: `A new ${req.body.role || "buyer"} account was registered (${req.body.email}).`,
+            metadata: { role: req.body.role || "buyer", email: req.body.email },
+            relatedUserId: result.userId
         });
 
         res.status(201).json({
@@ -62,7 +73,9 @@ exports.login = async (req, res) => {
 
         res.status(error.status || 401).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message,
+            ...(error.code ? { code: error.code } : {}),
+            ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {})
         });
     }
 };

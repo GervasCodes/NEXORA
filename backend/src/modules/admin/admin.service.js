@@ -7,6 +7,8 @@ const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
 const departmentSponsorshipService = require("../departmentSponsorship/departmentSponsorship.service");
 const auditService = require("../audit/audit.service");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
+const accountRepository = require("../account/account.repository");
 const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
 
 exports.listUsers = async () => {
@@ -57,8 +59,14 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         throw new Error("User not found");
     }
 
-    if (!user.deleted_at) {
-        throw new Error("Only an account the user has already deleted themselves can be permanently removed.");
+    // Used to require deleted_at (the user had already soft-deleted their
+    // own account first). Phase 1 of the Admin Account Control plan lifts
+    // that precondition - Suspend/Unsuspend and Permanent Delete are now
+    // both directly available admin levers, independent of whether the
+    // user ever self-deleted. Self-deleted accounts (Deleted Accounts
+    // section) can still be permanently removed the same way as before.
+    if (Number(userId) === Number(actorAdminId)) {
+        throw new Error("You can't permanently delete your own account.");
     }
 
     if (user.permanently_deleted_at) {
@@ -91,6 +99,14 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
 
         await adminRepository.deleteProducts(neverOrderedProductIds, connection);
         await adminRepository.deleteSellerCollections(userId, connection);
+
+        // Previously guaranteed by the self-delete step (Phase 3) that used
+        // to be a precondition for this action. Now that an admin can
+        // permanently delete an account directly, this step has to do that
+        // cleanup itself instead of assuming it already happened.
+        await accountRepository.deleteCartItems(userId, connection);
+        await accountRepository.deletePushSubscriptions(userId, connection);
+        await accountRepository.deactivateSellerListings(userId, connection);
 
         await adminRepository.deleteWishlistItems(userId, connection);
         await adminRepository.deleteOtpCodes(userId, connection);
@@ -137,6 +153,21 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         }
     });
 
+    // "admin" here means the target account HAD the admin role - not to
+    // be confused with removeAdmin below, which only revokes admin
+    // access without erasing the account. A permanently-deleted admin
+    // account is rare enough (and severe enough) to warrant its own
+    // event type and a higher severity than an ordinary user's.
+    adminNotificationService.notify({
+        type: user.role === "admin" ? "admin_account_permanently_deleted" : "user_account_permanently_deleted",
+        category: "account",
+        severity: user.role === "admin" ? "critical" : "warning",
+        title: user.role === "admin" ? "Admin account permanently deleted" : "Account permanently deleted",
+        message: `${user.first_name} ${user.last_name} (${user.email}, ${user.role}) was permanently deleted by an admin.`,
+        metadata: { role: user.role, target_user_id: Number(userId) },
+        relatedUserId: userId
+    });
+
     if (failedDeletes.length) {
         console.error(
             `[admin] permanentlyDeleteUser(${userId}): ${failedDeletes.length} Cloudinary asset(s) failed to delete`,
@@ -145,29 +176,98 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     }
 };
 
-exports.setUserActive = async (userId, isActive) => {
+// Suspend/Unsuspend (Phase 1 of the Admin Account Control plan) - replaces
+// the old bare setUserActive toggle. A suspension always records who did
+// it and why (migration 058), and is fully reversible; permanentlyDeleteUser
+// below is the separate, irreversible lever.
+exports.suspendUser = async (userId, reason, adminId) => {
     const user = await adminRepository.findUserById(userId);
 
     if (!user) {
         throw new Error("User not found");
     }
 
-    // A self-deleted account (deleted_at set) is not reversible through
-    // this lever - it never shows up in the regular Users list this
-    // action is called from anyway (see findAllUsers), but the guard
-    // stays here too in case it's ever called directly.
+    // A self-deleted account (deleted_at set) is not reachable through this
+    // lever - it never shows up in the regular Users list this action is
+    // called from anyway (see findAllUsers), but the guard stays here too
+    // in case it's ever called directly.
     if (user.deleted_at) {
-        throw new Error("This account has been deleted and can no longer be reactivated.");
+        throw new Error("This account has been deleted and can't be suspended.");
     }
 
-    await adminRepository.setUserActive(userId, isActive);
+    if (Number(userId) === Number(adminId)) {
+        throw new Error("You can't suspend your own account.");
+    }
+
+    if (!reason || !reason.trim()) {
+        throw new Error("A suspension reason is required.");
+    }
+
+    await adminRepository.suspendUser(userId, reason.trim(), adminId);
 
     await notificationService.notify({
         userId,
         type: "account_status",
-        titleKey: isActive ? "notifications.account.reactivated.title" : "notifications.account.deactivated.title",
-        messageKey: isActive ? "notifications.account.reactivated.message" : "notifications.account.deactivated.message",
+        titleKey: "notifications.account.suspended.title",
+        messageKey: "notifications.account.suspended.message",
+        messageParams: { reason: reason.trim() },
         withEmail: true
+    });
+
+    auditService.log({
+        userId: adminId,
+        eventType: "account_suspended",
+        description: `Admin suspended account #${userId}`,
+        metadata: { target_user_id: Number(userId), reason: reason.trim() }
+    });
+
+    adminNotificationService.notify({
+        type: "account_suspended",
+        category: "account",
+        severity: "warning",
+        title: "Account suspended",
+        message: `${user.first_name} ${user.last_name} (${user.email}) was suspended. Reason: ${reason.trim()}`,
+        metadata: { target_user_id: Number(userId), reason: reason.trim() },
+        relatedUserId: userId
+    });
+};
+
+exports.unsuspendUser = async (userId, adminId) => {
+    const user = await adminRepository.findUserById(userId);
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    if (!user.suspended_at) {
+        throw new Error("This account is not currently suspended.");
+    }
+
+    await adminRepository.unsuspendUser(userId);
+
+    await notificationService.notify({
+        userId,
+        type: "account_status",
+        titleKey: "notifications.account.unsuspended.title",
+        messageKey: "notifications.account.unsuspended.message",
+        withEmail: true
+    });
+
+    auditService.log({
+        userId: adminId,
+        eventType: "account_unsuspended",
+        description: `Admin unsuspended account #${userId}`,
+        metadata: { target_user_id: Number(userId) }
+    });
+
+    adminNotificationService.notify({
+        type: "account_unsuspended",
+        category: "account",
+        severity: "info",
+        title: "Account unsuspended",
+        message: `${user.first_name} ${user.last_name} (${user.email}) was unsuspended.`,
+        metadata: { target_user_id: Number(userId) },
+        relatedUserId: userId
     });
 };
 
@@ -463,7 +563,7 @@ exports.listAdmins = async () => {
     return adminRepository.findAllAdmins();
 };
 
-exports.addAdmin = async (data) => {
+exports.addAdmin = async (data, actorAdminId) => {
     const authRepository = require("../auth/auth.repository");
     const hashPassword = require("../../utils/hashPassword");
 
@@ -477,6 +577,7 @@ exports.addAdmin = async (data) => {
     }
 
     const hashedPassword = await hashPassword(password);
+    const resolvedLevel = admin_level === "super_admin" ? "super_admin" : "admin";
 
     const userId = await adminRepository.createAdmin({
         first_name,
@@ -484,13 +585,33 @@ exports.addAdmin = async (data) => {
         email,
         phone,
         password: hashedPassword,
-        admin_level: admin_level === "super_admin" ? "super_admin" : "admin"
+        admin_level: resolvedLevel
+    });
+
+    // Phase 5 (Audit Logs) - a new admin account is itself a permission
+    // grant, so it's tracked the same way as updateAdminPermissions below
+    // rather than being lumped in with ordinary user_registered events.
+    auditService.log({
+        userId: actorAdminId,
+        eventType: "admin_account_created",
+        description: `Admin created a new ${resolvedLevel === "super_admin" ? "super admin" : "admin"} account (${email})`,
+        metadata: { target_user_id: userId, admin_level: resolvedLevel, email }
+    });
+
+    adminNotificationService.notify({
+        type: "admin_account_created",
+        category: "account",
+        severity: resolvedLevel === "super_admin" ? "warning" : "info",
+        title: "Admin account created",
+        message: `${first_name} ${last_name} (${email}) was added as ${resolvedLevel === "super_admin" ? "a super admin" : "an admin"}.`,
+        metadata: { target_user_id: userId, admin_level: resolvedLevel },
+        relatedUserId: userId
     });
 
     return { userId };
 };
 
-exports.updateAdminPermissions = async (userId, adminLevel) => {
+exports.updateAdminPermissions = async (userId, adminLevel, actorAdminId) => {
     const admins = await adminRepository.findAllAdmins();
     const target = admins.find((a) => a.id === Number(userId));
 
@@ -505,7 +626,32 @@ exports.updateAdminPermissions = async (userId, adminLevel) => {
         }
     }
 
+    const previousLevel = target.admin_level;
+    const resolvedLevel = adminLevel === "super_admin" ? "super_admin" : "admin";
+
     await adminRepository.updateAdminLevel(userId, adminLevel);
+
+    // Phase 5 (Audit Logs) - permission changes weren't tracked at all
+    // before this; every promotion/demotion between admin and super_admin
+    // now leaves a record of who changed it and what it changed from/to.
+    if (previousLevel !== resolvedLevel) {
+        auditService.log({
+            userId: actorAdminId,
+            eventType: "admin_permissions_changed",
+            description: `Admin changed permissions for account #${userId} (${previousLevel} -> ${resolvedLevel})`,
+            metadata: { target_user_id: Number(userId), previous_level: previousLevel, new_level: resolvedLevel }
+        });
+
+        adminNotificationService.notify({
+            type: "admin_permissions_changed",
+            category: "account",
+            severity: resolvedLevel === "super_admin" ? "warning" : "info",
+            title: "Admin permissions changed",
+            message: `${target.first_name} ${target.last_name} (${target.email}) was changed from ${previousLevel} to ${resolvedLevel}.`,
+            metadata: { target_user_id: Number(userId), previous_level: previousLevel, new_level: resolvedLevel },
+            relatedUserId: Number(userId)
+        });
+    }
 };
 
 exports.removeAdmin = async (userId, requestingAdminId) => {
@@ -528,4 +674,27 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
     }
 
     await adminRepository.revokeAdmin(userId);
+
+    // This revokes admin access (demotes the row back to an ordinary
+    // role - see adminRepository.revokeAdmin) rather than deleting the
+    // account outright; permanentlyDeleteUser above is the separate,
+    // irreversible lever for that. Still surfaced as "admin account
+    // deleted" in the notification center per the Phase 2 event list,
+    // since from the platform's perspective the admin account is gone.
+    auditService.log({
+        userId: requestingAdminId,
+        eventType: "admin_account_deleted",
+        description: `Admin revoked admin access for account #${userId}`,
+        metadata: { target_user_id: Number(userId), was_admin_level: target.admin_level }
+    });
+
+    adminNotificationService.notify({
+        type: "admin_account_deleted",
+        category: "account",
+        severity: "critical",
+        title: "Admin account removed",
+        message: `${target.first_name} ${target.last_name} (${target.email}) had their admin access revoked.`,
+        metadata: { target_user_id: Number(userId), was_admin_level: target.admin_level },
+        relatedUserId: userId
+    });
 };

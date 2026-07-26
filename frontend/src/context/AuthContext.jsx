@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
-import api, { extractErrorMessage } from "../api/client";
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+import api, { extractErrorMessage, registerSuspensionHandler } from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -10,8 +10,22 @@ const loadStoredUser = () => {
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(loadStoredUser());
+    // Set whenever this account is suspended - either at login (before any
+    // token exists) or mid-session, via the api/client.js response
+    // interceptor. While set, App.jsx shows the full-screen suspended page
+    // in place of the normal app, regardless of the current route.
+    const [suspension, setSuspension] = useState(null);
 
-   
+    useEffect(() => {
+        registerSuspensionHandler((reason) => {
+            setUser(null);
+            setSuspension({ reason });
+        });
+        return () => registerSuspensionHandler(null);
+    }, []);
+
+    const clearSuspension = useCallback(() => setSuspension(null), []);
+
     const login = useCallback(async (email, password) => {
         try {
             const { data } = await api.post("/auth/login", { email, password });
@@ -22,6 +36,9 @@ export function AuthProvider({ children }) {
                 maskedEmail: data.data.maskedEmail
             };
         } catch (error) {
+            if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
+                setSuspension({ reason: error.response.data?.data?.reason || null });
+            }
             return { success: false, message: extractErrorMessage(error) };
         }
     }, []);
@@ -76,8 +93,8 @@ export function AuthProvider({ children }) {
 
     
     const value = useMemo(
-        () => ({ user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser }),
-        [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser]
+        () => ({ user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser, suspension, clearSuspension }),
+        [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser, suspension, clearSuspension]
     );
 
     return (

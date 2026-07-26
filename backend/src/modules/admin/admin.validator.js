@@ -4,6 +4,14 @@ exports.userIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid user")
 ];
 
+exports.suspendUserValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid user"),
+    body("reason")
+        .trim()
+        .notEmpty().withMessage("A suspension reason is required")
+        .isLength({ max: 500 }).withMessage("Suspension reason must be 500 characters or fewer")
+];
+
 exports.productIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid product")
 ];

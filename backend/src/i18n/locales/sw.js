@@ -24,7 +24,8 @@ module.exports = {
         INVALID_CREDENTIALS: "Barua pepe au nenosiri si sahihi",
         NOTIFICATION_NOT_FOUND: "Arifa haikupatikana",
         TERMS_NOT_ACCEPTED: "Lazima ukubali Masharti ya Huduma na Sera ya Faragha ili kuunda akaunti",
-        CATEGORY_UNAVAILABLE: "Kundi ulilochagua halipatikani"
+        CATEGORY_UNAVAILABLE: "Kundi ulilochagua halipatikani",
+        ACCOUNT_SUSPENDED: "Akaunti hii imesimamishwa."
     },
 
     labels: {
@@ -46,15 +47,18 @@ module.exports = {
     },
 
     notifications: {
+        "message.new.title": "Ujumbe mpya",
+        "message.new.message": "{preview}",
+
         "verification.approved.title": "Uthibitisho umekubaliwa",
         "verification.approved.message": "Akaunti yako ya {role} imethibitishwa. Sasa una ufikiaji kamili wa vipengele vya {role}.",
         "verification.rejected.title": "Uthibitisho umekataliwa",
         "verification.rejected.message": "Uthibitisho wa akaunti yako ya {role} umekataliwa: {reason}. Tafadhali wasiliana na msaada.",
 
-        "account.reactivated.title": "Akaunti imewashwa tena",
-        "account.reactivated.message": "Akaunti yako imewashwa tena. Karibu tena!",
-        "account.deactivated.title": "Akaunti imezimwa",
-        "account.deactivated.message": "Akaunti yako imezimwa. Wasiliana na msaada ikiwa unaamini hii ni makosa.",
+        "account.unsuspended.title": "Akaunti imerejeshwa",
+        "account.unsuspended.message": "Akaunti yako imerejeshwa. Karibu tena!",
+        "account.suspended.title": "Akaunti imesimamishwa",
+        "account.suspended.message": "Akaunti yako imesimamishwa: {reason}. Wasiliana na msaada ikiwa unaamini hii ni makosa.",
 
         "seller.storeVerified.title": "Duka limethibitishwa",
         "seller.storeVerified.message": "Hongera! \"{storeName}\" imethibitishwa.",

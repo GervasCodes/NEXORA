@@ -1,9 +1,11 @@
-import { lazy, Suspense, useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SplashScreen from "./components/SplashScreen";
+import SuspendedScreen from "./components/SuspendedScreen";
 import PageLoader from "./components/PageLoader";
+import { useAuth } from "./context/AuthContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
 import RequireAuth from "./components/RequireAuth";
@@ -75,14 +77,40 @@ const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountV
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
 const AdminDisputes = lazy(() => import("./pages/admin/AdminDisputes"));
+const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
         () => !sessionStorage.getItem("nexora_splash_shown")
     );
+    const { suspension, clearSuspension } = useAuth();
+    const navigate = useNavigate();
+
+    // Phase 3: when a push notification is clicked and it focuses an
+    // already-open tab (see sw.js#notificationclick), that only brings the
+    // browser window forward - it doesn't change the SPA's route, since
+    // this is a client-rendered app and the service worker has no access
+    // to React Router. sw.js posts the intended path back to us instead.
+    useEffect(() => {
+        if (!("serviceWorker" in navigator)) return undefined;
+        const handleMessage = (event) => {
+            if (event.data?.type === "notification-click" && event.data.url) {
+                navigate(event.data.url);
+            }
+        };
+        navigator.serviceWorker.addEventListener("message", handleMessage);
+        return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
+    }, [navigate]);
 
     if (showSplash) {
         return <SplashScreen onDone={() => setShowSplash(false)} />;
+    }
+
+    // Takes over the entire app, regardless of route - a suspension can be
+    // discovered while sitting on any page, not just at login (see
+    // AuthContext.jsx / api/client.js).
+    if (suspension) {
+        return <SuspendedScreen reason={suspension.reason} onBack={clearSuspension} />;
     }
 
     return (
@@ -162,6 +190,7 @@ export default function App() {
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />
                             <Route path="disputes" element={<AdminDisputes />} />
+                            <Route path="audit-logs" element={<AdminAuditLogs />} />
                         </Route>
 
                         <Route path="*" element={

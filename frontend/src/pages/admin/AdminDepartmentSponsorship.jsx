@@ -22,7 +22,7 @@ export default function AdminDepartmentSponsorship() {
     if (loading) return <p className="text-ash">Loading department sponsorship campaigns…</p>;
 
     return (
-        <div>
+        <div className="animate-fade-in">
             <h1 className="font-display text-2xl mb-1">Department sponsorship campaigns</h1>
             <p className="text-ash text-sm mb-8">
                 Every seller-paid department-sponsorship purchase, most recent first. The homepage
@@ -35,7 +35,7 @@ export default function AdminDepartmentSponsorship() {
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {campaigns.map((c) => (
-                        <li key={c.id} className="py-3 flex flex-wrap items-center gap-3">
+                        <li key={c.id} className="py-3 flex flex-wrap items-center gap-3 px-2 -mx-2 rounded-md transition-colors hover:bg-line/30">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium truncate">{c.store_name}</p>
                                 <p className="text-xs text-ash truncate">{c.category_name}</p>
@@ -47,7 +47,7 @@ export default function AdminDepartmentSponsorship() {
                             <p className="price text-sm">{formatMoney(c.total_cost)}</p>
                             <p className="text-xs text-ash">{formatDate(c.starts_at)} → {formatDate(c.ends_at)}</p>
 
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${STATUS_STYLES[c.status] || "bg-line text-ash"}`}>
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize transition-colors ${STATUS_STYLES[c.status] || "bg-line text-ash"}`}>
                                 {c.status}
                             </span>
                         </li>

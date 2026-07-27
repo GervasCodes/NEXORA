@@ -3,6 +3,7 @@ import { useAgentShift } from "../hooks/useAgentShift";
 import IncomingOfferModal from "./IncomingOfferModal";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
+import PageTransition from "./PageTransition";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
@@ -62,7 +63,9 @@ function ApprovedDeliveryLayout() {
                 ))}
             </nav>
 
-            <Outlet />
+            <PageTransition granular>
+                <Outlet />
+            </PageTransition>
         </div>
     );
 }

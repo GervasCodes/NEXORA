@@ -83,21 +83,22 @@ export default function AdminDispatch() {
     if (loading) return <p className="text-ash">Loading dispatch board…</p>;
 
     return (
-        <div>
+        <div className="animate-fade-in">
             <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
                 <h1 className="font-display text-2xl">Dispatch dashboard</h1>
-                <span className={`text-xs px-2.5 py-1 rounded-full ${connected ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
+                <span className={`text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-colors ${connected ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-teal animate-pulse" : "bg-coral"}`} />
                     {connected ? "Live" : connectionState === "reconnecting" ? "Reconnecting…" : "Offline"}
                 </span>
             </div>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-4 animate-slide-down">{error}</p>}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                <SummaryCard label="Active deliveries" value={summary?.active_deliveries ?? 0} />
-                <SummaryCard label="Delayed" value={delayedCount} tone={delayedCount > 0 ? "coral" : undefined} />
-                <SummaryCard label="Online agents" value={summary?.online_agents ?? 0} />
-                <SummaryCard label="Idle agents" value={summary?.idle_agents ?? 0} />
+                <SummaryCard label="Active deliveries" value={summary?.active_deliveries ?? 0} delay={0} />
+                <SummaryCard label="Delayed" value={delayedCount} tone={delayedCount > 0 ? "coral" : undefined} delay={40} />
+                <SummaryCard label="Online agents" value={summary?.online_agents ?? 0} delay={80} />
+                <SummaryCard label="Idle agents" value={summary?.idle_agents ?? 0} delay={120} />
             </div>
 
             <h2 className="font-display text-lg mb-3">Active deliveries</h2>
@@ -105,7 +106,7 @@ export default function AdminDispatch() {
             {sortedDeliveries.length > 0 && (
                 <ul className="divide-y divide-line border-y border-line mb-10">
                     {sortedDeliveries.map((d) => (
-                        <li key={d.id} className="py-3 flex flex-wrap items-center gap-3">
+                        <li key={d.id} className="py-3 flex flex-wrap items-center gap-3 px-2 -mx-2 rounded-md transition-colors hover:bg-line/30">
                             <div className="min-w-0 flex-1">
                                 <p className="price text-sm font-medium">{d.order_number}</p>
                                 <p className="text-xs text-ash truncate">
@@ -113,14 +114,14 @@ export default function AdminDispatch() {
                                 </p>
                             </div>
 
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[d.status] || "bg-line text-ash"}`}>
+                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize transition-colors ${statusStyles[d.status] || "bg-line text-ash"}`}>
                                 {statusLabels[d.status] || d.status}
                             </span>
 
                             <p className="text-xs text-ash w-24 text-right">Assigned {timeSince(d.assigned_at)}</p>
 
                             {d.is_delayed ? (
-                                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-coral text-white">Delayed</span>
+                                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-coral text-white animate-pulse">Delayed</span>
                             ) : (
                                 <span className="text-xs text-ash w-16 text-right">On time</span>
                             )}
@@ -136,13 +137,13 @@ export default function AdminDispatch() {
             {agents.length > 0 && (
                 <ul className="divide-y divide-line border-y border-line">
                     {agents.map((a) => (
-                        <li key={a.id} className="py-3 flex flex-wrap items-center gap-3">
+                        <li key={a.id} className="py-3 flex flex-wrap items-center gap-3 px-2 -mx-2 rounded-md transition-colors hover:bg-line/30">
                             <div className="min-w-0 flex-1">
                                 <p className="price text-sm font-medium">{a.first_name} {a.last_name}</p>
                                 <p className="text-xs text-ash truncate capitalize">{a.vehicle_type || "—"}</p>
                             </div>
 
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${Number(a.active_delivery_count) > 0 ? "bg-mango/20 text-mango-dark" : "bg-teal/10 text-teal"}`}>
+                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${Number(a.active_delivery_count) > 0 ? "bg-mango/20 text-mango-dark" : "bg-teal/10 text-teal"}`}>
                                 {Number(a.active_delivery_count) > 0 ? `Busy · ${a.active_delivery_count}` : "Idle"}
                             </span>
 
@@ -157,9 +158,12 @@ export default function AdminDispatch() {
     );
 }
 
-function SummaryCard({ label, value, tone }) {
+function SummaryCard({ label, value, tone, delay = 0 }) {
     return (
-        <div className="glass border border-line rounded-lg px-4 py-3">
+        <div
+            className="glass border border-line rounded-lg px-4 py-3 animate-slide-up hover:-translate-y-0.5 hover:shadow-md transition-all"
+            style={{ animationDelay: `${delay}ms` }}
+        >
             <p className="text-xs text-ash mb-1">{label}</p>
             <p className={`font-display text-2xl ${tone === "coral" && value > 0 ? "text-coral" : ""}`}>{value}</p>
         </div>

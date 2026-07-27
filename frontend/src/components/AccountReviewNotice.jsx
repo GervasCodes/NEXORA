@@ -2,7 +2,7 @@
 export default function AccountReviewNotice({ status, rejectionReason, roleLabel = "account" }) {
     if (status === "rejected") {
         return (
-            <div className="glass-strong rounded-lg p-8 text-center">
+            <div className="glass-strong rounded-lg p-8 text-center animate-scale-in">
                 <p className="text-coral text-3xl mb-3">✕</p>
                 <p className="font-display text-xl mb-2">Verification not approved</p>
                 <p className="text-ash text-sm max-w-md mx-auto">
@@ -19,7 +19,7 @@ export default function AccountReviewNotice({ status, rejectionReason, roleLabel
     // shouldn't normally happen for a seller/delivery account, but falls
     // back to the same pending copy rather than showing nothing.
     return (
-        <div className="glass-strong rounded-lg p-8 text-center">
+        <div className="glass-strong rounded-lg p-8 text-center animate-scale-in">
             <p className="text-mango text-3xl mb-3">⏳</p>
             <p className="font-display text-xl mb-2">Your account is under review</p>
             <p className="text-ash text-sm max-w-md mx-auto">

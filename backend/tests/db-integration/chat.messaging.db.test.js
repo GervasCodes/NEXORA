@@ -83,6 +83,22 @@ describe("chat.service messaging (real DB)", () => {
         expect(results[0].message).toBe("new message about pricing");
     });
 
+    it("searchMessages treats a literal % or _ in the query as plain text, not a SQL wildcard", async () => {
+        const buyer = await fixtures.createUser();
+        const seller = await fixtures.createUser({ role: "seller" });
+        const conversation = await fixtures.createConversation(buyer.id, seller.id);
+
+        // A message an unescaped "_" wildcard would also match (any single
+        // character in place of the underscore), which must NOT come back
+        // when searching for the literal "SAVE_10".
+        await fixtures.createMessage(conversation.id, seller.id, { message: "code SAVEX10 also works" });
+        const literalMatch = await fixtures.createMessage(conversation.id, seller.id, { message: "use code SAVE_10 at checkout" });
+
+        const results = await chatService.searchMessages(conversation.id, buyer.id, "SAVE_10");
+
+        expect(results.map((r) => r.id)).toEqual([literalMatch.id]);
+    });
+
     it("deleteMessage tombstones the message (sender only) instead of hard-deleting the row", async () => {
         const buyer = await fixtures.createUser();
         const seller = await fixtures.createUser({ role: "seller" });

@@ -95,13 +95,17 @@ router.get(
     paymentController.getPayment
 );
 
+// Buyer confirms they received the order (migration 061). For Cash on
+// Delivery this is what finalizes the payment - replaces the old
+// seller-self-reported PUT /:orderId/confirm-cod, which let a seller
+// claim cash was collected with no buyer involvement at all.
 router.put(
-    "/:orderId/confirm-cod",
+    "/:orderId/confirm-receipt",
     authMiddleware,
-    authorize("seller"),
+    authorize("buyer"),
     orderIdValidation,
     validationMiddleware,
-    paymentController.confirmCashOnDelivery
+    paymentController.confirmDeliveryReceipt
 );
 
 module.exports = router;

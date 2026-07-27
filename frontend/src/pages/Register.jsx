@@ -246,8 +246,9 @@ export default function Register() {
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="flex-1 bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                            className="flex-1 bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2"
                         >
+                            {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                             {submitting ? "Submitting…" : "Submit for review"}
                         </button>
                     </div>
@@ -356,7 +357,8 @@ export default function Register() {
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                 <button type="submit" disabled={submitting}
-                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                    {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </button>
             </form>

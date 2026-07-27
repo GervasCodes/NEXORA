@@ -20,8 +20,9 @@ const fraudService = require("../fraud/fraud.service");
 // `held_balance` (not withdrawable) and stay there until Phase 9D's
 // release job (delivered + escrow_hold_days elapsed, no open dispute)
 // moves them into `balance`. Cash on Delivery is different: the seller
-// already has the cash in hand by the time `confirmCashOnDelivery` can
-// even run (it requires the order to already be `delivered`), so there
+// already has the cash in hand by the time `confirmDeliveryReceipt` can
+// even run (it requires the order to already be `delivered`, and is now
+// a buyer-only action per Phase 2 - see payment.service.js), so there
 // is no platform-held money to hold back - COD earnings go straight to
 // `balance`, exactly as every payment method did before this phase, and
 // the corresponding order_items rows are marked `wallet_released = TRUE`
@@ -341,13 +342,17 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
             throw new Error("Withdrawal request not found");
         }
 
-        if (withdrawal.status !== "pending" && !(withdrawal.status === "approved" && action === "paid")) {
-            throw new Error(`This request is already "${withdrawal.status}"`);
-        }
-
         const nextStatus = { approve: "approved", reject: "rejected", paid: "paid" }[action];
         if (!nextStatus) {
             throw new Error("Invalid action");
+        }
+
+        // approve/reject only make sense from "pending"; "paid" must come
+        // from "approved" - a request can no longer skip straight from
+        // pending to paid without going through approval first.
+        const validFromStatus = action === "paid" ? "approved" : "pending";
+        if (withdrawal.status !== validFromStatus) {
+            throw new Error(`This request is already "${withdrawal.status}"`);
         }
 
         if (action === "reject") {

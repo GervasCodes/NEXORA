@@ -52,6 +52,34 @@ describe("delivery.service.claimDelivery", () => {
         await expect(deliveryService.claimDelivery(1, 5)).rejects.toThrow("This order has already been claimed");
     });
 
+    it("translates a duplicate-key race (two agents claiming at once) into the same friendly message", async () => {
+        // Both agents pass the up-front findByOrderId check (neither has
+        // inserted yet), so the race is only caught by the DB's
+        // UNIQUE(order_id) constraint on the actual insert.
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "shipped" });
+        deliveryRepository.findByOrderId.mockResolvedValue(undefined);
+        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({
+            fee: 4000, distanceKm: 6, durationMinutes: 18, routingProvider: "osrm"
+        });
+        deliveryRepository.create.mockRejectedValue(
+            Object.assign(new Error("Duplicate entry"), { code: "ER_DUP_ENTRY", errno: 1062 })
+        );
+
+        await expect(deliveryService.claimDelivery(1, 5)).rejects.toThrow("This order has already been claimed");
+        expect(socket.emitToAdmins).not.toHaveBeenCalled();
+    });
+
+    it("still propagates an unrelated DB error from the insert", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "shipped" });
+        deliveryRepository.findByOrderId.mockResolvedValue(undefined);
+        deliveryPricingService.calculateDeliveryFee.mockResolvedValue({
+            fee: 4000, distanceKm: 6, durationMinutes: 18, routingProvider: "osrm"
+        });
+        deliveryRepository.create.mockRejectedValue(new Error("Connection lost"));
+
+        await expect(deliveryService.claimDelivery(1, 5)).rejects.toThrow("Connection lost");
+    });
+
     it("prices and creates the delivery on a valid claim", async () => {
         orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "shipped" });
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);

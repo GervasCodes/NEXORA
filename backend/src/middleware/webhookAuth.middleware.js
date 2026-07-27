@@ -20,7 +20,7 @@
 // access - that's strictly stronger than a static shared secret.
 //
 // Required env vars: MALIPOPAY_WEBHOOK_SECRET, SELCOM_WEBHOOK_SECRET.
-// If a secret isn't configured, the webhook is REJECTED in production
+// If a secret isn't configured, the wec:\Users\PC\Downloads\New folder\backend\src\modules\chat\chat.repository.jsc:\Users\PC\Downloads\New folder\backend\src\modules\chat\chat.repository.jsbhook is REJECTED in production
 // (fails closed, not open) - it's only allowed through unset in
 // development, so local testing with a fake payload still works without
 // needing a secret configured.

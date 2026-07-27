@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
+import PageTransition from "./PageTransition";
 
 const tabs = [
     { to: "/seller", label: "Overview", end: true },
@@ -110,7 +111,9 @@ export default function SellerLayout() {
             </aside>
 
             <div className="min-w-0">
-                <Outlet context={{ profile, refreshProfile: loadProfile }} />
+                <PageTransition granular>
+                    <Outlet context={{ profile, refreshProfile: loadProfile }} />
+                </PageTransition>
             </div>
         </div>
     );

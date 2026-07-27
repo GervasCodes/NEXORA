@@ -112,19 +112,32 @@ what a fully-mocked pool never can: a typo'd column name, a broken
 `JOIN`, a foreign-key/constraint violation, or a transaction that
 doesn't actually roll back on error.
 
-### Running the DB-integration suite locally
+### Running the DB-integration suite locally (Docker)
+
+A disposable MySQL container backs this suite - nothing to install,
+and it never persists real data between runs.
 
 ```bash
-docker compose -f docker-compose.test.yml up -d   # disposable MySQL 8
-npm --prefix backend run db:migrate               # apply migrations to it
-npm --prefix backend run test:db                  # run tests/db-integration/**
+# 1. Start the disposable MySQL container.
+docker compose -f docker-compose.test.yml up -d
+
+# 2. Apply migrations to nexora_test.
+npm --prefix backend run db:migrate
+
+# 3. Run the suite.
+npm --prefix backend run test:db
+
+# 4. Tear the container down when done (drops the tmpfs data too).
 docker compose -f docker-compose.test.yml down -v
 ```
 
 `docker-compose.test.yml`'s credentials/port match `tests/setupEnv.js`'s
 fallback defaults (`DB_HOST=localhost`, `DB_PORT=3306`,
-`DB_USER=test`/`DB_PASSWORD=test`, `DB_NAME=nexora_test`), so no `.env`
-file is required to run it locally.
+`DB_USER=test`/`DB_PASSWORD=test`, `DB_NAME=nexora_test`), so no
+`backend/.env` file is required to run the suite locally. The
+container's data directory is `tmpfs`, so it's always rebuilt clean
+from migrations on the next `up -d` - just `down -v` and `up -d` again
+for a totally fresh database.
 
 ### CI (Phase 3)
 

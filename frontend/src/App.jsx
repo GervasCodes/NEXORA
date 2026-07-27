@@ -5,6 +5,8 @@ import Footer from "./components/Footer";
 import SplashScreen from "./components/SplashScreen";
 import SuspendedScreen from "./components/SuspendedScreen";
 import PageLoader from "./components/PageLoader";
+import PageTransition from "./components/PageTransition";
+import RouteProgressBar from "./components/RouteProgressBar";
 import { useAuth } from "./context/AuthContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
@@ -117,9 +119,12 @@ export default function App() {
         <div className="min-h-screen flex flex-col">
             <Header />
 
+            <RouteProgressBar />
+
             <main className="flex-1">
                 <Suspense fallback={<PageLoader />}>
-                    <Routes>
+                    <PageTransition>
+                        <Routes>
                         <Route path="/" element={<Home />} />
                         <Route path="/departments/:slug" element={<DepartmentPage />} />
                         <Route path="/products" element={<BrowseProducts />} />
@@ -198,7 +203,8 @@ export default function App() {
                                 <p className="font-display text-2xl mb-2">Page not found</p>
                             </div>
                         } />
-                    </Routes>
+                        </Routes>
+                    </PageTransition>
                 </Suspense>
             </main>
 

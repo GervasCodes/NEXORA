@@ -232,7 +232,17 @@ exports.findReactionsForMessage = async (messageId) => {
 // idx_messages_conversation_created in migration 060 for why this isn't
 // FULLTEXT. `clearedAt` is applied the same way as findMessages(), so a
 // search never surfaces something the user has "cleared" from view.
+//
+// The search term is escaped before being wrapped in %...% - otherwise a
+// literal "%" or "_" typed by the user (e.g. "50% off", "SAVE_10") would
+// be reinterpreted by MySQL as a LIKE wildcard instead of matched as
+// plain text, silently broadening the results. Backslash is escaped too
+// since it's what makes the escaping itself work (and MySQL's LIKE
+// treats backslash as its own escape character by default).
+const escapeLikePattern = (str) => str.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
 exports.searchMessages = async (conversationId, query, clearedAt) => {
+    const likePattern = `%${escapeLikePattern(query)}%`;
     const [rows] = await db.query(
         `SELECT id, sender_id, message, attachment_url, attachment_type, attachment_name, created_at
         FROM messages
@@ -240,7 +250,7 @@ exports.searchMessages = async (conversationId, query, clearedAt) => {
         ${clearedAt ? "AND created_at > ?" : ""}
         ORDER BY created_at DESC
         LIMIT 50`,
-        clearedAt ? [conversationId, `%${query}%`, clearedAt] : [conversationId, `%${query}%`]
+        clearedAt ? [conversationId, likePattern, clearedAt] : [conversationId, likePattern]
     );
     return rows;
 };

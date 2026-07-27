@@ -35,9 +35,15 @@ exports.listDeletedUsers = async (req, res) => {
 // DELETE /admin/deleted-users/:id (from the Deleted Accounts review list).
 exports.permanentlyDeleteUser = async (req, res) => {
     try {
-        await adminService.permanentlyDeleteUser(req.params.id, req.user.id);
+        const { hardDeleted } = await adminService.permanentlyDeleteUser(req.params.id, req.user.id);
 
-        return res.json({ success: true, message: "Account permanently deleted" });
+        return res.json({
+            success: true,
+            message: hardDeleted
+                ? "Account fully removed"
+                : "Account permanently anonymized (order/review/financial history retained)",
+            data: { hardDeleted }
+        });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

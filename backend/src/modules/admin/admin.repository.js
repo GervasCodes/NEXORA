@@ -510,11 +510,55 @@ exports.tombstoneSentMessages = async (userId, executor = db) => {
     );
 };
 
-// --- The users row itself ---
-// Final step: erase every remaining identifying field. email/phone are
-// UNIQUE NOT NULL, so they get a placeholder that can never collide
-// rather than NULL. password was already randomized at soft-delete time
-// (Phase 3) and is left as-is.
+// --- Full removal attempt ---
+// Tried only after every table in the "safe to delete outright" section
+// above has already been cleared in this same transaction. What's left
+// pointing at users(id) without ON DELETE CASCADE at this point is
+// exactly the financial/legal/other-party record set from migration
+// 057's header comment (orders, order_items as seller, payments,
+// reviews, disputes, refunds, delivery_ratings, deliveries as agent,
+// wallet/withdrawal/earnings history, sponsorship-style campaigns,
+// conversations/messages as sender). Asking MySQL directly (rather than
+// re-deriving that table list by hand, and risking missing one as the
+// schema grows) is the reliable way to know whether it's actually safe
+// to drop the row: a SAVEPOINT lets a blocked DELETE roll back to
+// exactly this point without losing the cleanup already done in this
+// transaction. Returns true if the row (and, via cascade, its
+// seller_profiles row) is genuinely gone; false if it's still
+// referenced elsewhere, in which case scrubUserPII below is the
+// fallback.
+exports.attemptHardDeleteUser = async (userId, connection) => {
+    await connection.query("SAVEPOINT before_hard_delete");
+
+    try {
+        await connection.query("DELETE FROM users WHERE id = ?", [userId]);
+        return true;
+
+    } catch (error) {
+        if (error.code === "ER_ROW_IS_REFERENCED_2" || error.code === "ER_ROW_IS_REFERENCED") {
+            await connection.query("ROLLBACK TO SAVEPOINT before_hard_delete");
+            return false;
+        }
+        throw error;
+    }
+};
+
+// --- The users row itself (fallback when attemptHardDeleteUser can't
+// drop the row outright) ---
+// Erases every remaining identifying field. email/phone are UNIQUE NOT
+// NULL, so they get a placeholder that can never collide rather than
+// NULL. password was already randomized at soft-delete time (Phase 3,
+// self-delete) if the account went through that first, and is left
+// as-is either way - a scrubbed account can never log in again since
+// its email no longer matches what the user knows.
+//
+// is_active = FALSE and deleted_at are set here too (previously only
+// deleted_at was ever set, and only by the self-delete step at Phase 3
+// - an account an admin permanently deleted *without* it ever having
+// been self-deleted first kept is_active = TRUE and deleted_at = NULL
+// forever, which left it showing up in the regular Users list as
+// "Active" even though its email/password no longer worked). Both are
+// idempotent against an account that already went through self-delete.
 exports.scrubUserPII = async (userId, executor = db) => {
     await executor.query(
         `UPDATE users
@@ -526,6 +570,8 @@ exports.scrubUserPII = async (userId, executor = db) => {
             current_lng = NULL,
             vehicle_type = NULL,
             vehicle_plate_number = NULL,
+            is_active = FALSE,
+            deleted_at = COALESCE(deleted_at, NOW()),
             permanently_deleted_at = NOW()
         WHERE id = ?`,
         [userId]

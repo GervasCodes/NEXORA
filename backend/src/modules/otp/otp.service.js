@@ -15,13 +15,19 @@ const generateCode = () => {
 
 const SUBJECTS = {
     login: "Your NEXORA sign-in code",
-    password_change: "Your NEXORA password change code"
+    password_change: "Your NEXORA password change code",
+    password_reset: "Your NEXORA password reset code"
 };
 
 const bodyFor = (purpose, code) => {
-    const intro = purpose === "login"
-        ? "Use this code to finish signing in to NEXORA:"
-        : "Use this code to verify it's you before changing your NEXORA password:";
+    let intro;
+    if (purpose === "login") {
+        intro = "Use this code to finish signing in to NEXORA:";
+    } else if (purpose === "password_reset") {
+        intro = "Use this code to reset your NEXORA password:";
+    } else {
+        intro = "Use this code to verify it's you before changing your NEXORA password:";
+    }
 
     return {
         text: `${intro}\n\n${code}\n\nThis code expires in ${EXPIRY_MINUTES} minutes. If you didn't request this, you can safely ignore this email.`,

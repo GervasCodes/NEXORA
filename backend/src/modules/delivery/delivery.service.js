@@ -17,6 +17,11 @@ const {
 // requires this file for the same reason).
 const socket = () => require("../../socket/socket");
 
+// Mirrors the ER_DUP_ENTRY code mysql2 throws on a UNIQUE constraint hit -
+// same helper refund.service.js uses for the same reason (see that
+// module's isDuplicateKeyError comment).
+const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062);
+
 exports.getAvailableForPickup = async () => {
     return deliveryRepository.findAvailableForPickup();
 };
@@ -39,9 +44,24 @@ exports.claimDelivery = async (orderId, agentId) => {
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
         await deliveryPricingService.calculateDeliveryFee(order);
-    const deliveryId = await deliveryRepository.create(
-        orderId, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider
-    );
+
+    // The findByOrderId check above is check-then-act: two agents racing to
+    // claim the same order can both pass it before either has inserted a
+    // row. deliveries.order_id is UNIQUE, so the DB itself is the real
+    // guard - whichever insert loses that race throws ER_DUP_ENTRY here.
+    // Translate that into the same friendly message the up-front check
+    // gives, instead of letting a raw DB error surface to the losing agent.
+    let deliveryId;
+    try {
+        deliveryId = await deliveryRepository.create(
+            orderId, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider
+        );
+    } catch (err) {
+        if (isDuplicateKeyError(err)) {
+            throw new Error("This order has already been claimed");
+        }
+        throw err;
+    }
 
     // Phase 6: let the admin dispatch dashboard know a new delivery just
     // entered the active pool, without waiting for its next poll/refresh.

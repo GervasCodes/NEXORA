@@ -33,19 +33,6 @@ export default function SellerOrders() {
         }
     };
 
-    const confirmCod = async (orderId) => {
-        setBusyId(orderId);
-        setError("");
-        try {
-            await api.put(`/payments/${orderId}/confirm-cod`);
-            load();
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setBusyId(null);
-        }
-    };
-
     if (loading) return <p className="text-ash">Loading orders…</p>;
 
     return (
@@ -98,7 +85,9 @@ export default function SellerOrders() {
                                             onChange={(e) => setShipChoice({ ...shipChoice, [order.id]: e.target.value })}
                                             className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring bg-paper"
                                         >
-                                            <option value="">Platform pool</option>
+                                            {order.payment_method !== "cash_on_delivery" && (
+                                                <option value="">Platform pool</option>
+                                            )}
                                             {roster.map((agent) => (
                                                 <option key={agent.agent_id} value={agent.agent_id}>
                                                     {agent.first_name} {agent.last_name} (my team)
@@ -106,9 +95,14 @@ export default function SellerOrders() {
                                             ))}
                                         </select>
                                     )}
+                                    {order.payment_method === "cash_on_delivery" && roster.length === 0 && (
+                                        <span className="text-xs text-coral">
+                                            Add a delivery agent to your roster to ship Cash on Delivery orders
+                                        </span>
+                                    )}
                                     <button
                                         onClick={() => updateStatus(order.id, "shipped", shipChoice[order.id])}
-                                        disabled={busyId === order.id}
+                                        disabled={busyId === order.id || (order.payment_method === "cash_on_delivery" && !shipChoice[order.id])}
                                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
                                     >
                                         Mark shipped
@@ -134,13 +128,9 @@ export default function SellerOrders() {
                             )}
 
                             {order.status === "delivered" && order.payment_status === "unpaid" && (
-                                <button
-                                    onClick={() => confirmCod(order.id)}
-                                    disabled={busyId === order.id}
-                                    className="text-xs bg-teal text-white px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
-                                >
-                                    Confirm COD received
-                                </button>
+                                <span className="text-xs text-ash italic">
+                                    Waiting for buyer to confirm receipt & cash payment
+                                </span>
                             )}
                         </div>
                     </li>

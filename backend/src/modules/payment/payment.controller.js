@@ -231,16 +231,18 @@ exports.capturePaypalPayment = async (req, res) => {
     }
 };
 
-exports.confirmCashOnDelivery = async (req, res) => {
+exports.confirmDeliveryReceipt = async (req, res) => {
     try {
-        const result = await paymentService.confirmCashOnDelivery(
+        const result = await paymentService.confirmDeliveryReceipt(
             req.params.orderId,
             req.user.id
         );
 
         return res.json({
             success: true,
-            message: "Cash on Delivery payment confirmed",
+            message: result.paymentConfirmed
+                ? "Receipt confirmed - Cash on Delivery payment recorded"
+                : "Receipt confirmed",
             data: result
         });
 

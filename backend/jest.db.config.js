@@ -7,9 +7,10 @@
 // that doesn't actually roll back.
 //
 // Needs a running MySQL with migrations applied first - see
-// docker-compose.test.yml at the repo root and `npm run test:db`
-// (which runs migrations, then this config, then exits) for the full
-// sequence. Never run as part of plain `npm test`.
+// docker-compose.test.yml (a disposable MySQL container - run
+// `docker compose -f docker-compose.test.yml up -d` first) and
+// `npm run test:db` (which runs migrations, then this config, then
+// exits) for the full sequence. Never run as part of plain `npm test`.
 module.exports = {
     testEnvironment: "node",
     setupFiles: ["<rootDir>/tests/setupEnv.js"],

@@ -3,7 +3,7 @@
 // typo'd column name, a broken JOIN, or a transaction that doesn't
 // actually roll back. This file runs the same scenarios against a real
 // MySQL instance with migrations applied - see docker-compose.test.yml
-// and `npm run test:db`.
+// (disposable Docker MySQL) and `npm run test:db`.
 
 jest.mock("../../src/modules/settings/settings.service");
 jest.mock("../../src/modules/notification/notification.service");

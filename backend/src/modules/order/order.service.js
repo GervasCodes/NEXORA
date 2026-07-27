@@ -314,6 +314,16 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         });
     }
 
+    // Cash on Delivery means whoever delivers it also collects and holds
+    // cash on the platform's behalf - that's only safe to ask of a
+    // seller's own, accountable roster agent, not an anonymous agent
+    // picked up from the open platform pool. See migration 061 /
+    // confirmDeliveryReceipt for the other half of this (buyer, not
+    // seller, is what finalizes COD payment).
+    if (newStatus === "shipped" && !agentId && order.payment_method === "cash_on_delivery") {
+        throw new Error("Cash on Delivery orders must be shipped with one of your own delivery agents - assign one from your roster instead of the platform pool");
+    }
+
     await orderRepository.updateOrderStatus(orderId, newStatus);
 
     // Platform pool (no specific roster agent chosen): kick off nearest-agent

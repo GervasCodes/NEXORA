@@ -37,7 +37,12 @@ export default function AdminDeletedAccounts() {
         setBusyId(u.id);
         setError("");
         try {
-            await api.delete(`/admin/deleted-users/${u.id}`);
+            const { data } = await api.delete(`/admin/deleted-users/${u.id}`);
+            window.alert(
+                data?.data?.hardDeleted
+                    ? "Account fully removed — no trace of it remains."
+                    : "Account anonymized and permanently disabled. Its order/review/financial history was kept because other users' records depend on it."
+            );
             load();
         } catch (err) {
             setError(extractErrorMessage(err));

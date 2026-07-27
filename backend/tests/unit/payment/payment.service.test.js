@@ -8,7 +8,7 @@ jest.mock("../../../src/modules/payment/providers/snippe.provider");
 jest.mock("../../../src/modules/payment/providers/paypal.provider");
 jest.mock("../../../src/modules/wallet/wallet.service");
 jest.mock("../../../src/modules/settings/settings.service");
-jest.mock("../../../src/socket/socket", () => ({ emitToAdmins: jest.fn() }), { virtual: true });
+jest.mock("../../../src/socket/socket", () => ({ emitToAdmins: jest.fn(), emitToUser: jest.fn() }), { virtual: true });
 
 const paymentRepository = require("../../../src/modules/payment/payment.repository");
 const orderRepository = require("../../../src/modules/order/order.repository");
@@ -378,42 +378,61 @@ describe("payment.service - initiateVerificationFeePayment (mobile money)", () =
     });
 });
 
-describe("payment.service - confirmCashOnDelivery", () => {
-    it("throws if the order doesn't belong to this seller", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1 });
-        orderRepository.sellerHasItemInOrder.mockResolvedValue(false);
+// migration 061 replaced the old seller-self-reported confirmCashOnDelivery
+// with a buyer-confirmed flow - a seller claiming "I got paid" was never
+// actually proof of anything, so it's the buyer who confirms receipt now.
+describe("payment.service - confirmDeliveryReceipt", () => {
+    it("throws if the order doesn't belong to this buyer", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 999 });
 
-        await expect(paymentService.confirmCashOnDelivery(1, 55)).rejects.toThrow("Order not found");
-    });
-
-    it("throws if the order isn't a cash_on_delivery order", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, payment_method: "mobile_money", status: "delivered" });
-        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
-
-        await expect(paymentService.confirmCashOnDelivery(1, 55)).rejects.toThrow("not a Cash on Delivery order");
+        await expect(paymentService.confirmDeliveryReceipt(1, 55)).rejects.toThrow("Order not found");
     });
 
     it("throws if the order hasn't been delivered yet", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, payment_method: "cash_on_delivery", status: "shipped" });
-        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 55, status: "shipped" });
 
-        await expect(paymentService.confirmCashOnDelivery(1, 55)).rejects.toThrow("only be confirmed after delivery");
+        await expect(paymentService.confirmDeliveryReceipt(1, 55)).rejects.toThrow("only confirm receipt after the order has been marked delivered");
     });
 
-    it("marks the payment completed, order paid, and credits the seller wallet once delivered", async () => {
+    it("throws if receipt has already been confirmed", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 55, status: "delivered", buyer_confirmed_at: new Date() });
+
+        await expect(paymentService.confirmDeliveryReceipt(1, 55)).rejects.toThrow("already confirmed receipt");
+    });
+
+    it("marks the order confirmed with no payment side effect for a non-COD order", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 55, status: "delivered", payment_method: "mobile_money" });
+
+        const result = await paymentService.confirmDeliveryReceipt(1, 55);
+
+        expect(orderRepository.markBuyerConfirmed).toHaveBeenCalledWith(1);
+        expect(paymentRepository.markCompleted).not.toHaveBeenCalled();
+        expect(result).toEqual({ confirmed: true, paymentConfirmed: false });
+    });
+
+    it("throws for a Cash on Delivery order that wasn't delivered by the seller's own agent", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, payment_method: "cash_on_delivery", status: "delivered", total_amount: 15000
+            id: 1, buyer_id: 55, status: "delivered", payment_method: "cash_on_delivery", delivery_mode: "platform_pool"
         });
-        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(paymentService.confirmDeliveryReceipt(1, 55)).rejects.toThrow("only available for orders delivered by the seller's own delivery agent");
+    });
+
+    it("marks the payment completed, order paid, and credits the seller wallet for Cash on Delivery", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 55, status: "delivered", payment_method: "cash_on_delivery", delivery_mode: "own", total_amount: 15000
+        });
         paymentRepository.findByOrderId.mockResolvedValue(null);
         paymentRepository.create.mockResolvedValue(77);
         walletService.creditSellersForOrder.mockResolvedValue(undefined);
 
-        const result = await paymentService.confirmCashOnDelivery(1, 55);
+        const result = await paymentService.confirmDeliveryReceipt(1, 55);
 
+        expect(orderRepository.markBuyerConfirmed).toHaveBeenCalledWith(1);
         expect(paymentRepository.markCompleted).toHaveBeenCalledWith(77, null, expect.stringMatching(/^RCPT-/));
         expect(orderRepository.updatePaymentStatus).toHaveBeenCalledWith(1, "paid");
         expect(walletService.creditSellersForOrder).toHaveBeenCalledWith(1);
+        expect(result).toEqual(expect.objectContaining({ confirmed: true, paymentConfirmed: true }));
         expect(result.receiptNumber).toMatch(/^RCPT-/);
     });
 });

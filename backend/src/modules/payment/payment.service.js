@@ -147,6 +147,14 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
         throw new Error(`No payment record found for order #${orderId}`);
     }
 
+    // Fetched up front (not just on the success path) so both branches can
+    // push a live "payment:updated" event to the buyer's open order page -
+    // see socket.emitToUser calls below. The buyer's browser only knows a
+    // provider redirect/webhook happened, not whether it actually
+    // succeeded, so it can't safely show a result until this event (or a
+    // fresh GET /orders/:id) confirms it.
+    const orderForNotify = await orderRepository.findOrderById(orderId);
+
     // Already processed - webhooks can be retried/duplicated by the
     // provider, so treat this as a no-op rather than an error.
     if (payment.status === "completed" || payment.status === "failed") {
@@ -160,6 +168,11 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
             description: `Payment failed for order #${orderId}`,
             metadata: { orderId, success: false, transactionReference }
         });
+        if (orderForNotify) {
+            require("../../socket/socket").emitToUser(orderForNotify.buyer_id, "payment:updated", {
+                orderId, success: false, paymentStatus: "unpaid"
+            });
+        }
         return { orderId, success: false };
     }
 
@@ -190,7 +203,20 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
         );
     }
 
-    require("../../socket/socket").emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
+    const socketModule = require("../../socket/socket");
+    socketModule.emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
+
+    if (orderForNotify) {
+        // Notify the buyer's own room too - Snippe/mobile-money redirects
+        // and USSD prompts only mean "the buyer tried to pay", not "it
+        // succeeded"; this is the actual confirmation the order page waits
+        // on before showing anything as successful. For a parent order,
+        // the buyer paid on the parent, so notify against the parent id
+        // (child order ids are internal and never shown to the buyer).
+        socketModule.emitToUser(orderForNotify.buyer_id, "payment:updated", {
+            orderId, success: true, paymentStatus: "paid", receiptNumber
+        });
+    }
 
     auditService.log({
         eventType: "payment_processed",
@@ -432,26 +458,43 @@ exports.getPayment = async (orderId, userId) => {
     return payment;
 };
 
-// Cash on Delivery: only confirm once the order has actually been delivered
-exports.confirmCashOnDelivery = async (orderId, sellerId) => {
+// Buyer confirms they actually received the order (migration 061). This
+// replaces the old seller-self-reported confirmCashOnDelivery: a seller
+// claiming "I got paid" was never actually proof of anything - the buyer
+// confirming is. Works for every payment method (records buyer_confirmed_at
+// either way), but only has a payment side effect for Cash on Delivery,
+// where confirming receipt IS confirming the cash was actually handed over.
+exports.confirmDeliveryReceipt = async (orderId, buyerId) => {
     const order = await orderRepository.findOrderById(orderId);
 
-    if (!order) {
+    if (!order || order.buyer_id !== buyerId) {
         throw new Error("Order not found");
-    }
-
-    const ownsItem = await orderRepository.sellerHasItemInOrder(orderId, sellerId);
-    if (!ownsItem) {
-        throw new Error("Order not found");
-    }
-
-    if (order.payment_method !== "cash_on_delivery") {
-        throw new Error("This order is not a Cash on Delivery order");
     }
 
     if (order.status !== "delivered") {
-        throw new Error("Cash on Delivery can only be confirmed after delivery");
+        throw new Error("You can only confirm receipt after the order has been marked delivered");
     }
+
+    if (order.buyer_confirmed_at) {
+        throw new Error("You've already confirmed receipt for this order");
+    }
+
+    if (order.payment_method !== "cash_on_delivery") {
+        await orderRepository.markBuyerConfirmed(orderId);
+        return { confirmed: true, paymentConfirmed: false };
+    }
+
+    // Cash on Delivery: only a seller's own roster agent should ever be
+    // handling cash (see order.service.js#updateOrderStatusBySeller,
+    // which blocks shipping a COD order through the open platform pool in
+    // the first place). This is a defensive re-check, not the primary
+    // gate - it protects orders that predate that guard, or any other
+    // path that could set delivery_mode.
+    if (order.delivery_mode !== "own") {
+        throw new Error("Cash on Delivery collection is only available for orders delivered by the seller's own delivery agent. Please contact support.");
+    }
+
+    await orderRepository.markBuyerConfirmed(orderId);
 
     let payment = await paymentRepository.findByOrderId(orderId);
 
@@ -473,5 +516,5 @@ exports.confirmCashOnDelivery = async (orderId, sellerId) => {
         console.error("Seller wallet credit error:", err)
     );
 
-    return { receiptNumber };
+    return { confirmed: true, paymentConfirmed: true, receiptNumber };
 };

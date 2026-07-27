@@ -223,6 +223,16 @@ exports.updateOrderStatus = async (orderId, status) => {
     );
 };
 
+// Buyer confirms they actually received the order - separate from
+// `status` (which just means "seller/agent marked it handed off"). See
+// migration 061 and payment.service.js#confirmDeliveryReceipt.
+exports.markBuyerConfirmed = async (orderId) => {
+    await db.query(
+        "UPDATE orders SET buyer_confirmed_at = NOW() WHERE id = ?",
+        [orderId]
+    );
+};
+
 // Set when a seller ships an order: 'platform' (open pool, any agent can
 // claim) or 'own' (assigned directly to one of the seller's own agents).
 exports.setDeliveryMode = async (orderId, mode) => {
@@ -252,7 +262,7 @@ exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus) =>
 // Orders that contain at least one item belonging to this seller
 exports.findOrdersBySeller = async (sellerId) => {
     const [rows] = await db.query(
-        `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status,
+        `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id

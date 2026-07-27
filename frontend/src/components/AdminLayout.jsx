@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import PageTransition from "./PageTransition";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like the rest of the app's nav) instead of a wall of 17
@@ -180,7 +181,9 @@ export default function AdminLayout() {
             </aside>
 
             <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
-                <Outlet />
+                <PageTransition granular>
+                    <Outlet />
+                </PageTransition>
             </div>
         </div>
     );

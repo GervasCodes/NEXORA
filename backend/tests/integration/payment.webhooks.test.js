@@ -1,6 +1,11 @@
 jest.mock("../../src/config/db", () => require("../helpers/mockDb"));
 jest.mock("../../src/socket/socket", () => ({ emitToAdmins: jest.fn(), emitToUser: jest.fn(), emitNewMessage: jest.fn() }));
 jest.mock("../../src/modules/wallet/wallet.service", () => ({ creditSellersForOrder: jest.fn().mockResolvedValue(undefined) }));
+// Fire-and-forget audit logging isn't what these auth/signature tests are
+// about, but it does hit db.query (see audit.repository.js) - mocked out
+// here so it can't consume a slot in the db.query mock queue below and
+// throw off the ordering of the calls these tests actually assert on.
+jest.mock("../../src/modules/audit/audit.service", () => ({ log: jest.fn(), logFromRequest: jest.fn() }));
 
 const crypto = require("crypto");
 const request = require("supertest");
@@ -27,9 +32,10 @@ describe("POST /api/v1/payments/webhooks/malipopay - shared-secret auth", () => 
     it("processes a webhook with the correct shared secret", async () => {
         db.query
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // paymentRepository.findByOrderId
+            .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]) // orderRepository.findOrderById (orderForNotify, fetched up front)
             .mockResolvedValueOnce([{}]) // markCompleted
             .mockResolvedValueOnce([{}]) // orderRepository.updatePaymentStatus
-            .mockResolvedValueOnce([[{ id: 5, is_parent: 0 }]]); // orderRepository.findOrderById
+            .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]); // orderRepository.findOrderById (is_parent check)
 
         const res = await request(app)
             .post("/api/v1/payments/webhooks/malipopay")
@@ -93,9 +99,10 @@ describe("POST /api/v1/payments/webhooks/snippe - raw-body HMAC signature", () =
 
         db.query
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // findByOrderId
+            .mockResolvedValueOnce([[{ id: 9, is_parent: 0, buyer_id: 1 }]]) // findOrderById (orderForNotify, fetched up front)
             .mockResolvedValueOnce([{}]) // markCompleted
             .mockResolvedValueOnce([{}]) // updatePaymentStatus
-            .mockResolvedValueOnce([[{ id: 9, is_parent: 0 }]]); // findOrderById
+            .mockResolvedValueOnce([[{ id: 9, is_parent: 0, buyer_id: 1 }]]); // findOrderById (is_parent check)
 
         const res = await request(app)
             .post("/api/v1/payments/webhooks/snippe")

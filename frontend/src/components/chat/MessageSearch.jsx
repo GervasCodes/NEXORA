@@ -13,19 +13,33 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
         const trimmed = query.trim();
         if (!trimmed) {
             setResults([]);
-            return;
+            return undefined;
         }
+
+        // Guards against out-of-order responses: if the query changes again
+        // before this request resolves, the cleanup below flips `cancelled`
+        // so a slower, now-stale response can never overwrite newer results.
+        let cancelled = false;
 
         setLoading(true);
         const handle = setTimeout(() => {
             api
                 .get(`/chat/conversations/${conversationId}/search`, { params: { q: trimmed } })
-                .then(({ data }) => setResults(data.data))
-                .catch(() => setResults([]))
-                .finally(() => setLoading(false));
+                .then(({ data }) => {
+                    if (!cancelled) setResults(data.data);
+                })
+                .catch(() => {
+                    if (!cancelled) setResults([]);
+                })
+                .finally(() => {
+                    if (!cancelled) setLoading(false);
+                });
         }, DEBOUNCE_MS);
 
-        return () => clearTimeout(handle);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
     }, [query, conversationId]);
 
     return (

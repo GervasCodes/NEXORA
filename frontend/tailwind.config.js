@@ -88,6 +88,16 @@ export default {
                     "0%": { transform: "scale(0.6)", opacity: "0" },
                     "60%": { transform: "scale(1.2)" },
                     "100%": { transform: "scale(1)", opacity: "1" }
+                },
+                // Phase 6: route-change page transition (see
+                // PageTransition.jsx). A touch shorter and subtler than
+                // slideUp/fadeIn above since it fires on *every*
+                // navigation, not just once - anything longer or with
+                // more travel starts to feel like it's slowing the app
+                // down rather than polishing it.
+                pageIn: {
+                    from: { opacity: "0", transform: "translateY(6px)" },
+                    to: { opacity: "1", transform: "translateY(0)" }
                 }
             },
             animation: {
@@ -101,7 +111,8 @@ export default {
                 float: "float 3.2s ease-in-out infinite",
                 "suspend-ring": "suspendRing 2s ease-out infinite",
                 "typing-dot": "typingDot 1.2s ease-in-out infinite",
-                "check-pop": "checkPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both"
+                "check-pop": "checkPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both",
+                "page-in": "pageIn 0.28s cubic-bezier(0.16,1,0.3,1) both"
             }
         }
     },

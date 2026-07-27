@@ -182,6 +182,34 @@ body {
 .stagger-5 { animation-delay: 200ms; }
 .stagger-6 { animation-delay: 240ms; }
 
+/* Phase 5: UI/UX modernization - a slim, on-brand scrollbar for
+   horizontally-scrolling rows (ProductRow, etc.) instead of the bulky
+   OS-default scrollbar that clashes with the glass/rounded aesthetic
+   everywhere else. Firefox uses the standard properties; WebKit/Chromium
+   needs the pseudo-elements below. */
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-line)) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-line));
+    border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--color-ash));
+}
+
 /* Leaflet positions markers with an inline `transform: translate3d(...)`
    on `.leaflet-marker-icon` every time a "agent:position" socket event
    updates state - this single rule is what turns that into a smooth

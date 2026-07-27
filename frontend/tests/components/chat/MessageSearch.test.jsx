@@ -85,4 +85,38 @@ describe("MessageSearch", () => {
         fireEvent.click(screen.getByText("Close"));
         expect(onClose).toHaveBeenCalled();
     });
+
+    it("ignores a stale, out-of-order search response instead of letting it clobber newer results", async () => {
+        let resolveFirst;
+        let resolveSecond;
+        mockGet
+            .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+            .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+
+        render(<MessageSearch conversationId={1} onJumpTo={() => {}} onClose={() => {}} />);
+        const input = screen.getByPlaceholderText(/search this conversation/i);
+
+        // First keystroke fires a (slow) request after the debounce.
+        fireEvent.change(input, { target: { value: "abc" } });
+        await new Promise((resolve) => setTimeout(resolve, 350));
+
+        // User keeps typing before that request resolves - a second, newer
+        // request fires and should supersede the first.
+        fireEvent.change(input, { target: { value: "abcd" } });
+        await new Promise((resolve) => setTimeout(resolve, 350));
+
+        expect(mockGet).toHaveBeenCalledTimes(2);
+
+        // Resolve out of order: the newer ("abcd") request settles first,
+        // then the older, now-stale ("abc") request settles after it.
+        resolveSecond({ data: { data: [{ id: 2, message: "abcd match" }] } });
+        await waitFor(() => expect(screen.getByText("abcd match")).toBeInTheDocument());
+
+        resolveFirst({ data: { data: [{ id: 1, message: "abc match" }] } });
+        // Give the stale promise's .then a tick to run, if it's going to.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(screen.queryByText("abc match")).not.toBeInTheDocument();
+        expect(screen.getByText("abcd match")).toBeInTheDocument();
+    });
 });

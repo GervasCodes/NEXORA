@@ -22,18 +22,18 @@ export default function DeliveryEarnings() {
     const { totalEarnings, totalDeliveries, todayEarnings, weekEarnings, monthEarnings, dailyBreakdown, recent } = dashboard;
 
     return (
-        <div>
+        <div className="animate-fade-in">
             <h1 className="font-display text-2xl mb-1">Earnings</h1>
             <p className="text-ash text-sm mb-8">What you've earned delivering for NEXORA.</p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                <Stat label="Total earned" value={formatMoney(totalEarnings)} mono />
-                <Stat label="Today" value={formatMoney(todayEarnings)} mono />
-                <Stat label="Last 7 days" value={formatMoney(weekEarnings)} mono />
-                <Stat label="Last 30 days" value={formatMoney(monthEarnings)} mono />
+                <Stat label="Total earned" value={formatMoney(totalEarnings)} mono delay={0} highlight />
+                <Stat label="Today" value={formatMoney(todayEarnings)} mono delay={40} />
+                <Stat label="Last 7 days" value={formatMoney(weekEarnings)} mono delay={80} />
+                <Stat label="Last 30 days" value={formatMoney(monthEarnings)} mono delay={120} />
             </div>
 
-            <div className="border border-line rounded-lg p-4 mb-10">
+            <div className="border border-line rounded-lg p-4 mb-10 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "160ms" }}>
                 <div className="flex items-center justify-between mb-4">
                     <p className="text-sm font-medium">Earnings - last 14 days</p>
                     <p className="text-xs text-ash">{totalDeliveries} deliveries total</p>
@@ -53,8 +53,12 @@ export default function DeliveryEarnings() {
                     <p className="text-ash text-sm">No completed deliveries yet.</p>
                 ) : (
                     <ul className="space-y-2">
-                        {recent.map((r) => (
-                            <li key={r.id} className="border border-line rounded-lg p-3 flex items-center justify-between text-sm">
+                        {recent.map((r, i) => (
+                            <li
+                                key={r.id}
+                                className="border border-line rounded-lg p-3 flex items-center justify-between text-sm animate-slide-up hover:shadow-md hover:-translate-y-0.5 hover:border-teal/30 transition-all"
+                                style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
+                            >
                                 <div>
                                     <p className="font-medium">{r.order_number}</p>
                                     <p className="text-xs text-ash">{r.shipping_city} · {formatDate(r.created_at)}</p>
@@ -69,11 +73,14 @@ export default function DeliveryEarnings() {
     );
 }
 
-function Stat({ label, value, mono }) {
+function Stat({ label, value, mono, delay = 0, highlight }) {
     return (
-        <div className="border border-line rounded-lg p-4">
+        <div
+            className={`border rounded-lg p-4 animate-slide-up hover:-translate-y-0.5 hover:shadow-md transition-all ${highlight ? "border-teal/30 bg-teal/5" : "border-line"}`}
+            style={{ animationDelay: `${delay}ms` }}
+        >
             <p className="text-xs text-ash mb-1">{label}</p>
-            <p className={`text-xl font-medium ${mono ? "price" : "font-display"}`}>{value}</p>
+            <p className={`text-xl font-medium ${mono ? "price" : "font-display"} ${highlight ? "text-teal" : ""}`}>{value}</p>
         </div>
     );
 }

@@ -13,7 +13,7 @@ export default function RatingBreakdown({ breakdown, reviewCount }) {
                         <span className="w-8 shrink-0">{star} ★</span>
                         <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-mango rounded-full"
+                                className="h-full bg-mango rounded-full transition-[width] duration-700 ease-out"
                                 style={{ width: `${pct}%` }}
                             />
                         </div>

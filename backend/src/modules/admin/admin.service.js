@@ -87,15 +87,12 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     const productMediaUrls = await adminRepository.findProductMediaUrls(neverOrderedProductIds);
 
     const connection = await db.getConnection();
+    let hardDeleted = false;
 
     try {
         await connection.beginTransaction();
 
         await adminRepository.deleteAccountVerificationDocuments(userId, connection);
-
-        if (sellerAssets) {
-            await adminRepository.scrubSellerProfile(userId, connection);
-        }
 
         await adminRepository.deleteProducts(neverOrderedProductIds, connection);
         await adminRepository.deleteSellerCollections(userId, connection);
@@ -115,7 +112,35 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         await adminRepository.deleteDeliveryOffersForAgent(userId, connection);
         await adminRepository.tombstoneSentMessages(userId, connection);
 
-        await adminRepository.scrubUserPII(userId, connection);
+        // Everything above was always safe to remove outright regardless
+        // of the account's history. What's left pointing at this row
+        // without ON DELETE CASCADE - orders, order_items (as seller),
+        // payments, reviews, disputes, refunds, delivery_ratings,
+        // deliveries (as agent), wallet/withdrawal/earnings history,
+        // sponsorship-style campaigns, conversations/messages (as
+        // sender, even tombstoned) - is exactly the financial/legal/
+        // other-party record set migration 057 documents. Rather than
+        // re-deriving that table list by hand (and risking missing one),
+        // ask MySQL directly: try an actual `DELETE FROM users`, inside a
+        // SAVEPOINT so a blocked delete rolls back to exactly this point
+        // without losing the cleanup already done above. If it succeeds,
+        // the account (and, via ON DELETE CASCADE, its seller_profiles
+        // row) is genuinely gone - true full removal, not a tombstone.
+        hardDeleted = await adminRepository.attemptHardDeleteUser(userId, connection);
+
+        if (!hardDeleted) {
+            // Blocked - this account has real order/review/dispute/
+            // financial/message history other people's records depend
+            // on, so the row has to survive as an anonymized tombstone
+            // instead (see admin.repository.js#scrubUserPII, which also
+            // sets is_active = FALSE and deleted_at so the account stops
+            // showing up as "Active" in the regular Users list).
+            if (sellerAssets) {
+                await adminRepository.scrubSellerProfile(userId, connection);
+            }
+
+            await adminRepository.scrubUserPII(userId, connection);
+        }
 
         await connection.commit();
 
@@ -142,10 +167,11 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     auditService.log({
         userId: actorAdminId,
         eventType: "account_permanently_deleted",
-        description: `Admin permanently deleted account #${userId}`,
+        description: `Admin permanently deleted account #${userId}${hardDeleted ? " (fully removed)" : " (anonymized - order/review/financial history retained)"}`,
         metadata: {
             target_user_id: Number(userId),
             role: user.role,
+            hard_deleted: hardDeleted,
             products_deleted: neverOrderedProductIds.length,
             cloudinary_assets_deleted:
                 verificationDocUrls.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
@@ -163,8 +189,8 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         category: "account",
         severity: user.role === "admin" ? "critical" : "warning",
         title: user.role === "admin" ? "Admin account permanently deleted" : "Account permanently deleted",
-        message: `${user.first_name} ${user.last_name} (${user.email}, ${user.role}) was permanently deleted by an admin.`,
-        metadata: { role: user.role, target_user_id: Number(userId) },
+        message: `${user.first_name} ${user.last_name} (${user.email}, ${user.role}) was permanently deleted by an admin${hardDeleted ? "" : " (order/review history retained; account anonymized)"}.`,
+        metadata: { role: user.role, target_user_id: Number(userId), hard_deleted: hardDeleted },
         relatedUserId: userId
     });
 
@@ -174,6 +200,8 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
             failedDeletes
         );
     }
+
+    return { hardDeleted };
 };
 
 // Suspend/Unsuspend (Phase 1 of the Admin Account Control plan) - replaces

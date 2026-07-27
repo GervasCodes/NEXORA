@@ -17,11 +17,29 @@ process.env.SELCOM_WEBHOOK_SECRET = process.env.SELCOM_WEBHOOK_SECRET || "test-s
 process.env.SNIPPE_SECRET_KEY = process.env.SNIPPE_SECRET_KEY || "test-snippe-secret-key";
 process.env.SNIPPE_WEBHOOK_SECRET = process.env.SNIPPE_WEBHOOK_SECRET || "test-snippe-webhook-secret";
 
-// DB env vars - never actually connected to in tests (config/db.js's pool
-// is always jest.mock()'d before use), but mysql2.createPool() reads these
-// synchronously at require-time, so they need to exist to avoid a warning.
+// DB env vars - for the mocked suite (jest.config.js) these are never
+// actually connected to (config/db.js's pool is always jest.mock()'d
+// before use) and only need to exist to avoid a mysql2.createPool()
+// warning at require-time. For the real-database suite
+// (jest.db.config.js / tests/db-integration/**) these ARE the real
+// connection details - see docker-compose.test.yml for the matching
+// disposable MySQL container this points at.
 process.env.DB_HOST = process.env.DB_HOST || "localhost";
 process.env.DB_PORT = process.env.DB_PORT || "3306";
 process.env.DB_USER = process.env.DB_USER || "test";
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || "test";
 process.env.DB_NAME = process.env.DB_NAME || "nexora_test";
+
+// Always force SSL off for the test DB, regardless of what's already in
+// the environment. Without this, db.js's later require("dotenv").config()
+// call fills these in from the real backend/.env (which has DB_SSL=true
+// for the managed cloud DB) since dotenv never overrides a key that's
+// already set - and setupEnv.js was setting DB_HOST/USER/PASSWORD/NAME
+// but not the SSL vars, so they leaked through. The local Docker MySQL
+// container doesn't support TLS, so that leak produced "Server does not
+// support secure connection". Setting all three here (including as
+// empty strings) pre-empts dotenv from ever filling them in.
+process.env.DB_SSL = "false";
+process.env.DB_SSL_REJECT_UNAUTHORIZED = "false";
+process.env.DB_SSL_CA_PATH = "";
+process.env.DB_SSL_CA = "";

@@ -55,6 +55,27 @@ export default function OrderDetail() {
     useEffect(load, [id]);
 
     
+    // Polls GET /orders/:id a few times as a fallback for the "payment:updated"
+    // socket event below, in case the buyer's socket was still reconnecting
+    // (e.g. right after a Snippe/PayPal redirect back into the app) when the
+    // provider's webhook actually landed. Never declares failure on its own -
+    // a timeout just means "still waiting", not "it failed".
+    const pollForPaymentConfirmation = (attempt = 0) => {
+        api.get(`/orders/${id}`).then(({ data }) => {
+            const fresh = data.data;
+            if (fresh.payment_status === "paid") {
+                setOrder(fresh);
+                setActionMessage("Payment successful.");
+                return;
+            }
+            if (attempt < 6) {
+                setTimeout(() => pollForPaymentConfirmation(attempt + 1), 3000);
+            } else {
+                setActionMessage("We're still confirming your payment - this can take a minute. Refresh to check the latest status.");
+            }
+        }).catch(() => {});
+    };
+
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const payment = params.get("payment");
@@ -69,7 +90,13 @@ export default function OrderDetail() {
                 return;
             }
             api.post("/payments/paypal/capture", { paypalOrderId })
-                .then(() => setActionMessage("Payment successful."))
+                .then(({ data }) => {
+                    if (data.data?.success) {
+                        setActionMessage("Payment successful.");
+                    } else {
+                        setActionError("Payment was not completed. Please try again.");
+                    }
+                })
                 .catch((err) => setActionError(extractErrorMessage(err)))
                 .finally(() => {
                     load();
@@ -77,8 +104,14 @@ export default function OrderDetail() {
                 });
 
         } else if (payment === "success") {
-            setActionMessage("Payment successful.");
+            // The redirect only means the buyer finished the checkout step on
+            // Snippe's side - the actual confirmation is the provider's
+            // webhook, which may not have landed yet. Show a pending state
+            // and wait for either the socket event or the poll fallback
+            // below to confirm it before saying "successful".
+            setActionMessage("Confirming your payment…");
             load();
+            pollForPaymentConfirmation();
             cleanUrl();
 
         } else if (payment === "cancelled") {
@@ -89,6 +122,24 @@ export default function OrderDetail() {
     }, [location.search]);
 
     const { socket, connected } = useSocket();
+
+    // Live confirmation from the backend once the provider's webhook is
+    // actually processed - covers mobile money (buyer stays on this page
+    // entering their PIN) as well as being the fastest path for the Snippe/
+    // PayPal redirect flows above.
+    useEffect(() => {
+        if (!socket || !connected) return;
+
+        const handlePaymentUpdated = (payload) => {
+            if (Number(payload.orderId) !== Number(id)) return;
+            load();
+            setActionMessage(payload.success ? "Payment successful." : "");
+            setActionError(payload.success ? "" : "Payment could not be confirmed. Please try again.");
+        };
+
+        socket.on("payment:updated", handlePaymentUpdated);
+        return () => socket.off("payment:updated", handlePaymentUpdated);
+    }, [socket, connected, id]);
 
     useEffect(() => {
         if (!socket || !connected || order?.is_parent) return;
@@ -136,12 +187,34 @@ export default function OrderDetail() {
         }
     };
 
+    const handleConfirmReceipt = async () => {
+        setBusy(true);
+        setActionError("");
+        try {
+            const { data } = await api.put(`/payments/${id}/confirm-receipt`);
+            setActionMessage(
+                data.data?.paymentConfirmed
+                    ? "Receipt confirmed - Cash on Delivery payment recorded. Thank you!"
+                    : "Receipt confirmed. Thank you!"
+            );
+            load();
+        } catch (err) {
+            setActionError(extractErrorMessage(err));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const handleRetryPayment = async () => {
         setBusy(true);
         setActionError("");
         try {
-            await api.post(`/payments/${id}/initiate`);
-            setActionMessage("Payment completed.");
+            // Sending the USSD prompt only means the buyer can now enter
+            // their PIN - it is not confirmation the payment went through.
+            // The actual result arrives later via the "payment:updated"
+            // socket listener above once the provider's webhook lands.
+            const { data } = await api.post(`/payments/${id}/initiate`);
+            setActionMessage(data.message || "Check your phone to complete the payment.");
             load();
         } catch (err) {
             setActionError(extractErrorMessage(err));
@@ -216,6 +289,9 @@ export default function OrderDetail() {
                     <p className="capitalize font-medium">
                         {order.payment_status} · {order.payment_method.replace("_", " ")}
                     </p>
+                    {order.buyer_confirmed_at && (
+                        <p className="text-xs text-teal mt-0.5">Receipt confirmed {formatDate(order.buyer_confirmed_at)}</p>
+                    )}
                 </div>
                 <div className="col-span-2">
                     <p className="text-ash mb-0.5">Delivering to</p>
@@ -330,6 +406,12 @@ export default function OrderDetail() {
                     <button onClick={handleCancel} disabled={busy}
                         className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
                         Cancel order
+                    </button>
+                )}
+                {!order.is_parent && order.status === "delivered" && !order.buyer_confirmed_at && (
+                    <button onClick={handleConfirmReceipt} disabled={busy}
+                        className="bg-teal text-white px-5 py-2.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-60">
+                        {busy ? "Confirming…" : order.payment_method === "cash_on_delivery" ? "Confirm Receipt & Cash Payment" : "Confirm Receipt"}
                     </button>
                 )}
                 {delivery?.agent_id && (

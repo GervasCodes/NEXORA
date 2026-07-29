@@ -116,6 +116,226 @@ exports.creditSellersForOrder = async (orderId) => {
     }
 };
 
+// ---- Bookings (Phase 3 - Financial Integration) ----------------------------
+// Called once a booking's payment is confirmed (payment.service.js's
+// booking-payment webhook handler). Mirrors creditSellersForOrder above
+// almost exactly - the one real difference is that a booking never splits
+// across multiple providers the way a multi-vendor order splits across
+// sellers (bookings.provider_id is a single snapshot of services.provider_id
+// - see 063's design notes), so there's no bySeller grouping map here, just
+// one provider credited from every uncredited booking_items row.
+//
+// Escrow: every booking payment goes through a platform-captured gateway
+// (mobile money / Snippe / PayPal) - there's no Cash-on-Delivery-shaped
+// concept for a service, so unlike creditSellersForOrder there's no
+// isEscrowed branch here at all; a provider's earnings always land in
+// held_balance and wait for releaseEligibleBookingEarnings below.
+exports.creditProvidersForBooking = async (bookingId) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const items = await walletRepository.findUncreditedItemsByBooking(bookingId, connection);
+
+        if (items.length === 0) {
+            await connection.commit();
+            return;
+        }
+
+        const commissionRate = await settingsService.getCommissionRate();
+        const providerId = items[0].provider_id;
+        let netTotal = 0;
+
+        for (const item of items) {
+            const subtotal = Number(item.subtotal);
+            const commissionAmount = Number((subtotal * (commissionRate / 100)).toFixed(2));
+            const netAmount = Number((subtotal - commissionAmount).toFixed(2));
+
+            await walletRepository.markBookingItemCredited(
+                item.id, commissionRate, commissionAmount, netAmount, false, connection
+            );
+
+            netTotal = Number((netTotal + netAmount).toFixed(2));
+        }
+
+        await walletRepository.ensureWallet(providerId, connection);
+        await walletRepository.getWalletForUpdate(providerId, connection);
+
+        const heldAfter = await walletRepository.incrementHeldBalance(providerId, netTotal, connection);
+
+        await walletRepository.insertTransaction({
+            sellerId: providerId,
+            type: "credit",
+            amount: netTotal,
+            balanceAfter: heldAfter,
+            referenceType: "booking",
+            referenceId: bookingId,
+            description: `Booking earnings for booking #${bookingId} held pending release (${commissionRate}% platform commission deducted)`
+        }, connection);
+
+        await connection.commit();
+
+        notificationService.notify({
+            userId: providerId,
+            type: "wallet_credit",
+            titleKey: "notifications.wallet.credited.title",
+            messageKey: "notifications.wallet.credited.message",
+            messageParams: { orderId: bookingId },
+            withEmail: false
+        }).catch((err) => console.error("provider wallet credit notify error:", err));
+
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+
+    } finally {
+        connection.release();
+    }
+};
+
+// Shared release mechanics for one already-fetched set of booking_items
+// rows - used by both the scheduled release job (platform-wide scan) and
+// the admin manual early-release action (one booking's items). No
+// dispute-freeze branch here (unlike releaseItems for orders above) since
+// there's no dispute system for bookings yet - see migration 064's design
+// notes - so every eligible item is a plain release.
+const releaseBookingItems = async (items) => {
+    const summary = { released: 0, amountReleased: 0 };
+    if (items.length === 0) {
+        return summary;
+    }
+
+    const releasedProviderIds = new Set();
+
+    for (const item of items) {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            await walletRepository.ensureWallet(item.provider_id, connection);
+            await walletRepository.getWalletForUpdate(item.provider_id, connection);
+
+            const netAmount = Number(item.provider_net_amount);
+            await walletRepository.incrementHeldBalance(item.provider_id, -netAmount, connection);
+            const balanceAfter = await walletRepository.incrementBalance(item.provider_id, netAmount, connection);
+            await walletRepository.markBookingItemReleased(item.id, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId: item.provider_id,
+                type: "credit",
+                amount: netAmount,
+                balanceAfter,
+                referenceType: "escrow_release",
+                referenceId: item.booking_id,
+                description: `Held earnings released for booking #${item.booking_id}`
+            }, connection);
+
+            await connection.commit();
+
+            summary.released += 1;
+            summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
+            releasedProviderIds.add(item.provider_id);
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    }
+
+    for (const providerId of releasedProviderIds) {
+        notificationService.notify({
+            userId: providerId,
+            type: "wallet_release",
+            titleKey: "notifications.wallet.released.title",
+            messageKey: "notifications.wallet.released.message",
+            withEmail: false
+        }).catch((err) => console.error("provider wallet release notify error:", err));
+    }
+
+    return summary;
+};
+
+// Called by jobs/escrowRelease.job.js alongside releaseEligibleEarnings -
+// scans every held, credited, unreleased booking_items row whose booking
+// is completed and past settings.escrow_hold_days (the same admin-tunable
+// window orders use - see migration 064's design notes on reusing it
+// as-is), and releases it.
+exports.releaseEligibleBookingEarnings = async () => {
+    const holdDays = await settingsService.getEscrowHoldDays();
+    const items = await walletRepository.findReleasableBookingItems(holdDays);
+    return releaseBookingItems(items);
+};
+
+// Admin manual early release for one booking - the booking equivalent of
+// releaseOrderEarnings below. Bypasses the completed/hold-days timing gate.
+exports.releaseBookingEarnings = async (bookingId) => {
+    const items = await walletRepository.findReleasableBookingItemsForBooking(bookingId);
+    if (items.length === 0) {
+        throw new Error("No held earnings are eligible for release on this booking");
+    }
+    return releaseBookingItems(items);
+};
+
+// Called from booking.service.js#cancelBooking when a paid booking is
+// cancelled - the booking equivalent of dispute.service.js's
+// reverseSellerEarnings (module-private there; exported here since a
+// booking cancellation has no dispute row to hang the reversal off of).
+// Reverses held_balance first, then balance if the held amount alone
+// isn't enough (mirrors that same held-then-balance order exactly, for
+// the same reason: a booking's earnings may have already been released
+// into balance by the time a late cancellation happens).
+exports.reverseProviderEarningsForBooking = async (providerId, amount, bookingId) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        await walletRepository.ensureWallet(providerId, connection);
+        const wallet = await walletRepository.getWalletForUpdate(providerId, connection);
+
+        const heldReversal = Math.min(amount, Math.max(Number(wallet.held_balance), 0));
+        const balanceReversal = Number((amount - heldReversal).toFixed(2));
+
+        if (heldReversal > 0) {
+            const heldAfter = await walletRepository.incrementHeldBalance(providerId, -heldReversal, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId: providerId,
+                type: "debit",
+                amount: heldReversal,
+                balanceAfter: heldAfter,
+                referenceType: "booking",
+                referenceId: bookingId,
+                description: `Refund issued for booking #${bookingId} - held earnings reversed`
+            }, connection);
+        }
+
+        if (balanceReversal > 0) {
+            const balanceAfter = await walletRepository.incrementBalance(providerId, -balanceReversal, connection);
+
+            await walletRepository.insertTransaction({
+                sellerId: providerId,
+                type: "debit",
+                amount: balanceReversal,
+                balanceAfter,
+                referenceType: "booking",
+                referenceId: bookingId,
+                description: `Refund issued for booking #${bookingId} - earnings reversed`
+            }, connection);
+        }
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 exports.getWalletSummary = async (sellerId) => {
     await walletRepository.ensureWallet(sellerId);
     const wallet = await walletRepository.getWallet(sellerId);

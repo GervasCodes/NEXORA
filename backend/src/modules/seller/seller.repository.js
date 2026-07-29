@@ -71,6 +71,20 @@ exports.update = async (userId, data) => {
     );
 };
 
+// Nexora Services Phase 1 - Merchant Type System (migration 062). A
+// dedicated setter rather than folding merchant_type into the generic
+// `allowed` list on update() above: this is a deliberate account-level
+// decision (unlocks/locks the whole Services module of the dashboard),
+// not a casual profile-field edit, so it gets its own explicit
+// service-layer entry point - same reasoning payVerificationFee has its
+// own endpoint instead of living in updateSellerValidation.
+exports.setMerchantType = async (userId, merchantType) => {
+    await db.query(
+        "UPDATE seller_profiles SET merchant_type = ? WHERE user_id = ?",
+        [merchantType, userId]
+    );
+};
+
 exports.updateLogo = async (userId, logoUrl) => {
     await db.query(
         "UPDATE seller_profiles SET store_logo = ? WHERE user_id = ?",

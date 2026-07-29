@@ -298,3 +298,29 @@ exports.confirmVerificationFeePaid = async (userId, amount, transactionReference
 };
 
 exports.syncBadgeForSeller = syncBadge;
+
+// Nexora Services Phase 1 - Merchant Type System. A seller opts into
+// Services (or both) here; existing 'product' sellers are completely
+// unaffected until they call this themselves (CHANGES.md's Registration
+// Flow Step 3/4, applied post-registration rather than only at signup so
+// existing sellers can opt in later too). No approval/verification gate
+// on the switch itself - requireServiceProvider.middleware.js is what
+// actually unlocks the Services endpoints, and that already requires an
+// approved seller account underneath it.
+const MERCHANT_TYPES = ["product", "service", "hybrid"];
+
+exports.setMerchantType = async (userId, merchantType) => {
+    const seller = await sellerRepository.findByUserId(userId);
+
+    if (!seller) {
+        throw new Error("Seller profile not found. Set up your store first.");
+    }
+
+    if (!MERCHANT_TYPES.includes(merchantType)) {
+        throw new Error("Invalid merchant type.");
+    }
+
+    await sellerRepository.setMerchantType(userId, merchantType);
+
+    return { merchantType };
+};

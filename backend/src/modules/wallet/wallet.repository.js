@@ -158,6 +158,77 @@ exports.markItemReleased = async (itemId, executor = db) => {
     );
 };
 
+// ---- Booking items (Phase 3 - Financial Integration) -----------------------
+// Byte-for-byte the same shape as the order_items functions above, against
+// booking_items/bookings instead - see migration 064's design notes for why
+// this is a parallel set rather than a generic "order OR booking" parameter
+// threaded through the order-side functions (bookings' provider_id/
+// booking_items columns are named for this domain, not reused column names).
+
+exports.findUncreditedItemsByBooking = async (bookingId, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT bi.id, b.provider_id, bi.subtotal
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
+        WHERE bi.booking_id = ? AND bi.wallet_credited = FALSE
+        FOR UPDATE`,
+        [bookingId]
+    );
+    return rows;
+};
+
+exports.markBookingItemCredited = async (itemId, commissionRate, commissionAmount, netAmount, released, executor = db) => {
+    await executor.query(
+        `UPDATE booking_items
+        SET commission_rate = ?, commission_amount = ?, provider_net_amount = ?,
+            wallet_credited = TRUE, wallet_released = ?
+        WHERE id = ?`,
+        [commissionRate, commissionAmount, netAmount, released, itemId]
+    );
+};
+
+// The set the booking escrow release scan needs: items credited (held)
+// but not yet released, whose booking has actually completed, and whose
+// completion happened at least `holdDays` ago. There's no dispute system
+// for bookings (see migration 064), so - unlike findReleasableItems for
+// orders - this is the whole eligibility check, not just the timing half;
+// wallet.service.js#releaseEligibleBookingEarnings applies no further
+// freeze rule on top.
+exports.findReleasableBookingItems = async (holdDays, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT bi.id, bi.booking_id, b.provider_id, bi.provider_net_amount
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
+        WHERE bi.wallet_credited = TRUE
+            AND bi.wallet_released = FALSE
+            AND b.status = 'completed'
+            AND b.updated_at <= (NOW() - INTERVAL ? DAY)`,
+        [Number(holdDays)]
+    );
+    return rows;
+};
+
+// Every not-yet-released, credited item for one booking, regardless of
+// completion status or hold-day timing - backs the admin manual
+// early-release action, same reasoning as findReleasableItemsForOrder.
+exports.findReleasableBookingItemsForBooking = async (bookingId, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT bi.id, bi.booking_id, b.provider_id, bi.provider_net_amount
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
+        WHERE bi.booking_id = ? AND bi.wallet_credited = TRUE AND bi.wallet_released = FALSE`,
+        [bookingId]
+    );
+    return rows;
+};
+
+exports.markBookingItemReleased = async (itemId, executor = db) => {
+    await executor.query(
+        "UPDATE booking_items SET wallet_released = TRUE WHERE id = ?",
+        [itemId]
+    );
+};
+
 // ---- Withdrawal requests ----------------------------------------------------
 
 exports.createWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, executor = db) => {

@@ -1,5 +1,6 @@
 const paymentRepository = require("./payment.repository");
 const orderRepository = require("../order/order.repository");
+const bookingRepository = require("../booking/booking.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
 const snippeProvider = require("./providers/snippe.provider");
 const paypalProvider = require("./providers/paypal.provider");
@@ -117,17 +118,153 @@ exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
     };
 };
 
+// ---- Booking payments (Phase 3 - Financial Integration) --------------------
+// Follow initiateVerificationFeePayment's shape, not the order-payment
+// functions' - see migration 064's design notes: a booking has no
+// predetermined payment_method column to validate against (unlike
+// orders.payment_method, chosen once at checkout), so any of these three
+// can be called for the same booking until one actually succeeds.
+
+exports.initiateMobileMoneyBookingPayment = async (bookingId, buyerId, phone) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.customer_id !== buyerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (booking.payment_status === "paid") {
+        throw new Error("This booking has already been paid");
+    }
+
+    if (!phone) {
+        throw new Error("A phone number is required to pay by mobile money");
+    }
+
+    const existingPending = await paymentRepository.findPendingBookingPayment(bookingId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createBookingPayment(bookingId, booking.amount, "mobile_money");
+
+    const reference = `BOOKING-${bookingId}`;
+
+    let providerResult;
+    try {
+        providerResult = await mobileMoneyProvider.initiate(phone, booking.amount, {
+            reference,
+            description: `NEXORA booking ${booking.booking_reference}`
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        throw error;
+    }
+
+    if (!providerResult.success) {
+        await paymentRepository.markFailed(paymentId);
+        throw new Error("Payment could not be initiated. Please try again");
+    }
+
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+
+    return {
+        status: "pending",
+        message: "Check your phone to complete the payment.",
+        transactionReference: providerResult.transactionReference
+    };
+};
+
+exports.initiateSnippeBookingPayment = async (bookingId, buyerId, { successUrl, cancelUrl }) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.customer_id !== buyerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (booking.payment_status === "paid") {
+        throw new Error("This booking has already been paid");
+    }
+
+    const existingPending = await paymentRepository.findPendingBookingPayment(bookingId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createBookingPayment(bookingId, booking.amount, "snippe");
+
+    const reference = `BOOKING-${bookingId}`;
+
+    const session = await snippeProvider.createCheckoutSession({
+        amountTzs: booking.amount,
+        reference,
+        description: `NEXORA booking ${booking.booking_reference}`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+exports.initiatePaypalBookingPayment = async (bookingId, buyerId, { returnUrl, cancelUrl }) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.customer_id !== buyerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (booking.payment_status === "paid") {
+        throw new Error("This booking has already been paid");
+    }
+
+    const existingPending = await paymentRepository.findPendingBookingPayment(bookingId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createBookingPayment(bookingId, booking.amount, "paypal");
+
+    const usdExchangeRate = await settingsService.getUsdExchangeRate();
+    const reference = `BOOKING-${bookingId}`;
+
+    const result = await paypalProvider.createOrder({
+        amountTzs: booking.amount,
+        usdExchangeRate,
+        reference,
+        description: `NEXORA booking ${booking.booking_reference}`,
+        returnUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, result.paypalOrderId);
+
+    return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
+};
+
+exports.getBookingPayment = async (bookingId, userId) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || (booking.customer_id !== userId && booking.provider_id !== userId)) {
+        throw new Error("Booking not found");
+    }
+
+    const payment = await paymentRepository.findByBookingId(bookingId);
+
+    if (!payment) {
+        throw new Error("No payment record for this booking yet");
+    }
+
+    return payment;
+};
+
 // Called by payment.controller's webhook handlers once MalipoPay/Selcom/
 // Snippe confirm the buyer/seller actually completed (or failed/cancelled)
 // the payment on their end, or by the PayPal capture flow once we've
 // confirmed a capture server-side. `providerReference` is the reference WE
 // sent when initiating the payment: "ORDER-42" for order payments,
-// "VERIFY-7" for a seller's verification fee - see the two `reference`
-// values above. `chargedCurrency`/`chargedAmount` are only passed for
-// foreign-currency gateways (PayPal) - see migration 028.
+// "VERIFY-7" for a seller's verification fee, "BOOKING-15" for a booking
+// payment (Phase 3) - see the `reference` values above/in the order
+// functions further down. `chargedCurrency`/`chargedAmount` are only
+// passed for foreign-currency gateways (PayPal) - see migration 028.
 exports.handleProviderWebhook = async ({ providerReference, success, transactionReference, chargedCurrency, chargedAmount }) => {
     const orderMatch = /^ORDER-(\d+)$/.exec(providerReference || "");
     const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
+    const bookingMatch = /^BOOKING-(\d+)$/.exec(providerReference || "");
 
     if (orderMatch) {
         return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
@@ -137,7 +274,135 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
         return exports._handleVerificationFeeWebhook(Number(verifyMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
+    if (bookingMatch) {
+        return exports._handleBookingPaymentWebhook(Number(bookingMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
+    }
+
     throw new Error(`Unrecognized payment reference: ${providerReference}`);
+};
+
+// The booking equivalent of _handleOrderPaymentWebhook below - much
+// simpler since a booking has exactly one provider (no parent/child
+// split to propagate payment_status across - see 063's design notes) and
+// always goes through escrow (no Cash-on-Delivery-shaped path for a
+// service - see walletService.creditProvidersForBooking).
+exports._handleBookingPaymentWebhook = async (bookingId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
+    const payment = await paymentRepository.findByBookingId(bookingId);
+
+    if (!payment) {
+        throw new Error(`No payment record found for booking #${bookingId}`);
+    }
+
+    if (payment.status === "completed" || payment.status === "failed") {
+        return { alreadyProcessed: true };
+    }
+
+    if (!success) {
+        await paymentRepository.markFailed(payment.id);
+        auditService.log({
+            eventType: "payment_processed",
+            description: `Payment failed for booking #${bookingId}`,
+            metadata: { bookingId, success: false, transactionReference }
+        });
+        return { bookingId, success: false };
+    }
+
+    const receiptNumber = generateReceiptNumber();
+
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
+    await bookingRepository.updatePaymentStatus(bookingId, "paid");
+
+    const booking = await bookingRepository.findById(bookingId);
+
+    walletService.creditProvidersForBooking(bookingId).catch((err) =>
+        console.error("Provider wallet credit error:", err)
+    );
+
+    if (booking) {
+        const notificationService = require("../notification/notification.service");
+
+        notificationService.notify({
+            userId: booking.customer_id,
+            type: "booking_payment",
+            title: "Payment received",
+            message: `Your payment for booking ${booking.booking_reference} was received.`,
+            url: `/bookings/${bookingId}`
+        }).catch((err) => console.error("booking payment notify error:", err));
+
+        notificationService.notify({
+            userId: booking.provider_id,
+            type: "booking_payment",
+            title: "Payment received",
+            message: `Payment for booking ${booking.booking_reference} has been received and is held in escrow.`,
+            url: `/seller/bookings/${bookingId}`
+        }).catch((err) => console.error("booking payment notify error:", err));
+
+        const socketModule = require("../../socket/socket");
+        socketModule.emitToUser(booking.customer_id, "payment:updated", {
+            bookingId, success: true, paymentStatus: "paid", receiptNumber
+        });
+    }
+
+    auditService.log({
+        eventType: "payment_processed",
+        description: `Payment completed for booking #${bookingId}`,
+        metadata: { bookingId, success: true, transactionReference, receiptNumber, chargedCurrency, chargedAmount }
+    });
+
+    return { bookingId, success: true, receiptNumber };
+};
+
+// Best-effort online refund for a paid booking that's being cancelled
+// (booking.service.js#cancelBooking) - not tied to a dispute row, unlike
+// refund.service.js's dispute-triggered refunds (there is no dispute
+// system for bookings - see migration 064's design notes), so this calls
+// the same provider refund APIs refund.service.js's callProvider already
+// wraps, directly, without the retry/audit/refunds-table machinery built
+// around the disputes flow. Fire-and-forget from the caller's point of
+// view is NOT appropriate here (the booking's own status/refund outcome
+// depends on this), so this is awaited and its result returned as-is.
+exports.refundBookingPayment = async (bookingId, amount) => {
+    const payment = await paymentRepository.findByBookingId(bookingId);
+
+    if (!payment || payment.status !== "completed") {
+        return { success: false, error: "No completed payment found for this booking" };
+    }
+
+    if (payment.method === "mobile_money") {
+        const booking = await bookingRepository.findById(bookingId);
+        // Bookings don't carry a phone column of their own (see 063) - the
+        // buyer's phone was only ever collected transiently, at the moment
+        // they called initiateMobileMoneyBookingPayment, and isn't
+        // persisted anywhere this refund path can read it back from.
+        return { success: false, error: "Mobile money booking refunds need the buyer's phone number - please process this refund manually", requiresManualHandling: true, booking };
+    }
+
+    if (payment.method === "snippe") {
+        if (!payment.transaction_reference) {
+            return { success: false, error: "Payment has no Snippe transaction reference on file" };
+        }
+        const result = await snippeProvider.refundPayment({
+            transactionReference: payment.transaction_reference,
+            amountTzs: amount,
+            reason: `booking_${bookingId}_cancelled`
+        });
+        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
+    }
+
+    if (payment.method === "paypal") {
+        if (!payment.transaction_reference) {
+            return { success: false, error: "Payment has no PayPal capture id on file" };
+        }
+        const isFullRefund = Number(amount) >= Number(payment.amount);
+        const amountUsd = isFullRefund || !payment.charged_amount
+            ? null
+            : Number(((Number(amount) / Number(payment.amount)) * Number(payment.charged_amount)).toFixed(2));
+
+        const result = await paypalProvider.refundCapture(payment.transaction_reference, amountUsd);
+        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
+    }
+
+    return { success: false, error: `No automatic refund path for payment method "${payment.method}"` };
 };
 
 exports._handleOrderPaymentWebhook = async (orderId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
@@ -411,9 +676,13 @@ exports.capturePaypalPayment = async (paypalOrderId) => {
     if (!reference) {
         const payment = await paymentRepository.findByTransactionReference(paypalOrderId);
         if (payment) {
-            reference = payment.purpose === "seller_verification_fee"
-                ? `VERIFY-${payment.seller_id}`
-                : `ORDER-${payment.order_id}`;
+            if (payment.purpose === "seller_verification_fee") {
+                reference = `VERIFY-${payment.seller_id}`;
+            } else if (payment.purpose === "booking_payment") {
+                reference = `BOOKING-${payment.booking_id}`;
+            } else {
+                reference = `ORDER-${payment.order_id}`;
+            }
         }
     }
 

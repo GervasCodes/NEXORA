@@ -29,6 +29,10 @@ map of what exists and where, not a full OpenAPI spec.
 | Seller department sponsorship | `/seller/department-sponsorship` | `modules/departmentSponsorship/departmentSponsorship.routes.js` |
 | Products | `/products` | `modules/product/product.routes.js` |
 | Categories | `/categories` | `modules/category/category.routes.js` |
+| Service categories | `/service-categories` | `modules/serviceCategory/serviceCategory.routes.js` |
+| Services | `/services` | `modules/service/service.routes.js` |
+| Availability | `/services/:serviceId/availability` | `modules/availability/availability.routes.js` |
+| Bookings | `/bookings` | `modules/booking/booking.routes.js` |
 | Store types | `/store-types` | `modules/storeType/storeType.routes.js` |
 | Stores (public storefront) | `/stores` | `modules/store/store.routes.js` |
 | Cart | `/cart` | `modules/cart/cart.routes.js` |
@@ -87,6 +91,7 @@ map of what exists and where, not a full OpenAPI spec.
 | DELETE | `/collections/:id/products/:productId` | Remove a product from a collection |
 | GET | `/analytics` | Seller sales/analytics dashboard |
 | POST | `/verification/fee` | Pay the Verified Seller badge fee (Phase 7D) |
+| PUT | `/merchant-type` | Set `product` / `service` / `hybrid` (Nexora Services Phase 1) |
 
 Sub-modules mounted under `/seller/*`: `sponsorship`, `featured-store`,
 `department-sponsorship` — each exposes the same shape:
@@ -125,6 +130,71 @@ category-scoped ones — featured store and department sponsorship).
 | PUT | `/:id` | Update category (admin) |
 | PUT | `/:id/deactivate` | Deactivate (admin) |
 | PUT | `/:id/activate` | Reactivate (admin) |
+
+## Service categories — `/service-categories` (Nexora Services Phase 1)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/` | Public category list |
+| GET | `/browse` | Category grid with live listing counts |
+| GET | `/:slug` | Single category incl. listing count |
+| GET | `/admin/all` | Full list incl. inactive (admin) |
+| POST | `/:id/cover` | Upload category cover image (admin) |
+| POST | `/` | Create category (admin) |
+| PUT | `/:id` | Update category (admin) |
+| PUT | `/:id/deactivate` | Deactivate (admin) |
+| PUT | `/:id/activate` | Reactivate (admin) |
+
+## Services — `/services` (Nexora Services Phase 1)
+
+Provider-side routes require an approved seller account whose
+`merchant_type` is `service` or `hybrid` (`requireServiceProvider`
+middleware — see `PUT /seller/merchant-type` above).
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/` | Public listing search (category/city/price filters, `sort`: newest/price_low/price_high, pagination) |
+| GET | `/:slug` | Public service detail incl. media |
+| POST | `/` | Create a service listing (provider, starts as `draft`) |
+| POST | `/:id/images` | Upload service image |
+| POST | `/:id/videos` | Upload service video (max 3 per listing) |
+| GET | `/mine/list` | Own listings incl. drafts (provider) |
+| GET | `/mine/:id` | Own listing detail (provider) |
+| PUT | `/:id` | Update listing |
+| PUT | `/:id/publish` | Publish (requires at least one photo) |
+| PUT | `/:id/unpublish` | Move back to draft |
+| PUT | `/:id/deactivate` | Deactivate |
+| PUT | `/:id/activate` | Reactivate |
+
+## Availability — `/services/:serviceId/availability` (Nexora Services Phase 2)
+
+A service isn't bookable on a date until its provider explicitly opens
+that date — there's no implicit/unlimited inventory.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/` | Public: per-date availability + effective price across a `start_date`/`end_date` range |
+| PUT | `/` | Provider: bulk-set `available_units`/`price`/`status` across a date range in one call |
+
+## Bookings — `/bookings` (Nexora Services Phase 2/3)
+
+A created booking sits at `status: pending, payment_status: unpaid` until
+paid — see `/payments` below (Phase 3, Financial Integration) for how a
+booking actually gets paid for and escrowed.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/` | Buyer: create a booking (checks + decrements availability transactionally) |
+| GET | `/mine` | Buyer: own bookings |
+| GET | `/provider/mine` | Provider: bookings on their services |
+| GET | `/:id` | Detail — accessible by either the booking's customer or provider |
+| PUT | `/:id/confirm` | Provider: `pending` → `confirmed` |
+| PUT | `/:id/cancel` | Either party: cancels a `pending`/`confirmed` booking, restores availability. If the booking was already paid, this reverses the provider's escrowed earnings and attempts an online refund, landing the booking on `refunded` instead of `cancelled` (Phase 3) |
+
+`confirmed` → `active` → `completed` transitions happen automatically as
+a paid booking's dates pass (`jobs/bookingLifecycle.job.js`, Phase 3) —
+there's no manual "complete" endpoint, since a booking's service
+delivery is inherently date-driven.
 
 ## Store types — `/store-types`
 
@@ -180,11 +250,20 @@ category-scoped ones — featured store and department sponsorship).
 | POST | `/:orderId/paypal/create` | Start PayPal payment for an order |
 | GET | `/:orderId` | Payment status for an order |
 | PUT | `/:orderId/confirm-cod` | Confirm cash-on-delivery |
+| POST | `/booking/:bookingId/initiate` | Start mobile-money payment for a booking (Phase 3 — body: `{ phone }`) |
+| POST | `/booking/:bookingId/snippe/checkout` | Start Snippe hosted checkout for a booking (Phase 3) |
+| POST | `/booking/:bookingId/paypal/create` | Start PayPal payment for a booking (Phase 3) |
+| GET | `/booking/:bookingId` | Payment status for a booking — either party (Phase 3) |
 
-Escrow: captured payments are held rather than released to the seller
-immediately; release happens via
-`PUT /admin/orders/:id/release-escrow` — see `docs/ESCROW_ANALYSIS.md`
-and the Admin section below.
+Escrow: captured payments are held rather than released to the
+seller/provider immediately; release happens via
+`PUT /admin/orders/:id/release-escrow` (orders) or
+`PUT /admin/bookings/:id/release-escrow` (bookings, Phase 3) — see
+`docs/ESCROW_ANALYSIS.md` and the Admin section below. Every booking
+payment goes through escrow (there's no Cash-on-Delivery-shaped path for
+a service), and a booking's commission/hold mechanics reuse the exact
+same `settings.commission_rate` / `settings.escrow_hold_days` an order
+already reads — see migration 064.
 
 ## Delivery — `/delivery`
 
@@ -352,6 +431,7 @@ for the underlying columns.
 | PUT | `/products/:id/sponsor` / `/unsponsor` | Toggle `is_sponsored` (Phase 2C) |
 | GET | `/orders` | List orders |
 | PUT | `/orders/:id/release-escrow` | Release held payment to seller wallet (Phase 9D) |
+| PUT | `/bookings/:id/release-escrow` | Release held payment to provider wallet (Phase 3) |
 | GET | `/settings` / PUT `/settings` | Platform settings (commission rates, fees, etc.) |
 | GET | `/sponsorship-campaigns` | All product sponsorship campaigns |
 | GET | `/featured-store-campaigns` | All featured-store campaigns |

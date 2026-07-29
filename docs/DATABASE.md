@@ -95,6 +95,36 @@ delivery pricing"), whose `event_type` values are now grouped for the
 admin panel's filter UI in `backend/src/modules/audit/audit.constants.js`
 rather than a schema change.
 
+**Nexora Services — Phase 1, Foundation** (`062`)
+`seller_profiles.merchant_type` (`product`/`service`/`hybrid` — a seller
+opts into Services without a separate provider record, reusing
+`seller_profiles` as CHANGES.md's "Service Provider" entity);
+`service_categories` (own taxonomy from product `categories`, seeded
+with the four Phase-1 categories: Accommodation, Transportation,
+Tourism, Business Spaces); `services` (bookable listings — title,
+pricing model, base price, location, draft/published/suspended status);
+`service_media` (image/video gallery per service, mirrors
+`product_images`). Availability and booking tables are intentionally
+deferred to the Phase 2 (Booking Infrastructure) migration — see
+`062_services_foundation.sql`'s header for the full reasoning.
+
+**Nexora Services — Phase 2, Booking Infrastructure** (`063`)
+`service_availability` (per-date `available_units`/`price` override/
+`status`, one row per service per date — CHANGES.md's Availability
+entity); `bookings` (the services equivalent of `orders` — a
+`booking_reference` like `order_number`, the same plain `unpaid`/`paid`
+`payment_status` orders use, and `status` following CHANGES.md's
+Booking Lifecycle verbatim: pending → confirmed → active → completed,
+with cancelled/refunded as exits); `booking_items` (one row per date
+within a booking's `[start_date, end_date)` range — a 3-night hotel
+stay needs 3 separate availability checks against
+`service_availability`, one per night, so this is where each night's
+quantity/unit_price/subtotal actually lives; a single-date booking gets
+exactly one row). Full reasoning, including why this isn't a simple
+`order_items` port, is in `063_services_booking_infrastructure.sql`'s
+header. `provider_payouts` (escrow/payout wiring) is deferred to Phase 3
+(Financial Integration).
+
 ## Testing against the database
 
 The backend has three Jest suites (`backend/jest.config.js` /

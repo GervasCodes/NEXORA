@@ -24,6 +24,10 @@ exports.orderIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid order")
 ];
 
+exports.bookingIdValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
+];
+
 exports.updateSettingsValidation = [
     body("commission_rate")
         .optional()

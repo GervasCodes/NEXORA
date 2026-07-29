@@ -6,7 +6,7 @@ const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
 const paymentController = require("./payment.controller");
-const { orderIdValidation } = require("./payment.validator");
+const { orderIdValidation, bookingIdValidation } = require("./payment.validator");
 const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middleware/webhookAuth.middleware");
 
 // Provider webhooks - called directly by MalipoPay/Selcom's servers, not
@@ -58,6 +58,50 @@ router.post(
     "/paypal/capture",
     authMiddleware,
     paymentController.capturePaypalPayment
+);
+
+// Booking payments (Phase 3 - Financial Integration) - buyer-side, mirror
+// the order-payment routes below one-for-one but under a literal
+// "/booking/" prefix so they can't collide with "/:orderId/..." further
+// down (same reasoning the verification-fee/paypal routes above already
+// document - literal paths must be registered before same-shaped dynamic
+// ones).
+router.post(
+    "/booking/:bookingId/initiate",
+    authMiddleware,
+    authorize("buyer"),
+    bookingIdValidation,
+    validationMiddleware,
+    paymentController.initiateMobileMoneyBookingPayment
+);
+
+router.post(
+    "/booking/:bookingId/snippe/checkout",
+    authMiddleware,
+    authorize("buyer"),
+    bookingIdValidation,
+    validationMiddleware,
+    paymentController.initiateSnippeBookingPayment
+);
+
+router.post(
+    "/booking/:bookingId/paypal/create",
+    authMiddleware,
+    authorize("buyer"),
+    bookingIdValidation,
+    validationMiddleware,
+    paymentController.initiatePaypalBookingPayment
+);
+
+// Either party on the booking (mirrors GET /:orderId below) - the service
+// layer checks customer_id/provider_id, not a role check at the route
+// level.
+router.get(
+    "/booking/:bookingId",
+    authMiddleware,
+    bookingIdValidation,
+    validationMiddleware,
+    paymentController.getBookingPayment
 );
 
 router.post(

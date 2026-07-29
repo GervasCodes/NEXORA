@@ -45,6 +45,39 @@ exports.findPendingVerificationFeePayment = async (sellerId) => {
 // provider only gives us that id back (e.g. PayPal's capture response,
 // or a frontend return-URL query param) and we need to find our own
 // payment row and its order_id/seller_id/purpose.
+// ---- Booking payments (Phase 3 - Financial Integration) --------------------
+// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// exactly (see migration 064's design notes for why bookings follow the
+// verification-fee shape - no predetermined payment_method column to
+// check against - rather than the order shape).
+
+exports.findByBookingId = async (bookingId) => {
+    const [rows] = await db.query(
+        "SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at DESC LIMIT 1",
+        [bookingId]
+    );
+    return rows[0];
+};
+
+exports.createBookingPayment = async (bookingId, amount, method) => {
+    const [result] = await db.query(
+        `INSERT INTO payments (order_id, booking_id, method, status, amount, purpose)
+        VALUES (NULL, ?, ?, 'pending', ?, 'booking_payment')`,
+        [bookingId, method, amount]
+    );
+    return result.insertId;
+};
+
+exports.findPendingBookingPayment = async (bookingId) => {
+    const [rows] = await db.query(
+        `SELECT * FROM payments
+        WHERE booking_id = ? AND purpose = 'booking_payment' AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1`,
+        [bookingId]
+    );
+    return rows[0];
+};
+
 exports.findByTransactionReference = async (transactionReference) => {
     const [rows] = await db.query(
         "SELECT * FROM payments WHERE transaction_reference = ? ORDER BY created_at DESC LIMIT 1",

@@ -231,6 +231,77 @@ exports.capturePaypalPayment = async (req, res) => {
     }
 };
 
+// --- Booking payments (Phase 3 - Financial Integration) ---------------------
+
+exports.initiateMobileMoneyBookingPayment = async (req, res) => {
+    try {
+        const result = await paymentService.initiateMobileMoneyBookingPayment(
+            req.params.bookingId,
+            req.user.id,
+            req.body.phone
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: result.message,
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.initiateSnippeBookingPayment = async (req, res) => {
+    try {
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+
+        const result = await paymentService.initiateSnippeBookingPayment(
+            req.params.bookingId,
+            req.user.id,
+            { successUrl, cancelUrl }
+        );
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.initiatePaypalBookingPayment = async (req, res) => {
+    try {
+        const returnUrl = assertAllowedRedirect(req.body.returnUrl, "returnUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+
+        const result = await paymentService.initiatePaypalBookingPayment(
+            req.params.bookingId,
+            req.user.id,
+            { returnUrl, cancelUrl }
+        );
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getBookingPayment = async (req, res) => {
+    try {
+        const payment = await paymentService.getBookingPayment(
+            req.params.bookingId,
+            req.user.id
+        );
+
+        return res.json({ success: true, data: payment });
+    } catch (error) {
+        return res.status(404).json({ success: false, message: error.message });
+    }
+};
+
 exports.confirmDeliveryReceipt = async (req, res) => {
     try {
         const result = await paymentService.confirmDeliveryReceipt(

@@ -13,6 +13,10 @@ const sellerRoutes = require("./modules/seller/seller.routes");
 const productRoutes = require("./modules/product/product.routes");
 const categoryRoutes = require("./modules/category/category.routes");
 const storeTypeRoutes = require("./modules/storeType/storeType.routes");
+const serviceCategoryRoutes = require("./modules/serviceCategory/serviceCategory.routes");
+const serviceRoutes = require("./modules/service/service.routes");
+const availabilityRoutes = require("./modules/availability/availability.routes");
+const bookingRoutes = require("./modules/booking/booking.routes");
 const storeRoutes = require("./modules/store/store.routes");
 const cartRoutes = require("./modules/cart/cart.routes");
 const orderRoutes = require("./modules/order/order.routes");
@@ -224,6 +228,23 @@ app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/store-types", storeTypeRoutes);
+// Nexora Services - Phase 1 (Foundation). Separate top-level namespaces
+// from /categories and /products, matching CHANGES.md's own framing of
+// Services as a parallel domain sharing infrastructure, not a variant of
+// the product catalog.
+app.use("/api/v1/service-categories", serviceCategoryRoutes);
+app.use("/api/v1/services", serviceRoutes);
+// Nexora Services - Phase 2 (Booking Infrastructure). Mounted at the
+// same /services base as serviceRoutes above, not nested further -
+// availabilityRoutes defines its own "/:serviceId/availability" paths,
+// so this sits alongside serviceRoutes' own "/:id/images" etc. without
+// colliding (Express only matches a route pattern to a request with the
+// same number of path segments). Bookings gets its own top-level
+// namespace since a booking's identity doesn't belong to the service
+// the way an image or an availability date does - same reasoning
+// order_items live under /orders, not nested under /products.
+app.use("/api/v1/services", availabilityRoutes);
+app.use("/api/v1/bookings", bookingRoutes);
 app.use("/api/v1/stores", storeRoutes);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);

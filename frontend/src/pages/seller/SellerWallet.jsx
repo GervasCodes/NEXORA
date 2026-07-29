@@ -80,8 +80,9 @@ export default function SellerWallet() {
                             <p className="text-xs text-ash mb-1">Pending release</p>
                             <p className="price text-3xl font-medium text-ash">{formatMoney(wallet.heldBalance)}</p>
                             <p className="text-xs text-ash mt-1 max-w-xs">
-                                Held until the order is delivered and the dispute window
-                                passes, then released here automatically.
+                                Held until the order is delivered (or the booking is
+                                completed) and the dispute/hold window passes, then
+                                released here automatically.
                             </p>
                         </div>
                     )}

@@ -13,6 +13,7 @@ const {
     productIdValidation,
     withdrawalIdValidation,
     orderIdValidation,
+    bookingIdValidation,
     updateSettingsValidation,
     createAdminValidation,
     updateAdminPermissionsValidation
@@ -86,6 +87,10 @@ router.get("/orders", adminController.listOrders);
 // dispute-freeze rule (adminService.releaseOrderEscrow -> walletService
 // .releaseOrderEarnings).
 router.put("/orders/:id/release-escrow", orderIdValidation, validationMiddleware, adminController.releaseOrderEscrow);
+
+// Booking equivalent (Phase 3 - Financial Integration) - same manual
+// early-release lever, for one booking's held provider earnings.
+router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddleware, adminController.releaseBookingEscrow);
 
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);

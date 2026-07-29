@@ -25,6 +25,19 @@ export function BrowseIcon({ className }) {
     );
 }
 
+// Nexora Services - a plain calendar glyph (bookable listings), kept in
+// the same hand-drawn single-path style as the icons around it rather
+// than a literal "briefcase" - a calendar reads more clearly as
+// "something you book" at nav-icon size.
+export function ServicesIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+            <path d="M3.5 9.5h17M8 3v3M16 3v3" />
+        </svg>
+    );
+}
+
 export function DashboardIcon({ className }) {
     return (
         <svg {...base} className={className}>
@@ -91,6 +104,19 @@ export function SavedIcon({ className }) {
     );
 }
 
+// A buyer's own bookings (Phase 2: Booking Infrastructure) - a calendar
+// with a checkmark, so it reads distinctly from ServicesIcon's plain
+// calendar (browsing bookable listings) at nav-icon size.
+export function BookingsIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+            <path d="M3.5 9.5h17M8 3v3M16 3v3" />
+            <path d="m8.5 14 2 2 4-4" />
+        </svg>
+    );
+}
+
 export function CartIcon({ className }) {
     return (
         <svg {...base} className={className}>
@@ -131,11 +157,13 @@ export function SignOutIcon({ className }) {
 // path, without every call site needing its own if/else chain.
 export const NAV_ICON_BY_PATH = {
     "/products": BrowseIcon,
+    "/services": ServicesIcon,
     "/seller": DashboardIcon,
     "/delivery": DeliveryIcon,
     "/admin": AdminIcon,
     "/messages": MessagesIcon,
     "/orders": OrdersIcon,
+    "/bookings": BookingsIcon,
     "/disputes": DisputesIcon,
     "/saved": SavedIcon,
     "/cart": CartIcon,

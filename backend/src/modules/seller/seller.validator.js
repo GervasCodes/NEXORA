@@ -116,3 +116,12 @@ exports.payVerificationFeeValidation = [
         .isLength({ min: 10, max: 20 })
         .withMessage("Invalid phone number.")
 ];
+
+// Nexora Services Phase 1 - Merchant Type System
+exports.merchantTypeValidation = [
+    body("merchant_type")
+        .notEmpty()
+        .withMessage("merchant_type is required")
+        .isIn(["product", "service", "hybrid"])
+        .withMessage("merchant_type must be one of: product, service, hybrid")
+];

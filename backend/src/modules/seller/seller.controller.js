@@ -307,3 +307,21 @@ exports.getAnalytics = async (req, res) => {
         });
     }
 };
+
+exports.setMerchantType = async (req, res) => {
+    try {
+        const result = await sellerService.setMerchantType(req.user.id, req.body.merchant_type);
+
+        return res.json({
+            success: true,
+            message: "Merchant type updated",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

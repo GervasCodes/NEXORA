@@ -6,6 +6,7 @@ const sponsorshipExpiryJob = require("./sponsorshipExpiry.job");
 const featuredStoreExpiryJob = require("./featuredStoreExpiry.job");
 const departmentSponsorshipExpiryJob = require("./departmentSponsorshipExpiry.job");
 const escrowReleaseJob = require("./escrowRelease.job");
+const bookingLifecycleJob = require("./bookingLifecycle.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick.
@@ -46,6 +47,13 @@ exports.startJobs = () => {
     // for the seller/admin campaign lists.
     cron.schedule("0 * * * *", safeRun("departmentSponsorshipExpiry", departmentSponsorshipExpiryJob));
 
+    // Every hour, at 10 past: advance paid bookings through
+    // confirmed -> active -> completed as their dates pass - see
+    // bookingLifecycle.job.js. Scheduled before escrowRelease (15 past)
+    // so a booking that completes this hour is already 'completed' by
+    // the time that job's hold-day scan runs.
+    cron.schedule("10 * * * *", safeRun("bookingLifecycle", bookingLifecycleJob));
+
     // Every hour, at 15 past: release seller earnings that are past their
     // escrow hold window - see escrowRelease.job.js and
     // wallet.service.js#releaseEligibleEarnings. Offset from the other
@@ -53,5 +61,5 @@ exports.startJobs = () => {
     // in the same instant; no ordering dependency between them.
     cron.schedule("15 * * * *", safeRun("escrowRelease", escrowReleaseJob));
 
-    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, escrowRelease hourly)");
+    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly)");
 };

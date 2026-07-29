@@ -22,6 +22,8 @@ const Home = lazy(() => import("./pages/Home"));
 const DepartmentPage = lazy(() => import("./pages/DepartmentPage"));
 const BrowseProducts = lazy(() => import("./pages/BrowseProducts"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const ServicesBrowse = lazy(() => import("./pages/ServicesBrowse"));
+const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
 const StorePage = lazy(() => import("./pages/StorePage"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
@@ -31,6 +33,8 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
 const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
+const Bookings = lazy(() => import("./pages/Bookings"));
+const BookingDetail = lazy(() => import("./pages/BookingDetail"));
 const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
@@ -44,6 +48,10 @@ const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts"));
 const SellerProductForm = lazy(() => import("./pages/seller/SellerProductForm"));
+const SellerServices = lazy(() => import("./pages/seller/SellerServices"));
+const SellerServiceForm = lazy(() => import("./pages/seller/SellerServiceForm"));
+const SellerAvailability = lazy(() => import("./pages/seller/SellerAvailability"));
+const SellerBookings = lazy(() => import("./pages/seller/SellerBookings"));
 const SellerCollections = lazy(() => import("./pages/seller/SellerCollections"));
 const SellerOrders = lazy(() => import("./pages/seller/SellerOrders"));
 const SellerReviews = lazy(() => import("./pages/seller/SellerReviews"));
@@ -68,6 +76,7 @@ const AdminDeletedAccounts = lazy(() => import("./pages/admin/AdminDeletedAccoun
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
+const AdminServiceCategories = lazy(() => import("./pages/admin/AdminServiceCategories"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -129,6 +138,8 @@ export default function App() {
                         <Route path="/departments/:slug" element={<DepartmentPage />} />
                         <Route path="/products" element={<BrowseProducts />} />
                         <Route path="/products/:slug" element={<ProductDetail />} />
+                        <Route path="/services" element={<ServicesBrowse />} />
+                        <Route path="/services/:slug" element={<ServiceDetail />} />
                         <Route path="/stores/:slug" element={<StorePage />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
@@ -139,6 +150,9 @@ export default function App() {
                         <Route path="/orders" element={<RequireBuyer><Orders /></RequireBuyer>} />
                         <Route path="/orders/:id" element={<RequireBuyer><OrderDetail /></RequireBuyer>} />
                         <Route path="/orders/:id/tracking" element={<RequireBuyer><OrderTrackingPage /></RequireBuyer>} />
+                        <Route path="/bookings" element={<RequireBuyer><Bookings /></RequireBuyer>} />
+                        {/* Shared: buyer or provider - booking.service.js#getBookingById enforces per-booking access */}
+                        <Route path="/bookings/:id" element={<RequireAuth><BookingDetail /></RequireAuth>} />
                         <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
                         <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
@@ -156,6 +170,11 @@ export default function App() {
                             <Route path="products" element={<SellerProducts />} />
                             <Route path="products/new" element={<SellerProductForm />} />
                             <Route path="products/:id/edit" element={<SellerProductForm />} />
+                            <Route path="services" element={<SellerServices />} />
+                            <Route path="services/new" element={<SellerServiceForm />} />
+                            <Route path="services/:id/edit" element={<SellerServiceForm />} />
+                            <Route path="availability" element={<SellerAvailability />} />
+                            <Route path="bookings" element={<SellerBookings />} />
                             <Route path="collections" element={<SellerCollections />} />
                             <Route path="orders" element={<SellerOrders />} />
                             <Route path="reviews" element={<SellerReviews />} />
@@ -184,6 +203,7 @@ export default function App() {
                             <Route path="sellers" element={<AdminSellers />} />
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="categories" element={<AdminCategories />} />
+                            <Route path="service-categories" element={<AdminServiceCategories />} />
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />

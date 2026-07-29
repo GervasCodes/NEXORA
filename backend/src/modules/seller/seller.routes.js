@@ -14,7 +14,8 @@ const {
     addDeliveryAgentValidation,
     createCollectionValidation,
     addCollectionProductValidation,
-    payVerificationFeeValidation
+    payVerificationFeeValidation,
+    merchantTypeValidation
 } = require("./seller.validator");
 
 const {
@@ -168,6 +169,20 @@ router.post(
     payVerificationFeeValidation,
     validationMiddleware,
     sellerController.payVerificationFee
+);
+
+// --- Nexora Services Phase 1: Merchant Type System ---
+// A seller opts into Services (or both) here; account approval isn't
+// required to flip this since it's just a dashboard-access flag - the
+// Services endpoints themselves (service.routes.js) still require an
+// approved seller underneath requireServiceProvider.
+router.put(
+    "/merchant-type",
+    authMiddleware,
+    authorize("seller"),
+    merchantTypeValidation,
+    validationMiddleware,
+    sellerController.setMerchantType
 );
 
 module.exports = router;

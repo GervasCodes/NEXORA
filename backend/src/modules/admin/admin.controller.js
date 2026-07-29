@@ -325,6 +325,18 @@ exports.releaseOrderEscrow = async (req, res) => {
     }
 };
 
+// Booking equivalent (Phase 3).
+exports.releaseBookingEscrow = async (req, res) => {
+    try {
+        const result = await adminService.releaseBookingEscrow(req.params.id);
+
+        return res.json({ success: true, message: "Held earnings released for this booking", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // Old seller document-verification review actions lived here
 // (listPendingVerifications / getVerificationDocuments /
 // approveVerification / rejectVerification) - removed; see

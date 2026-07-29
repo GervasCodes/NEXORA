@@ -578,6 +578,15 @@ exports.releaseOrderEscrow = async (orderId) => {
     return walletService.releaseOrderEarnings(orderId);
 };
 
+// Booking equivalent (Phase 3 - Financial Integration) - same manual
+// bypass of the completed + escrow_hold_days timing gate, for one
+// booking's held provider earnings. No dispute-freeze rule to respect
+// here (see migration 064's design notes - bookings have no dispute
+// system yet), so this is a straight release.
+exports.releaseBookingEscrow = async (bookingId) => {
+    return walletService.releaseBookingEarnings(bookingId);
+};
+
 // Old seller document-verification review methods lived here
 // (listPendingVerifications / getSellerVerificationDetail /
 // approveSellerVerification / rejectSellerVerification) - removed; see

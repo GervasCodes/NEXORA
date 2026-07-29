@@ -19,6 +19,7 @@ const groups = [
         tabs: [
             { to: "/admin/products", label: "Products" },
             { to: "/admin/categories", label: "Categories" },
+            { to: "/admin/service-categories", label: "Service categories" },
             { to: "/admin/store-types", label: "Store types" }
         ]
     },

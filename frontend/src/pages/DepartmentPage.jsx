@@ -5,14 +5,15 @@ import ProductGrid from "../components/ProductGrid";
 import ProductRow from "../components/ProductRow";
 import FeaturedStoreCard from "../components/FeaturedStoreCard";
 import ProductFilters from "../components/ProductFilters";
-import ComingSoon from "../components/ComingSoon";
+import ServicesBrowse from "./ServicesBrowse";
 
-// Departments disabled until their feature is redesigned. The backend
-// already excludes these from the homepage grid and category dropdowns
-// (categories.is_active = 0 - see migration 055), so this route would
-// otherwise just show a generic "not found" error; showing Coming Soon
-// instead is friendlier for anyone who still has the link/bookmark.
-const DISABLED_DEPARTMENTS = ["services"];
+// The "Services" department card lives in the same homepage grid as every
+// product department, but services aren't products - they have their own
+// browsing UI (categories, availability, bookings) already built in
+// ServicesBrowse.jsx. So this route special-cases that one slug and
+// renders the real services experience instead of the product grid below,
+// rather than calling the product-department API for it.
+const SERVICES_DEPARTMENT_SLUG = "services";
 
 // Flow: Homepage -> Department -> Products.
 export default function DepartmentPage() {
@@ -23,7 +24,7 @@ export default function DepartmentPage() {
     const [filters, setFilters] = useState({});
 
     useEffect(() => {
-        if (DISABLED_DEPARTMENTS.includes(slug)) {
+        if (slug === SERVICES_DEPARTMENT_SLUG) {
             setLoading(false);
             return;
         }
@@ -44,8 +45,8 @@ export default function DepartmentPage() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    if (DISABLED_DEPARTMENTS.includes(slug)) {
-        return <ComingSoon />;
+    if (slug === SERVICES_DEPARTMENT_SLUG) {
+        return <ServicesBrowse />;
     }
 
     if (loading) {

@@ -6,7 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
-import { NAV_ICON_BY_PATH, BrowseIcon, ServicesIcon, CartIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -132,13 +132,6 @@ export default function Header() {
                         active={isActive("/products")}
                     />
 
-                    <IconNavLink
-                        to="/services"
-                        label={t("nav.services")}
-                        icon={ServicesIcon}
-                        active={isActive("/services")}
-                    />
-
                     {links.map((link) => (
                         <IconNavLink
                             key={link.to}
@@ -256,16 +249,6 @@ export default function Header() {
                         >
                             <BrowseIcon className="w-[18px] h-[18px] shrink-0" />
                             {t("nav.browse")}
-                        </Link>
-
-                        <Link
-                            to="/services"
-                            onClick={() => setMenuOpen(false)}
-                            className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
-                                ${isActive("/services") ? "text-teal" : "hover:text-teal"}`}
-                        >
-                            <ServicesIcon className="w-[18px] h-[18px] shrink-0" />
-                            {t("nav.services")}
                         </Link>
 
                         {links.map((link) => {

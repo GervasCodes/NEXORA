@@ -1,0 +1,22 @@
+-- Migration 065: re-enable the Services department card.
+-- Depends on: categories (002), migration 055 (disable_services_department),
+-- migration 062 (services_foundation)
+--
+-- Migration 055 disabled this row on the assumption that "there's no
+-- service-listing flow distinct from a physical product" - that's no
+-- longer true: migrations 062-064 shipped a full Services feature
+-- (service_categories, services, bookings, escrow) with its own browsing
+-- UI (ServicesBrowse.jsx). That UI was reachable only from a standalone
+-- "/services" link in the main site header, not from "Shop by department"
+-- on the homepage like every other department.
+--
+-- This flips `categories.is_active` back to 1 for the 'services' row so
+-- it reappears in the homepage department grid (findAllActiveWithSponsorship)
+-- and department page (getDepartmentBySlug). The frontend now special-cases
+-- this one slug in DepartmentPage.jsx to render the real ServicesBrowse
+-- experience instead of the product grid every other department uses, and
+-- the standalone header nav link has been removed - so "Services" is once
+-- again reachable from exactly one place: its department card.
+--
+-- Safe to re-run: a no-op if the row is already active or doesn't exist.
+UPDATE categories SET is_active = 1 WHERE slug = 'services';

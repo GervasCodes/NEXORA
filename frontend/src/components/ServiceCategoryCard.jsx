@@ -19,7 +19,7 @@ export default function ServiceCategoryCard({ category, index, active, onSelect 
             type="button"
             onClick={onSelect}
             aria-pressed={active}
-            className={`group shrink-0 w-36 sm:w-40 text-left bg-paper border rounded-xl overflow-hidden transition-all ${
+            className={`group block w-full text-left bg-paper border rounded-xl overflow-hidden transition-all ${
                 active ? "border-ink shadow-md" : "border-line hover:border-ink hover:shadow-md hover:-translate-y-0.5"
             }`}
         >
@@ -34,13 +34,13 @@ export default function ServiceCategoryCard({ category, index, active, onSelect 
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <span className="font-display text-2xl text-frost/90">{category.name.charAt(0)}</span>
+                        <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
-                <div className="absolute bottom-2.5 left-2.5 right-2.5">
-                    <h3 className="font-display text-sm text-frost leading-tight mb-0.5 truncate">{category.name}</h3>
-                    <p className="text-frost/75 text-[11px]">
+                <div className="absolute bottom-3 left-3 right-3">
+                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5 truncate">{category.name}</h3>
+                    <p className="text-frost/75 text-xs">
                         {category.serviceCount} {category.serviceCount === 1 ? "service" : "services"}
                     </p>
                 </div>

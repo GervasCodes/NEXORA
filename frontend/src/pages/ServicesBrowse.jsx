@@ -5,13 +5,27 @@ import ServiceGrid from "../components/ServiceGrid";
 import ServiceFilters from "../components/ServiceFilters";
 import ServiceCategoryCard from "../components/ServiceCategoryCard";
 
+// Matches DepartmentCardSkeleton on the homepage, so the category grid
+// here occupies the same space/shape while loading instead of popping in.
+function ServiceCategoryCardSkeleton() {
+    return (
+        <div className="animate-pulse">
+            <div className="aspect-[4/3] bg-line/50 rounded-xl" />
+        </div>
+    );
+}
+
 export default function ServicesBrowse() {
     const [categories, setCategories] = useState([]);
+    const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [filters, setFilters] = useState({});
     const [search, setSearch] = useState("");
 
     useEffect(() => {
-        api.get("/service-categories/browse").then(({ data }) => setCategories(data.data)).catch(() => {});
+        api.get("/service-categories/browse")
+            .then(({ data }) => setCategories(data.data))
+            .catch(() => {})
+            .finally(() => setCategoriesLoading(false));
     }, []);
 
     const selectCategory = (categoryId) => {
@@ -32,14 +46,20 @@ export default function ServicesBrowse() {
                 </p>
             </div>
 
-            {categories.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-2 mb-6">
+            {categoriesLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 mb-8">
+                    {Array.from({ length: 5 }).map((_, i) => <ServiceCategoryCardSkeleton key={i} />)}
+                </div>
+            ) : categories.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 mb-8">
                     <button
                         type="button"
                         onClick={() => selectCategory(undefined)}
                         aria-pressed={!filters.category_id}
-                        className={`shrink-0 w-36 sm:w-40 h-full min-h-[7rem] rounded-xl border flex items-center justify-center text-sm font-medium transition-all ${
-                            !filters.category_id ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
+                        className={`group block w-full text-left rounded-xl border overflow-hidden transition-all aspect-[4/3] flex items-center justify-center text-sm font-medium ${
+                            !filters.category_id
+                                ? "border-ink bg-ink text-paper"
+                                : "border-line hover:border-ink hover:shadow-md hover:-translate-y-0.5"
                         }`}
                     >
                         All services

@@ -40,7 +40,7 @@ jobs:
 
       - name: Open issue on failure
         if: steps.url.outputs.configured == 'true' && steps.ping.outputs.status != '200'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const status = "${{ steps.ping.outputs.status }}";
@@ -73,7 +73,7 @@ jobs:
 
       - name: Auto-close resolved uptime issues
         if: steps.url.outputs.configured == 'true' && steps.ping.outputs.status == '200'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const existing = await github.rest.issues.listForRepo({

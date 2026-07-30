@@ -1,5 +1,8 @@
 # NEXORA
 
+[![CI](https://github.com/GervasCodes/NEXORA/actions/workflows/ci.yml/badge.svg)](https://github.com/GervasCodes/NEXORA/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/GervasCodes/NEXORA/actions/workflows/codeql.yml/badge.svg)](https://github.com/GervasCodes/NEXORA/actions/workflows/codeql.yml)
+
 NEXORA is a regional multi-vendor e-commerce platform that connects buyers, sellers, service providers, and delivery agents in one marketplace. Alongside physical products, NEXORA supports bookable services (accommodation, transportation, tours, and more), with secure payments, escrow-backed order protection, and real-time delivery tracking.
 
 ## What you can do on NEXORA

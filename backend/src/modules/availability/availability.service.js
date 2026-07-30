@@ -1,5 +1,6 @@
 const availabilityRepository = require("./availability.repository");
 const serviceRepository = require("../service/service.repository");
+const { computeDynamicPrice } = require("../../utils/dynamicPricing");
 
 // Inclusive date range -> array of "YYYY-MM-DD" strings. Kept deliberately
 // simple (no timezone library) since every date here is a plain calendar
@@ -71,6 +72,13 @@ exports.getAvailability = async (serviceId, startDate, endDate) => {
         row
     ]));
 
+    // Phase 5 (Growth) - same rule set + priority order
+    // booking.service.js's priceDateItems uses at charge time, so the
+    // calendar preview never shows a price different from what the
+    // customer will actually be charged.
+    const pricingRules = await serviceRepository.findActivePricingRulesByService(serviceId);
+    const basePrice = Number(service.discount_price ?? service.base_price);
+
     return dateRange(startDate, endDate).map((date) => {
         const row = byDate.get(date);
 
@@ -82,7 +90,7 @@ exports.getAvailability = async (serviceId, startDate, endDate) => {
             date,
             available: true,
             availableUnits: row.available_units,
-            price: row.price !== null ? Number(row.price) : Number(service.discount_price ?? service.base_price)
+            price: row.price !== null ? Number(row.price) : computeDynamicPrice(basePrice, pricingRules, date)
         };
     });
 };

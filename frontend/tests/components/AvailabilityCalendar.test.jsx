@@ -10,6 +10,10 @@ vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ format: (v) => `TZS ${v}` })
 }));
 
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({ t: (key) => key })
+}));
+
 import api from "../../src/api/client";
 import AvailabilityCalendar from "../../src/components/AvailabilityCalendar";
 

@@ -51,10 +51,12 @@ const SellerProductForm = lazy(() => import("./pages/seller/SellerProductForm"))
 const SellerServices = lazy(() => import("./pages/seller/SellerServices"));
 const SellerServiceForm = lazy(() => import("./pages/seller/SellerServiceForm"));
 const SellerAvailability = lazy(() => import("./pages/seller/SellerAvailability"));
+const SellerPricing = lazy(() => import("./pages/seller/SellerPricing"));
 const SellerBookings = lazy(() => import("./pages/seller/SellerBookings"));
 const SellerCollections = lazy(() => import("./pages/seller/SellerCollections"));
 const SellerOrders = lazy(() => import("./pages/seller/SellerOrders"));
 const SellerReviews = lazy(() => import("./pages/seller/SellerReviews"));
+const SellerServiceReviews = lazy(() => import("./pages/seller/SellerServiceReviews"));
 const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"));
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
@@ -174,10 +176,12 @@ export default function App() {
                             <Route path="services/new" element={<SellerServiceForm />} />
                             <Route path="services/:id/edit" element={<SellerServiceForm />} />
                             <Route path="availability" element={<SellerAvailability />} />
+                            <Route path="pricing" element={<SellerPricing />} />
                             <Route path="bookings" element={<SellerBookings />} />
                             <Route path="collections" element={<SellerCollections />} />
                             <Route path="orders" element={<SellerOrders />} />
                             <Route path="reviews" element={<SellerReviews />} />
+                            <Route path="service-reviews" element={<SellerServiceReviews />} />
                             <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />

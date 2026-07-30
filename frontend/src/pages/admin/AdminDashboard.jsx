@@ -9,16 +9,19 @@ export default function AdminDashboard() {
     const { socket } = useSocket();
     const [stats, setStats] = useState(null);
     const [analytics, setAnalytics] = useState(null);
+    const [servicesAnalytics, setServicesAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [live, setLive] = useState(false);
 
     const load = useCallback(() => {
         return Promise.all([
             api.get("/admin/dashboard"),
-            api.get("/admin/analytics")
-        ]).then(([dashboardRes, analyticsRes]) => {
+            api.get("/admin/analytics"),
+            api.get("/admin/analytics/services")
+        ]).then(([dashboardRes, analyticsRes, servicesAnalyticsRes]) => {
             setStats(dashboardRes.data.data);
             setAnalytics(analyticsRes.data.data);
+            setServicesAnalytics(servicesAnalyticsRes.data.data);
         });
     }, []);
 
@@ -49,6 +52,14 @@ export default function AdminDashboard() {
         ]
         : [];
 
+    // Phase 5 (Growth) - services counterpart of chartData above.
+    const bookingChartData = servicesAnalytics
+        ? [
+            ...servicesAnalytics.dailyBookingSales,
+            ...servicesAnalytics.forecast.map((d) => ({ ...d, projected: true }))
+        ]
+        : [];
+
     return (
         <div>
             <div className="flex items-center gap-3 mb-8">
@@ -75,6 +86,13 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
                 <Stat label="Total products" value={stats.products.total} />
                 <Stat label="Active products" value={stats.products.active} />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                <Stat label="Total bookings" value={stats.bookings.total} />
+                <Stat label="Completed bookings" value={stats.bookings.completed} />
+                <Stat label="Booking revenue (paid)" value={formatMoney(stats.bookingRevenue)} mono />
+                <Stat label="Active services" value={stats.services.active} />
             </div>
 
             {analytics && (
@@ -146,9 +164,99 @@ export default function AdminDashboard() {
                         </div>
                     </div>
 
-                    <Link to="/admin/fraud" className="text-sm text-teal hover:underline">
+                    <Link to="/admin/fraud" className="text-sm text-teal hover:underline block mb-10">
                         Review flagged orders & sellers →
                     </Link>
+                </>
+            )}
+
+            {servicesAnalytics && (
+                <>
+                    <h2 className="font-display text-xl mb-4">Services marketplace</h2>
+
+                    <div className="border border-line rounded-lg p-5 mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <p className="text-xs uppercase tracking-widest text-ash">
+                                Daily booking revenue · last 14 days + 7-day forecast
+                            </p>
+                            <span className="text-[10px] text-ash flex items-center gap-1">
+                                <span className="w-2 h-2 bg-mango/40 border border-dashed border-mango-dark rounded-sm" /> Projected
+                            </span>
+                        </div>
+                        <BarChart
+                            data={bookingChartData}
+                            labelKey="label"
+                            valueKey="revenue"
+                            formatValue={(v) => formatMoney(v)}
+                            highlightKey="projected"
+                        />
+                        <p className="text-[11px] text-ash mt-3">
+                            Forecast is a straight trend line fit to the last 30 days of booking revenue - a
+                            rough directional estimate, not a guarantee.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                        <div className="border border-line rounded-lg p-5">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-4">Top services</p>
+                            {servicesAnalytics.topServices.length === 0 ? (
+                                <p className="text-ash text-sm">No paid bookings yet.</p>
+                            ) : (
+                                <ul className="divide-y divide-line">
+                                    {servicesAnalytics.topServices.map((s, i) => (
+                                        <li key={s.id} className="py-2.5 flex items-center gap-3 text-sm">
+                                            <span className="text-ash text-xs w-4 shrink-0">{i + 1}</span>
+                                            <Link to={`/services/${s.slug}`} className="flex-1 min-w-0 truncate hover:text-teal transition-colors">
+                                                {s.title}
+                                            </Link>
+                                            <span className="price text-xs text-ash shrink-0">{s.booking_count} bookings</span>
+                                            <span className="price text-xs font-medium shrink-0">{formatMoney(s.revenue)}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
+                        <div className="border border-line rounded-lg p-5">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-4">Top providers</p>
+                            {servicesAnalytics.topProviders.length === 0 ? (
+                                <p className="text-ash text-sm">No paid bookings yet.</p>
+                            ) : (
+                                <ul className="divide-y divide-line">
+                                    {servicesAnalytics.topProviders.map((p, i) => (
+                                        <li key={p.user_id} className="py-2.5 flex items-center gap-2 text-sm">
+                                            <span className="text-ash text-xs w-4 shrink-0">{i + 1}</span>
+                                            <span className="flex-1 min-w-0 truncate">
+                                                {p.store_name}
+                                                {(p.is_verified === 1 || p.is_verified === true) && (
+                                                    <span className="ml-1.5 text-[10px] text-teal font-semibold uppercase align-middle">Verified</span>
+                                                )}
+                                            </span>
+                                            <span className="price text-xs text-ash shrink-0">{p.booking_count} bookings</span>
+                                            <span className="price text-xs font-medium shrink-0">{formatMoney(p.revenue)}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="border border-line rounded-lg p-5">
+                        <p className="text-xs uppercase tracking-widest text-ash mb-4">Revenue by category</p>
+                        {servicesAnalytics.categoryPerformance.every((c) => c.booking_count === 0) ? (
+                            <p className="text-ash text-sm">No paid bookings yet.</p>
+                        ) : (
+                            <ul className="divide-y divide-line">
+                                {servicesAnalytics.categoryPerformance.map((c) => (
+                                    <li key={c.id} className="py-2.5 flex items-center gap-3 text-sm">
+                                        <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                                        <span className="price text-xs text-ash shrink-0">{c.booking_count} bookings</span>
+                                        <span className="price text-xs font-medium shrink-0">{formatMoney(c.revenue)}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
                 </>
             )}
         </div>

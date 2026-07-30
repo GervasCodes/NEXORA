@@ -9,10 +9,13 @@ const upload = require("../../middleware/upload.middleware");
 const reviewController = require("./review.controller");
 const {
     createReviewValidation,
+    createBookingReviewValidation,
     updateReviewValidation,
     reviewIdValidation,
     productIdValidation,
     sellerIdValidation,
+    serviceIdValidation,
+    providerIdValidation,
     replyValidation
 } = require("./review.validator");
 
@@ -34,6 +37,25 @@ router.get(
     reviewController.getStoreReviews
 );
 
+// Phase 4 (Customer Experience) - public, anyone can read a service's
+// reviews. Literal "/service/:serviceId" segment, same disambiguation
+// reasoning as "/store/:sellerId" above.
+router.get(
+    "/service/:serviceId",
+    serviceIdValidation,
+    validationMiddleware,
+    reviewController.getServiceReviews
+);
+
+// Phase 4 - public, anyone can read a provider's reviews across all
+// their services.
+router.get(
+    "/provider/:providerId",
+    providerIdValidation,
+    validationMiddleware,
+    reviewController.getProviderReviews
+);
+
 // Buyer routes
 router.post(
     "/",
@@ -42,6 +64,18 @@ router.post(
     createReviewValidation,
     validationMiddleware,
     reviewController.createReview
+);
+
+// Phase 4 - buyer submits a review for their own completed booking.
+// Literal "/booking/:bookingId" prefix, same route-ordering reasoning
+// payment.routes.js's booking endpoints already document (062/064).
+router.post(
+    "/booking/:bookingId",
+    authMiddleware,
+    authorize("buyer"),
+    createBookingReviewValidation,
+    validationMiddleware,
+    reviewController.createBookingReview
 );
 
 router.put(
@@ -75,10 +109,15 @@ router.post(
     reviewController.uploadReviewPhoto
 );
 
-// Phase 6C - seller reply to a review on one of their products.
+// Phase 6C - seller reply to a review on one of their products. Phase 4
+// (Customer Experience) extended review.service.js's replyToReview to
+// also accept a provider replying to a booking review - same route,
+// same authorize("seller") gate (a provider is a seller account with
+// merchant_type service/hybrid, see migration 062), just a different
+// branch inside the service layer depending on the review's target.
 // requireApprovedSeller isn't used here (unlike product mutation routes):
-// a seller only ever has reviews to reply to on products they were
-// already approved to list, so the ownership check inside
+// a seller only ever has reviews to reply to on products/bookings they
+// were already approved to list, so the ownership check inside
 // review.service.js's replyToReview is the real gate.
 router.post(
     "/:id/reply",

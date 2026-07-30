@@ -10,6 +10,17 @@ vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ format: (v) => `TZS ${v}` })
 }));
 
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key) => ({
+            "booking.title": "Your bookings",
+            "booking.empty": "No bookings yet",
+            "booking.browseServices": "Browse services",
+            "booking.status.confirmed": "confirmed"
+        }[key] || key)
+    })
+}));
+
 import api from "../../src/api/client";
 import Bookings from "../../src/pages/Bookings";
 

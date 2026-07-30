@@ -12,6 +12,27 @@ vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ format: (v) => `TZS ${v}` })
 }));
 
+vi.mock("../../src/context/SocketContext", () => ({
+    useSocket: () => ({ socket: null, connected: false })
+}));
+
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key) => ({
+            "booking.notFound": "Booking not found",
+            "booking.backToBookings": "Back to bookings",
+            "booking.confirmButton": "Confirm booking",
+            "booking.confirming": "Confirming…",
+            "booking.confirmedMessage": "Booking confirmed.",
+            "booking.cancelButton": "Cancel booking",
+            "booking.cancelling": "Cancelling…",
+            "booking.cancelledMessage": "Booking cancelled.",
+            "booking.cancelledRefundedMessage": "Booking cancelled and refunded.",
+            "booking.loading": "Loading bookings…"
+        }[key] || key)
+    })
+}));
+
 const mockUser = vi.fn();
 vi.mock("../../src/context/AuthContext", () => ({
     useAuth: () => ({ user: mockUser() })
@@ -54,11 +75,12 @@ beforeEach(() => {
 
 describe("BookingDetail page", () => {
     it("shows a not-found state when the booking can't be loaded", async () => {
-        api.get.mockRejectedValueOnce({ response: { data: { message: "Booking not found" } } });
+        api.get.mockRejectedValueOnce({ response: { data: { message: "No such booking exists" } } });
         mockUser.mockReturnValue({ id: 42, role: "buyer" });
         renderPage();
 
         await waitFor(() => expect(screen.getByText("Booking not found")).toBeInTheDocument());
+        expect(screen.getByText("No such booking exists")).toBeInTheDocument();
     });
 
     it("lets the provider confirm a pending booking", async () => {

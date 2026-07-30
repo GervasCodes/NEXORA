@@ -395,7 +395,7 @@ exports.getDispatchOverview = async () => {
 };
 
 exports.getDashboard = async () => {
-    const { userCounts, orderCounts, revenue, productCounts } =
+    const { userCounts, orderCounts, revenue, productCounts, bookingCounts, bookingRevenue, serviceCounts } =
         await adminRepository.getDashboardStats();
 
     return {
@@ -414,6 +414,19 @@ exports.getDashboard = async () => {
         products: {
             total: Number(productCounts.total_products) || 0,
             active: Number(productCounts.active_products) || 0
+        },
+        // Phase 5 (Growth) - marketplace insights: the services
+        // counterpart of orders/products/revenue above.
+        bookings: {
+            total: Number(bookingCounts.total_bookings) || 0,
+            pending: Number(bookingCounts.pending_bookings) || 0,
+            completed: Number(bookingCounts.completed_bookings) || 0,
+            cancelled: Number(bookingCounts.cancelled_bookings) || 0
+        },
+        bookingRevenue: Number(bookingRevenue.total_booking_revenue) || 0,
+        services: {
+            total: Number(serviceCounts.total_services) || 0,
+            active: Number(serviceCounts.active_services) || 0
         }
     };
 };
@@ -466,6 +479,68 @@ exports.getAnalytics = async () => {
             ...s,
             revenue: Number(s.revenue) || 0,
             order_count: Number(s.order_count) || 0
+        }))
+    };
+};
+
+// Phase 5 (Growth) - Analytics + Advanced Reporting. Services
+// counterpart of getAnalytics above, same daily-sales/forecast/top-N
+// shape, reusing forecastRevenue as-is (it only cares about a row's
+// day/revenue fields, nothing product-specific) plus a
+// category-performance breakdown that getAnalytics has no product
+// equivalent of yet (categories weren't a natural revenue grouping for
+// products the way "which category of services earns the most" is a
+// question sellers/admins actually ask about a growing services catalog).
+exports.getServicesAnalytics = async () => {
+    const DAYS = 14;
+    const FORECAST_DAYS = 7;
+    const REGRESSION_WINDOW_DAYS = 30;
+
+    const [dailyRows, regressionRows, topServices, topProviders, categoryPerformance] = await Promise.all([
+        adminRepository.getDailyBookingSales(DAYS),
+        adminRepository.getDailyBookingSales(REGRESSION_WINDOW_DAYS),
+        adminRepository.getTopServices(5),
+        adminRepository.getTopProviders(5),
+        adminRepository.getCategoryPerformance()
+    ]);
+
+    const byDay = new Map(dailyRows.map((r) => [
+        new Date(r.day).toISOString().slice(0, 10),
+        { revenue: Number(r.revenue) || 0, booking_count: Number(r.booking_count) || 0 }
+    ]));
+
+    const dailyBookingSales = [];
+    for (let i = DAYS - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().slice(0, 10);
+        const entry = byDay.get(key) || { revenue: 0, booking_count: 0 };
+        dailyBookingSales.push({
+            day: key,
+            label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            ...entry
+        });
+    }
+
+    const forecast = forecastRevenue(regressionRows, REGRESSION_WINDOW_DAYS, FORECAST_DAYS);
+
+    return {
+        dailyBookingSales,
+        forecast,
+        topServices: topServices.map((s) => ({
+            ...s,
+            booking_count: Number(s.booking_count) || 0,
+            revenue: Number(s.revenue) || 0
+        })),
+        topProviders: topProviders.map((p) => ({
+            ...p,
+            revenue: Number(p.revenue) || 0,
+            booking_count: Number(p.booking_count) || 0
+        })),
+        categoryPerformance: categoryPerformance.map((c) => ({
+            ...c,
+            booking_count: Number(c.booking_count) || 0,
+            revenue: Number(c.revenue) || 0
         }))
     };
 };

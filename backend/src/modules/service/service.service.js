@@ -2,6 +2,7 @@ const serviceRepository = require("./service.repository");
 const serviceCategoryRepository = require("../serviceCategory/serviceCategory.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const { parseSort } = require("../../utils/serviceSort");
+const { parseLocation, parseMinRating } = require("../../utils/serviceFilters");
 
 // Same reasoning as product.service.js#assertCategoryIsActive - the
 // dropdown that feeds this already excludes inactive categories, so this
@@ -61,6 +62,8 @@ exports.listServices = async (query) => {
         minPrice,
         maxPrice,
         city: query.city || null,
+        region: parseLocation(query.region),
+        minRating: parseMinRating(query.min_rating),
         sort: parseSort(query.sort),
         page,
         limit
@@ -75,6 +78,13 @@ exports.listServices = async (query) => {
             totalPages: Math.max(1, Math.ceil(total / limit))
         }
     };
+};
+
+// Phase 4 (Customer Experience) - services counterpart of
+// product.service.js's getFilterRegions, feeding ServiceFilters.jsx's
+// Location dropdown.
+exports.listFilterRegions = async (query) => {
+    return serviceRepository.findFilterRegions({ categoryId: query.category_id || null });
 };
 
 exports.getServiceBySlug = async (slug) => {
@@ -193,4 +203,96 @@ exports.setServiceActiveByProvider = async (providerId, serviceId, isActive) => 
     }
 
     await serviceRepository.setActive(serviceId, isActive);
+};
+
+// --- Dynamic pricing rules (Phase 5 - Growth) --------------------------
+
+const RULE_TYPES = ["day_of_week", "date_range"];
+const ADJUSTMENT_TYPES = ["percentage", "fixed"];
+
+function validatePricingRuleInput(data) {
+    if (!RULE_TYPES.includes(data.rule_type)) {
+        throw new Error("Invalid rule type");
+    }
+
+    if (!ADJUSTMENT_TYPES.includes(data.adjustment_type)) {
+        throw new Error("Invalid adjustment type");
+    }
+
+    if (data.rule_type === "day_of_week") {
+        const day = Number(data.day_of_week);
+        if (!Number.isInteger(day) || day < 0 || day > 6) {
+            throw new Error("day_of_week must be between 0 (Sunday) and 6 (Saturday)");
+        }
+    } else if (!data.start_date || !data.end_date || data.end_date < data.start_date) {
+        throw new Error("date_range rules need a valid start_date and end_date");
+    }
+
+    if (data.adjustment_type === "percentage" && Number(data.adjustment_value) <= -100) {
+        throw new Error("A percentage adjustment can't reduce the price to zero or below");
+    }
+}
+
+exports.createPricingRule = async (providerId, serviceId, data) => {
+    const service = await serviceRepository.findById(serviceId);
+
+    if (!service || service.provider_id !== providerId) {
+        throw new Error("Service not found");
+    }
+
+    validatePricingRuleInput(data);
+
+    const ruleId = await serviceRepository.createPricingRule(serviceId, {
+        rule_type: data.rule_type,
+        day_of_week: data.rule_type === "day_of_week" ? Number(data.day_of_week) : null,
+        start_date: data.rule_type === "date_range" ? data.start_date : null,
+        end_date: data.rule_type === "date_range" ? data.end_date : null,
+        adjustment_type: data.adjustment_type,
+        adjustment_value: data.adjustment_value,
+        label: data.label || null
+    });
+
+    return { ruleId };
+};
+
+exports.getPricingRules = async (providerId, serviceId) => {
+    const service = await serviceRepository.findById(serviceId);
+
+    if (!service || service.provider_id !== providerId) {
+        throw new Error("Service not found");
+    }
+
+    return serviceRepository.findPricingRulesByService(serviceId);
+};
+
+exports.setPricingRuleActive = async (providerId, ruleId, isActive) => {
+    const rule = await serviceRepository.findPricingRuleById(ruleId);
+
+    if (!rule) {
+        throw new Error("Pricing rule not found");
+    }
+
+    const service = await serviceRepository.findById(rule.service_id);
+
+    if (!service || service.provider_id !== providerId) {
+        throw new Error("Pricing rule not found");
+    }
+
+    await serviceRepository.setPricingRuleActive(ruleId, isActive);
+};
+
+exports.deletePricingRule = async (providerId, ruleId) => {
+    const rule = await serviceRepository.findPricingRuleById(ruleId);
+
+    if (!rule) {
+        throw new Error("Pricing rule not found");
+    }
+
+    const service = await serviceRepository.findById(rule.service_id);
+
+    if (!service || service.provider_id !== providerId) {
+        throw new Error("Pricing rule not found");
+    }
+
+    await serviceRepository.deletePricingRule(ruleId);
 };

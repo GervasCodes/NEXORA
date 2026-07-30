@@ -77,7 +77,10 @@ describe("admin.service.getDashboard", () => {
             userCounts: { buyers: "10", sellers: "3", delivery_agents: undefined },
             orderCounts: { total_orders: "50", pending_orders: "5", delivered_orders: "40", cancelled_orders: "5" },
             revenue: { total_revenue: "1500000.50" },
-            productCounts: { total_products: "20", active_products: "18" }
+            productCounts: { total_products: "20", active_products: "18" },
+            bookingCounts: { total_bookings: "12", pending_bookings: "2", completed_bookings: "9", cancelled_bookings: undefined },
+            bookingRevenue: { total_booking_revenue: "300000" },
+            serviceCounts: { total_services: "7", active_services: "5" }
         });
 
         const result = await adminService.getDashboard();
@@ -86,7 +89,10 @@ describe("admin.service.getDashboard", () => {
             users: { buyers: 10, sellers: 3, delivery_agents: 0 },
             orders: { total: 50, pending: 5, delivered: 40, cancelled: 5 },
             revenue: 1500000.5,
-            products: { total: 20, active: 18 }
+            products: { total: 20, active: 18 },
+            bookings: { total: 12, pending: 2, completed: 9, cancelled: 0 },
+            bookingRevenue: 300000,
+            services: { total: 7, active: 5 }
         });
     });
 });

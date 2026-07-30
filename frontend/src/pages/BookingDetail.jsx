@@ -32,6 +32,22 @@ export default function BookingDetail() {
     const [error, setError] = useState("");
     const [phone, setPhone] = useState("");
 
+    // Phase 4 (Customer Experience) - "Improved customer booking journey":
+    // a completed booking now carries can_review/review from the API
+    // (see booking.service.js#getBookingById), so this form only needs
+    // to show up when there's actually something to review, without a
+    // second request to figure that out. Mirrors ProductDetail.jsx's
+    // review submission flow, just posting to /reviews/booking/:id
+    // instead of /reviews.
+    const MAX_REVIEW_PHOTOS = 5;
+    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState("");
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [reviewError, setReviewError] = useState("");
+    const [justSubmittedReview, setJustSubmittedReview] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
     const load = () => {
         api.get(`/bookings/${id}`)
             .then(({ data }) => setBooking(data.data))
@@ -216,6 +232,44 @@ export default function BookingDetail() {
         }
     };
 
+    const handleReviewSubmit = async (e) => {
+        e.preventDefault();
+        setSubmittingReview(true);
+        setReviewError("");
+        try {
+            await api.post(`/reviews/booking/${id}`, {
+                rating: reviewRating,
+                comment: reviewComment
+            });
+            setJustSubmittedReview(true);
+            setReviewComment("");
+            load();
+        } catch (err) {
+            setReviewError(extractErrorMessage(err));
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const handleReviewPhotoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !booking?.review?.id) return;
+
+        setUploadingPhoto(true);
+        setReviewError("");
+        try {
+            const body = new FormData();
+            body.append("photo", file);
+            await api.post(`/reviews/${booking.review.id}/photos`, body);
+            load();
+        } catch (err) {
+            setReviewError(extractErrorMessage(err));
+        } finally {
+            setUploadingPhoto(false);
+            e.target.value = "";
+        }
+    };
+
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             {justBooked && booking.status === "pending" && (
@@ -328,6 +382,98 @@ export default function BookingDetail() {
                     </button>
                 )}
             </div>
+
+            {!isProvider && (booking.can_review || booking.review) && (
+                <div className="mt-8 border-t border-line pt-6">
+                    <h2 className="font-display text-lg mb-3">{t("booking.review.title")}</h2>
+
+                    {booking.review ? (
+                        <div className="border border-line rounded-lg p-4">
+                            {justSubmittedReview && (
+                                <p className="text-sm text-teal mb-3">{t("booking.review.thanks")}</p>
+                            )}
+                            <p className="text-sm text-ash mb-1">{t("booking.review.yourReview")}</p>
+                            <p className="text-sm mb-1">★ {booking.review.rating}/5</p>
+                            {booking.review.comment && (
+                                <p className="text-sm text-ink/80">{booking.review.comment}</p>
+                            )}
+
+                            {justSubmittedReview && (
+                                (booking.review.photos?.length || 0) < MAX_REVIEW_PHOTOS ? (
+                                    <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors mt-3">
+                                        {uploadingPhoto ? t("booking.review.uploading") : t("booking.review.addPhoto")}
+                                        <input type="file" accept="image/*" onChange={handleReviewPhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                                    </label>
+                                ) : (
+                                    <p className="text-ash text-xs mt-3">{t("booking.review.maxPhotos", { count: MAX_REVIEW_PHOTOS })}</p>
+                                )
+                            )}
+
+                            {booking.review.photos?.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                    {booking.review.photos.map((photo) => (
+                                        <img
+                                            key={photo.id}
+                                            src={photo.photo_url}
+                                            alt=""
+                                            loading="lazy"
+                                            className="w-16 h-16 rounded-md object-cover border border-line"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
+                            {reviewError && <p className="text-sm text-coral mt-3">{reviewError}</p>}
+                        </div>
+                    ) : showReviewForm ? (
+                        <form onSubmit={handleReviewSubmit} className="border border-line rounded-lg p-4">
+                            <p className="text-sm mb-3">{t("booking.review.prompt")}</p>
+                            <label className="block text-sm mb-1">{t("booking.review.rating")}</label>
+                            <select
+                                value={reviewRating}
+                                onChange={(e) => setReviewRating(Number(e.target.value))}
+                                className="border border-line rounded-md px-3 py-2 text-sm mb-3 focus-ring bg-paper"
+                            >
+                                {[5, 4, 3, 2, 1].map((n) => (
+                                    <option key={n} value={n}>{n} star{n === 1 ? "" : "s"}</option>
+                                ))}
+                            </select>
+                            <label className="block text-sm mb-1">{t("booking.review.comment")}</label>
+                            <textarea
+                                value={reviewComment}
+                                onChange={(e) => setReviewComment(e.target.value)}
+                                maxLength={1000}
+                                rows={3}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm mb-3 focus-ring"
+                            />
+                            {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
+                            <div className="flex gap-3">
+                                <button
+                                    type="submit"
+                                    disabled={submittingReview}
+                                    className="bg-mango text-abyss px-5 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-50"
+                                >
+                                    {submittingReview ? t("booking.review.submitting") : t("booking.review.submit")}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowReviewForm(false)}
+                                    className="text-sm text-ash hover:underline"
+                                >
+                                    {t("booking.cancelButton")}
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <button
+                            onClick={() => setShowReviewForm(true)}
+                            className="text-sm text-teal hover:underline"
+                        >
+                            {t("booking.review.title")}
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

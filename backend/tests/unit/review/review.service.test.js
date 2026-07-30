@@ -1,10 +1,12 @@
 jest.mock("../../../src/modules/review/review.repository");
 jest.mock("../../../src/modules/product/product.repository");
 jest.mock("../../../src/utils/cloudinaryUpload");
+jest.mock("../../../src/modules/notification/notification.service");
 
 const reviewRepository = require("../../../src/modules/review/review.repository");
 const productRepository = require("../../../src/modules/product/product.repository");
 const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
+const notificationService = require("../../../src/modules/notification/notification.service");
 const reviewService = require("../../../src/modules/review/review.service");
 
 // Phase 5D: getStoreReviews is the store-page sibling of the existing
@@ -161,11 +163,19 @@ describe("review.service.replyToReview", () => {
     });
 
     it("saves the reply when the seller owns the reviewed product", async () => {
-        reviewRepository.findById.mockResolvedValue({ id: 5, product_id: 1 });
-        productRepository.findById.mockResolvedValue({ id: 1, seller_id: 1 });
+        reviewRepository.findById.mockResolvedValue({ id: 5, product_id: 1, buyer_id: 7 });
+        productRepository.findById.mockResolvedValue({ id: 1, seller_id: 1, slug: "widget" });
+        notificationService.notify.mockResolvedValue(undefined);
 
         await reviewService.replyToReview(1, 5, "Thanks for the feedback!");
 
         expect(reviewRepository.setSellerReply).toHaveBeenCalledWith(5, "Thanks for the feedback!");
+        expect(notificationService.notify).toHaveBeenCalledWith({
+            userId: 7,
+            type: "review_reply",
+            title: "You got a reply on your review",
+            message: "The seller replied to the review you left.",
+            url: "/products/widget"
+        });
     });
 });

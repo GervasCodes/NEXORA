@@ -22,6 +22,31 @@ exports.findByBuyerAndProduct = async (buyerId, productId) => {
     return rows[0];
 };
 
+// Phase 4 (Customer Experience) - booking-review counterpart of
+// hasDeliveredPurchase above. A booking has no delivery step of its own
+// (see migration 064's design notes: a booking's exit states are
+// completed/cancelled/refunded, there's no separate "delivered" status),
+// so eligibility is simply: this buyer's own booking, and it reached
+// 'completed'. No JOIN through order_items is needed since bookings.
+// customer_id already identifies the buyer directly.
+exports.hasCompletedBooking = async (buyerId, bookingId) => {
+    const [rows] = await db.query(
+        `SELECT id FROM bookings
+        WHERE id = ? AND customer_id = ? AND status = 'completed'
+        LIMIT 1`,
+        [bookingId, buyerId]
+    );
+    return rows.length > 0;
+};
+
+exports.findByBuyerAndBooking = async (buyerId, bookingId) => {
+    const [rows] = await db.query(
+        "SELECT * FROM reviews WHERE buyer_id = ? AND booking_id = ?",
+        [buyerId, bookingId]
+    );
+    return rows[0];
+};
+
 exports.findById = async (reviewId) => {
     const [rows] = await db.query(
         "SELECT * FROM reviews WHERE id = ?",
@@ -35,6 +60,18 @@ exports.create = async (buyerId, productId, rating, comment) => {
         `INSERT INTO reviews (buyer_id, product_id, rating, comment)
         VALUES (?, ?, ?, ?)`,
         [buyerId, productId, rating, comment || null]
+    );
+    return result.insertId;
+};
+
+// Phase 4 - booking-keyed sibling of create() above (migration 065 added
+// booking_id as a nullable column alongside product_id, mutually
+// exclusive via chk_reviews_target).
+exports.createForBooking = async (buyerId, bookingId, rating, comment) => {
+    const [result] = await db.query(
+        `INSERT INTO reviews (buyer_id, booking_id, rating, comment)
+        VALUES (?, ?, ?, ?)`,
+        [buyerId, bookingId, rating, comment || null]
     );
     return result.insertId;
 };
@@ -96,6 +133,92 @@ exports.getProductRatingBreakdown = async (productId) => {
         WHERE product_id = ?
         GROUP BY rating`,
         [productId]
+    );
+    return rows;
+};
+
+// Phase 4 - booking-review counterpart of findByProduct. Joined through
+// bookings (reviews has no service_id column of its own, same reasoning
+// findByProduct doesn't need one for products) rather than adding a
+// denormalized service_id to reviews, keeping the "exactly one target"
+// shape migration 065 established.
+exports.findByService = async (serviceId, sortBy) => {
+    const [rows] = await db.query(
+        `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
+                u.first_name, u.last_name
+        FROM reviews r
+        JOIN bookings b ON b.id = r.booking_id
+        JOIN users u ON u.id = r.buyer_id
+        WHERE b.service_id = ?
+        ORDER BY ${resolveSortClause(sortBy)}`,
+        [serviceId]
+    );
+    return rows;
+};
+
+exports.getServiceRatingSummary = async (serviceId) => {
+    const [rows] = await db.query(
+        `SELECT COUNT(*) AS review_count, AVG(r.rating) AS average_rating
+        FROM reviews r
+        JOIN bookings b ON b.id = r.booking_id
+        WHERE b.service_id = ?`,
+        [serviceId]
+    );
+    return rows[0];
+};
+
+exports.getServiceRatingBreakdown = async (serviceId) => {
+    const [rows] = await db.query(
+        `SELECT r.rating, COUNT(*) AS count
+        FROM reviews r
+        JOIN bookings b ON b.id = r.booking_id
+        WHERE b.service_id = ?
+        GROUP BY r.rating`,
+        [serviceId]
+    );
+    return rows;
+};
+
+// Phase 4 - provider-level sibling of findByService, the booking-review
+// counterpart of findBySeller/getSellerRatingSummary/getSellerRatingBreakdown
+// just below. Paginated for the same reason findBySeller is: a provider's
+// review count across every service they offer is unbounded.
+exports.findByProvider = async (providerId, limit, offset, sortBy) => {
+    const [rows] = await db.query(
+        `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
+                u.first_name, u.last_name,
+                s.id AS service_id, s.title AS service_title, s.slug AS service_slug
+        FROM reviews r
+        JOIN users u ON u.id = r.buyer_id
+        JOIN bookings b ON b.id = r.booking_id
+        JOIN services s ON s.id = b.service_id
+        WHERE b.provider_id = ?
+        ORDER BY ${resolveSortClause(sortBy)}
+        LIMIT ? OFFSET ?`,
+        [providerId, limit, offset]
+    );
+    return rows;
+};
+
+exports.getProviderRatingSummary = async (providerId) => {
+    const [rows] = await db.query(
+        `SELECT COUNT(*) AS review_count, AVG(r.rating) AS average_rating
+        FROM reviews r
+        JOIN bookings b ON b.id = r.booking_id
+        WHERE b.provider_id = ?`,
+        [providerId]
+    );
+    return rows[0];
+};
+
+exports.getProviderRatingBreakdown = async (providerId) => {
+    const [rows] = await db.query(
+        `SELECT r.rating, COUNT(*) AS count
+        FROM reviews r
+        JOIN bookings b ON b.id = r.booking_id
+        WHERE b.provider_id = ?
+        GROUP BY r.rating`,
+        [providerId]
     );
     return rows;
 };

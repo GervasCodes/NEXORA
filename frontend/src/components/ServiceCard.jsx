@@ -78,6 +78,16 @@ function ServiceCard({ service, layout = "grid" }) {
         <p className="text-xs text-ash mt-1">{service.category_name}</p>
     ) : null;
 
+    // Phase 4 (Customer Experience) - same rating badge shape as
+    // ProductCard.jsx's ratingAndStock, minus the stock half (a service
+    // listing has no stock concept).
+    const ratingLine = service.average_rating ? (
+        <p className="text-xs text-ash flex items-center gap-0.5 mt-1">
+            <span className="text-mango">★</span> {Number(service.average_rating).toFixed(1)}
+            <span className="text-ash/70">({service.review_count})</span>
+        </p>
+    ) : null;
+
     if (isList) {
         return (
             <Link
@@ -91,6 +101,7 @@ function ServiceCard({ service, layout = "grid" }) {
                     <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{service.title}</h3>
                     {priceRow}
                     {categoryLine}
+                    {ratingLine}
                 </div>
             </Link>
         );
@@ -108,6 +119,7 @@ function ServiceCard({ service, layout = "grid" }) {
 
             {priceRow}
             {categoryLine}
+            {ratingLine}
         </Link>
     );
 }

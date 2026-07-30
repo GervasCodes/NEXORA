@@ -18,8 +18,9 @@ vi.mock("../../src/context/SocketContext", () => ({
     useSocket: () => ({ socket: mockSocket })
 }));
 
+const mockToast = { error: vi.fn() };
 vi.mock("../../src/context/ToastContext", () => ({
-    useToast: () => ({ error: vi.fn() })
+    useToast: () => mockToast
 }));
 
 import AdminNotificationBell from "../../src/components/AdminNotificationBell";

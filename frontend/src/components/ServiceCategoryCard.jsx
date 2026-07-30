@@ -11,8 +11,15 @@ const FALLBACK_GRADIENTS = [
     "linear-gradient(135deg, #1E3A8A 0%, #9FC1F2 100%)"
 ];
 
-export default function ServiceCategoryCard({ category, index, active, onSelect }) {
+// category is null/undefined for the "All services" tile - it sits in the
+// same grid as every real category (ServicesBrowse.jsx passes it first) so
+// clearing the filter looks like just another card instead of a leftover
+// button bolted onto the row.
+export default function ServiceCategoryCard({ category, index, active, onSelect, totalCount }) {
+    const isAll = !category;
     const gradient = FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length];
+    const name = isAll ? "All services" : category.name;
+    const count = isAll ? totalCount : category.serviceCount;
 
     return (
         <button
@@ -23,8 +30,11 @@ export default function ServiceCategoryCard({ category, index, active, onSelect 
                 active ? "border-ink shadow-md" : "border-line hover:border-ink hover:shadow-md hover:-translate-y-0.5"
             }`}
         >
-            <div className="aspect-[4/3] relative overflow-hidden" style={!category.cover_image_url ? { background: gradient } : undefined}>
-                {category.cover_image_url ? (
+            <div
+                className="aspect-[4/3] relative overflow-hidden"
+                style={isAll ? { background: "linear-gradient(135deg, #111827 0%, #374151 100%)" } : (!category.cover_image_url ? { background: gradient } : undefined)}
+            >
+                {!isAll && category.cover_image_url ? (
                     <img
                         src={category.cover_image_url}
                         alt={category.name}
@@ -34,14 +44,23 @@ export default function ServiceCategoryCard({ category, index, active, onSelect 
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
+                        {isAll ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-8 h-8 text-frost/90">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                            </svg>
+                        ) : (
+                            <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
+                        )}
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
                 <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5 truncate">{category.name}</h3>
+                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5 truncate">{name}</h3>
                     <p className="text-frost/75 text-xs">
-                        {category.serviceCount} {category.serviceCount === 1 ? "service" : "services"}
+                        {count} {count === 1 ? "service" : "services"}
                     </p>
                 </div>
             </div>

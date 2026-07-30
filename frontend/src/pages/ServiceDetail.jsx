@@ -5,6 +5,8 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
+import RatingBreakdown from "../components/RatingBreakdown";
+import { formatDate } from "../utils/format";
 
 const PRICING_LABELS = {
     fixed: "",
@@ -202,6 +204,8 @@ export default function ServiceDetail() {
     const [service, setService] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeMedia, setActiveMedia] = useState(0);
+    const [reviews, setReviews] = useState(null);
+    const [reviewSort, setReviewSort] = useState("newest");
 
     useEffect(() => {
         setLoading(true);
@@ -210,6 +214,17 @@ export default function ServiceDetail() {
             .catch(() => setService(null))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    // Phase 4 (Customer Experience) - a service's reviews are read here,
+    // but submitted from BookingDetail.jsx once a booking is completed
+    // (a review is booking-keyed, not service-keyed - see migration
+    // 065's design notes), so this page only ever displays them.
+    useEffect(() => {
+        if (!service) return;
+        api.get(`/reviews/service/${service.id}`, { params: { sort: reviewSort } })
+            .then(({ data }) => setReviews(data.data))
+            .catch(() => {});
+    }, [service, reviewSort]);
 
     if (loading) {
         return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">Loading…</div>;
@@ -281,6 +296,12 @@ export default function ServiceDetail() {
                         {service.is_verified ? " · Verified" : ""}
                     </Link>
 
+                    {reviews?.average_rating && (
+                        <p className="text-sm text-ash mt-2">
+                            ★ {reviews.average_rating} average · {reviews.review_count} review{reviews.review_count === 1 ? "" : "s"}
+                        </p>
+                    )}
+
                     {locationLine && (
                         <p className="text-sm text-ash mt-2 flex items-center gap-1">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
@@ -308,6 +329,58 @@ export default function ServiceDetail() {
                     <BookingWidget service={service} />
                 </div>
             </div>
+
+            <section className="mt-16 max-w-2xl">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-1">
+                    <h2 className="font-display text-xl">Reviews</h2>
+                    {reviews?.review_count > 0 && (
+                        <select
+                            value={reviewSort}
+                            onChange={(e) => setReviewSort(e.target.value)}
+                            className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring"
+                        >
+                            <option value="newest">Newest</option>
+                            <option value="highest">Highest rated</option>
+                            <option value="lowest">Lowest rated</option>
+                        </select>
+                    )}
+                </div>
+
+                <RatingBreakdown breakdown={reviews?.rating_breakdown} reviewCount={reviews?.review_count} />
+
+                {!reviews?.reviews?.length && <p className="text-ash text-sm">No reviews yet.</p>}
+                <ul className="space-y-4">
+                    {reviews?.reviews?.map((r) => (
+                        <li key={r.id} className="border-b border-line pb-4">
+                            <div className="flex justify-between items-baseline mb-1">
+                                <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
+                            </div>
+                            <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
+                            {r.comment && <p className="text-sm text-ink/80">{r.comment}</p>}
+                            {r.photos?.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {r.photos.map((photo) => (
+                                        <img
+                                            key={photo.id}
+                                            src={photo.photo_url}
+                                            alt=""
+                                            loading="lazy"
+                                            className="w-16 h-16 rounded-md object-cover border border-line"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            {r.seller_reply && (
+                                <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
+                                    <p className="text-xs font-medium text-ink mb-0.5">Provider response</p>
+                                    <p className="text-xs text-ink/80">{r.seller_reply}</p>
+                                </div>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            </section>
         </div>
     );
 }

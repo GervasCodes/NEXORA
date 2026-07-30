@@ -15,10 +15,12 @@ const tabs = [
     { to: "/seller/products", label: "Products" },
     { to: "/seller/services", label: "Services" },
     { to: "/seller/availability", label: "Availability" },
+    { to: "/seller/pricing", label: "Pricing" },
     { to: "/seller/bookings", label: "Bookings" },
     { to: "/seller/collections", label: "Collections" },
     { to: "/seller/orders", label: "Orders" },
     { to: "/seller/reviews", label: "Reviews" },
+    { to: "/seller/service-reviews", label: "Service reviews" },
     { to: "/seller/delivery-team", label: "Delivery team" },
     { to: "/seller/disputes", label: "Disputes" },
     { to: "/seller/store", label: "Store settings" }

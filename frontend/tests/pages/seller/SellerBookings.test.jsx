@@ -14,6 +14,21 @@ vi.mock("../../../src/api/client", () => ({
     extractErrorMessage: () => "Something went wrong"
 }));
 
+vi.mock("../../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key) => ({
+            "booking.loading": "Loading bookings…",
+            "booking.seller.title": "Bookings",
+            "booking.seller.onlyProviders": "Bookings management is for service providers. Add services to your store first.",
+            "booking.seller.goToServices": "Go to Services",
+            "booking.seller.empty": "No bookings yet.",
+            "booking.seller.confirm": "Confirm",
+            "booking.seller.cancel": "Cancel",
+            "booking.seller.details": "Details"
+        }[key] || key)
+    })
+}));
+
 import api from "../../../src/api/client";
 import SellerBookings from "../../../src/pages/seller/SellerBookings";
 

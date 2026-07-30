@@ -1,5 +1,7 @@
 const reviewRepository = require("./review.repository");
 const productRepository = require("../product/product.repository");
+const bookingRepository = require("../booking/booking.repository");
+const notificationService = require("../notification/notification.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
 // Phase 6C: turns the flat [{rating, count}, ...] rows from
@@ -54,6 +56,45 @@ exports.createReview = async (buyerId, productId, rating, comment) => {
     return { reviewId };
 };
 
+// Phase 4 (Customer Experience) - booking-review counterpart of
+// createReview. Eligibility is "this buyer's own completed booking"
+// (reviewRepository.hasCompletedBooking) rather than a delivered order,
+// since a booking has no delivery step (see migration 064's design
+// notes on the booking lifecycle's exit states).
+exports.createBookingReview = async (buyerId, bookingId, rating, comment) => {
+    const eligible = await reviewRepository.hasCompletedBooking(buyerId, bookingId);
+
+    if (!eligible) {
+        throw new Error("You can only review services from completed bookings");
+    }
+
+    const existing = await reviewRepository.findByBuyerAndBooking(buyerId, bookingId);
+
+    if (existing) {
+        throw new Error("You've already reviewed this booking. You can edit your review instead");
+    }
+
+    const reviewId = await reviewRepository.createForBooking(buyerId, bookingId, rating, comment);
+
+    // New-review notification to the provider - reviews never notified
+    // anyone before Phase 4 (CHANGES.md's own Phase 4 "Notifications"
+    // item). Plain title/message, not i18n keys, same convention
+    // booking.service.js's notify() calls already use for this module's
+    // events.
+    const booking = await bookingRepository.findById(bookingId);
+    if (booking) {
+        await notificationService.notify({
+            userId: booking.provider_id,
+            type: "review_received",
+            title: "New review received",
+            message: `A customer left a ${rating}-star review on booking ${booking.booking_reference}.`,
+            url: `/seller/bookings/${bookingId}`
+        });
+    }
+
+    return { reviewId };
+};
+
 exports.updateReview = async (reviewId, buyerId, rating, comment) => {
     const review = await reviewRepository.findById(reviewId);
 
@@ -87,6 +128,53 @@ exports.getProductReviews = async (productId, sortBy) => {
             ? Number(Number(summary.average_rating).toFixed(1))
             : null,
         review_count: summary.review_count,
+        rating_breakdown: buildRatingBreakdown(breakdownRows)
+    };
+};
+
+// Phase 4 - booking-review counterpart of getProductReviews.
+exports.getServiceReviews = async (serviceId, sortBy) => {
+    const [reviews, summary, breakdownRows] = await Promise.all([
+        reviewRepository.findByService(serviceId, sortBy),
+        reviewRepository.getServiceRatingSummary(serviceId),
+        reviewRepository.getServiceRatingBreakdown(serviceId)
+    ]);
+
+    return {
+        reviews: await attachPhotos(reviews),
+        average_rating: summary.average_rating
+            ? Number(Number(summary.average_rating).toFixed(1))
+            : null,
+        review_count: summary.review_count,
+        rating_breakdown: buildRatingBreakdown(breakdownRows)
+    };
+};
+
+const PROVIDER_REVIEWS_PAGE_SIZE = 10;
+
+// Phase 4 - paginated provider-level sibling of getServiceReviews, same
+// reasoning/shape as getStoreReviews below (a provider's total review
+// count across every service is unbounded).
+exports.getProviderReviews = async (providerId, page = 1, sortBy) => {
+    const currentPage = Math.max(1, page);
+    const offset = (currentPage - 1) * PROVIDER_REVIEWS_PAGE_SIZE;
+
+    const [reviews, summary, breakdownRows] = await Promise.all([
+        reviewRepository.findByProvider(providerId, PROVIDER_REVIEWS_PAGE_SIZE, offset, sortBy),
+        reviewRepository.getProviderRatingSummary(providerId),
+        reviewRepository.getProviderRatingBreakdown(providerId)
+    ]);
+
+    const reviewCount = summary.review_count || 0;
+
+    return {
+        reviews: await attachPhotos(reviews),
+        average_rating: summary.average_rating
+            ? Number(Number(summary.average_rating).toFixed(1))
+            : null,
+        review_count: reviewCount,
+        page: currentPage,
+        totalPages: Math.max(1, Math.ceil(reviewCount / PROVIDER_REVIEWS_PAGE_SIZE)),
         rating_breakdown: buildRatingBreakdown(breakdownRows)
     };
 };
@@ -160,11 +248,47 @@ exports.replyToReview = async (sellerId, reviewId, replyText) => {
         throw new Error("Review not found");
     }
 
-    const product = await productRepository.findById(review.product_id);
+    // Phase 4 - a review is now either product-keyed or booking-keyed
+    // (migration 065), so ownership is checked against whichever target
+    // it has. A provider replying to a booking review goes through the
+    // exact same seller_reply column/endpoint as a seller replying to a
+    // product review (see migration 065's design notes on why this
+    // reuses the column instead of adding a separate provider_reply).
+    let notifyUserId = null;
+    let reviewUrl = null;
+    let replyFrom = null;
 
-    if (!product || product.seller_id !== sellerId) {
-        throw new Error("Review not found");
+    if (review.product_id) {
+        const product = await productRepository.findById(review.product_id);
+
+        if (!product || product.seller_id !== sellerId) {
+            throw new Error("Review not found");
+        }
+
+        notifyUserId = review.buyer_id;
+        reviewUrl = `/products/${product.slug}`;
+        replyFrom = "seller";
+    } else {
+        const booking = await bookingRepository.findById(review.booking_id);
+
+        if (!booking || booking.provider_id !== sellerId) {
+            throw new Error("Review not found");
+        }
+
+        notifyUserId = review.buyer_id;
+        reviewUrl = `/bookings/${review.booking_id}`;
+        replyFrom = "provider";
     }
 
     await reviewRepository.setSellerReply(reviewId, replyText);
+
+    await notificationService.notify({
+        userId: notifyUserId,
+        type: "review_reply",
+        title: "You got a reply on your review",
+        message: replyFrom === "seller"
+            ? "The seller replied to the review you left."
+            : "The provider replied to the review you left.",
+        url: reviewUrl
+    });
 };

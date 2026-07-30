@@ -24,6 +24,7 @@ router.use(authMiddleware, authorize("admin"));
 router.get("/dashboard", adminController.getDashboard);
 router.get("/dispatch", adminController.getDispatchOverview);
 router.get("/analytics", adminController.getAnalytics);
+router.get("/analytics/services", adminController.getServicesAnalytics);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 router.get("/audit-logs", adminController.listAuditLogs);

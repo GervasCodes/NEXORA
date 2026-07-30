@@ -4,6 +4,8 @@ const serviceRepository = require("../service/service.repository");
 const notificationService = require("../notification/notification.service");
 const walletService = require("../wallet/wallet.service");
 const paymentService = require("../payment/payment.service");
+const reviewRepository = require("../review/review.repository");
+const { computeDynamicPrice } = require("../../utils/dynamicPricing");
 
 const generateBookingReference = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -62,6 +64,14 @@ const priceDateItems = async (service, dates, quantity) => {
         row
     ]));
 
+    // Phase 5 (Growth) - Dynamic Pricing. Fetched once outside the loop
+    // (same rule set applies to every date in the range) and only
+    // consulted for a date with no manual service_availability.price -
+    // a provider's explicit per-date override always wins over a rule,
+    // same priority order utils/dynamicPricing.js documents.
+    const pricingRules = await serviceRepository.findActivePricingRulesByService(service.id);
+    const basePrice = Number(service.discount_price ?? service.base_price);
+
     const items = [];
 
     for (const date of dates) {
@@ -77,7 +87,7 @@ const priceDateItems = async (service, dates, quantity) => {
 
         const unitPrice = row.price !== null
             ? Number(row.price)
-            : Number(service.discount_price ?? service.base_price);
+            : computeDynamicPrice(basePrice, pricingRules, date);
 
         items.push({ date, quantity, unitPrice, subtotal: unitPrice * quantity });
     }
@@ -151,10 +161,35 @@ const loadBookingWithAccessCheck = async (bookingId, userId) => {
     return booking;
 };
 
+// Phase 4 (Customer Experience) - "Improved customer booking journey":
+// a completed booking now carries its own review (if the customer
+// already left one) plus a can_review flag, so BookingDetail.jsx can
+// show "Leave a review" / "Edit your review" / nothing, without a
+// second round trip to the reviews endpoints just to find out which.
+// Only computed for the customer's own view - a provider doesn't need
+// this flag on their own copy of the booking.
 exports.getBookingById = async (bookingId, userId) => {
     const booking = await loadBookingWithAccessCheck(bookingId, userId);
     const items = await bookingRepository.findItemsByBookingId(bookingId);
-    return { ...booking, items };
+
+    let review = null;
+    if (booking.status === "completed" && booking.customer_id === userId) {
+        const reviewRow = await reviewRepository.findByBuyerAndBooking(userId, bookingId);
+        if (reviewRow) {
+            const photos = await reviewRepository.findPhotosByReviewIds([reviewRow.id]);
+            review = {
+                ...reviewRow,
+                photos: photos.map((photo) => ({ id: photo.id, photo_url: photo.photo_url }))
+            };
+        }
+    }
+
+    return {
+        ...booking,
+        items,
+        review,
+        can_review: booking.status === "completed" && booking.customer_id === userId && !review
+    };
 };
 
 exports.getMyBookingsAsCustomer = async (customerId) => {

@@ -226,7 +226,29 @@ exports.getDashboardStats = async () => {
         FROM products`
     );
 
-    return { userCounts, orderCounts, revenue, productCounts };
+    // Phase 5 (Growth) - services counterpart of orderCounts/productCounts
+    // above, same shape.
+    const [[bookingCounts]] = await db.query(
+        `SELECT
+            COUNT(*) AS total_bookings,
+            SUM(status = 'pending') AS pending_bookings,
+            SUM(status = 'completed') AS completed_bookings,
+            SUM(status = 'cancelled') AS cancelled_bookings
+        FROM bookings`
+    );
+
+    const [[bookingRevenue]] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total_booking_revenue
+        FROM bookings
+        WHERE payment_status = 'paid'`
+    );
+
+    const [[serviceCounts]] = await db.query(
+        `SELECT COUNT(*) AS total_services, SUM(is_active = 1 AND status = 'published') AS active_services
+        FROM services`
+    );
+
+    return { userCounts, orderCounts, revenue, productCounts, bookingCounts, bookingRevenue, serviceCounts };
 };
 
 // --- Analytics: daily sales, top products, top sellers ---
@@ -279,6 +301,73 @@ exports.getTopSellers = async (limit) => {
         ORDER BY revenue DESC
         LIMIT ?`,
         [limit]
+    );
+    return rows;
+};
+
+// --- Analytics: services counterpart (Phase 5 - Growth) ---------------
+
+exports.getDailyBookingSales = async (days) => {
+    const [rows] = await db.query(
+        `SELECT DATE(created_at) AS day,
+                COALESCE(SUM(amount), 0) AS revenue,
+                COUNT(*) AS booking_count
+        FROM bookings
+        WHERE payment_status = 'paid' AND created_at >= (NOW() - INTERVAL ? DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY day ASC`,
+        [days]
+    );
+    return rows;
+};
+
+exports.getTopServices = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT s.id, s.title, s.slug, sp.store_name,
+                COUNT(b.id) AS booking_count,
+                SUM(b.amount) AS revenue
+        FROM bookings b
+        JOIN services s ON s.id = b.service_id
+        JOIN seller_profiles sp ON sp.user_id = s.provider_id
+        WHERE b.payment_status = 'paid'
+        GROUP BY s.id, s.title, s.slug, sp.store_name
+        ORDER BY revenue DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+exports.getTopProviders = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT sp.user_id, sp.store_name, sp.is_verified,
+                SUM(b.amount) AS revenue,
+                COUNT(DISTINCT b.id) AS booking_count
+        FROM bookings b
+        JOIN seller_profiles sp ON sp.user_id = b.provider_id
+        WHERE b.payment_status = 'paid'
+        GROUP BY sp.user_id, sp.store_name, sp.is_verified
+        ORDER BY revenue DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+// Advanced reporting (Phase 5 - Growth): bookings/revenue grouped by
+// service category, for the "which category is actually driving
+// revenue" question a top-N services/providers list can't answer on
+// its own.
+exports.getCategoryPerformance = async () => {
+    const [rows] = await db.query(
+        `SELECT sc.id, sc.name,
+                COUNT(b.id) AS booking_count,
+                COALESCE(SUM(b.amount), 0) AS revenue
+        FROM service_categories sc
+        LEFT JOIN services s ON s.category_id = sc.id
+        LEFT JOIN bookings b ON b.service_id = s.id AND b.payment_status = 'paid'
+        GROUP BY sc.id, sc.name
+        ORDER BY revenue DESC`
     );
     return rows;
 };

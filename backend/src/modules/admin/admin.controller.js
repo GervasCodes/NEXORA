@@ -209,6 +209,18 @@ exports.getAnalytics = async (req, res) => {
     }
 };
 
+// Phase 5 (Growth) - services counterpart of getAnalytics.
+exports.getServicesAnalytics = async (req, res) => {
+    try {
+        const analytics = await adminService.getServicesAnalytics();
+
+        return res.json({ success: true, data: analytics });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // --- Platform settings ---
 
 exports.getSettings = async (req, res) => {

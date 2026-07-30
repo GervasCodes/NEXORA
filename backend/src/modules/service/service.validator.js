@@ -40,3 +40,52 @@ exports.createServiceValidation = [
         .isFloat({ min: -180, max: 180 })
         .withMessage("Invalid longitude")
 ];
+
+const RULE_TYPES = ["day_of_week", "date_range"];
+const ADJUSTMENT_TYPES = ["percentage", "fixed"];
+
+// Phase 5 (Growth) - Dynamic Pricing. Deliberately loose here (doesn't
+// enforce day_of_week vs. date_range's mutually-exclusive fields the
+// way migration 066's CHECK constraint does) - service.service.js's
+// validatePricingRuleInput is the real gate for that, same division of
+// labor createServiceValidation above already has with the service
+// layer's own checks.
+exports.createPricingRuleValidation = [
+    body("rule_type")
+        .notEmpty()
+        .withMessage("Rule type is required")
+        .isIn(RULE_TYPES)
+        .withMessage(`Rule type must be one of: ${RULE_TYPES.join(", ")}`),
+
+    body("adjustment_type")
+        .notEmpty()
+        .withMessage("Adjustment type is required")
+        .isIn(ADJUSTMENT_TYPES)
+        .withMessage(`Adjustment type must be one of: ${ADJUSTMENT_TYPES.join(", ")}`),
+
+    body("adjustment_value")
+        .notEmpty()
+        .withMessage("Adjustment value is required")
+        .isNumeric()
+        .withMessage("Adjustment value must be a number"),
+
+    body("day_of_week")
+        .optional({ nullable: true })
+        .isInt({ min: 0, max: 6 })
+        .withMessage("day_of_week must be between 0 (Sunday) and 6 (Saturday)"),
+
+    body("start_date")
+        .optional({ nullable: true })
+        .isDate()
+        .withMessage("Invalid start_date"),
+
+    body("end_date")
+        .optional({ nullable: true })
+        .isDate()
+        .withMessage("Invalid end_date"),
+
+    body("label")
+        .optional({ nullable: true })
+        .isLength({ max: 100 })
+        .withMessage("Label is too long")
+];

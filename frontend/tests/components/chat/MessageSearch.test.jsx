@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 // A stray copy of the MessageSearch *component* itself previously lived at
@@ -11,6 +11,10 @@ vi.mock("../../../src/api/client", () => ({
 }));
 
 import MessageSearch from "../../../src/components/chat/MessageSearch";
+
+beforeEach(() => {
+    mockGet.mockReset();
+});
 
 describe("MessageSearch", () => {
     it("does not call the search endpoint for a blank query", () => {

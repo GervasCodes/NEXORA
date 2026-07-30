@@ -25,6 +25,33 @@ exports.createReview = async (req, res) => {
     }
 };
 
+// Phase 4 (Customer Experience) - booking-review counterpart of
+// createReview.
+exports.createBookingReview = async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+
+        const result = await reviewService.createBookingReview(
+            req.user.id,
+            req.params.bookingId,
+            rating,
+            comment
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Review submitted",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.updateReview = async (req, res) => {
     try {
         const { rating, comment } = req.body;
@@ -69,6 +96,45 @@ exports.deleteReview = async (req, res) => {
 exports.getProductReviews = async (req, res) => {
     try {
         const result = await reviewService.getProductReviews(req.params.productId, req.query.sort);
+
+        return res.json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Phase 4 - public, same as getProductReviews (anyone can read a
+// service's reviews).
+exports.getServiceReviews = async (req, res) => {
+    try {
+        const result = await reviewService.getServiceReviews(req.params.serviceId, req.query.sort);
+
+        return res.json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Phase 4 - public, paginated provider-level sibling of
+// getServiceReviews, same "?page=" convention as getStoreReviews below.
+exports.getProviderReviews = async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const result = await reviewService.getProviderReviews(req.params.providerId, page, req.query.sort);
 
         return res.json({
             success: true,

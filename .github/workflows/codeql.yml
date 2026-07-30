@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # javascript-typescript's default build covers both backend
       # (CommonJS/Node) and frontend (JSX/Vite) source - no separate

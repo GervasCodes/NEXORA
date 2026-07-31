@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import api from "../api/client";
-import ServiceGrid from "../components/ServiceGrid";
-import ServiceFilters from "../components/ServiceFilters";
 import ServiceCategoryCard from "../components/ServiceCategoryCard";
 
 function ServiceCategoryCardSkeleton() {
@@ -13,31 +10,25 @@ function ServiceCategoryCardSkeleton() {
     );
 }
 
-// The "All services" hub - the services equivalent of Home.jsx's department
-// discovery. Each category card here links out to its own dedicated page
-// (ServiceCategoryPage.jsx, at /services/category/:slug) instead of filtering
-// in place, so every category gets a real, shareable URL of its own. The
-// search bar on this page searches across every category; each category's
-// own page has the same search bar, scoped to just that category.
+// The "All services" hub - the services equivalent of Home.jsx's default
+// (no-search) view, which shows nothing but DepartmentDiscovery. This page
+// now shows nothing but the category grid the same way: no search bar, no
+// filters, no service listing here. Each card links out to its own page
+// (ServiceCategoryPage.jsx, at /services/category/:slug), and THAT page is
+// where the search bar and min/max filters live, scoped to just that
+// category - mirroring how DepartmentPage.jsx scopes ProductFilters to one
+// department after Home.jsx's department grid.
 export default function ServicesBrowse() {
     const [categories, setCategories] = useState([]);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
-    const [filters, setFilters] = useState({});
-    const [search, setSearch] = useState("");
+    const [error, setError] = useState("");
 
     useEffect(() => {
         api.get("/service-categories/browse")
             .then(({ data }) => setCategories(data.data))
-            .catch(() => {})
+            .catch(() => setError("Couldn't load service categories right now."))
             .finally(() => setCategoriesLoading(false));
     }, []);
-
-    const submitSearch = (e) => {
-        e.preventDefault();
-        setFilters((prev) => ({ ...prev, search: search || undefined }));
-    };
-
-    const totalCount = categories.reduce((sum, c) => sum + (c.serviceCount || 0), 0);
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
@@ -48,60 +39,28 @@ export default function ServicesBrowse() {
                 </p>
             </div>
 
-            {/* Service categories - grid-aligned and styled like the homepage's
-                "Shop by department" section, with the search bar and the rest
-                of the browsing controls tucked inside this same block instead
-                of stacking as separate bars underneath it. */}
-            <div className="mb-8">
-                <div className="mb-4 flex items-end justify-between flex-wrap gap-3">
-                    <div>
-                        <h2 className="font-display text-xl mb-1">Browse by category</h2>
-                        <p className="text-ash text-sm">Find the right provider, organized the way you book.</p>
-                    </div>
-                    <form onSubmit={submitSearch} className="flex gap-2 w-full sm:w-auto sm:max-w-[15rem]">
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search all services..."
-                            className="flex-1 border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
-                        />
-                        <button type="submit" className="text-sm border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors shrink-0">
-                            Search
-                        </button>
-                    </form>
-                </div>
-
-                {categoriesLoading ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 mb-6">
-                        {Array.from({ length: 5 }).map((_, i) => <ServiceCategoryCardSkeleton key={i} />)}
-                    </div>
-                ) : categories.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 mb-6">
-                        <ServiceCategoryCard category={null} totalCount={totalCount} active />
-                        {categories.map((category, i) => (
-                            <ServiceCategoryCard
-                                key={category.id}
-                                category={category}
-                                index={i}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                <ServiceFilters categoryId={undefined} onChange={(next) => setFilters((prev) => ({ ...prev, ...next }))} />
+            <div className="mb-6">
+                <h2 className="font-display text-xl mb-1">Browse by category</h2>
+                <p className="text-ash text-sm">Find the right provider, organized the way you book.</p>
             </div>
 
-            <ServiceGrid
-                params={filters}
-                emptyTitle="No services yet"
-                emptyHint="Check back soon as providers list new services."
-                emptyAction={
-                    <p className="mt-4 text-sm">
-                        <Link to="/products" className="text-teal hover:underline">Browse products instead</Link>
-                    </p>
-                }
-            />
+            {error && <p className="text-coral">{error}</p>}
+
+            {categoriesLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+                    {Array.from({ length: 7 }).map((_, i) => <ServiceCategoryCardSkeleton key={i} />)}
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+                    {categories.map((category, i) => (
+                        <ServiceCategoryCard
+                            key={category.id}
+                            category={category}
+                            index={i}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

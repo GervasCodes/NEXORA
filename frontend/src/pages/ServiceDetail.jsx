@@ -286,7 +286,16 @@ export default function ServiceDetail() {
 
                 <div>
                     {service.category_name && (
-                        <p className="text-xs text-ash uppercase tracking-wide mb-2">{service.category_name}</p>
+                        service.category_slug ? (
+                            <Link
+                                to={`/services/category/${service.category_slug}`}
+                                className="text-xs text-ash uppercase tracking-wide mb-2 hover:text-ink inline-block"
+                            >
+                                {service.category_name}
+                            </Link>
+                        ) : (
+                            <p className="text-xs text-ash uppercase tracking-wide mb-2">{service.category_name}</p>
+                        )
                     )}
 
                     <h1 className="font-display text-2xl sm:text-3xl mb-2">{service.title}</h1>

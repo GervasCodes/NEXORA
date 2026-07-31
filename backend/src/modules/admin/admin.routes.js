@@ -25,6 +25,12 @@ router.get("/dashboard", adminController.getDashboard);
 router.get("/dispatch", adminController.getDispatchOverview);
 router.get("/analytics", adminController.getAnalytics);
 router.get("/analytics/services", adminController.getServicesAnalytics);
+
+// Phase 4 (Analytics & Business Metrics) - GMV, take rate, repeat-buyer,
+// and provider-retention metrics, plus a CSV export of the underlying
+// daily GMV series.
+router.get("/analytics/business", adminController.getBusinessMetrics);
+router.get("/analytics/business/export", adminController.exportGmvCsv);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 router.get("/audit-logs", adminController.listAuditLogs);

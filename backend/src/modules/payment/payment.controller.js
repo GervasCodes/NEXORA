@@ -1,4 +1,6 @@
 const paymentService = require("./payment.service");
+const logger = require("../../utils/logger").child({ module: "payment-webhook" });
+const Sentry = require("../../config/sentry");
 
 // Buyers/sellers pass their own return URLs (e.g. the exact order or
 // verification page they were on) so Snippe/PayPal send them back to the
@@ -47,6 +49,25 @@ exports.initiateMobileMoneyPayment = async (req, res) => {
     }
 };
 
+// Phase 5 (Resilience & Growth). No orderId/auth-role restriction beyond
+// being logged in - this just reports which rails are configured, not
+// anything about the requesting user's own orders.
+exports.getAvailablePaymentMethods = async (req, res) => {
+    try {
+        const methods = paymentService.getAvailablePaymentMethods();
+
+        return res.json({
+            success: true,
+            data: methods
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getPayment = async (req, res) => {
     try {
         const payment = await paymentService.getPayment(
@@ -89,7 +110,8 @@ exports.malipopayWebhook = async (req, res) => {
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("MalipoPay webhook error:", error);
+        logger.error({ err: error, provider: "malipopay", reqId: req.id }, "MalipoPay webhook error");
+        Sentry.captureException(error, { tags: { area: "payment-webhook", provider: "malipopay" } });
         // Still 200 so MalipoPay doesn't retry-storm on our own bug; the
         // error is logged above for us to investigate.
         return res.status(200).json({ success: false });
@@ -111,7 +133,8 @@ exports.selcomWebhook = async (req, res) => {
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("Selcom webhook error:", error);
+        logger.error({ err: error, provider: "selcom", reqId: req.id }, "Selcom webhook error");
+        Sentry.captureException(error, { tags: { area: "payment-webhook", provider: "selcom" } });
         return res.status(200).json({ success: false });
     }
 };
@@ -170,7 +193,19 @@ exports.snippeWebhook = async (req, res) => {
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        console.error("Snippe webhook error:", error.message);
+        logger.error({ err: error, provider: "snippe", reqId: req.id }, "Snippe webhook error");
+        // Not sent to Sentry as an exception: an invalid-signature
+        // rejection here is usually a forged/replayed request rather
+        // than an application bug (same reasoning as
+        // webhookAuth.middleware.js's warn-level log for the mobile
+        // money providers) - captureMessage at warning level keeps it
+        // visible without treating every rejected forgery as an
+        // incident.
+        Sentry.captureMessage("Snippe webhook rejected", {
+            level: "warning",
+            tags: { area: "payment-webhook", provider: "snippe" },
+            extra: { reason: error.message }
+        });
         // 400 here (unlike the mobile money webhooks) is correct: an
         // invalid signature means this request didn't come from Snippe,
         // and a 4xx on a signature failure is what we want (it won't

@@ -4,9 +4,12 @@ const bookingRepository = require("../booking/booking.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
 const snippeProvider = require("./providers/snippe.provider");
 const paypalProvider = require("./providers/paypal.provider");
+const providerRegistry = require("./providers/registry");
 const walletService = require("../wallet/wallet.service");
 const settingsService = require("../settings/settings.service");
 const auditService = require("../audit/audit.service");
+const logger = require("../../utils/logger").child({ module: "payment-webhook" });
+const Sentry = require("../../config/sentry");
 
 const generateReceiptNumber = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -314,9 +317,15 @@ exports._handleBookingPaymentWebhook = async (bookingId, success, transactionRef
 
     const booking = await bookingRepository.findById(bookingId);
 
-    walletService.creditProvidersForBooking(bookingId).catch((err) =>
-        console.error("Provider wallet credit error:", err)
-    );
+    walletService.creditProvidersForBooking(bookingId).catch((err) => {
+        // This is the critical case: the buyer's payment already
+        // succeeded (we're past that point above) but crediting the
+        // provider's wallet failed - money is "stuck" in escrow state
+        // until this is manually reconciled, so it's reported to
+        // Sentry as an error, not just logged.
+        logger.error({ err, bookingId }, "Provider wallet credit error");
+        Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { bookingId } });
+    });
 
     if (booking) {
         const notificationService = require("../notification/notification.service");
@@ -327,7 +336,7 @@ exports._handleBookingPaymentWebhook = async (bookingId, success, transactionRef
             title: "Payment received",
             message: `Your payment for booking ${booking.booking_reference} was received.`,
             url: `/bookings/${bookingId}`
-        }).catch((err) => console.error("booking payment notify error:", err));
+        }).catch((err) => logger.warn({ err, bookingId, userId: booking.customer_id }, "booking payment notify error"));
 
         notificationService.notify({
             userId: booking.provider_id,
@@ -335,7 +344,7 @@ exports._handleBookingPaymentWebhook = async (bookingId, success, transactionRef
             title: "Payment received",
             message: `Payment for booking ${booking.booking_reference} has been received and is held in escrow.`,
             url: `/seller/bookings/${bookingId}`
-        }).catch((err) => console.error("booking payment notify error:", err));
+        }).catch((err) => logger.warn({ err, bookingId, userId: booking.provider_id }, "booking payment notify error"));
 
         const socketModule = require("../../socket/socket");
         socketModule.emitToUser(booking.customer_id, "payment:updated", {
@@ -458,14 +467,16 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
         await orderRepository.updatePaymentStatusForChildren(orderId, "paid");
 
         for (const child of children) {
-            walletService.creditSellersForOrder(child.id).catch((err) =>
-                console.error("Seller wallet credit error:", err)
-            );
+            walletService.creditSellersForOrder(child.id).catch((err) => {
+                logger.error({ err, orderId: child.id, parentOrderId: orderId }, "Seller wallet credit error");
+                Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { orderId: child.id, parentOrderId: orderId } });
+            });
         }
     } else {
-        walletService.creditSellersForOrder(orderId).catch((err) =>
-            console.error("Seller wallet credit error:", err)
-        );
+        walletService.creditSellersForOrder(orderId).catch((err) => {
+            logger.error({ err, orderId }, "Seller wallet credit error");
+            Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { orderId } });
+        });
     }
 
     const socketModule = require("../../socket/socket");
@@ -702,6 +713,13 @@ exports.capturePaypalPayment = async (paypalOrderId) => {
     });
 };
 
+// Phase 5 (Resilience & Growth). Purely additive - reads the registry's
+// capability metadata, doesn't touch any existing payment flow. Lets
+// checkout show only rails an admin has actually configured, instead of
+// hardcoding "mobile money, Snippe, PayPal" and finding out one of them
+// 401s when a buyer tries it.
+exports.getAvailablePaymentMethods = () => providerRegistry.listConfiguredProviders();
+
 exports.getPayment = async (orderId, userId) => {
     const order = await orderRepository.findOrderById(orderId);
 
@@ -781,9 +799,10 @@ exports.confirmDeliveryReceipt = async (orderId, buyerId) => {
     await paymentRepository.markCompleted(payment.id, null, receiptNumber);
     await orderRepository.updatePaymentStatus(orderId, "paid");
 
-    walletService.creditSellersForOrder(orderId).catch((err) =>
-        console.error("Seller wallet credit error:", err)
-    );
+    walletService.creditSellersForOrder(orderId).catch((err) => {
+        logger.error({ err, orderId }, "Seller wallet credit error");
+        Sentry.captureException(err, { tags: { area: "payment", stage: "wallet-credit" }, extra: { orderId } });
+    });
 
     return { confirmed: true, paymentConfirmed: true, receiptNumber };
 };

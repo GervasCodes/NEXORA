@@ -245,7 +245,8 @@ delivery is inherently date-driven.
 | POST | `/verification-fee/snippe/checkout` | Snippe checkout for the seller verification fee |
 | POST | `/verification-fee/paypal/create` | PayPal order for the verification fee |
 | POST | `/paypal/capture` | Capture a PayPal payment |
-| POST | `/:orderId/initiate` | Start mobile-money payment (Selcom/MalipoPay) for an order |
+| GET | `/methods` | Configured payment rails and their capabilities (Phase 5 — `providers/registry.js`) |
+| POST | `/:orderId/initiate` | Start mobile-money payment (MalipoPay/Selcom/AzamPay, per `MOBILE_MONEY_PROVIDER`) for an order |
 | POST | `/:orderId/snippe/checkout` | Start Snippe hosted checkout for an order |
 | POST | `/:orderId/paypal/create` | Start PayPal payment for an order |
 | GET | `/:orderId` | Payment status for an order |

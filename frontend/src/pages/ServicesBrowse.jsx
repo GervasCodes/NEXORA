@@ -13,6 +13,12 @@ function ServiceCategoryCardSkeleton() {
     );
 }
 
+// The "All services" hub - the services equivalent of Home.jsx's department
+// discovery. Each category card here links out to its own dedicated page
+// (ServiceCategoryPage.jsx, at /services/category/:slug) instead of filtering
+// in place, so every category gets a real, shareable URL of its own. The
+// search bar on this page searches across every category; each category's
+// own page has the same search bar, scoped to just that category.
 export default function ServicesBrowse() {
     const [categories, setCategories] = useState([]);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -25,10 +31,6 @@ export default function ServicesBrowse() {
             .catch(() => {})
             .finally(() => setCategoriesLoading(false));
     }, []);
-
-    const selectCategory = (categoryId) => {
-        setFilters((prev) => ({ ...prev, category_id: categoryId || undefined }));
-    };
 
     const submitSearch = (e) => {
         e.preventDefault();
@@ -61,7 +63,7 @@ export default function ServicesBrowse() {
                             type="search"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search services..."
+                            placeholder="Search all services..."
                             className="flex-1 border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
                         />
                         <button type="submit" className="text-sm border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors shrink-0">
@@ -76,25 +78,18 @@ export default function ServicesBrowse() {
                     </div>
                 ) : categories.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 mb-6">
-                        <ServiceCategoryCard
-                            category={null}
-                            totalCount={totalCount}
-                            active={!filters.category_id}
-                            onSelect={() => selectCategory(undefined)}
-                        />
+                        <ServiceCategoryCard category={null} totalCount={totalCount} active />
                         {categories.map((category, i) => (
                             <ServiceCategoryCard
                                 key={category.id}
                                 category={category}
                                 index={i}
-                                active={filters.category_id === category.id}
-                                onSelect={() => selectCategory(category.id)}
                             />
                         ))}
                     </div>
                 )}
 
-                <ServiceFilters categoryId={filters.category_id} onChange={(next) => setFilters((prev) => ({ ...prev, ...next }))} />
+                <ServiceFilters categoryId={undefined} onChange={(next) => setFilters((prev) => ({ ...prev, ...next }))} />
             </div>
 
             <ServiceGrid

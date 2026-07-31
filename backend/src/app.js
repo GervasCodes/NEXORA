@@ -3,6 +3,11 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const compression = require("compression");
 const helmet = require("helmet");
+// Already initialized by server.js requiring ./src/config/sentry before
+// this module - requiring it again here just returns the same
+// already-configured Sentry instance (Node's module cache), needed for
+// Sentry.setupExpressErrorHandler below.
+const Sentry = require("./config/sentry");
 
 const db = require("./config/db");
 const { apiLimiter } = require("./middleware/rateLimit.middleware");
@@ -71,6 +76,11 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
+// Structured per-request access logging (method/path/status/duration,
+// request id) - see middleware/requestLogger.middleware.js. Mounted this
+// early so the request id it generates (X-Request-Id) is available to
+// every handler below, including the raw-body Snippe webhook route.
+app.use(require("./middleware/requestLogger.middleware"));
 
 // Snippe webhook signature verification (snippe.provider.js ->
 // constructWebhookEvent) needs the exact raw request bytes - once
@@ -276,6 +286,23 @@ app.get("/api/v1/me", authMiddleware, (req, res) => {
         success: true,
         user: req.user
     });
+});
+
+// Reports unexpected (5xx-class) errors to Sentry - must be registered
+// after all routes but before the app's own errorHandler below, per
+// Sentry's own setup docs. shouldHandleError is overridden because the
+// default only skips 4xx status codes that were set via
+// `res.status()` before the error - most of this codebase throws a
+// plain Error or an appError() with `.status` attached (see
+// utils/appError.js and errorHandler.js), which the default wouldn't
+// recognize. Expected client errors (validation, "not found", a
+// rejected webhook signature, etc.) are noise here, not incidents -
+// only genuine 5xx/unclassified errors are worth an alert.
+Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError(error) {
+        const status = error.status || error.statusCode;
+        return !status || status >= 500;
+    }
 });
 
 // errorHandler must be registered last, after all routes

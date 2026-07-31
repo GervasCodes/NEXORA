@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
@@ -21,6 +21,11 @@ const PAYMENT_METHODS = [
     { value: "paypal", label: "PayPal", hint: "(charged in USD)" }
 ];
 
+// Phase 5 (Resilience & Growth): cash_on_delivery isn't a payment-provider
+// rail at all (no gateway involved), so it's never filtered by
+// GET /payments/methods below - only the three provider-backed options are.
+const PROVIDER_GATED_METHODS = new Set(["mobile_money", "snippe", "paypal"]);
+
 export default function Checkout() {
     const { format } = useCurrency();
     const { items, total, refresh } = useCart();
@@ -32,6 +37,48 @@ export default function Checkout() {
     const [errorTick, setErrorTick] = useState(0);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
+    // Phase 5 (Resilience & Growth). null = still loading / endpoint
+    // unavailable - in either case every method stays visible (fail-open),
+    // so this new, optional lookup can never make checkout show FEWER
+    // options than it did before this phase if something's wrong with it.
+    const [configuredKeys, setConfiguredKeys] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.get("/payments/methods")
+            .then(({ data }) => {
+                if (cancelled) return;
+                setConfiguredKeys(data.data.map((provider) => provider.key));
+            })
+            .catch(() => {
+                // Fail-open: leave configuredKeys null so nothing gets
+                // hidden - a checkout page that can't reach this brand-new
+                // endpoint should still let people pay, not lose options.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const visiblePaymentMethods = PAYMENT_METHODS.filter((method) => {
+        if (!PROVIDER_GATED_METHODS.has(method.value)) return true;
+        if (configuredKeys === null) return true;
+        return configuredKeys.includes(method.value);
+    });
+
+    // If the currently-selected method turns out not to be configured
+    // (e.g. someone lands here with mobile_money selected but only cash
+    // on delivery is actually configured on this deployment), fall back
+    // to the first visible option rather than submitting a payment method
+    // the checkout form no longer shows as selectable.
+    useEffect(() => {
+        if (configuredKeys === null) return;
+        const stillVisible = visiblePaymentMethods.some((method) => method.value === form.payment_method);
+        if (!stillVisible && visiblePaymentMethods.length > 0) {
+            setForm((current) => ({ ...current, payment_method: visiblePaymentMethods[0].value }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [configuredKeys]);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -139,7 +186,7 @@ export default function Checkout() {
                 <div>
                     <label className="block text-sm mb-2">Payment method</label>
                     <div className="space-y-2">
-                        {PAYMENT_METHODS.map((method) => {
+                        {visiblePaymentMethods.map((method) => {
                             const selected = form.payment_method === method.value;
                             return (
                                 <label

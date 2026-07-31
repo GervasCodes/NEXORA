@@ -10,19 +10,44 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
     const [analytics, setAnalytics] = useState(null);
     const [servicesAnalytics, setServicesAnalytics] = useState(null);
+    // Phase 4 (Analytics & Business Metrics) - GMV / take rate / repeat
+    // buyers / provider retention, blended across products + services.
+    const [businessMetrics, setBusinessMetrics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [live, setLive] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     const load = useCallback(() => {
         return Promise.all([
             api.get("/admin/dashboard"),
             api.get("/admin/analytics"),
-            api.get("/admin/analytics/services")
-        ]).then(([dashboardRes, analyticsRes, servicesAnalyticsRes]) => {
+            api.get("/admin/analytics/services"),
+            api.get("/admin/analytics/business")
+        ]).then(([dashboardRes, analyticsRes, servicesAnalyticsRes, businessMetricsRes]) => {
             setStats(dashboardRes.data.data);
             setAnalytics(analyticsRes.data.data);
             setServicesAnalytics(servicesAnalyticsRes.data.data);
+            setBusinessMetrics(businessMetricsRes.data.data);
         });
+    }, []);
+
+    // Auth is a Bearer token (see api/client.js), so a plain <a href> to
+    // the export endpoint wouldn't carry it - fetch as a blob instead and
+    // trigger the download client-side.
+    const handleExportCsv = useCallback(() => {
+        setExporting(true);
+        api.get("/admin/analytics/business/export?days=90", { responseType: "blob" })
+            .then((response) => {
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "nexora-gmv-90d.csv";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .finally(() => setExporting(false));
     }, []);
 
     useEffect(() => {
@@ -94,6 +119,75 @@ export default function AdminDashboard() {
                 <Stat label="Booking revenue (paid)" value={formatMoney(stats.bookingRevenue)} mono />
                 <Stat label="Active services" value={stats.services.active} />
             </div>
+
+            {businessMetrics && (
+                <div className="mb-10">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-display text-xl">Business metrics</h2>
+                        <button
+                            type="button"
+                            onClick={handleExportCsv}
+                            disabled={exporting}
+                            className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {exporting ? "Preparing CSV…" : "Export GMV CSV (90d) ↓"}
+                        </button>
+                    </div>
+
+                    <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                        GMV (Gross Merchandise Value) · products + services
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                        <Stat label="GMV today" value={formatMoney(businessMetrics.gmv.today)} mono />
+                        <Stat label="GMV (7d)" value={formatMoney(businessMetrics.gmv.last7Days)} mono />
+                        <Stat label="GMV (30d)" value={formatMoney(businessMetrics.gmv.last30Days)} mono />
+                        <Stat label="GMV (all-time)" value={formatMoney(businessMetrics.gmv.allTime)} mono />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+                        <div className="border border-line rounded-lg p-5">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-3">Take rate</p>
+                            <p className="text-2xl font-medium price mb-1">{businessMetrics.takeRate.blendedRatePercent}%</p>
+                            <p className="text-xs text-ash mb-3">
+                                {formatMoney(businessMetrics.takeRate.commissionRevenue)} commission earned on{" "}
+                                {formatMoney(businessMetrics.takeRate.gmv)} GMV credited so far
+                            </p>
+                            <div className="flex justify-between text-xs text-ash">
+                                <span>Products: {businessMetrics.takeRate.products.ratePercent}%</span>
+                                <span>Services: {businessMetrics.takeRate.services.ratePercent}%</span>
+                            </div>
+                        </div>
+
+                        <div className="border border-line rounded-lg p-5">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-3">Repeat buyers</p>
+                            <p className="text-2xl font-medium price mb-1">{businessMetrics.repeatBuyers.repeatRatePercent}%</p>
+                            <p className="text-xs text-ash mb-3">
+                                {businessMetrics.repeatBuyers.repeatBuyers} of {businessMetrics.repeatBuyers.totalBuyers} buyers
+                                have more than one paid order or booking
+                            </p>
+                            <div className="flex justify-between text-xs text-ash">
+                                <span>Active (30d): {businessMetrics.repeatBuyers.last30Days.activeBuyers}</span>
+                                <span>Returning: {businessMetrics.repeatBuyers.last30Days.returningBuyers}</span>
+                                <span>New: {businessMetrics.repeatBuyers.last30Days.newBuyers}</span>
+                            </div>
+                        </div>
+
+                        <div className="border border-line rounded-lg p-5">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-3">Provider retention</p>
+                            <p className="text-2xl font-medium price mb-1">{businessMetrics.providerRetention.retentionRatePercent}%</p>
+                            <p className="text-xs text-ash mb-3">
+                                {businessMetrics.providerRetention.retained} of {businessMetrics.providerRetention.activePrior} providers
+                                active in the prior 30 days are still active now
+                            </p>
+                            <div className="flex justify-between text-xs text-ash">
+                                <span>Active now: {businessMetrics.providerRetention.activeCurrent}</span>
+                                <span>Churned: {businessMetrics.providerRetention.churned}</span>
+                                <span>New: {businessMetrics.providerRetention.newProviders}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {analytics && (
                 <>

@@ -170,6 +170,26 @@ is safe to use as-is.
 - [ ] Road-routing provider (OSRM) reachable in production if you want
       real road distance/ETA instead of the straight-line fallback (see
       `docs/ROUTING.md`)
+- [ ] `SENTRY_DSN` set (backend `.env`) and `VITE_SENTRY_DSN` set
+      (frontend `.env`) for error tracking — see "Observability" below.
+      Optional but recommended; the app runs fine without it, you just
+      won't get alerted to production errors
+
+## 6.5 Observability
+
+- **Error tracking (Sentry):** set `SENTRY_DSN` in `backend/.env` and
+  `VITE_SENTRY_DSN` in `frontend/.env` (get both from the same Sentry
+  project's Client Keys page, or separate backend/frontend Sentry
+  projects if you want them tracked apart). Unset by default — the app
+  runs identically either way, you just won't get error alerts. See
+  `backend/src/config/sentry.js` and `frontend/src/main.jsx`.
+- **Structured logs:** the backend logs JSON (via `pino`) instead of
+  free-text `console.log` — set `LOG_LEVEL` (`debug`/`info`/`warn`/
+  `error`) to control verbosity, defaults to `info` in production. On
+  Render (or any host that captures stdout), these show up as-is in the
+  log viewer; pipe them to a log aggregator if you want search/alerting
+  beyond what Sentry covers.
+- **Uptime:** see `docs/UPTIME_MONITORING.md`.
 
 ## 7. Running everything together (local dev)
 

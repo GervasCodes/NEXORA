@@ -8,21 +8,29 @@
  * To switch providers (e.g. MalipoPay -> Selcom later), you change env
  * vars only. No other file in the app needs to change.
  *
- *   MOBILE_MONEY_PROVIDER=malipopay   (or "selcom")
+ *   MOBILE_MONEY_PROVIDER=malipopay   (or "selcom", or "azampay")
  *
  * Each provider file exports the same shape:
  *   isConfigured() -> boolean
  *   initiate(phone, amount, meta) -> { success, transactionReference }
  *   disburse(phone, amount, meta) -> { success, transactionReference }
  *
- * Adding a third provider later (e.g. AzamPay) means: drop in
- * azampay.provider.js with that same shape, add one line to `providers`
- * below, and set MOBILE_MONEY_PROVIDER=azampay. Nothing else changes.
+ * Phase 5 (Resilience & Growth) added the third rail this comment used
+ * to invite as a future example: azampay.provider.js, following this
+ * same shape. Adding a fourth later means exactly what adding azampay
+ * did: drop in <name>.provider.js with that same shape, add one line to
+ * `providers` below, and set MOBILE_MONEY_PROVIDER=<name>. Nothing else
+ * changes — see docs/PAYMENT_PROVIDERS.md for the full walkthrough.
  */
 
 const providers = {
     malipopay: require("./malipopay.provider"),
-    selcom: require("./selcom.provider")
+    selcom: require("./selcom.provider"),
+    // Phase 5 (Resilience & Growth): third rail prepared per this file's
+    // own doc comment above. Inert until MOBILE_MONEY_PROVIDER=azampay is
+    // set AND azampay.provider.js#isConfigured() passes — adding this line
+    // changes no behavior for anyone still on malipopay/selcom.
+    azampay: require("./azampay.provider")
 };
 
 const simulateProvider = require("./simulate.provider");

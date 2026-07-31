@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 // Same rotating gradient fallback as DepartmentCard.jsx, reused verbatim
 // so a category without an admin-uploaded cover (AdminServiceCategories)
 // looks just as intentional as a product department does on day one.
@@ -12,21 +14,23 @@ const FALLBACK_GRADIENTS = [
 ];
 
 // category is null/undefined for the "All services" tile - it sits in the
-// same grid as every real category (ServicesBrowse.jsx passes it first) so
-// clearing the filter looks like just another card instead of a leftover
-// button bolted onto the row.
-export default function ServiceCategoryCard({ category, index, active, onSelect, totalCount }) {
+// same grid as every real category (ServicesBrowse.jsx / ServiceCategoryPage.jsx
+// pass it first) and links back to the /services hub, the same way each real
+// category card links to its own dedicated /services/category/:slug page
+// (mirrors DepartmentCard.jsx linking to /departments/:slug). `active` just
+// highlights whichever card matches the page currently being viewed.
+export default function ServiceCategoryCard({ category, index, active, totalCount }) {
     const isAll = !category;
     const gradient = FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length];
     const name = isAll ? "All services" : category.name;
     const count = isAll ? totalCount : category.serviceCount;
+    const to = isAll ? "/services" : `/services/category/${category.slug}`;
 
     return (
-        <button
-            type="button"
-            onClick={onSelect}
-            aria-pressed={active}
-            className={`group block w-full text-left bg-paper border rounded-xl overflow-hidden transition-all ${
+        <Link
+            to={to}
+            aria-current={active ? "page" : undefined}
+            className={`group block bg-paper border rounded-xl overflow-hidden transition-all ${
                 active ? "border-ink shadow-md" : "border-line hover:border-ink hover:shadow-md hover:-translate-y-0.5"
             }`}
         >
@@ -64,6 +68,6 @@ export default function ServiceCategoryCard({ category, index, active, onSelect,
                     </p>
                 </div>
             </div>
-        </button>
+        </Link>
     );
 }

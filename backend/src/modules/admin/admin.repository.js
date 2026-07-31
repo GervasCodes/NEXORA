@@ -372,6 +372,212 @@ exports.getCategoryPerformance = async () => {
     return rows;
 };
 
+// --- Business metrics (Phase 4 - Analytics & Business Metrics) --------
+//
+// These queries back adminService.getBusinessMetrics - a deliberately
+// separate endpoint from getDashboard/getAnalytics above rather than
+// folding into either: getDashboard is point-in-time counts and
+// getAnalytics/getServicesAnalytics are per-vertical trend charts,
+// while this is blended GMV/take-rate/retention math that reads from
+// both orders and bookings at once and answers a different question
+// ("how healthy is the marketplace as a business", not "what happened
+// today").
+
+// GMV (Gross Merchandise Value) - the total value of paid transactions
+// flowing through the platform, BEFORE commission is deducted. This is
+// deliberately the same "paid orders' total_amount" / "paid bookings'
+// amount" shape getDashboardStats/getDailySales already use for
+// revenue - GMV and what this codebase has been calling "revenue" are
+// the same number for a marketplace that never takes inventory risk;
+// this query just also buckets it into today/7d/30d/all-time windows
+// so a single call can back every period a dashboard stat card needs
+// without four separate round trips.
+exports.getGmvBreakdown = async () => {
+    const [[products]] = await db.query(
+        `SELECT
+            COALESCE(SUM(total_amount), 0) AS gmv_all_time,
+            COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN total_amount ELSE 0 END), 0) AS gmv_today,
+            COALESCE(SUM(CASE WHEN created_at >= (NOW() - INTERVAL 7 DAY) THEN total_amount ELSE 0 END), 0) AS gmv_7d,
+            COALESCE(SUM(CASE WHEN created_at >= (NOW() - INTERVAL 30 DAY) THEN total_amount ELSE 0 END), 0) AS gmv_30d,
+            COUNT(*) AS paid_count
+        FROM orders
+        WHERE payment_status = 'paid' AND parent_order_id IS NULL`
+    );
+
+    const [[bookings]] = await db.query(
+        `SELECT
+            COALESCE(SUM(amount), 0) AS gmv_all_time,
+            COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN amount ELSE 0 END), 0) AS gmv_today,
+            COALESCE(SUM(CASE WHEN created_at >= (NOW() - INTERVAL 7 DAY) THEN amount ELSE 0 END), 0) AS gmv_7d,
+            COALESCE(SUM(CASE WHEN created_at >= (NOW() - INTERVAL 30 DAY) THEN amount ELSE 0 END), 0) AS gmv_30d,
+            COUNT(*) AS paid_count
+        FROM bookings
+        WHERE payment_status = 'paid'`
+    );
+
+    return { products, bookings };
+};
+
+// Take rate - the platform's actual commission revenue as a share of
+// GMV. Reads the *stored* commission_amount snapshot on each item
+// (order_items / booking_items, set once at wallet-credit time - see
+// migration 017/064's design notes) rather than recomputing against
+// today's platform_settings.commission_rate, so a historical rate
+// change doesn't retroactively distort what was actually taken on past
+// transactions. wallet_credited = TRUE is the same "has this snapshot
+// actually been written" guard sellerRepository.getOrderTotals already
+// relies on.
+exports.getTakeRateBreakdown = async () => {
+    const [[products]] = await db.query(
+        `SELECT
+            COALESCE(SUM(oi.subtotal), 0) AS gmv,
+            COALESCE(SUM(oi.commission_amount), 0) AS commission_revenue
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE o.payment_status = 'paid' AND oi.wallet_credited = TRUE`
+    );
+
+    const [[bookings]] = await db.query(
+        `SELECT
+            COALESCE(SUM(bi.subtotal), 0) AS gmv,
+            COALESCE(SUM(bi.commission_amount), 0) AS commission_revenue
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
+        WHERE b.payment_status = 'paid' AND bi.wallet_credited = TRUE`
+    );
+
+    return { products, bookings };
+};
+
+// Repeat-buyer metrics, platform-wide and blended across both verticals
+// (a buyer who has bought a product AND booked a service is one buyer,
+// not two) - a paid order and a paid booking are both just "a
+// transaction by this buyer" for this question, unioned by created_at
+// so the 30-day new-vs-returning split below can bucket on one shared
+// timeline.
+const BUYER_TRANSACTIONS_SQL = `
+    SELECT buyer_id, created_at FROM orders
+    WHERE payment_status = 'paid' AND parent_order_id IS NULL
+    UNION ALL
+    SELECT customer_id AS buyer_id, created_at FROM bookings
+    WHERE payment_status = 'paid'
+`;
+
+exports.getBuyerRetentionMetrics = async () => {
+    const [[allTimeRows], [periodRows]] = await Promise.all([
+        db.query(
+            `SELECT
+                COUNT(*) AS total_buyers,
+                COALESCE(SUM(txn_count > 1), 0) AS repeat_buyers
+            FROM (
+                SELECT buyer_id, COUNT(*) AS txn_count
+                FROM (${BUYER_TRANSACTIONS_SQL}) t
+                GROUP BY buyer_id
+            ) x`
+        ),
+        db.query(
+            `SELECT
+                COUNT(DISTINCT recent.buyer_id) AS active_buyers,
+                COALESCE(COUNT(DISTINCT prior.buyer_id), 0) AS returning_buyers
+            FROM (
+                SELECT DISTINCT buyer_id FROM (${BUYER_TRANSACTIONS_SQL}) t
+                WHERE created_at >= (NOW() - INTERVAL 30 DAY)
+            ) recent
+            LEFT JOIN (
+                SELECT DISTINCT buyer_id FROM (${BUYER_TRANSACTIONS_SQL}) t
+                WHERE created_at < (NOW() - INTERVAL 30 DAY)
+            ) prior ON prior.buyer_id = recent.buyer_id`
+        )
+    ]);
+
+    return { allTime: allTimeRows[0], period: periodRows[0] };
+};
+
+// Provider-retention metrics - the seller/provider-side counterpart of
+// buyer retention above. A "provider" here is any seller_profiles user
+// who was actually paid for something (a product sale or a service
+// booking, whichever - or both, since this platform's stores can do
+// either - see docs/ARCHITECTURE_REVIEW.md on how Products/Services
+// converge on one seller identity), over trailing 30-day windows:
+// currently active, active in the prior 30-day window, and the overlap
+// between the two (retained). adminService derives churned/new from
+// these three counts rather than this query returning subtraction
+// results itself, keeping the SQL to plain counts.
+const PROVIDER_ACTIVITY_SQL = `
+    SELECT oi.seller_id AS provider_id, o.created_at AS created_at
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE o.payment_status = 'paid'
+    UNION ALL
+    SELECT b.provider_id, b.created_at
+    FROM bookings b
+    WHERE b.payment_status = 'paid'
+`;
+
+exports.getProviderRetentionMetrics = async () => {
+    const [[currentRows], [priorRows], [retainedRows]] = await Promise.all([
+        db.query(
+            `SELECT COUNT(DISTINCT provider_id) AS active_current
+            FROM (${PROVIDER_ACTIVITY_SQL}) a
+            WHERE a.created_at >= (NOW() - INTERVAL 30 DAY)`
+        ),
+        db.query(
+            `SELECT COUNT(DISTINCT provider_id) AS active_prior
+            FROM (${PROVIDER_ACTIVITY_SQL}) a
+            WHERE a.created_at >= (NOW() - INTERVAL 60 DAY) AND a.created_at < (NOW() - INTERVAL 30 DAY)`
+        ),
+        db.query(
+            `SELECT COUNT(DISTINCT cur.provider_id) AS retained
+            FROM (
+                SELECT DISTINCT provider_id FROM (${PROVIDER_ACTIVITY_SQL}) a
+                WHERE a.created_at >= (NOW() - INTERVAL 30 DAY)
+            ) cur
+            JOIN (
+                SELECT DISTINCT provider_id FROM (${PROVIDER_ACTIVITY_SQL}) a
+                WHERE a.created_at >= (NOW() - INTERVAL 60 DAY) AND a.created_at < (NOW() - INTERVAL 30 DAY)
+            ) prior ON prior.provider_id = cur.provider_id`
+        )
+    ]);
+
+    return {
+        activeCurrent: currentRows[0].active_current,
+        activePrior: priorRows[0].active_prior,
+        retained: retainedRows[0].retained
+    };
+};
+
+// Daily GMV series (products + bookings, kept separate per-day so
+// adminService can either blend or split them) backing the CSV export
+// - reuses the exact same paid/date-window shape as getDailySales /
+// getDailyBookingSales above, just over a longer, caller-supplied
+// window since a CSV export is expected to cover more than a 14-day
+// dashboard chart.
+exports.getGmvSeries = async (days) => {
+    const [productRows] = await db.query(
+        `SELECT DATE(created_at) AS day,
+                COALESCE(SUM(total_amount), 0) AS gmv,
+                COUNT(*) AS transaction_count
+        FROM orders
+        WHERE payment_status = 'paid' AND parent_order_id IS NULL AND created_at >= (NOW() - INTERVAL ? DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY day ASC`,
+        [days]
+    );
+
+    const [bookingRows] = await db.query(
+        `SELECT DATE(created_at) AS day,
+                COALESCE(SUM(amount), 0) AS gmv,
+                COUNT(*) AS transaction_count
+        FROM bookings
+        WHERE payment_status = 'paid' AND created_at >= (NOW() - INTERVAL ? DAY)
+        GROUP BY DATE(created_at)
+        ORDER BY day ASC`,
+        [days]
+    );
+
+    return { productRows, bookingRows };
+};
+
 // Old seller document-verification review queries lived here
 // (findPendingVerifications / findVerificationDocuments /
 // setSellerVerificationStatus) - removed along with

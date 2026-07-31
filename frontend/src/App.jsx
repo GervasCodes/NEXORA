@@ -7,6 +7,9 @@ import SuspendedScreen from "./components/SuspendedScreen";
 import PageLoader from "./components/PageLoader";
 import PageTransition from "./components/PageTransition";
 import RouteProgressBar from "./components/RouteProgressBar";
+import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
+import NetworkStatusNotice from "./components/NetworkStatusNotice";
+import InstallPrompt from "./components/InstallPrompt";
 import { useAuth } from "./context/AuthContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
@@ -23,6 +26,7 @@ const DepartmentPage = lazy(() => import("./pages/DepartmentPage"));
 const BrowseProducts = lazy(() => import("./pages/BrowseProducts"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const ServicesBrowse = lazy(() => import("./pages/ServicesBrowse"));
+const ServiceCategoryPage = lazy(() => import("./pages/ServiceCategoryPage"));
 const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
 const StorePage = lazy(() => import("./pages/StorePage"));
 const Login = lazy(() => import("./pages/Login"));
@@ -128,6 +132,10 @@ export default function App() {
 
     return (
         <div className="min-h-screen flex flex-col">
+            <UpdateAvailableBanner />
+            <NetworkStatusNotice />
+            <InstallPrompt />
+
             <Header />
 
             <RouteProgressBar />
@@ -141,6 +149,7 @@ export default function App() {
                         <Route path="/products" element={<BrowseProducts />} />
                         <Route path="/products/:slug" element={<ProductDetail />} />
                         <Route path="/services" element={<ServicesBrowse />} />
+                        <Route path="/services/category/:slug" element={<ServiceCategoryPage />} />
                         <Route path="/services/:slug" element={<ServiceDetail />} />
                         <Route path="/stores/:slug" element={<StorePage />} />
                         <Route path="/login" element={<Login />} />

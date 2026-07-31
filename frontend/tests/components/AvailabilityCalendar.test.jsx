@@ -17,14 +17,20 @@ vi.mock("../../src/context/LanguageContext", () => ({
 import api from "../../src/api/client";
 import AvailabilityCalendar from "../../src/components/AvailabilityCalendar";
 
-// A date guaranteed to be "today or later" (never disabled as past)
-// without needing to fake the system clock - tomorrow is always still
-// within the current or next calendar day, and the calendar always
-// renders the *current* real month on mount.
-const tomorrow = new Date();
-tomorrow.setDate(tomorrow.getDate() + 1);
-const tomorrowKey = tomorrow.toISOString().slice(0, 10);
-const tomorrowDay = String(tomorrow.getDate());
+// A date guaranteed to be available/non-past without needing to fake the
+// system clock. Today itself qualifies - the component's isPast check is
+// `dateKey < min`, not `<=` - and it's always inside whichever month the
+// calendar renders by default, so there's no dependency on "tomorrow"
+// staying in the same month as "today" (that broke on any month's last
+// day, e.g. the 31st, since the calendar doesn't auto-advance to next
+// month). The key is also built from local date parts (matching the
+// component's own toDateKey), not toISOString()'s UTC conversion, which
+// could otherwise disagree with the locally-numbered day cell the test
+// looks up by name.
+const pad = (n) => String(n).padStart(2, "0");
+const today = new Date();
+const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+const todayDay = String(today.getDate());
 
 beforeEach(() => {
     api.get.mockReset();
@@ -45,7 +51,7 @@ describe("AvailabilityCalendar", () => {
         api.get.mockResolvedValueOnce({
             data: {
                 data: [
-                    { date: tomorrowKey, available: true, availableUnits: 3, price: 10000 }
+                    { date: todayKey, available: true, availableUnits: 3, price: 10000 }
                 ]
             }
         });
@@ -54,11 +60,11 @@ describe("AvailabilityCalendar", () => {
         const user = userEvent.setup();
         render(<AvailabilityCalendar serviceId={5} clickable onDateClick={onDateClick} />);
 
-        const openCell = await screen.findByRole("button", { name: tomorrowDay });
+        const openCell = await screen.findByRole("button", { name: todayDay });
         await waitFor(() => expect(openCell).not.toBeDisabled());
         await user.click(openCell);
 
-        expect(onDateClick).toHaveBeenCalledWith(tomorrowKey, expect.objectContaining({ available: true }));
+        expect(onDateClick).toHaveBeenCalledWith(todayKey, expect.objectContaining({ available: true }));
     });
 
     it("does not call onDateClick for a day with no availability row", async () => {
@@ -67,7 +73,7 @@ describe("AvailabilityCalendar", () => {
         const onDateClick = vi.fn();
         render(<AvailabilityCalendar serviceId={5} clickable onDateClick={onDateClick} />);
 
-        const cell = await screen.findByRole("button", { name: tomorrowDay });
+        const cell = await screen.findByRole("button", { name: todayDay });
         expect(cell).toBeDisabled();
     });
 });

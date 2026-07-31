@@ -221,6 +221,39 @@ exports.getServicesAnalytics = async (req, res) => {
     }
 };
 
+// Phase 4 (Analytics & Business Metrics) - GMV, take rate, repeat-buyer
+// rate, and provider retention, blended across products + services.
+exports.getBusinessMetrics = async (req, res) => {
+    try {
+        const metrics = await adminService.getBusinessMetrics();
+
+        return res.json({ success: true, data: metrics });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase 4 (Analytics & Business Metrics) - CSV download of the daily
+// GMV series backing the business-metrics dashboard section.
+// ?days= defaults to 90 and is clamped to a sane [1, 365] range so a
+// stray query param can't trigger an unbounded scan.
+exports.exportGmvCsv = async (req, res) => {
+    try {
+        const requestedDays = Number(req.query.days) || 90;
+        const days = Math.min(365, Math.max(1, Math.trunc(requestedDays)));
+
+        const csv = await adminService.exportGmvCsv(days);
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="nexora-gmv-${days}d.csv"`);
+        return res.status(200).send(csv);
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // --- Platform settings ---
 
 exports.getSettings = async (req, res) => {

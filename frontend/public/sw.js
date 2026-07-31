@@ -5,7 +5,7 @@
 // Bumped on every SW logic change so stale, possibly-buggy service
 // workers still installed on returning visitors' devices are replaced
 // rather than continuing to run their old (broken) fetch handler.
-const CACHE_VERSION = "nexora-v2";
+const CACHE_VERSION = "nexora-v3";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const OFFLINE_URL = "/offline.html";

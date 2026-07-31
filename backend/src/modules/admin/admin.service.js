@@ -593,6 +593,140 @@ function forecastRevenue(rows, windowDays, forecastDays) {
     return projected;
 }
 
+// --- Business metrics (Phase 4 - Analytics & Business Metrics) --------
+//
+// One blended endpoint covering GMV, take rate, repeat-buyer rate, and
+// provider retention - the "how healthy is the marketplace as a
+// business" questions getDashboard/getAnalytics/getServicesAnalytics
+// above don't answer on their own (those are point-in-time counts and
+// per-vertical trend charts respectively). Every ratio here is computed
+// defensively against a zero denominator (a brand-new/empty platform
+// shouldn't show NaN or divide-by-zero errors, just 0%).
+exports.getBusinessMetrics = async () => {
+    const [gmv, takeRate, buyerRetention, providerRetention] = await Promise.all([
+        adminRepository.getGmvBreakdown(),
+        adminRepository.getTakeRateBreakdown(),
+        adminRepository.getBuyerRetentionMetrics(),
+        adminRepository.getProviderRetentionMetrics()
+    ]);
+
+    const productsGmv = {
+        today: Number(gmv.products.gmv_today) || 0,
+        last7Days: Number(gmv.products.gmv_7d) || 0,
+        last30Days: Number(gmv.products.gmv_30d) || 0,
+        allTime: Number(gmv.products.gmv_all_time) || 0,
+        paidCount: Number(gmv.products.paid_count) || 0
+    };
+    const servicesGmv = {
+        today: Number(gmv.bookings.gmv_today) || 0,
+        last7Days: Number(gmv.bookings.gmv_7d) || 0,
+        last30Days: Number(gmv.bookings.gmv_30d) || 0,
+        allTime: Number(gmv.bookings.gmv_all_time) || 0,
+        paidCount: Number(gmv.bookings.paid_count) || 0
+    };
+
+    const productsTake = {
+        gmv: Number(takeRate.products.gmv) || 0,
+        commissionRevenue: Number(takeRate.products.commission_revenue) || 0
+    };
+    const servicesTake = {
+        gmv: Number(takeRate.bookings.gmv) || 0,
+        commissionRevenue: Number(takeRate.bookings.commission_revenue) || 0
+    };
+    const blendedGmv = productsTake.gmv + servicesTake.gmv;
+    const blendedCommission = productsTake.commissionRevenue + servicesTake.commissionRevenue;
+
+    const ratePercent = (commission, gmvAmount) => (gmvAmount > 0 ? Number(((commission / gmvAmount) * 100).toFixed(2)) : 0);
+
+    const totalBuyers = Number(buyerRetention.allTime.total_buyers) || 0;
+    const repeatBuyers = Number(buyerRetention.allTime.repeat_buyers) || 0;
+    const activeBuyers30d = Number(buyerRetention.period.active_buyers) || 0;
+    const returningBuyers30d = Number(buyerRetention.period.returning_buyers) || 0;
+
+    const activeCurrentProviders = Number(providerRetention.activeCurrent) || 0;
+    const activePriorProviders = Number(providerRetention.activePrior) || 0;
+    const retainedProviders = Number(providerRetention.retained) || 0;
+
+    return {
+        gmv: {
+            today: productsGmv.today + servicesGmv.today,
+            last7Days: productsGmv.last7Days + servicesGmv.last7Days,
+            last30Days: productsGmv.last30Days + servicesGmv.last30Days,
+            allTime: productsGmv.allTime + servicesGmv.allTime,
+            products: productsGmv,
+            services: servicesGmv
+        },
+        takeRate: {
+            blendedRatePercent: ratePercent(blendedCommission, blendedGmv),
+            commissionRevenue: blendedCommission,
+            gmv: blendedGmv,
+            products: { ...productsTake, ratePercent: ratePercent(productsTake.commissionRevenue, productsTake.gmv) },
+            services: { ...servicesTake, ratePercent: ratePercent(servicesTake.commissionRevenue, servicesTake.gmv) }
+        },
+        repeatBuyers: {
+            totalBuyers,
+            repeatBuyers,
+            repeatRatePercent: totalBuyers > 0 ? Number(((repeatBuyers / totalBuyers) * 100).toFixed(2)) : 0,
+            last30Days: {
+                activeBuyers: activeBuyers30d,
+                returningBuyers: returningBuyers30d,
+                newBuyers: Math.max(0, activeBuyers30d - returningBuyers30d),
+                returningRatePercent: activeBuyers30d > 0 ? Number(((returningBuyers30d / activeBuyers30d) * 100).toFixed(2)) : 0
+            }
+        },
+        providerRetention: {
+            activeCurrent: activeCurrentProviders,
+            activePrior: activePriorProviders,
+            retained: retainedProviders,
+            churned: Math.max(0, activePriorProviders - retainedProviders),
+            newProviders: Math.max(0, activeCurrentProviders - retainedProviders),
+            retentionRatePercent: activePriorProviders > 0 ? Number(((retainedProviders / activePriorProviders) * 100).toFixed(2)) : 0
+        }
+    };
+};
+
+// CSV export (Phase 4 - Dashboard/reporting enhancements). A plain,
+// dependency-free CSV built by hand (one row per day, products and
+// bookings GMV kept in separate columns as well as a blended total) -
+// no new npm package pulled in just to serialize a handful of numeric
+// columns. `days` is caller-controlled (adminController defaults/clamps
+// it) so an admin can pull a quick 30-day snapshot or a longer
+// year-to-date-ish export from the same endpoint.
+exports.exportGmvCsv = async (days) => {
+    const { productRows, bookingRows } = await adminRepository.getGmvSeries(days);
+
+    const productsByDay = new Map(productRows.map((r) => [
+        new Date(r.day).toISOString().slice(0, 10),
+        { gmv: Number(r.gmv) || 0, count: Number(r.transaction_count) || 0 }
+    ]));
+    const bookingsByDay = new Map(bookingRows.map((r) => [
+        new Date(r.day).toISOString().slice(0, 10),
+        { gmv: Number(r.gmv) || 0, count: Number(r.transaction_count) || 0 }
+    ]));
+
+    const header = "date,product_gmv,product_orders,service_gmv,service_bookings,blended_gmv,blended_transactions";
+    const lines = [header];
+
+    for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const key = date.toISOString().slice(0, 10);
+        const p = productsByDay.get(key) || { gmv: 0, count: 0 };
+        const b = bookingsByDay.get(key) || { gmv: 0, count: 0 };
+        lines.push([
+            key,
+            p.gmv.toFixed(2),
+            p.count,
+            b.gmv.toFixed(2),
+            b.count,
+            (p.gmv + b.gmv).toFixed(2),
+            p.count + b.count
+        ].join(","));
+    }
+
+    return lines.join("\n");
+};
+
 exports.getSettings = async () => {
     return settingsService.getAll();
 };

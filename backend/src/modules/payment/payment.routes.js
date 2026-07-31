@@ -131,6 +131,16 @@ router.post(
     paymentController.initiatePaypalOrderPayment
 );
 
+// Phase 5 (Resilience & Growth). Literal path - MUST stay registered
+// before "/:orderId" below for the same reason the verification-fee
+// routes above do (Express would otherwise bind orderId to the string
+// "methods").
+router.get(
+    "/methods",
+    authMiddleware,
+    paymentController.getAvailablePaymentMethods
+);
+
 router.get(
     "/:orderId",
     authMiddleware,

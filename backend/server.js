@@ -1,7 +1,15 @@
+// Sentry must be imported/initialized before anything else - including
+// `./src/app` - so its automatic instrumentation can hook into `http`
+// and `express` before those modules are required elsewhere. See
+// src/config/sentry.js for the "no-op when SENTRY_DSN unset" behavior.
+const Sentry = require("./src/config/sentry");
+
 const http = require("http");
 const app = require("./src/app");
 const socket = require("./src/socket/socket");
 const { startJobs } = require("./src/jobs");
+const logger = require("./src/utils/logger");
+const paymentProviderRegistry = require("./src/modules/payment/providers/registry");
 
 // Without these, a single unhandled promise rejection or uncaught
 // exception ANYWHERE in the app - a socket event handler, a cron job
@@ -14,13 +22,18 @@ const { startJobs } = require("./src/jobs");
 // after a truly uncaught synchronous exception, since the process may be
 // in a corrupted state. Render (or any process manager) restarts the
 // process automatically after an exit, so this trades "silent full
-// outage with no diagnosis" for "brief restart, logged".
+// outage with no diagnosis" for "brief restart, logged". Both are also
+// reported to Sentry (a no-op if SENTRY_DSN isn't set) since a process-
+// level crash is exactly the kind of thing that should page someone,
+// not just sit in a log line no one's watching.
 process.on("unhandledRejection", (reason) => {
-    console.error("[unhandledRejection]", reason);
+    logger.error({ err: reason }, "[unhandledRejection]");
+    Sentry.captureException(reason);
 });
 
 process.on("uncaughtException", (error) => {
-    console.error("[uncaughtException] shutting down for a clean restart:", error);
+    logger.fatal({ err: error }, "[uncaughtException] shutting down for a clean restart");
+    Sentry.captureException(error);
     process.exit(1);
 });
 
@@ -31,6 +44,12 @@ const httpServer = http.createServer(app);
 socket.init(httpServer);
 startJobs();
 
+// Phase 5 (Resilience & Growth): catch a malformed payment-provider entry
+// (bad merge, renamed export) at boot rather than mid-checkout. Warn-only
+// - an unconfigured rail (no credentials set, normal in dev) is not an
+// error and must never block startup.
+paymentProviderRegistry.validateRegistry(logger);
+
 httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    logger.info({ port: PORT }, "🚀 Server running");
 });

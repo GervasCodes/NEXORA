@@ -25,13 +25,15 @@
 // development, so local testing with a fake payload still works without
 // needing a secret configured.
 
-const verifyWebhookSecret = (envVarName) => (req, res, next) => {
+const logger = require("../utils/logger");
+
+const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
     const configuredSecret = process.env[envVarName];
     const providedSecret = req.headers["x-webhook-secret"];
 
     if (!configuredSecret) {
         if (process.env.NODE_ENV === "production") {
-            console.error(`[webhook auth] ${envVarName} is not set - rejecting webhook in production (fail closed).`);
+            logger.error({ provider, envVarName, reqId: req.id }, "[webhook auth] secret not configured - rejecting webhook in production (fail closed)");
             return res.status(200).json({ success: false });
         }
         // Not configured outside production - allow through so local/dev
@@ -40,7 +42,14 @@ const verifyWebhookSecret = (envVarName) => (req, res, next) => {
     }
 
     if (providedSecret !== configuredSecret) {
-        console.error(`[webhook auth] Rejected webhook with invalid/missing x-webhook-secret header.`);
+        // Logged at warn, not error: an unmatched secret here is
+        // expected background noise (scanners/bots probing known
+        // webhook paths), not an application fault - see the same
+        // reasoning in errorHandler.js for the warn/error split. It's
+        // still logged with enough context to spot a real pattern
+        // (e.g. the same IP hammering this repeatedly) if it ever
+        // becomes worth investigating.
+        logger.warn({ provider, reqId: req.id, ip: req.ip }, "[webhook auth] rejected webhook with invalid/missing x-webhook-secret header");
         // 200, not 401: same reasoning as the webhook handlers themselves -
         // a real provider retry-storms on non-2xx, and a rejected forgery
         // doesn't need to look any different to the caller than a
@@ -51,5 +60,5 @@ const verifyWebhookSecret = (envVarName) => (req, res, next) => {
     next();
 };
 
-exports.verifyMalipopayWebhook = verifyWebhookSecret("MALIPOPAY_WEBHOOK_SECRET");
-exports.verifySelcomWebhook = verifyWebhookSecret("SELCOM_WEBHOOK_SECRET");
+exports.verifyMalipopayWebhook = verifyWebhookSecret("MALIPOPAY_WEBHOOK_SECRET", "malipopay");
+exports.verifySelcomWebhook = verifyWebhookSecret("SELCOM_WEBHOOK_SECRET", "selcom");

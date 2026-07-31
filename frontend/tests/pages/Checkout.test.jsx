@@ -10,7 +10,12 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("../../src/api/client", () => ({
-    default: { post: vi.fn() },
+    // Checkout also calls api.get("/payments/methods") on mount (Phase 5's
+    // provider-gating lookup). It fails open on any rejection - leaving
+    // every payment method visible - which is what every test below
+    // already assumes, so a plain rejected mock keeps that behavior
+    // without needing per-test setup.
+    default: { post: vi.fn(), get: vi.fn(() => Promise.reject(new Error("not mocked"))) },
     extractErrorMessage: (error) => error?.response?.data?.message || "Something went wrong. Please try again"
 }));
 

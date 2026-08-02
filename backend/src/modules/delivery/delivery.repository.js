@@ -156,10 +156,13 @@ exports.findAgentLocation = async (agentId) => {
 
 // Online agents with a known location, who don't already have an active
 // (not yet delivered/failed) delivery, and haven't already been offered
-// this specific order.
+// this specific order. vehicle_type comes along so the smart-dispatch
+// ranking (offerToNextCandidate in delivery.service.js) can request a
+// road-routing ETA on the correct OSRM profile per agent, instead of
+// treating every vehicle as a generic driving route.
 exports.findCandidateAgents = async (orderId) => {
     const [rows] = await db.query(
-        `SELECT u.id, u.first_name, u.current_lat, u.current_lng
+        `SELECT u.id, u.first_name, u.current_lat, u.current_lng, u.vehicle_type
         FROM users u
         WHERE u.role = 'delivery_agent'
           AND u.is_online = TRUE

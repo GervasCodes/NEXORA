@@ -19,12 +19,22 @@ function DepartmentDiscovery() {
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [serviceCount, setServiceCount] = useState(null);
 
     useEffect(() => {
         api.get("/categories/departments")
             .then(({ data }) => setDepartments(data.data))
             .catch(() => setError("Couldn't load departments right now."))
             .finally(() => setLoading(false));
+    }, []);
+
+    // Total across all service categories, shown on the Services tile the
+    // same way each DepartmentCard shows its own productCount - fetched
+    // separately since services aren't part of /categories/departments.
+    useEffect(() => {
+        api.get("/service-categories/browse")
+            .then(({ data }) => setServiceCount(data.data.reduce((sum, c) => sum + (c.serviceCount || 0), 0)))
+            .catch(() => {});
     }, []);
 
     if (loading) {
@@ -42,6 +52,30 @@ function DepartmentDiscovery() {
             {departments.map((department, i) => (
                 <DepartmentCard key={department.id} department={department} index={i} />
             ))}
+
+            {/* Services lives alongside product departments - entering it is
+                the same tap-a-tile gesture as any department, not a separate
+                nav destination. */}
+            <Link
+                to="/services"
+                className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+            >
+                <div className="aspect-[4/3] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #111827 0%, #1D4ED8 100%)" }}>
+                    <div className="w-full h-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-9 h-9 text-frost/90">
+                            <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+                            <path d="M3.5 9.5h17M8 3v3M16 3v3" />
+                        </svg>
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                        <h3 className="font-display text-lg text-frost leading-tight mb-0.5">Services</h3>
+                        <p className="text-frost/75 text-xs">
+                            {serviceCount === null ? "Bookable providers" : `${serviceCount} ${serviceCount === 1 ? "service" : "services"}`}
+                        </p>
+                    </div>
+                </div>
+            </Link>
         </div>
     );
 }

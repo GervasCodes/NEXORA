@@ -1,6 +1,7 @@
 jest.mock("../../../src/modules/delivery/delivery.repository");
 jest.mock("../../../src/modules/delivery/deliveryPricing.service");
 jest.mock("../../../src/modules/order/order.repository");
+jest.mock("../../../src/modules/seller/seller.repository");
 jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/push/push.service");
 jest.mock("../../../src/modules/settings/settings.service");
@@ -11,6 +12,7 @@ jest.mock("../../../src/socket/socket");
 const deliveryRepository = require("../../../src/modules/delivery/delivery.repository");
 const deliveryPricingService = require("../../../src/modules/delivery/deliveryPricing.service");
 const orderRepository = require("../../../src/modules/order/order.repository");
+const sellerRepository = require("../../../src/modules/seller/seller.repository");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const pushService = require("../../../src/modules/push/push.service");
 const settingsService = require("../../../src/modules/settings/settings.service");
@@ -20,11 +22,20 @@ const socket = require("../../../src/socket/socket");
 
 const deliveryService = require("../../../src/modules/delivery/delivery.service");
 
+// Nearest-agent matching (startMatching / offerToNextCandidate /
+// declineOffer) now ranks against the SELLER's pickup pin, resolved via
+// orderRepository.findOrderSellerId -> sellerRepository.findByUserId - so
+// every test in that suite needs a seller with a pickup pin by default
+// unless it's specifically testing the "no pickup pin" fallback.
+const SELLER_PICKUP_PIN = { pickup_lat: -6.8, pickup_lng: 39.2, store_name: "Test Store", address: "1 Shop Rd" };
+
 beforeEach(() => {
     jest.useFakeTimers();
     notificationService.notify.mockResolvedValue(undefined);
     pushService.sendToUser.mockResolvedValue(undefined);
     earningsService.creditForDelivery.mockResolvedValue(undefined);
+    orderRepository.findOrderSellerId.mockResolvedValue(7);
+    sellerRepository.findByUserId.mockResolvedValue(SELLER_PICKUP_PIN);
     socket.emitToOrder = jest.fn();
     socket.emitToUser = jest.fn();
     socket.emitToAdmins = jest.fn();
@@ -471,8 +482,16 @@ describe("delivery.service.startMatching / offer flow", () => {
         expect(deliveryRepository.findCandidateAgents).not.toHaveBeenCalled();
     });
 
-    it("skips matching entirely when the order has no delivery pin", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, delivery_lat: null, delivery_lng: null });
+    it("skips matching entirely when the order has no seller, or the seller has no pickup pin", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 });
+        orderRepository.findOrderSellerId.mockResolvedValue(undefined);
+
+        await deliveryService.startMatching(1);
+        expect(deliveryRepository.findCandidateAgents).not.toHaveBeenCalled();
+
+        orderRepository.findOrderSellerId.mockResolvedValue(7);
+        sellerRepository.findByUserId.mockResolvedValue({ pickup_lat: null, pickup_lng: null });
+
         await deliveryService.startMatching(1);
         expect(deliveryRepository.findCandidateAgents).not.toHaveBeenCalled();
     });
@@ -486,10 +505,11 @@ describe("delivery.service.startMatching / offer flow", () => {
         expect(deliveryRepository.findCandidateAgents).not.toHaveBeenCalled();
     });
 
-    it("leaves the order in the manual pool when no candidate agent is within range", async () => {
+    it("leaves the order in the manual pool when no candidate agent is within range of the SHOP", async () => {
         orderRepository.findOrderById.mockResolvedValue({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 });
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
-        // Agent far outside OFFER_RADIUS_KM (15km) - Dodoma vs Dar es Salaam
+        // Agent far outside OFFER_RADIUS_KM (15km) of the shop pin (-6.8, 39.2)
+        // - Dodoma vs Dar es Salaam - even though it's close to the buyer.
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             { id: 50, current_lat: -6.1730, current_lng: 35.7419 }
         ]);
@@ -499,22 +519,47 @@ describe("delivery.service.startMatching / offer flow", () => {
         expect(deliveryRepository.createOffer).not.toHaveBeenCalled();
     });
 
-    it("offers to the nearest in-range candidate and notifies them via socket + push", async () => {
+    it("offers to whoever is nearest the SHOP (not the buyer), and notifies them via socket + push", async () => {
         orderRepository.findOrderById
             .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
             .mockResolvedValueOnce({ id: 1, order_number: "ORD-1", shipping_address: "123 St", shipping_city: "Dar" });
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
-            { id: 50, current_lat: -6.81, current_lng: 39.21 }, // ~1.5km away, in range
-            { id: 51, current_lat: -6.9, current_lng: 39.3 }    // farther away
+            // ~1.5km from the shop pin (-6.8, 39.2), in range
+            { id: 50, current_lat: -6.81, current_lng: 39.21, vehicle_type: "motorcycle" },
+            { id: 51, current_lat: -6.9, current_lng: 39.3, vehicle_type: "motorcycle" }  // farther from the shop
         ]);
         deliveryRepository.createOffer.mockResolvedValue(200);
+        routingService.getRoute.mockResolvedValue({ distanceKm: 1.5, durationMinutes: 5, provider: "osrm", degraded: false });
 
         await deliveryService.startMatching(1);
 
         expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 50, expect.any(Number), expect.any(Date));
         expect(socket.emitToUser).toHaveBeenCalledWith(50, "delivery:offer", expect.objectContaining({ offerId: 200, orderId: 1 }));
         expect(pushService.sendToUser).toHaveBeenCalledWith(50, expect.objectContaining({ offerId: 200, orderId: 1 }));
+    });
+
+    it("prefers the agent with the faster road ETA to the shop over the merely-closer-as-the-crow-flies one", async () => {
+        orderRepository.findOrderById
+            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
+            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" });
+        deliveryRepository.findByOrderId.mockResolvedValue(undefined);
+        deliveryRepository.findCandidateAgents.mockResolvedValue([
+            { id: 50, current_lat: -6.805, current_lng: 39.205, vehicle_type: "car" }, // nearer by straight line
+            { id: 51, current_lat: -6.82, current_lng: 39.22, vehicle_type: "motorcycle" } // further, but a quicker route
+        ]);
+        deliveryRepository.createOffer.mockResolvedValue(200);
+        routingService.getRoute.mockImplementation(({ originLat }) =>
+            Promise.resolve(
+                originLat === -6.805
+                    ? { distanceKm: 0.7, durationMinutes: 14, provider: "osrm", degraded: false } // stuck in traffic
+                    : { distanceKm: 3, durationMinutes: 6, provider: "osrm", degraded: false }
+            )
+        );
+
+        await deliveryService.startMatching(1);
+
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date));
     });
 
     it("advances to the next candidate once an unaccepted offer expires", async () => {
@@ -687,8 +732,12 @@ describe("delivery.service.declineOffer", () => {
         await expect(deliveryService.declineOffer(200, 50)).rejects.toThrow("Offer not found");
     });
 
-    it("declines then offers the order to the next candidate", async () => {
+    it("declines then offers the order to the next candidate nearest the shop", async () => {
         deliveryRepository.findOfferById.mockResolvedValue({ id: 200, agent_id: 50, order_id: 1 });
+        // Re-matching re-resolves the seller's pickup pin from scratch, so
+        // only one findOrderById call happens here (not two, unlike
+        // startMatching) - the pickup point is looked up first, then the
+        // order is fetched again just for the offer notification payload.
         orderRepository.findOrderById
             .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
             .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" });

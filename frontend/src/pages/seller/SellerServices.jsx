@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
@@ -104,7 +105,7 @@ export default function SellerServices() {
         return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} error={switchError} />;
     }
 
-    if (loading) return <p className="text-ash">Loading services…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

@@ -6,7 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
-import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -108,7 +108,13 @@ export default function Header() {
     return (
         <header className="glass-dark text-frost sticky top-0 z-40">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-4 sm:gap-6">
-                <Link to="/" className="flex items-center gap-2 shrink-0" onClick={() => setMenuOpen(false)}>
+                <Link
+                    to="/"
+                    aria-label={t("nav.home")}
+                    title={t("nav.home")}
+                    className="flex items-center gap-2 shrink-0"
+                    onClick={() => setMenuOpen(false)}
+                >
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
                 </Link>
 
@@ -125,6 +131,14 @@ export default function Header() {
                     items, mirroring the notification bell / cart icons that
                     already lived here. */}
                 <nav className="hidden md:flex items-center gap-1.5 text-sm ml-auto">
+                    <IconNavLink
+                        to="/"
+                        label={t("nav.home")}
+                        icon={HomeIcon}
+                        active={location.pathname === "/"}
+                        onClick={() => setMenuOpen(false)}
+                    />
+
                     <IconNavLink
                         to="/products"
                         label={t("nav.browse")}
@@ -241,6 +255,16 @@ export default function Header() {
             {menuOpen && (
                 <div id="mobile-nav-drawer" className="md:hidden glass-strong text-ink border-t border-line/60 px-4 py-3 animate-slide-up">
                     <nav className="flex flex-col divide-y divide-line/60">
+                        <Link
+                            to="/"
+                            onClick={() => setMenuOpen(false)}
+                            className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
+                                ${location.pathname === "/" ? "text-teal" : "hover:text-teal"}`}
+                        >
+                            <HomeIcon className="w-[18px] h-[18px] shrink-0" />
+                            {t("nav.home")}
+                        </Link>
+
                         <Link
                             to="/products"
                             onClick={() => setMenuOpen(false)}

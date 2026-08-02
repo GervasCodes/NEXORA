@@ -10,7 +10,8 @@ const categoryController = require("./category.controller");
 const {
     createCategoryValidation,
     updateCategoryValidation,
-    categoryIdValidation
+    categoryIdValidation,
+    scheduleMaintenanceValidation
 } = require("./category.validator");
 
 // Public
@@ -75,6 +76,28 @@ router.put(
     categoryIdValidation,
     validationMiddleware,
     categoryController.activateCategory
+);
+
+// Schedule a future maintenance window (start/end times) for a
+// department - see category.service.js#scheduleMaintenance. If start_at
+// is omitted or already past, maintenance begins immediately and
+// auto-restores at end_at.
+router.put(
+    "/:id/schedule-maintenance",
+    authMiddleware,
+    authorize("admin"),
+    scheduleMaintenanceValidation,
+    validationMiddleware,
+    categoryController.scheduleMaintenance
+);
+
+router.put(
+    "/:id/cancel-scheduled-maintenance",
+    authMiddleware,
+    authorize("admin"),
+    categoryIdValidation,
+    validationMiddleware,
+    categoryController.cancelScheduledMaintenance
 );
 
 module.exports = router;

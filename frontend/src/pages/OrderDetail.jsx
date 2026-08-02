@@ -7,6 +7,7 @@ import { useSocket } from "../context/SocketContext";
 import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
 import TrackingWidget from "../components/TrackingWidget";
+import PageLoader from "../components/PageLoader";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -255,7 +256,7 @@ export default function OrderDetail() {
         }
     };
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading order…</div>;
+    if (loading) return <PageLoader />;
 
     if (!order) {
         return (

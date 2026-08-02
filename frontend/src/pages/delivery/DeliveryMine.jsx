@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 const NEXT_STATUS = {
     assigned: [{ value: "picked_up", label: "Mark picked up" }, { value: "failed", label: "Report failed" }],
@@ -40,7 +41,7 @@ export default function DeliveryMine() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading your deliveries…</p>;
+    if (loading) return <PageLoader />;
 
     if (deliveries.length === 0) {
         return <p className="text-ash text-sm">You haven't claimed any deliveries yet.</p>;

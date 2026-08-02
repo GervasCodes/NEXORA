@@ -74,18 +74,23 @@ function ServiceCard({ service, layout = "grid" }) {
         </div>
     );
 
-    const categoryLine = service.category_name ? (
-        <p className="text-xs text-ash mt-1">{service.category_name}</p>
-    ) : null;
+    // Phase 4 (Customer Experience) - same row shape as ProductCard.jsx's
+    // ratingAndStock (category takes the stock slot, since a service
+    // listing has no stock concept), so both card types line up the same
+    // way instead of the category and rating stacking as separate rows.
+    const categoryAndRating = (service.category_name || service.average_rating) ? (
+        <div className="flex items-center justify-between mt-1 gap-2">
+            {service.category_name ? (
+                <p className="text-xs text-ash truncate">{service.category_name}</p>
+            ) : <span />}
 
-    // Phase 4 (Customer Experience) - same rating badge shape as
-    // ProductCard.jsx's ratingAndStock, minus the stock half (a service
-    // listing has no stock concept).
-    const ratingLine = service.average_rating ? (
-        <p className="text-xs text-ash flex items-center gap-0.5 mt-1">
-            <span className="text-mango">★</span> {Number(service.average_rating).toFixed(1)}
-            <span className="text-ash/70">({service.review_count})</span>
-        </p>
+            {service.average_rating ? (
+                <p className="text-xs text-ash shrink-0 flex items-center gap-0.5">
+                    <span className="text-mango">★</span> {Number(service.average_rating).toFixed(1)}
+                    <span className="text-ash/70">({service.review_count})</span>
+                </p>
+            ) : null}
+        </div>
     ) : null;
 
     if (isList) {
@@ -100,8 +105,7 @@ function ServiceCard({ service, layout = "grid" }) {
                     {providerLine}
                     <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{service.title}</h3>
                     {priceRow}
-                    {categoryLine}
-                    {ratingLine}
+                    {categoryAndRating}
                 </div>
             </Link>
         );
@@ -118,8 +122,7 @@ function ServiceCard({ service, layout = "grid" }) {
             <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{service.title}</h3>
 
             {priceRow}
-            {categoryLine}
-            {ratingLine}
+            {categoryAndRating}
         </Link>
     );
 }

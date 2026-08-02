@@ -59,6 +59,21 @@ module.exports = async (req, res, next) => {
             });
         }
 
+        // A password change (Settings' OTP flow, or forgotten-password
+        // reset) bumps token_version in the same query that updates the
+        // password (account.repository.js#updatePassword) - any token
+        // signed before that bump no longer matches and is rejected here,
+        // forcing a fresh login instead of staying valid for the rest of
+        // its 7-day life. Tokens issued before this check existed carry
+        // no `tv` claim at all; treat that as version 0 so they aren't
+        // all invalidated the moment this ships.
+        if ((decoded.tv || 0) !== (status.token_version || 0)) {
+            return res.status(401).json({
+                success: false,
+                message: t(req.locale, "common.invalidToken")
+            });
+        }
+
         req.user = decoded;
 
         // The account's saved language (see auth/login.service.js, which

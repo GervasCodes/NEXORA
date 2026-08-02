@@ -60,7 +60,6 @@ exports.createCheckoutSession = async ({ amountTzs, reference, description, succ
     return { success: true, sessionId: data.id, url: data.checkout_url || data.url };
 };
 
-// Refund leg (Phase 2 - Refund Automation). Follows the same
 // hosted-gateway REST convention as createCheckoutSession above (a
 // `/payments/{reference}/refund` style endpoint is the commonly
 // documented shape for hosted-checkout providers) - confirm the exact

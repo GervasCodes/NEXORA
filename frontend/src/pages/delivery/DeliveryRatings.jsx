@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 export default function DeliveryRatings() {
     const [summary, setSummary] = useState(null);
@@ -14,7 +15,7 @@ export default function DeliveryRatings() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <p className="text-ash">Loading your ratings…</p>;
+    if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!summary) return null;
 

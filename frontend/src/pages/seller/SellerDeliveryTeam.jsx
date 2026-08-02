@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
@@ -45,7 +46,7 @@ export default function SellerDeliveryTeam() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading your delivery team…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div className="max-w-lg">

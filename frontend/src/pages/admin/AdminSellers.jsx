@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 export default function AdminSellers() {
     const [sellers, setSellers] = useState([]);
@@ -26,7 +27,7 @@ export default function AdminSellers() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading sellers…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

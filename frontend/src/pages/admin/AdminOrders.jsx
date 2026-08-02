@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -44,7 +45,7 @@ export default function AdminOrders() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading orders…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

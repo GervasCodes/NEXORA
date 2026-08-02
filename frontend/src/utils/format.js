@@ -20,6 +20,18 @@ export const formatShortDate = (dateString) => {
 };
 
 
+// Date + time together, e.g. "5 Aug 2026, 14:30" - used for maintenance
+// schedule windows where the exact time (not just the day) matters.
+export const formatDateTime = (dateString) => {
+    return new Date(dateString).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+};
+
 export const formatMonthYear = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-GB", {
         month: "short",

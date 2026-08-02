@@ -420,7 +420,16 @@ COMPLETED
 CANCELLED
 
 REFUNDED
+
+REJECTED
 ```
+
+REJECTED (Phase 5 - Booking Status Review, migration 070) is reachable
+only from PENDING, via a provider-only decline action distinct from
+CANCELLED - see booking.service.js#rejectBooking. A pending booking
+that was already paid still exits through REFUNDED as before; REJECTED
+only replaces CANCELLED for the unpaid case, so the payment flow is
+unchanged.
 
 ---
 
@@ -591,6 +600,21 @@ Inventory
 Availability
 Payouts
 ```
+
+---
+
+Enforcement: both single-type restrictions above are enforced
+server-side, not just by the seller dashboard hiding the corresponding
+tabs - `requireServiceProvider` blocks a Product Seller's direct calls
+into Services/Bookings/Availability, and `requireProductProvider`
+(Phase 7 - Final Review) closes the mirror-image gap that existed
+until then, blocking a Service Provider's direct calls into product
+create/update/deactivate/reactivate and image/video/audio upload.
+Shipping (the delivery module) is shared infrastructure used by both
+delivery agents and sellers and was left out of this pass - flagged
+for a follow-up review rather than folded into Phase 7, since scoping
+it correctly needs its own look at the delivery-agent side of that
+module.
 
 ---
 

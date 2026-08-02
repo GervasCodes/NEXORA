@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 
 export default function AdminDeletedAccounts() {
     const { user: currentUser } = useAuth();
     const isSuperAdmin = currentUser?.admin_level === "super_admin";
+    const toast = useToast();
 
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
     const [busyId, setBusyId] = useState(null);
 
     const load = () => {
         api.get("/admin/deleted-users")
             .then(({ data }) => setUsers(data.data))
-            .catch((err) => setError(extractErrorMessage(err)))
+            .catch((err) => toast?.error(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -30,28 +32,27 @@ export default function AdminDeletedAccounts() {
 
         if (typed === null) return;
         if (typed.trim().toLowerCase() !== u.email.toLowerCase()) {
-            window.alert("That didn't match the account's email. Nothing was deleted.");
+            toast?.error("That didn't match the account's email. Nothing was deleted.");
             return;
         }
 
         setBusyId(u.id);
-        setError("");
         try {
             const { data } = await api.delete(`/admin/deleted-users/${u.id}`);
-            window.alert(
+            toast?.success(
                 data?.data?.hardDeleted
                     ? "Account fully removed — no trace of it remains."
                     : "Account anonymized and permanently disabled. Its order/review/financial history was kept because other users' records depend on it."
             );
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
     };
 
-    if (loading) return <p className="text-ash">Loading deleted accounts…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>
@@ -60,8 +61,6 @@ export default function AdminDeletedAccounts() {
                 Accounts that deleted themselves. They can no longer log in and can't be reactivated.
                 {isSuperAdmin && " Super admins can permanently erase one below."}
             </p>
-
-            {error && <p className="text-sm text-coral mb-4">{error}</p>}
 
             {users.length === 0 ? (
                 <p className="text-ash text-sm">No deleted accounts.</p>

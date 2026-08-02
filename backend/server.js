@@ -10,6 +10,7 @@ const socket = require("./src/socket/socket");
 const { startJobs } = require("./src/jobs");
 const logger = require("./src/utils/logger");
 const paymentProviderRegistry = require("./src/modules/payment/providers/registry");
+const envCheck = require("./src/config/envCheck");
 
 // Without these, a single unhandled promise rejection or uncaught
 // exception ANYWHERE in the app - a socket event handler, a cron job
@@ -49,6 +50,11 @@ startJobs();
 // - an unconfigured rail (no credentials set, normal in dev) is not an
 // error and must never block startup.
 paymentProviderRegistry.validateRegistry(logger);
+
+// Phase 1 (Launch Blockers): catches typo'd/misconfigured env vars (e.g.
+// AADMIN_EMAIL instead of ADMIN_EMAIL) loudly at boot instead of as
+// silent downstream behavior - see src/config/envCheck.js.
+envCheck.run(logger);
 
 httpServer.listen(PORT, () => {
     logger.info({ port: PORT }, "🚀 Server running");

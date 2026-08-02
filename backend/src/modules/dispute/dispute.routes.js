@@ -5,6 +5,7 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const upload = require("../../middleware/upload.middleware");
+const maintenanceCheck = require("../../middleware/maintenance.middleware");
 
 const disputeController = require("./dispute.controller");
 const {
@@ -45,9 +46,18 @@ router.put(
 // --- Seller ---
 router.get("/seller", authorize("seller"), disputeController.getSellerDisputes);
 
-// --- Buyer ---
-router.get("/", authorize("buyer"), disputeController.getMyDisputes);
-router.post("/", authorize("buyer"), createDisputeValidation, validationMiddleware, disputeController.createDispute);
+// --- Buyer --- (gated: filing/browsing disputes is the "functionality"
+// the admin's Maintenance toggle turns off; sellers/admins above keep
+// working normally with anything already filed)
+router.get("/", authorize("buyer"), maintenanceCheck("disputes"), disputeController.getMyDisputes);
+router.post(
+    "/",
+    authorize("buyer"),
+    maintenanceCheck("disputes"),
+    createDisputeValidation,
+    validationMiddleware,
+    disputeController.createDispute
+);
 router.put(
     "/:id/withdraw",
     authorize("buyer"),

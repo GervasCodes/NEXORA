@@ -1,0 +1,23 @@
+-- Migration 071: Add users.token_version for JWT/session invalidation.
+--
+-- Phase 1 (Launch Blockers) - Security fix.
+--
+-- Today auth.middleware.js re-checks is_active/suspended_at from the
+-- database on every request (see the comment there, added for Soft
+-- Account Deletion), but it does NOT re-check anything about the
+-- password. A session JWT is valid for 7 days (utils/generateToken.js)
+-- purely because it has a valid signature - if an account's password
+-- is changed (Settings' OTP-gated change flow, account.service.js
+-- #changePassword) or reset (forgotten-password flow,
+-- passwordReset.service.js#resetPassword), any token issued before
+-- that point - including one held by an attacker who no longer knows
+-- the new password - keeps working until it naturally expires.
+--
+-- token_version is a per-user counter baked into the JWT at login
+-- (login.service.js#verifyLoginOtp) as a `tv` claim. Bumping it
+-- invalidates every token issued before the bump in one write, without
+-- needing a server-side token blacklist/session store. Both password
+-- change paths route through account.repository.js#updatePassword,
+-- which is the single place this now gets incremented.
+ALTER TABLE users
+    ADD COLUMN token_version INT UNSIGNED NOT NULL DEFAULT 0 AFTER password;

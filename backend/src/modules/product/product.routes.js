@@ -4,6 +4,7 @@ const router = express.Router();
 const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
+const requireProductProvider = require("../../middleware/requireProductProvider.middleware");
 const upload = require("../../middleware/upload.middleware");
 const uploadVideo = require("../../middleware/uploadVideo.middleware");
 const uploadAudio = require("../../middleware/uploadAudio.middleware");
@@ -26,6 +27,7 @@ router.post(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
+    requireProductProvider,
     createProductValidation,
     productController.createProduct
 );
@@ -35,6 +37,7 @@ router.post(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
+    requireProductProvider,
     upload.single("image"),
     productController.uploadProductImage
 );
@@ -44,6 +47,7 @@ router.post(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
+    requireProductProvider,
     uploadVideo.single("video"),
     productController.uploadProductVideo
 );
@@ -53,6 +57,7 @@ router.post(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
+    requireProductProvider,
     uploadAudio.single("audio"),
     productController.uploadProductAudio
 );
@@ -61,6 +66,7 @@ router.get(
     "/mine/list",
     authMiddleware,
     authorize("seller"),
+    requireProductProvider,
     productController.getMyProducts
 );
 
@@ -68,6 +74,7 @@ router.get(
     "/mine/:id",
     authMiddleware,
     authorize("seller"),
+    requireProductProvider,
     productController.getMyProductById
 );
 
@@ -75,6 +82,7 @@ router.put(
     "/:id",
     authMiddleware,
     authorize("seller"),
+    requireProductProvider,
     productController.updateProduct
 );
 
@@ -82,6 +90,7 @@ router.put(
     "/:id/deactivate",
     authMiddleware,
     authorize("seller"),
+    requireProductProvider,
     productController.deactivateMyProduct
 );
 
@@ -90,6 +99,7 @@ router.put(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
+    requireProductProvider,
     productController.activateMyProduct
 );
 

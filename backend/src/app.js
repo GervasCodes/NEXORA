@@ -42,6 +42,7 @@ const disputeRoutes = require("./modules/dispute/dispute.routes");
 const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
 const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
+const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -274,6 +275,7 @@ app.use("/api/v1/push", pushRoutes);
 // silently shadow this router entirely.
 app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
 app.use("/api/v1/admin/notifications", adminNotificationRoutes);
+app.use("/api/v1/admin/maintenance", maintenanceRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);

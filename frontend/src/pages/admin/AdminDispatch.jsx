@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../../api/client";
 import { useSocket } from "../../context/SocketContext";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
+import AdminDispatchMap from "../../components/AdminDispatchMap";
 
 const statusStyles = {
     assigned: "bg-line text-ash",
@@ -80,7 +82,7 @@ export default function AdminDispatch() {
         [deliveries]
     );
 
-    if (loading) return <p className="text-ash">Loading dispatch board…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div className="animate-fade-in">
@@ -99,6 +101,11 @@ export default function AdminDispatch() {
                 <SummaryCard label="Delayed" value={delayedCount} tone={delayedCount > 0 ? "coral" : undefined} delay={40} />
                 <SummaryCard label="Online agents" value={summary?.online_agents ?? 0} delay={80} />
                 <SummaryCard label="Idle agents" value={summary?.idle_agents ?? 0} delay={120} />
+            </div>
+
+            <h2 className="font-display text-lg mb-3">Live map</h2>
+            <div className="mb-10">
+                <AdminDispatchMap deliveries={sortedDeliveries} agents={agents} />
             </div>
 
             <h2 className="font-display text-lg mb-3">Active deliveries</h2>

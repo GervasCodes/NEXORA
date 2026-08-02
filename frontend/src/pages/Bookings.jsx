@@ -6,16 +6,33 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
 import BookingStatusBadge from "../components/BookingStatusBadge";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 
 export default function Bookings() {
     const { format } = useCurrency();
     const { t } = useLanguage();
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [maintenance, setMaintenance] = useState(null);
 
-    useEffect(() => {
-        api.get("/bookings/mine").then(({ data }) => setBookings(data.data)).finally(() => setLoading(false));
-    }, []);
+    const load = () => {
+        setLoading(true);
+        setMaintenance(null);
+        api.get("/bookings/mine")
+            .then(({ data }) => setBookings(data.data))
+            .catch((err) => {
+                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
+                    setMaintenance(err.response.data.message);
+                }
+            })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(load, []);
+
+    if (maintenance) {
+        return <MaintenanceScreen title="Bookings is under maintenance" message={maintenance} onRetry={load} />;
+    }
 
     if (loading) {
         return (

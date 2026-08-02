@@ -1,7 +1,6 @@
 /**
  * AzamPay provider adapter.
  *
- * Phase 5 (Resilience & Growth) — additional payment-rail preparation.
  * This is the third mobile-money rail invited by the comment at the top
  * of mobileMoney.provider.js ("Adding a third provider later e.g.
  * AzamPay"). It follows the exact same adapter shape as malipopay.provider.js
@@ -18,17 +17,6 @@
  *   AZAMPAY_APP_NAME         -> AzamPay "App Name" (from their dashboard)
  *   AZAMPAY_CLIENT_ID        -> AzamPay client ID (used to fetch a token)
  *   AZAMPAY_CLIENT_SECRET    -> AzamPay client secret (used to fetch a token)
- *
- * IMPORTANT: this is prepared, not activated. isConfigured() returns false
- * until all four env vars above are set, and even then it is inert until
- * an operator opts in via MOBILE_MONEY_PROVIDER=azampay (see
- * mobileMoney.provider.js) — so shipping this file changes no existing
- * behavior for anyone not already using it. Confirm the exact endpoint
- * paths and response field names against AzamPay's own docs/onboarding
- * package before ever setting MOBILE_MONEY_PROVIDER=azampay in production;
- * the shape below follows their publicly documented checkout pattern.
- *
- * Docs: https://developers.azampay.co.tz/
  */
 
 const BASE_URL = process.env.AZAMPAY_API_BASE_URL;

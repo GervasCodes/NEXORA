@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 const emptyForm = { name: "" };
 
@@ -61,7 +62,7 @@ export default function AdminStoreTypes() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading store types…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
+import PageLoader from "../components/PageLoader";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -167,7 +168,7 @@ export default function DisputeDetail() {
         }
     };
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading dispute…</div>;
+    if (loading) return <PageLoader />;
 
     if (loadError || !dispute) {
         return (

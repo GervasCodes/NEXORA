@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import PageLoader from "../components/PageLoader";
 
 const TYPES = [
     { value: "damaged_item", label: "Damaged item" },
@@ -63,7 +64,7 @@ export default function NewDispute() {
         }
     };
 
-    if (loading) return <div className="max-w-xl mx-auto px-6 py-16 text-ash">Loading order…</div>;
+    if (loading) return <PageLoader />;
 
     if (loadError || !order) {
         return (

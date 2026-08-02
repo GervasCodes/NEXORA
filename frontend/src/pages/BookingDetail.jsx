@@ -8,7 +8,13 @@ import { useLanguage } from "../context/LanguageContext";
 import { useSocket } from "../context/SocketContext";
 import BookingStatusBadge from "../components/BookingStatusBadge";
 import BookingProgressTimeline from "../components/BookingProgressTimeline";
+import PageLoader from "../components/PageLoader";
 
+// Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
+// allows either side to cancel a pending or confirmed booking. A
+// still-pending request also has a provider-only reject action (see
+// booking.service.js#rejectBooking), so a provider viewing a pending
+// booking gets Confirm/Reject, not a redundant Cancel button.
 const CANCELLABLE = ["pending", "confirmed"];
 
 // Accessible by either side of the booking - booking.service.js's
@@ -136,7 +142,7 @@ export default function BookingDetail() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, id]);
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">{t("booking.loading")}</div>;
+    if (loading) return <PageLoader />;
 
     if (!booking) {
         return (
@@ -150,7 +156,8 @@ export default function BookingDetail() {
 
     const isProvider = user?.id === booking.provider_id;
     const canPay = !isProvider && booking.payment_status === "unpaid"
-        && !["cancelled", "refunded"].includes(booking.status);
+        && !["cancelled", "refunded", "rejected"].includes(booking.status);
+    const canCancel = CANCELLABLE.includes(booking.status) && !(isProvider && booking.status === "pending");
 
     const handleConfirm = async () => {
         setBusy(true);
@@ -172,6 +179,24 @@ export default function BookingDetail() {
         try {
             const { data } = await api.put(`/bookings/${id}/cancel`);
             setMessage(data.data?.refunded ? t("booking.cancelledRefundedMessage") : t("booking.cancelledMessage"));
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // Phase 5: provider-only decline of a still-pending request - see
+    // booking.service.js#rejectBooking. Kept separate from handleCancel
+    // so the two actions can't drift (e.g. one gaining a confirmation
+    // step the other doesn't).
+    const handleReject = async () => {
+        setBusy(true);
+        setError("");
+        try {
+            await api.put(`/bookings/${id}/reject`);
+            setMessage(t("booking.rejectedMessage"));
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -370,12 +395,18 @@ export default function BookingDetail() {
 
             <div className="flex flex-wrap gap-3">
                 {isProvider && booking.status === "pending" && (
-                    <button onClick={handleConfirm} disabled={busy}
-                        className="bg-teal text-white px-5 py-2.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-60">
-                        {busy ? t("booking.confirming") : t("booking.confirmButton")}
-                    </button>
+                    <>
+                        <button onClick={handleConfirm} disabled={busy}
+                            className="bg-teal text-white px-5 py-2.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-60">
+                            {busy ? t("booking.confirming") : t("booking.confirmButton")}
+                        </button>
+                        <button onClick={handleReject} disabled={busy}
+                            className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
+                            {busy ? t("booking.rejecting") : t("booking.rejectButton")}
+                        </button>
+                    </>
                 )}
-                {CANCELLABLE.includes(booking.status) && (
+                {canCancel && (
                     <button onClick={handleCancel} disabled={busy}
                         className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
                         {busy ? t("booking.cancelling") : t("booking.cancelButton")}

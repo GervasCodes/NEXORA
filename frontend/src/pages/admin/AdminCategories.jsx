@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 const emptyForm = { name: "", description: "", display_order: 0 };
 
@@ -86,7 +87,7 @@ export default function AdminCategories() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading categories…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

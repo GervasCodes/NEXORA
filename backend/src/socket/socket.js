@@ -53,6 +53,16 @@ exports.emitToAdmins = (event, payload) => {
     io.to("admins").emit(event, payload);
 };
 
+// Broadcasts to every currently-connected socket, regardless of role or
+// room membership. Used for department maintenance enter/exit
+// notifications (see category.service.js#notifyMaintenanceChange) - any
+// shopper anywhere in the app should see the toast, not just whoever
+// happens to be viewing that department right now.
+exports.emitToAll = (event, payload) => {
+    if (!io) return;
+    io.emit(event, payload);
+};
+
 // Buyer's tracking page joins `order:{orderId}` to receive the assigned
 // agent's live position as it streams in.
 exports.emitToOrder = (orderId, event, payload) => {

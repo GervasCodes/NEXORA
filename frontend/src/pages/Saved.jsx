@@ -2,18 +2,35 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import ProductCard from "../components/ProductCard";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 
 export default function Saved() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [maintenance, setMaintenance] = useState(null);
 
-    useEffect(() => {
+    const load = () => {
+        setLoading(true);
+        setError("");
+        setMaintenance(null);
         api.get("/wishlist")
             .then(({ data }) => setItems(data.data))
-            .catch(() => setError("Couldn't load your saved items."))
+            .catch((err) => {
+                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
+                    setMaintenance(err.response.data.message);
+                } else {
+                    setError("Couldn't load your saved items.");
+                }
+            })
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(load, []);
+
+    if (maintenance) {
+        return <MaintenanceScreen title="Wishlist is under maintenance" message={maintenance} onRetry={load} />;
+    }
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">

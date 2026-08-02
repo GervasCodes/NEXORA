@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 const STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -35,7 +36,7 @@ export default function AdminWithdrawals() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading withdrawal requests…</p>;
+    if (loading) return <PageLoader />;
 
     if (withdrawals.length === 0) {
         return <p className="text-ash text-sm">No withdrawal requests yet.</p>;

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import PageLoader from "../components/PageLoader";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 
 export default function Messages() {
     const { user } = useAuth();
@@ -10,13 +12,23 @@ export default function Messages() {
     const [confirmingId, setConfirmingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
     const [error, setError] = useState("");
+    const [maintenance, setMaintenance] = useState(null);
     const [query, setQuery] = useState("");
 
-    useEffect(() => {
+    const loadConversations = () => {
+        setLoading(true);
+        setMaintenance(null);
         api.get("/chat/conversations")
             .then(({ data }) => setConversations(data.data))
+            .catch((err) => {
+                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
+                    setMaintenance(err.response.data.message);
+                }
+            })
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(loadConversations, []);
 
     const otherPartyName = (c) => {
         const isMeBuyer = c.buyer_id === user.id;
@@ -49,7 +61,8 @@ export default function Messages() {
         }
     };
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading messages…</div>;
+    if (loading) return <PageLoader />;
+    if (maintenance) return <MaintenanceScreen title="Messages is under maintenance" message={maintenance} onRetry={loadConversations} />;
 
     if (conversations.length === 0) {
         return (

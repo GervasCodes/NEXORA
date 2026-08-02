@@ -12,6 +12,10 @@ process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 // Webhook secrets - set to fixed values so signature/secret tests are
 // deterministic instead of depending on whatever a real .env happens to
 // contain.
+// MOBILE_MONEY_API_KEY doubles as MalipoPay's webhook payloadSignature
+// secret (see webhookAuth.middleware.js) - MalipoPay has one key, not a
+// separate secret+key pair.
+process.env.MOBILE_MONEY_API_KEY = process.env.MOBILE_MONEY_API_KEY || "test-malipopay-api-key";
 process.env.MALIPOPAY_WEBHOOK_SECRET = process.env.MALIPOPAY_WEBHOOK_SECRET || "test-malipopay-secret";
 process.env.SELCOM_WEBHOOK_SECRET = process.env.SELCOM_WEBHOOK_SECRET || "test-selcom-secret";
 process.env.SNIPPE_SECRET_KEY = process.env.SNIPPE_SECRET_KEY || "test-snippe-secret-key";

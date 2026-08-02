@@ -4,11 +4,13 @@ const router = express.Router();
 const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
+const maintenanceCheck = require("../../middleware/maintenance.middleware");
 
 const walletController = require("./wallet.controller");
 const { requestWithdrawalValidation } = require("./wallet.validator");
 
 router.use(authMiddleware, authorize("seller"));
+router.use(maintenanceCheck("wallet"));
 
 router.get("/", walletController.getWallet);
 router.get("/withdrawals", walletController.getMyWithdrawals);

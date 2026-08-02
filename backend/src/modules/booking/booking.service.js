@@ -228,10 +228,70 @@ exports.confirmBooking = async (bookingId, providerId) => {
     });
 };
 
+// Phase 5 (Merchant-Type-Aware Dashboard - Booking Status Review):
+// provider-only, pending -> rejected. Split out from cancelBooking
+// below so a provider turning down a request is distinguishable from
+// either side cancelling one - see migration 070's notes. Only valid
+// while still pending; once a provider has confirmed a booking, backing
+// out goes through the existing cancel flow instead (same as any other
+// post-confirmation cancellation).
+exports.rejectBooking = async (bookingId, providerId) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.provider_id !== providerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (booking.status !== "pending") {
+        throw new Error(`Booking can no longer be rejected (status: "${booking.status}")`);
+    }
+
+    const wasPaid = booking.payment_status === "paid";
+    const items = await bookingRepository.findItemsByBookingId(bookingId);
+
+    // Payment flow unchanged: a pending booking that was already paid
+    // still exits through 'refunded', exactly like cancelBooking - only
+    // the unpaid case gets the new, more specific 'rejected' status.
+    await bookingRepository.cancelBooking(
+        bookingId, booking.service_id, items, wasPaid ? "refunded" : "rejected"
+    );
+
+    if (wasPaid) {
+        walletService.reverseProviderEarningsForBooking(
+            booking.provider_id, Number(booking.amount), bookingId
+        ).catch((err) => console.error("booking wallet reversal error:", err));
+
+        paymentService.refundBookingPayment(bookingId, Number(booking.amount))
+            .then((result) => {
+                if (!result.success) {
+                    console.error(`booking #${bookingId} refund needs manual handling:`, result.error);
+                }
+            })
+            .catch((err) => console.error("booking refund error:", err));
+    }
+
+    await notificationService.notify({
+        userId: booking.customer_id,
+        type: "booking_rejected",
+        title: "Booking declined",
+        message: wasPaid
+            ? `Booking ${booking.booking_reference} was declined by the provider and refunded.`
+            : `Booking ${booking.booking_reference} was declined by the provider.`,
+        url: `/bookings/${bookingId}`
+    });
+};
+
 // Either side can cancel a pending/confirmed booking - a provider
 // declining a request, or a customer changing their mind. Once a
 // booking is active/completed it's too late to cancel outright (that's
 // what refunds are for for a payment already taken - Phase 3).
+//
+// Phase 5 note: a provider declining a still-pending request now has
+// its own rejectBooking above; this stays as-is (still reachable by
+// either side for either status, cancellable statuses unchanged) so
+// nothing that already relies on cancel - customer-initiated pending
+// cancellations, or either side cancelling a confirmed booking -
+// changes behavior.
 const CANCELLABLE_STATUSES = ["pending", "confirmed"];
 
 // Phase 3: a cancelled booking that was never paid just needs its

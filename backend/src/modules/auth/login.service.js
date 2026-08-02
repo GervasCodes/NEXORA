@@ -89,7 +89,10 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
         id: user.id,
         role: user.role,
         admin_level: user.role === "admin" ? user.admin_level : undefined,
-        language: user.language
+        language: user.language,
+        // See migration 071 / auth.middleware.js - lets a password change
+        // invalidate this token before its natural 7-day expiry.
+        tv: user.token_version || 0
     });
 
     delete user.password;

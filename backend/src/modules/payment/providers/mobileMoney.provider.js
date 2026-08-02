@@ -15,7 +15,7 @@
  *   initiate(phone, amount, meta) -> { success, transactionReference }
  *   disburse(phone, amount, meta) -> { success, transactionReference }
  *
- * Phase 5 (Resilience & Growth) added the third rail this comment used
+ *  added the third rail this comment used
  * to invite as a future example: azampay.provider.js, following this
  * same shape. Adding a fourth later means exactly what adding azampay
  * did: drop in <name>.provider.js with that same shape, add one line to
@@ -46,10 +46,7 @@ const resolveProvider = () => {
 
     if (process.env.NODE_ENV === "production") {
         throw new Error(
-            "Mobile money is not configured for production. Set " +
-            "MOBILE_MONEY_PROVIDER to 'malipopay' or 'selcom' and set that " +
-            "provider's required credentials in .env - refusing to simulate " +
-            "a payment in production."
+            "Mobile money is not configured"
         );
     }
 
@@ -64,7 +61,7 @@ exports.disburse = async (phone, amount, meta = {}) => {
     return resolveProvider().disburse(phone, amount, meta);
 };
 
-// Refund leg (Phase 2 - Refund Automation). Same routing rules as
+// Refund leg  Same routing rules as
 // initiate/disburse: whichever provider is active in .env, falling back
 // to the simulate provider outside production.
 exports.refund = async (phone, amount, meta = {}) => {

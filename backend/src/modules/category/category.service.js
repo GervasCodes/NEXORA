@@ -1,5 +1,6 @@
 const categoryRepository = require("./category.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const socket = require("../../socket/socket");
 
 const toSlug = (name) =>
     name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
@@ -61,8 +62,21 @@ exports.listDepartments = async () => {
 // you're already looking at one department, not fanned out across all 7.
 exports.getDepartmentBySlug = async (slug) => {
     const category = await categoryRepository.findBySlug(slug);
-    if (!category || !category.is_active) {
+    if (!category) {
         return null;
+    }
+
+    // Deliberately deactivated by an admin (Maintenance Management) is a
+    // different case from "doesn't exist": the frontend shows a
+    // maintenance page instead of a 404 for this one. See
+    // category.controller.js#getDepartment.
+    if (!category.is_active) {
+        const error = new Error(
+            category.maintenance_message || `${category.name} is temporarily unavailable for maintenance.`
+        );
+        error.isMaintenance = true;
+        error.departmentName = category.name;
+        throw error;
     }
 
     const [productCount, trending, recent, newCount, promotions, sponsored, featuredStores] = await Promise.all([
@@ -118,11 +132,77 @@ exports.uploadCoverImage = async (id, file) => {
     return result.secure_url;
 };
 
-exports.setCategoryActive = async (id, isActive) => {
+// Toast/in-app alert broadcast for the department the shopper-facing app
+// listens for (frontend/src/components/DepartmentMaintenanceListener.jsx
+// and DepartmentPage.jsx). Fires on every transition regardless of
+// whether it was a manual admin click or an automated schedule tick
+// (jobs/departmentMaintenanceSchedule.job.js), so shoppers get the same
+// live notice either way.
+const notifyMaintenanceChange = (category, status, message) => {
+    socket.emitToAll("department:maintenance", {
+        categoryId: category.id,
+        slug: category.slug,
+        name: category.name,
+        status, // "entered" | "exited"
+        message: message || null
+    });
+};
+
+exports.setCategoryActive = async (id, isActive, maintenanceMessage) => {
     const category = await categoryRepository.findById(id);
     if (!category) {
         throw new Error("Category not found");
     }
 
-    await categoryRepository.setActive(id, isActive);
+    await categoryRepository.setActive(id, isActive, maintenanceMessage);
+    notifyMaintenanceChange(category, isActive ? "exited" : "entered", isActive ? null : maintenanceMessage);
+};
+
+// Schedules (or immediately applies, if startAt has already arrived) a
+// maintenance window for a department. See
+// category.repository.js#scheduleMaintenance for the "starts now" rule.
+exports.scheduleMaintenance = async (id, startAt, endAt, message) => {
+    const category = await categoryRepository.findById(id);
+    if (!category) {
+        throw new Error("Category not found");
+    }
+    if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
+        throw new Error("End time must be after start time");
+    }
+
+    const startedNow = await categoryRepository.scheduleMaintenance(id, startAt, endAt, message);
+    if (startedNow) {
+        notifyMaintenanceChange(category, "entered", message);
+    }
+    return { startedNow };
+};
+
+exports.cancelScheduledMaintenance = async (id) => {
+    const category = await categoryRepository.findById(id);
+    if (!category) {
+        throw new Error("Category not found");
+    }
+
+    await categoryRepository.cancelScheduledMaintenance(id);
+};
+
+// Called by the cron job - applies every due transition and broadcasts
+// each one exactly like a manual toggle would.
+exports.applyDueMaintenanceSchedules = async () => {
+    const [dueToEnter, dueToExit] = await Promise.all([
+        categoryRepository.findDueToEnterMaintenance(),
+        categoryRepository.findDueToExitMaintenance()
+    ]);
+
+    for (const category of dueToEnter) {
+        await categoryRepository.applyScheduledEntry(category.id);
+        notifyMaintenanceChange(category, "entered", category.maintenance_message);
+    }
+
+    for (const category of dueToExit) {
+        await categoryRepository.applyScheduledExit(category.id);
+        notifyMaintenanceChange(category, "exited", null);
+    }
+
+    return dueToEnter.length + dueToExit.length;
 };

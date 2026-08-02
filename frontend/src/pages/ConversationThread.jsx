@@ -7,6 +7,7 @@ import MessageBubble from "../components/chat/MessageBubble";
 import TypingIndicator from "../components/chat/TypingIndicator";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import MessageSearch from "../components/chat/MessageSearch";
+import PageLoader from "../components/PageLoader";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -309,7 +310,7 @@ export default function ConversationThread() {
         }
     };
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading…</div>;
+    if (loading) return <PageLoader />;
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)]">

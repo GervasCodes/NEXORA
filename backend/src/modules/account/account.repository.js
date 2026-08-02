@@ -70,7 +70,12 @@ exports.updateSettings = async (userId, { language, theme, currency }) => {
 };
 
 exports.updatePassword = async (userId, hashedPassword) => {
-    await db.query("UPDATE users SET password = ? WHERE id = ?", [hashedPassword, userId]);
+    // token_version bump invalidates every session token issued before
+    // this password change - see migration 071 and auth.middleware.js.
+    await db.query(
+        "UPDATE users SET password = ?, token_version = token_version + 1 WHERE id = ?",
+        [hashedPassword, userId]
+    );
 };
 
 // --- Account deletion (Phase 3 - soft delete) ---

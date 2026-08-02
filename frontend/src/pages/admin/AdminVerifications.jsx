@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -65,7 +66,7 @@ export default function AdminVerifications() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading verification requests…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

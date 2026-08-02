@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -77,7 +78,7 @@ export default function SellerDepartmentSponsorship() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading department sponsorship data…</p>;
+    if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!pricing) return null;
 

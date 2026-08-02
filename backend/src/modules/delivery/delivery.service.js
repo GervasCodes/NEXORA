@@ -1,6 +1,7 @@
 const deliveryRepository = require("./delivery.repository");
 const deliveryPricingService = require("./deliveryPricing.service");
 const orderRepository = require("../order/order.repository");
+const sellerRepository = require("../seller/seller.repository");
 const notificationService = require("../notification/notification.service");
 const pushService = require("../push/push.service");
 const settingsService = require("../settings/settings.service");
@@ -335,42 +336,128 @@ exports.assertCanTrackOrder = async (orderId, userId) => {
 };
 
 // ---- Nearest-agent matching (Bolt-style offer queue) ----------------------
+//
+// Dispatch ranks agents by proximity/ETA to the SELLER'S pickup point, not
+// the buyer's delivery destination — an agent needs to reach the shop and
+// collect the order before the buyer's location matters at all. Every
+// non-parent order has exactly one seller (see order.repository's
+// findOrderSellerId), so there's always a single pickup pin to measure
+// candidates against once the seller has set one in Store settings.
+
+// Resolves the pickup point (lat/lng + a bit of display info) an order
+// should be matched from. Returns null when there's nothing to route from
+// yet (no seller on the order, or the seller hasn't set a pickup pin) —
+// callers fall back to the manual "available for pickup" pool in that
+// case, same as a missing buyer pin used to.
+const getSellerPickupPoint = async (order) => {
+    const sellerId = await orderRepository.findOrderSellerId(order.id);
+    if (!sellerId) return null;
+
+    const seller = await sellerRepository.findByUserId(sellerId);
+    if (!seller || seller.pickup_lat == null || seller.pickup_lng == null) return null;
+
+    return {
+        lat: Number(seller.pickup_lat),
+        lng: Number(seller.pickup_lng),
+        storeName: seller.store_name,
+        address: seller.address
+    };
+};
+
+// How many of the closest-by-straight-line candidates get a real
+// road-routing ETA lookup. Keeps "smart dispatch" (ranking by actual
+// travel time, not just as-the-crow-flies distance) cheap even when a
+// lot of agents are online — we only ever need to compare a handful of
+// genuinely-nearby agents to find the one who can reach the shop
+// soonest, not every online agent in the city.
+const ETA_CANDIDATE_POOL_SIZE = 5;
 
 // Called when a seller ships an order into the open platform pool (no
-// specific roster agent chosen). Offers the order to the nearest online
-// agent, with a timeout that falls through to the next-nearest.
+// specific roster agent chosen). Offers the order to whichever online
+// agent can reach the SELLER'S shop soonest, with a timeout that falls
+// through to the next-best candidate.
 exports.startMatching = async (orderId) => {
     const order = await orderRepository.findOrderById(orderId);
     if (!order) return;
 
-    // No pinned destination yet (checkout didn't capture one) — fall back
-    // to the manual "available for pickup" pool instead of matching.
-    if (order.delivery_lat == null || order.delivery_lng == null) {
-        return;
-    }
+    const pickup = await getSellerPickupPoint(order);
 
-    await offerToNextCandidate(orderId, order.delivery_lat, order.delivery_lng);
+    // No seller pickup pin yet (seller hasn't set one in Store settings) —
+    // fall back to the manual "available for pickup" pool instead of
+    // matching.
+    if (!pickup) return;
+
+    await offerToNextCandidate(orderId, pickup);
 };
 
-const offerToNextCandidate = async (orderId, destLat, destLng) => {
+// Ranks candidates by straight-line distance to the shop first (cheap,
+// no network calls), then asks the routing layer for a real travel-time
+// ETA on just the closest few (see ETA_CANDIDATE_POOL_SIZE) and picks
+// whoever can actually reach the shop soonest by road — a nearer agent
+// stuck the wrong side of a river can lose out to a slightly-further one
+// with a faster route, which straight-line distance alone would miss.
+// Falls back to the haversine ranking untouched if a routing lookup fails
+// for some agent (the routing layer's own fallback provider means that's
+// effectively never, but this keeps dispatch working either way).
+const rankCandidatesBySellerEta = async (candidates, pickup) => {
+    const inRange = candidates
+        .map((agent) => ({
+            ...agent,
+            distanceKm: haversineKm(pickup.lat, pickup.lng, agent.current_lat, agent.current_lng)
+        }))
+        .filter((agent) => agent.distanceKm <= OFFER_RADIUS_KM)
+        .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    if (inRange.length === 0) return [];
+
+    const etaPool = inRange.slice(0, ETA_CANDIDATE_POOL_SIZE);
+
+    const withEta = await Promise.all(
+        etaPool.map(async (agent) => {
+            try {
+                const route = await routingService.getRoute({
+                    originLat: agent.current_lat,
+                    originLng: agent.current_lng,
+                    destLat: pickup.lat,
+                    destLng: pickup.lng,
+                    vehicleType: agent.vehicle_type
+                });
+                return { ...agent, etaMinutesToSeller: route.durationMinutes };
+            } catch {
+                // Unknown ETA — keep the agent, just don't let a routing
+                // hiccup drop them from consideration.
+                return { ...agent, etaMinutesToSeller: null };
+            }
+        })
+    );
+
+    withEta.sort((a, b) => {
+        if (a.etaMinutesToSeller == null && b.etaMinutesToSeller == null) {
+            return a.distanceKm - b.distanceKm;
+        }
+        if (a.etaMinutesToSeller == null) return 1;
+        if (b.etaMinutesToSeller == null) return -1;
+        return a.etaMinutesToSeller - b.etaMinutesToSeller;
+    });
+
+    // Anyone outside the ETA pool was already further away by straight-
+    // line distance than every agent we actually timed, so they stay
+    // ranked behind the timed group.
+    return [...withEta, ...inRange.slice(ETA_CANDIDATE_POOL_SIZE)];
+};
+
+const offerToNextCandidate = async (orderId, pickup) => {
     // Someone may have manually claimed it while offers were in flight.
     const existingDelivery = await deliveryRepository.findByOrderId(orderId);
     if (existingDelivery) return;
 
     const candidates = await deliveryRepository.findCandidateAgents(orderId);
-
-    const ranked = candidates
-        .map((agent) => ({
-            ...agent,
-            distanceKm: haversineKm(destLat, destLng, agent.current_lat, agent.current_lng)
-        }))
-        .filter((agent) => agent.distanceKm <= OFFER_RADIUS_KM)
-        .sort((a, b) => a.distanceKm - b.distanceKm);
+    const ranked = await rankCandidatesBySellerEta(candidates, pickup);
 
     if (ranked.length === 0) {
-        // Nobody in range right now — order just sits in the manual pool
-        // (findAvailableForPickup) until an agent claims it or comes online
-        // and a future order/retry triggers matching again.
+        // Nobody in range of the shop right now — order just sits in the
+        // manual pool (findAvailableForPickup) until an agent claims it or
+        // comes online and a future order/retry triggers matching again.
         return;
     }
 
@@ -389,33 +476,38 @@ const offerToNextCandidate = async (orderId, destLat, destLng) => {
         offerId,
         orderId,
         orderNumber: order.order_number,
-        shippingAddress: order.shipping_address,
-        shippingCity: order.shipping_city,
-        distanceKm: Math.round(nearest.distanceKm * 10) / 10,
+        // Shop details the agent needs to go collect the order from —
+        // the buyer's address matters once it's in hand, not before.
+        pickupStoreName: pickup.storeName,
+        pickupAddress: pickup.address,
+        distanceToSellerKm: Math.round(nearest.distanceKm * 10) / 10,
+        etaToSellerMinutes: nearest.etaMinutesToSeller ?? null,
         expiresInMs: OFFER_TIMEOUT_MS
     });
 
     pushService
         .sendToUser(nearest.id, {
-            title: "New delivery nearby",
-            body: `${order.order_number} · ${Math.round(nearest.distanceKm * 10) / 10} km away`,
+            title: "New pickup nearby",
+            body: nearest.etaMinutesToSeller != null
+                ? `${order.order_number} · ${Math.round(nearest.etaMinutesToSeller)} min to ${pickup.storeName || "the shop"}`
+                : `${order.order_number} · ${Math.round(nearest.distanceKm * 10) / 10} km to ${pickup.storeName || "the shop"}`,
             offerId,
             orderId
         })
         .catch((err) => console.error("Push send error:", err));
 
     setTimeout(() => {
-        expireAndAdvance(offerId, orderId, destLat, destLng).catch((err) =>
+        expireAndAdvance(offerId, orderId, pickup).catch((err) =>
             console.error("Offer expiry error:", err)
         );
     }, OFFER_TIMEOUT_MS);
 };
 
-const expireAndAdvance = async (offerId, orderId, destLat, destLng) => {
+const expireAndAdvance = async (offerId, orderId, pickup) => {
     const stillPending = await deliveryRepository.expireOffer(offerId);
     if (!stillPending) return; // already accepted/declined
 
-    await offerToNextCandidate(orderId, destLat, destLng);
+    await offerToNextCandidate(orderId, pickup);
 };
 
 exports.acceptOffer = async (offerId, agentId) => {
@@ -534,6 +626,9 @@ exports.declineOffer = async (offerId, agentId) => {
 
     const order = await orderRepository.findOrderById(offer.order_id);
     if (order) {
-        await offerToNextCandidate(offer.order_id, order.delivery_lat, order.delivery_lng);
+        const pickup = await getSellerPickupPoint(order);
+        if (pickup) {
+            await offerToNextCandidate(offer.order_id, pickup);
+        }
     }
 };

@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 export default function AdminUsers() {
     const { user: currentUser } = useAuth();
     const isSuperAdmin = currentUser?.admin_level === "super_admin";
+    const toast = useToast();
 
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
 
     const load = () => {
         api.get("/admin/users").then(({ data }) => setUsers(data.data)).finally(() => setLoading(false));
@@ -25,17 +27,17 @@ export default function AdminUsers() {
 
         if (reason === null) return;
         if (!reason.trim()) {
-            window.alert("A reason is required to suspend an account.");
+            toast?.error("A reason is required to suspend an account.");
             return;
         }
 
         setBusyId(user.id);
-        setError("");
         try {
             await api.put(`/admin/users/${user.id}/suspend`, { reason: reason.trim() });
+            toast?.success(`${user.first_name} ${user.last_name} has been suspended.`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -43,12 +45,12 @@ export default function AdminUsers() {
 
     const handleUnsuspend = async (user) => {
         setBusyId(user.id);
-        setError("");
         try {
             await api.put(`/admin/users/${user.id}/unsuspend`);
+            toast?.success(`${user.first_name} ${user.last_name} has been unsuspended.`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -62,33 +64,31 @@ export default function AdminUsers() {
 
         if (typed === null) return;
         if (typed.trim().toLowerCase() !== user.email.toLowerCase()) {
-            window.alert("That didn't match the account's email. Nothing was deleted.");
+            toast?.error("That didn't match the account's email. Nothing was deleted.");
             return;
         }
 
         setBusyId(user.id);
-        setError("");
         try {
             const { data } = await api.delete(`/admin/users/${user.id}`);
-            window.alert(
+            toast?.success(
                 data?.data?.hardDeleted
                     ? "Account fully removed — no trace of it remains."
                     : "Account anonymized and permanently disabled. Its order/review/financial history was kept because other users' records depend on it."
             );
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
     };
 
-    if (loading) return <p className="text-ash">Loading users…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>
             <h1 className="font-display text-2xl mb-6">Users</h1>
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {users.map((u) => (

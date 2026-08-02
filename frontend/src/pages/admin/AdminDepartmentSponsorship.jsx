@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -19,7 +20,7 @@ export default function AdminDepartmentSponsorship() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <p className="text-ash">Loading department sponsorship campaigns…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div className="animate-fade-in">

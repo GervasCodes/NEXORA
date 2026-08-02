@@ -4,6 +4,7 @@ const router = express.Router();
 const authMiddleware = require("../../middleware/auth.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const uploadChatAttachment = require("../../middleware/uploadChatAttachment.middleware");
+const maintenanceCheck = require("../../middleware/maintenance.middleware");
 
 const chatController = require("./chat.controller");
 const {
@@ -18,6 +19,10 @@ const {
 } = require("./chat.validator");
 
 router.use(authMiddleware);
+// Only gates the REST endpoints here (starting/fetching conversations,
+// sending messages/attachments, reactions, search) - the realtime socket
+// layer in socket/ is separate and isn't touched by this toggle.
+router.use(maintenanceCheck("chat"));
 
 router.post(
     "/conversations",

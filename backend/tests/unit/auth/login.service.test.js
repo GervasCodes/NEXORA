@@ -2,6 +2,8 @@ jest.mock("../../../src/modules/auth/auth.repository");
 jest.mock("../../../src/utils/comparePassword");
 jest.mock("../../../src/modules/otp/otp.service");
 
+const jwt = require("jsonwebtoken");
+
 const userRepository = require("../../../src/modules/auth/auth.repository");
 const comparePassword = require("../../../src/utils/comparePassword");
 const otpService = require("../../../src/modules/otp/otp.service");
@@ -69,6 +71,27 @@ describe("login.service.verifyLoginOtp (step 2: OTP check -> real session)", () 
         expect(otpService.verifyOtp).toHaveBeenCalledWith(1, "login", "042917");
         expect(result.token).toEqual(expect.any(String));
         expect(result.user.password).toBeUndefined();
+
+        // See migration 071 / auth.middleware.js - a missing token_version
+        // on the row (pre-migration data) must still produce a tv claim,
+        // defaulted to 0, rather than an undefined claim.
+        const decoded = jwt.decode(result.token);
+        expect(decoded.tv).toBe(0);
+    });
+
+    it("bakes the user's current token_version into the session token's tv claim", async () => {
+        userRepository.findByEmail.mockResolvedValue({ id: 1, email: "a@b.com", password: "hashed", is_active: 1 });
+        comparePassword.mockResolvedValue(true);
+        otpService.requestOtp.mockResolvedValue({ expiresInSeconds: 300 });
+        const { preAuthToken: token } = await loginService.login("a@b.com", "correct");
+
+        userRepository.findById.mockResolvedValue({ id: 1, role: "buyer", language: "en", password: "hashed", email: "a@b.com", token_version: 3 });
+        otpService.verifyOtp.mockResolvedValue(undefined);
+
+        const result = await loginService.verifyLoginOtp(token, "042917");
+
+        const decoded = jwt.decode(result.token);
+        expect(decoded.tv).toBe(3);
     });
 
     it("throws ACCOUNT_NOT_FOUND if the user was deleted between step 1 and step 2", async () => {

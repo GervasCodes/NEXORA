@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import api from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
+import PageLoader from "../components/PageLoader";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -25,12 +27,25 @@ export default function Disputes() {
     const { format } = useCurrency();
     const [disputes, setDisputes] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [maintenance, setMaintenance] = useState(null);
 
-    useEffect(() => {
-        api.get("/disputes").then(({ data }) => setDisputes(data.data)).finally(() => setLoading(false));
-    }, []);
+    const load = () => {
+        setLoading(true);
+        setMaintenance(null);
+        api.get("/disputes")
+            .then(({ data }) => setDisputes(data.data))
+            .catch((err) => {
+                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
+                    setMaintenance(err.response.data.message);
+                }
+            })
+            .finally(() => setLoading(false));
+    };
 
-    if (loading) return <div className="max-w-2xl mx-auto px-6 py-16 text-ash">Loading your disputes…</div>;
+    useEffect(load, []);
+
+    if (loading) return <PageLoader />;
+    if (maintenance) return <MaintenanceScreen title="Disputes is under maintenance" message={maintenance} onRetry={load} />;
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">

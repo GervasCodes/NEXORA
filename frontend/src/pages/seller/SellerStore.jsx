@@ -4,8 +4,85 @@ import api, { extractErrorMessage } from "../../api/client";
 import LocationPicker from "../../components/LocationPicker";
 import { STORE_THEMES } from "../../utils/storeThemes";
 
+// Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
+// PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
+// and SellerServices' MerchantTypeGate (in-dashboard upgrade prompt)
+// already call. No new backend logic: the route/validator/service/
+// repository already existed and had no restrictions on switching in
+// either direction, so this is purely the general-purpose (all three
+// options, either direction) UI for it living in Settings.
+const MERCHANT_TYPE_OPTIONS = [
+    {
+        value: "product",
+        label: "Products",
+        description: "List physical products for sale."
+    },
+    {
+        value: "service",
+        label: "Services",
+        description: "Offer bookable services - accommodation, transportation, tours, and more."
+    },
+    {
+        value: "hybrid",
+        label: "Products & Services",
+        description: "Sell products and offer bookable services from the same store."
+    }
+];
+
+function MerchantTypeSection({ merchantType, onSwitch, switching, error, saved }) {
+    return (
+        <div className="mb-8 pb-8 border-b border-line">
+            <h2 className="text-sm font-medium mb-1">What you sell</h2>
+            <p className="text-xs text-ash mb-3">
+                Controls which dashboard tabs and pages your store sees - Products, Services, or both.
+            </p>
+
+            <div className="grid gap-2">
+                {MERCHANT_TYPE_OPTIONS.map((option) => (
+                    <button
+                        key={option.value}
+                        type="button"
+                        disabled={switching}
+                        onClick={() => onSwitch(option.value)}
+                        aria-pressed={merchantType === option.value}
+                        className={`text-left border rounded-lg p-3 transition-colors disabled:opacity-60 ${
+                            merchantType === option.value ? "border-ink bg-line/30" : "border-line hover:border-ink"
+                        }`}
+                    >
+                        <p className="font-medium text-sm mb-0.5">{option.label}</p>
+                        <p className="text-xs text-ash">{option.description}</p>
+                    </button>
+                ))}
+            </div>
+
+            {error && <p role="alert" className="text-coral text-sm mt-3">{error}</p>}
+            {saved && <p className="text-teal text-sm mt-3">Merchant type updated.</p>}
+        </div>
+    );
+}
+
 export default function SellerStore() {
     const { profile, refreshProfile } = useOutletContext();
+
+    const [merchantSwitching, setMerchantSwitching] = useState(false);
+    const [merchantError, setMerchantError] = useState("");
+    const [merchantSaved, setMerchantSaved] = useState(false);
+
+    const handleMerchantTypeSwitch = async (merchantType) => {
+        if (merchantType === profile.merchant_type) return;
+        setMerchantSwitching(true);
+        setMerchantError("");
+        setMerchantSaved(false);
+        try {
+            await api.put("/seller/merchant-type", { merchant_type: merchantType });
+            await refreshProfile?.();
+            setMerchantSaved(true);
+        } catch (err) {
+            setMerchantError(extractErrorMessage(err));
+        } finally {
+            setMerchantSwitching(false);
+        }
+    };
 
     const [storeTypes, setStoreTypes] = useState([]);
     const [form, setForm] = useState({
@@ -100,6 +177,14 @@ export default function SellerStore() {
     return (
         <div className="max-w-lg">
             <h1 className="font-display text-2xl mb-6">Store settings</h1>
+
+            <MerchantTypeSection
+                merchantType={profile.merchant_type || "product"}
+                onSwitch={handleMerchantTypeSwitch}
+                switching={merchantSwitching}
+                error={merchantError}
+                saved={merchantSaved}
+            />
 
             <div className="grid grid-cols-2 gap-4 mb-8">
                 <div>

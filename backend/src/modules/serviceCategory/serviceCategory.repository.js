@@ -62,6 +62,9 @@ exports.updateCoverImage = async (id, coverImageUrl) => {
     );
 };
 
-exports.setActive = async (id, isActive) => {
-    await db.query("UPDATE service_categories SET is_active = ? WHERE id = ?", [isActive, id]);
+exports.setActive = async (id, isActive, maintenanceMessage) => {
+    await db.query(
+        "UPDATE service_categories SET is_active = ?, maintenance_message = ? WHERE id = ?",
+        [isActive, isActive ? null : (maintenanceMessage || null), id]
+    );
 };

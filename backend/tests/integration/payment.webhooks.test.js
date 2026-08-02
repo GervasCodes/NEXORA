@@ -12,16 +12,26 @@ const request = require("supertest");
 const db = require("../../src/config/db");
 const app = require("../../src/app");
 
-describe("POST /api/v1/payments/webhooks/malipopay - shared-secret auth", () => {
-    afterEach(() => {
-        delete process.env.MALIPOPAY_WEBHOOK_SECRET;
-        process.env.MALIPOPAY_WEBHOOK_SECRET = "test-malipopay-secret";
-    });
+describe("POST /api/v1/payments/webhooks/malipopay - payloadSignature verification", () => {
+    // Matches developers.malipopay.co.tz/integration/webhooks:
+    // SHA256(reference + timestamp + amount + phoneNumber + secret)
+    const sign = ({ reference, timestamp, amount, phoneNumber }) => crypto
+        .createHash("sha256")
+        .update(`${reference}${timestamp}${amount}${phoneNumber}${process.env.MOBILE_MONEY_API_KEY}`)
+        .digest("hex");
 
-    it("rejects a request with a missing/wrong x-webhook-secret header (still 200, per provider-retry-storm handling)", async () => {
+    const basePayload = {
+        reference: "ORDER-1",
+        timestamp: "20260802120000",
+        amount: 10000,
+        status: "SUCCESS",
+        customer: { firstname: "John", lastname: "Doe", phoneNumber: "255655128812", mno: "Tigo" }
+    };
+
+    it("rejects a request with a missing/wrong payloadSignature (still 200, per provider-retry-storm handling)", async () => {
         const res = await request(app)
             .post("/api/v1/payments/webhooks/malipopay")
-            .send({ reference: "ORDER-1", status: "SUCCESS" });
+            .send({ ...basePayload, payloadSignature: "0".repeat(64) });
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(false);
@@ -29,7 +39,7 @@ describe("POST /api/v1/payments/webhooks/malipopay - shared-secret auth", () => 
         expect(db.query).not.toHaveBeenCalled();
     });
 
-    it("processes a webhook with the correct shared secret", async () => {
+    it("processes a webhook with a correctly computed payloadSignature", async () => {
         db.query
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // paymentRepository.findByOrderId
             .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]) // orderRepository.findOrderById (orderForNotify, fetched up front)
@@ -37,31 +47,78 @@ describe("POST /api/v1/payments/webhooks/malipopay - shared-secret auth", () => 
             .mockResolvedValueOnce([{}]) // orderRepository.updatePaymentStatus
             .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]); // orderRepository.findOrderById (is_parent check)
 
+        const payload = { ...basePayload, reference: "ORDER-5" };
         const res = await request(app)
             .post("/api/v1/payments/webhooks/malipopay")
-            .set("x-webhook-secret", "test-malipopay-secret")
-            .send({ reference: "ORDER-5", status: "SUCCESS" });
+            .send({ ...payload, payloadSignature: sign({ ...payload, phoneNumber: payload.customer.phoneNumber }) });
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
     });
 
-    it("fails closed (rejects) in production when the secret env var isn't configured at all", async () => {
+    it("fails closed (rejects) in production when MOBILE_MONEY_API_KEY isn't configured at all", async () => {
         const originalEnv = process.env.NODE_ENV;
-        const originalSecret = process.env.MALIPOPAY_WEBHOOK_SECRET;
+        const originalKey = process.env.MOBILE_MONEY_API_KEY;
         process.env.NODE_ENV = "production";
-        delete process.env.MALIPOPAY_WEBHOOK_SECRET;
+        delete process.env.MOBILE_MONEY_API_KEY;
 
         const res = await request(app)
             .post("/api/v1/payments/webhooks/malipopay")
-            .send({ reference: "ORDER-1", status: "SUCCESS" });
+            .send({ ...basePayload, payloadSignature: "0".repeat(64) });
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(false);
         expect(db.query).not.toHaveBeenCalled();
 
         process.env.NODE_ENV = originalEnv;
-        process.env.MALIPOPAY_WEBHOOK_SECRET = originalSecret;
+        process.env.MOBILE_MONEY_API_KEY = originalKey;
+    });
+});
+
+describe("POST /api/v1/payments/webhooks/selcom - Bearer token auth", () => {
+    it("rejects a request with a missing/wrong Authorization bearer token (still 200, per provider-retry-storm handling)", async () => {
+        const res = await request(app)
+            .post("/api/v1/payments/webhooks/selcom")
+            .send({ transid: "T1", reference: "ORDER-1", resultcode: "000", result: "SUCCESS" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(false);
+        expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it("processes a webhook with the correct bearer token", async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 1, status: "pending" }]])
+            .mockResolvedValueOnce([[{ id: 6, is_parent: 0, buyer_id: 1 }]])
+            .mockResolvedValueOnce([{}])
+            .mockResolvedValueOnce([{}])
+            .mockResolvedValueOnce([[{ id: 6, is_parent: 0, buyer_id: 1 }]]);
+
+        const res = await request(app)
+            .post("/api/v1/payments/webhooks/selcom")
+            .set("Authorization", `Bearer ${process.env.SELCOM_WEBHOOK_SECRET}`)
+            .send({ transid: "ORDER-6", reference: "SEL-REF-6", resultcode: "000", result: "SUCCESS" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+    });
+
+    it("fails closed (rejects) in production when SELCOM_WEBHOOK_SECRET isn't configured at all", async () => {
+        const originalEnv = process.env.NODE_ENV;
+        const originalSecret = process.env.SELCOM_WEBHOOK_SECRET;
+        process.env.NODE_ENV = "production";
+        delete process.env.SELCOM_WEBHOOK_SECRET;
+
+        const res = await request(app)
+            .post("/api/v1/payments/webhooks/selcom")
+            .send({ transid: "T1", reference: "ORDER-1", resultcode: "000", result: "SUCCESS" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(false);
+        expect(db.query).not.toHaveBeenCalled();
+
+        process.env.NODE_ENV = originalEnv;
+        process.env.SELCOM_WEBHOOK_SECRET = originalSecret;
     });
 });
 

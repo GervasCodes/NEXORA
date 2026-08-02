@@ -7,6 +7,7 @@ const featuredStoreExpiryJob = require("./featuredStoreExpiry.job");
 const departmentSponsorshipExpiryJob = require("./departmentSponsorshipExpiry.job");
 const escrowReleaseJob = require("./escrowRelease.job");
 const bookingLifecycleJob = require("./bookingLifecycle.job");
+const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick.
@@ -61,5 +62,10 @@ exports.startJobs = () => {
     // in the same instant; no ordering dependency between them.
     cron.schedule("15 * * * *", safeRun("escrowRelease", escrowReleaseJob));
 
-    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly)");
+    // Every minute: flip departments into/out of maintenance as their
+    // scheduled windows arrive - see departmentMaintenanceSchedule.job.js
+    // and category.service.js#applyDueMaintenanceSchedules.
+    cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
+
+    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute)");
 };

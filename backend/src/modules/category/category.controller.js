@@ -68,6 +68,15 @@ exports.getDepartment = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.isMaintenance) {
+            return res.status(503).json({
+                success: false,
+                code: "DEPARTMENT_MAINTENANCE",
+                message: error.message,
+                data: { name: error.departmentName }
+            });
+        }
+
         return res.status(400).json({
             success: false,
             message: error.message
@@ -134,7 +143,7 @@ exports.uploadCover = async (req, res) => {
 
 exports.deactivateCategory = async (req, res) => {
     try {
-        await categoryService.setCategoryActive(req.params.id, false);
+        await categoryService.setCategoryActive(req.params.id, false, req.body?.message);
 
         return res.json({
             success: true,
@@ -156,6 +165,49 @@ exports.activateCategory = async (req, res) => {
         return res.json({
             success: true,
             message: "Category activated"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.scheduleMaintenance = async (req, res) => {
+    try {
+        const { start_at, end_at, message } = req.body;
+
+        const { startedNow } = await categoryService.scheduleMaintenance(
+            req.params.id,
+            start_at,
+            end_at,
+            message
+        );
+
+        return res.json({
+            success: true,
+            message: startedNow
+                ? "Maintenance started now and will restore automatically at the scheduled end time"
+                : "Maintenance window scheduled"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.cancelScheduledMaintenance = async (req, res) => {
+    try {
+        await categoryService.cancelScheduledMaintenance(req.params.id);
+
+        return res.json({
+            success: true,
+            message: "Scheduled maintenance cancelled"
         });
 
     } catch (error) {

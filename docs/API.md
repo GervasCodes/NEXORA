@@ -101,6 +101,13 @@ category-scoped ones — featured store and department sponsorship).
 
 ## Products — `/products`
 
+Provider-side routes require an approved seller account whose
+`merchant_type` is `product` or `hybrid` (`requireProductProvider`
+middleware, Phase 7 - Final Review; mirrors `requireServiceProvider`
+below). Previously only the seller dashboard's own tab gating enforced
+this side of `CHANGES.md`'s Permission Matrix - a direct API call was
+not blocked.
+
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/` | List/search products (filters, sort, pagination via query params) |

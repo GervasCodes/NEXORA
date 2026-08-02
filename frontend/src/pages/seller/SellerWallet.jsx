@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
+import MaintenanceScreen from "../../components/MaintenanceScreen";
 
 const WITHDRAWAL_STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -14,6 +16,7 @@ export default function SellerWallet() {
     const [withdrawals, setWithdrawals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [maintenance, setMaintenance] = useState(null);
 
     const [showForm, setShowForm] = useState(false);
     const [amount, setAmount] = useState("");
@@ -24,6 +27,8 @@ export default function SellerWallet() {
 
     const load = () => {
         setLoading(true);
+        setError("");
+        setMaintenance(null);
         Promise.all([
             api.get("/wallet"),
             api.get("/wallet/withdrawals")
@@ -32,7 +37,13 @@ export default function SellerWallet() {
                 setWallet(w.data.data);
                 setWithdrawals(wd.data.data);
             })
-            .catch(() => setError("Couldn't load your wallet."))
+            .catch((err) => {
+                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
+                    setMaintenance(err.response.data.message);
+                } else {
+                    setError("Couldn't load your wallet.");
+                }
+            })
             .finally(() => setLoading(false));
     };
 
@@ -60,7 +71,8 @@ export default function SellerWallet() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading your wallet…</p>;
+    if (loading) return <PageLoader />;
+    if (maintenance) return <MaintenanceScreen title="Wallet is under maintenance" message={maintenance} onRetry={load} />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!wallet) return null;
 

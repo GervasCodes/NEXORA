@@ -4,6 +4,7 @@ import api from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import { useSocket } from "../../context/SocketContext";
 import BarChart from "../../components/BarChart";
+import PageLoader from "../../components/PageLoader";
 
 export default function AdminDashboard() {
     const { socket } = useSocket();
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
         return () => socket.off("admin:stats_changed", handleStatsChanged);
     }, [socket, load]);
 
-    if (loading) return <p className="text-ash">Loading dashboard…</p>;
+    if (loading) return <PageLoader />;
     if (!stats) return <p className="text-coral">Couldn't load dashboard stats.</p>;
 
     const chartData = analytics

@@ -4,8 +4,12 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import { useLanguage } from "../../context/LanguageContext";
 import BookingStatusBadge from "../../components/BookingStatusBadge";
+import PageLoader from "../../components/PageLoader";
 
-const CANCELLABLE = ["pending", "confirmed"];
+// Phase 5: a still-pending request is now declined via reject (below),
+// not cancel - cancel stays for a confirmed booking either side needs
+// to back out of. See booking.service.js#rejectBooking.
+const CANCELLABLE = ["confirmed"];
 
 export default function SellerBookings() {
     const { t } = useLanguage();
@@ -41,6 +45,19 @@ export default function SellerBookings() {
         }
     };
 
+    const handleReject = async (booking) => {
+        setBusyId(booking.id);
+        setError("");
+        try {
+            await api.put(`/bookings/${booking.id}/reject`);
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     const handleCancel = async (booking) => {
         setBusyId(booking.id);
         setError("");
@@ -64,7 +81,7 @@ export default function SellerBookings() {
         );
     }
 
-    if (loading) return <p className="text-ash">{t("booking.loading")}</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>
@@ -93,13 +110,22 @@ export default function SellerBookings() {
 
                         <div className="flex items-center gap-2 flex-wrap">
                             {booking.status === "pending" && (
-                                <button
-                                    onClick={() => handleConfirm(booking)}
-                                    disabled={busyId === booking.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
-                                >
-                                    {t("booking.seller.confirm")}
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => handleConfirm(booking)}
+                                        disabled={busyId === booking.id}
+                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    >
+                                        {t("booking.seller.confirm")}
+                                    </button>
+                                    <button
+                                        onClick={() => handleReject(booking)}
+                                        disabled={busyId === booking.id}
+                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
+                                    >
+                                        {t("booking.seller.reject")}
+                                    </button>
+                                </>
                             )}
                             {CANCELLABLE.includes(booking.status) && (
                                 <button

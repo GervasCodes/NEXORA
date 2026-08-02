@@ -245,6 +245,85 @@ exports.updateCoverImage = async (id, coverImageUrl) => {
     );
 };
 
-exports.setActive = async (id, isActive) => {
-    await db.query("UPDATE categories SET is_active = ? WHERE id = ?", [isActive, id]);
+// Manual, instant activate/deactivate (Admin Panel "Deactivate"/"Activate"
+// buttons). Always clears any pending schedule columns too - a manual
+// override takes precedence over a schedule set earlier, and leaving a
+// past-dated maintenance_scheduled_start behind would otherwise cause the
+// next cron tick (departmentMaintenanceSchedule.job.js) to immediately
+// re-apply a maintenance window the admin just manually cleared.
+exports.setActive = async (id, isActive, maintenanceMessage) => {
+    await db.query(
+        `UPDATE categories
+        SET is_active = ?, maintenance_message = ?,
+            maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
+        WHERE id = ?`,
+        [isActive, isActive ? null : (maintenanceMessage || null), id]
+    );
+};
+
+// Schedules a future maintenance window. Doesn't touch is_active directly -
+// departmentMaintenanceSchedule.job.js flips it at the scheduled moment -
+// except when startAt has already arrived (or is missing/past), in which
+// case the window is applied immediately so admins can also use this as
+// an "activate now, auto-restore at endAt" shortcut instead of two calls.
+exports.scheduleMaintenance = async (id, startAt, endAt, message) => {
+    const startsNow = !startAt || new Date(startAt) <= new Date();
+    await db.query(
+        `UPDATE categories
+        SET maintenance_scheduled_start = ?, maintenance_scheduled_end = ?,
+            maintenance_message = ?,
+            is_active = IF(?, 0, is_active)
+        WHERE id = ?`,
+        [startAt || null, endAt || null, message || null, startsNow, id]
+    );
+    return startsNow;
+};
+
+exports.cancelScheduledMaintenance = async (id) => {
+    await db.query(
+        `UPDATE categories
+        SET maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
+        WHERE id = ?`,
+        [id]
+    );
+};
+
+// Due windows whose start has arrived but the department is still marked
+// active - the cron job flips these into maintenance.
+exports.findDueToEnterMaintenance = async () => {
+    const [rows] = await db.query(
+        `SELECT * FROM categories
+        WHERE is_active = 1
+            AND maintenance_scheduled_start IS NOT NULL
+            AND maintenance_scheduled_start <= NOW()
+            AND (maintenance_scheduled_end IS NULL OR maintenance_scheduled_end > NOW())`
+    );
+    return rows;
+};
+
+// Due windows whose end has arrived and the department is still in
+// maintenance - the cron job flips these back to active and clears the
+// schedule/message so the department comes back exactly as it was.
+exports.findDueToExitMaintenance = async () => {
+    const [rows] = await db.query(
+        `SELECT * FROM categories
+        WHERE is_active = 0
+            AND maintenance_scheduled_end IS NOT NULL
+            AND maintenance_scheduled_end <= NOW()`
+    );
+    return rows;
+};
+
+exports.applyScheduledEntry = async (id) => {
+    await db.query("UPDATE categories SET is_active = 0 WHERE id = ?", [id]);
+};
+
+exports.applyScheduledExit = async (id) => {
+    await db.query(
+        `UPDATE categories
+        SET is_active = 1, maintenance_message = NULL,
+            maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
+        WHERE id = ?`,
+        [id]
+    );
 };

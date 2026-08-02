@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 export default function SellerProducts() {
     const [products, setProducts] = useState([]);
@@ -24,7 +25,7 @@ export default function SellerProducts() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading products…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

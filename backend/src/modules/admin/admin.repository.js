@@ -152,6 +152,13 @@ exports.findAllOrders = async () => {
 // delivery.repository.js's `create` for why it's a frozen snapshot, not
 // a live value): a delivery is flagged delayed once more real minutes
 // have passed since assignment than that snapshot allowed for.
+//
+// LEFT JOINs the seller's pickup pin (via order_items -> seller_profiles,
+// same pattern as delivery.repository's findByOrderIdWithAgent) so the
+// dispatch map can plot the shop location and draw the shop -> buyer leg
+// of each active delivery, not just where the agent currently is.
+// Nullable like every other pickup-pin read - a seller who hasn't set one
+// yet just means that delivery's shop marker/route line doesn't render.
 exports.findActiveDeliveries = async () => {
     const [rows] = await db.query(
         `SELECT d.id, d.order_id, d.agent_id, d.status, d.delivery_fee,
@@ -166,10 +173,18 @@ exports.findActiveDeliveries = async () => {
                 u.first_name AS agent_first_name, u.last_name AS agent_last_name,
                 u.phone AS agent_phone, u.vehicle_type AS agent_vehicle_type,
                 u.current_lat AS agent_current_lat, u.current_lng AS agent_current_lng,
-                u.location_updated_at AS agent_location_updated_at
+                u.location_updated_at AS agent_location_updated_at,
+                sp.store_name AS seller_store_name,
+                sp.pickup_lat AS seller_pickup_lat, sp.pickup_lng AS seller_pickup_lng
         FROM deliveries d
         JOIN orders o ON o.id = d.order_id
         JOIN users u ON u.id = d.agent_id
+        LEFT JOIN (
+            SELECT order_id, MIN(seller_id) AS seller_id
+            FROM order_items
+            GROUP BY order_id
+        ) oi ON oi.order_id = o.id
+        LEFT JOIN seller_profiles sp ON sp.user_id = oi.seller_id
         WHERE d.status NOT IN ('delivered', 'failed')
         ORDER BY is_delayed DESC, d.assigned_at ASC`
     );

@@ -1,9 +1,10 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAgentShift } from "../hooks/useAgentShift";
 import IncomingOfferModal from "./IncomingOfferModal";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
+import { HomeIcon } from "./NavIcons";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
@@ -23,7 +24,17 @@ function ApprovedDeliveryLayout() {
 
             <div className="flex items-start justify-between gap-4 mb-1">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-ash mb-1">Delivery</p>
+                    <p className="text-xs uppercase tracking-widest text-ash mb-1 flex items-center gap-2">
+                        <Link
+                            to="/"
+                            aria-label="Back to Home"
+                            title="Back to Home"
+                            className="inline-flex items-center justify-center w-5 h-5 -ml-1 rounded text-ash hover:text-ink hover:bg-line/50 focus-ring transition-colors"
+                        >
+                            <HomeIcon className="w-3.5 h-3.5" />
+                        </Link>
+                        Delivery
+                    </p>
                     <h1 className="font-display text-2xl">Your delivery rounds</h1>
                 </div>
 

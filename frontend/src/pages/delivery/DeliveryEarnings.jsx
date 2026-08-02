@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatShortDate, formatDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
+import PageLoader from "../../components/PageLoader";
 
 export default function DeliveryEarnings() {
     const [dashboard, setDashboard] = useState(null);
@@ -15,7 +16,7 @@ export default function DeliveryEarnings() {
             .finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <p className="text-ash">Loading your earnings…</p>;
+    if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!dashboard) return null;
 

@@ -3,15 +3,15 @@ import { useLanguage } from "../context/LanguageContext";
 // Horizontal lifecycle tracker for a booking, matching the visual language
 // of OrderTimeline.jsx (checkout) and DeliveryStatusTimeline.jsx (delivery)
 // so the "in progress" pattern feels the same everywhere in the app.
-// Steps mirror the `bookings.status` ENUM's happy path; "cancelled" and
-// "refunded" are terminal side-states shown as a banner instead, same
-// treatment OrderTimeline gives "cancelled".
+// Steps mirror the `bookings.status` ENUM's happy path; "cancelled",
+// "refunded" and "rejected" (Phase 5) are terminal side-states shown as
+// a banner instead, same treatment OrderTimeline gives "cancelled".
 const STEPS = ["pending", "confirmed", "active", "completed"];
 
 export default function BookingProgressTimeline({ status }) {
     const { t } = useLanguage();
 
-    if (status === "cancelled" || status === "refunded") {
+    if (status === "cancelled" || status === "refunded" || status === "rejected") {
         return (
             <div className="flex items-center gap-2 text-sm text-coral bg-coral/10 rounded-md px-3 py-2 mb-8 animate-slide-down">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 shrink-0">

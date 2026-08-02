@@ -27,7 +27,10 @@ const fraudService = require("../fraud/fraud.service");
 // `balance`, exactly as every payment method did before this phase, and
 // the corresponding order_items rows are marked `wallet_released = TRUE`
 // immediately so Phase 9D's release job never picks them up. See
-// docs/ESCROW_ANALYSIS.md section 3.2 for the reasoning.
+// docs/ESCROW_ANALYSIS.md section 3.2 for the reasoning, and
+// docs/ESCROW_LICENSING_REVIEW.md (Phase 1, Launch Blockers) for the
+// money-transmission/e-money licensing questions this pattern raises -
+// get that reviewed by a lawyer before this handles real money.
 exports.creditSellersForOrder = async (orderId) => {
     const connection = await db.getConnection();
 

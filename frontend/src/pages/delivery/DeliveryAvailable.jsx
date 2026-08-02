@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 export default function DeliveryAvailable() {
     const [orders, setOrders] = useState([]);
@@ -31,7 +32,7 @@ export default function DeliveryAvailable() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading available orders…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

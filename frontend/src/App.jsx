@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, useNavigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SplashScreen from "./components/SplashScreen";
@@ -10,6 +10,7 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
+import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
 import { useAuth } from "./context/AuthContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
@@ -82,6 +83,7 @@ const AdminDeletedAccounts = lazy(() => import("./pages/admin/AdminDeletedAccoun
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
+const AdminMaintenance = lazy(() => import("./pages/admin/AdminMaintenance"));
 const AdminServiceCategories = lazy(() => import("./pages/admin/AdminServiceCategories"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
@@ -135,6 +137,7 @@ export default function App() {
             <UpdateAvailableBanner />
             <NetworkStatusNotice />
             <InstallPrompt />
+            <DepartmentMaintenanceListener />
 
             <Header />
 
@@ -216,6 +219,7 @@ export default function App() {
                             <Route path="sellers" element={<AdminSellers />} />
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="categories" element={<AdminCategories />} />
+                            <Route path="maintenance" element={<AdminMaintenance />} />
                             <Route path="service-categories" element={<AdminServiceCategories />} />
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
@@ -234,6 +238,13 @@ export default function App() {
                         <Route path="*" element={
                             <div className="max-w-lg mx-auto py-24 px-6 text-center">
                                 <p className="font-display text-2xl mb-2">Page not found</p>
+                                <p className="text-ash text-sm mb-6">The page you're looking for doesn't exist or may have moved.</p>
+                                <Link
+                                    to="/"
+                                    className="inline-block bg-mango text-abyss px-5 py-2.5 rounded-md font-semibold hover:bg-mango-dark transition-colors duration-150"
+                                >
+                                    Go to Home
+                                </Link>
                             </div>
                         } />
                         </Routes>

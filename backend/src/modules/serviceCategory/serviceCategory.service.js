@@ -30,8 +30,19 @@ exports.listWithCounts = async () => {
 
 exports.getBySlug = async (slug) => {
     const category = await serviceCategoryRepository.findBySlug(slug);
-    if (!category || !category.is_active) {
+    if (!category) {
         return null;
+    }
+
+    // Same maintenance-vs-not-found distinction as
+    // category.service.js#getDepartmentBySlug - see that comment.
+    if (!category.is_active) {
+        const error = new Error(
+            category.maintenance_message || `${category.name} is temporarily unavailable for maintenance.`
+        );
+        error.isMaintenance = true;
+        error.categoryName = category.name;
+        throw error;
     }
 
     const serviceCount = await serviceCategoryRepository.countServicesByCategory(category.id);
@@ -78,11 +89,11 @@ exports.uploadCoverImage = async (id, file) => {
     return result.secure_url;
 };
 
-exports.setCategoryActive = async (id, isActive) => {
+exports.setCategoryActive = async (id, isActive, maintenanceMessage) => {
     const category = await serviceCategoryRepository.findById(id);
     if (!category) {
         throw new Error("Service category not found");
     }
 
-    await serviceCategoryRepository.setActive(id, isActive);
+    await serviceCategoryRepository.setActive(id, isActive, maintenanceMessage);
 };

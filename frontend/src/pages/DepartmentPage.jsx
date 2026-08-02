@@ -5,7 +5,9 @@ import ProductGrid from "../components/ProductGrid";
 import ProductRow from "../components/ProductRow";
 import FeaturedStoreCard from "../components/FeaturedStoreCard";
 import ProductFilters from "../components/ProductFilters";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 import ServicesBrowse from "./ServicesBrowse";
+import { useSocket } from "../context/SocketContext";
 
 // The "Services" department card lives in the same homepage grid as every
 // product department, but services aren't products - they have their own
@@ -21,7 +23,31 @@ export default function DepartmentPage() {
     const [department, setDepartment] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [maintenance, setMaintenance] = useState(null);
     const [filters, setFilters] = useState({});
+
+    const loadDepartment = () => {
+        setLoading(true);
+        setError("");
+        setMaintenance(null);
+        setFilters({});
+
+        api.get(`/categories/departments/${slug}`)
+            .then(({ data }) => setDepartment(data.data))
+            .catch((err) => {
+                if (err.response?.data?.code === "DEPARTMENT_MAINTENANCE") {
+                    setMaintenance({
+                        name: err.response.data.data?.name,
+                        message: err.response.data.message
+                    });
+                } else if (err.response?.status === 404) {
+                    setError("This department couldn't be found.");
+                } else {
+                    setError("Couldn't load this department right now.");
+                }
+            })
+            .finally(() => setLoading(false));
+    };
 
     useEffect(() => {
         if (slug === SERVICES_DEPARTMENT_SLUG) {
@@ -29,21 +55,35 @@ export default function DepartmentPage() {
             return;
         }
 
-        setLoading(true);
-        setError("");
-        setFilters({});
-
-        api.get(`/categories/departments/${slug}`)
-            .then(({ data }) => setDepartment(data.data))
-            .catch((err) => {
-                if (err.response?.status === 404) {
-                    setError("This department couldn't be found.");
-                } else {
-                    setError("Couldn't load this department right now.");
-                }
-            })
-            .finally(() => setLoading(false));
+        loadDepartment();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [slug]);
+
+    // If this exact department's maintenance state changes while the
+    // shopper is already looking at it, react live instead of waiting for
+    // a manual refresh - DepartmentMaintenanceListener.jsx handles the
+    // toast for everyone else; this only concerns the page currently open.
+    // (Only fires for logged-in shoppers - SocketContext only connects an
+    // authenticated socket; a guest browsing this page still gets the
+    // correct state on their next request via the REST call above.)
+    const { socket } = useSocket();
+    useEffect(() => {
+        if (!socket || slug === SERVICES_DEPARTMENT_SLUG) return undefined;
+
+        const handleMaintenanceChange = (payload) => {
+            if (payload.slug !== slug) return;
+
+            if (payload.status === "entered") {
+                setMaintenance({ name: payload.name, message: payload.message });
+            } else {
+                loadDepartment();
+            }
+        };
+
+        socket.on("department:maintenance", handleMaintenanceChange);
+        return () => socket.off("department:maintenance", handleMaintenanceChange);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [socket, slug]);
 
     if (slug === SERVICES_DEPARTMENT_SLUG) {
         return <ServicesBrowse />;
@@ -54,6 +94,16 @@ export default function DepartmentPage() {
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
                 <div className="animate-pulse h-40 bg-line/40 rounded-xl mb-8" />
             </div>
+        );
+    }
+
+    if (maintenance) {
+        return (
+            <MaintenanceScreen
+                title={maintenance.name ? `${maintenance.name} is under maintenance` : "This department is under maintenance"}
+                message={maintenance.message}
+                onRetry={loadDepartment}
+            />
         );
     }
 

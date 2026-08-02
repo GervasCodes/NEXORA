@@ -68,6 +68,15 @@ exports.getBySlug = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.isMaintenance) {
+            return res.status(503).json({
+                success: false,
+                code: "DEPARTMENT_MAINTENANCE",
+                message: error.message,
+                data: { name: error.categoryName }
+            });
+        }
+
         return res.status(400).json({
             success: false,
             message: error.message
@@ -134,7 +143,7 @@ exports.uploadCover = async (req, res) => {
 
 exports.deactivateCategory = async (req, res) => {
     try {
-        await serviceCategoryService.setCategoryActive(req.params.id, false);
+        await serviceCategoryService.setCategoryActive(req.params.id, false, req.body?.message);
 
         return res.json({
             success: true,

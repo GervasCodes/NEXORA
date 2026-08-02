@@ -16,6 +16,19 @@ const base = {
     strokeLinejoin: "round"
 };
 
+// Return-to-home shortcut - used anywhere a user might be several taps
+// deep (control panels, detail pages, the 404 screen) and needs a single
+// explicit way back to "/" instead of repeatedly pressing back.
+export function HomeIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M4 11.5 12 4l8 7.5" />
+            <path d="M6 10v9.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V10" />
+            <path d="M10 20.5V14h4v6.5" />
+        </svg>
+    );
+}
+
 export function BrowseIcon({ className }) {
     return (
         <svg {...base} className={className}>

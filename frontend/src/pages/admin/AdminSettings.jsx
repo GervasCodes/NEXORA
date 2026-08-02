@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageLoader from "../../components/PageLoader";
 
 export default function AdminSettings() {
     const [settings, setSettings] = useState(null);
@@ -84,7 +85,7 @@ export default function AdminSettings() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading settings…</p>;
+    if (loading) return <PageLoader />;
     if (!settings) return <p role="alert" className="text-coral text-sm">{error}</p>;
 
     return (

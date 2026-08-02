@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import PageTransition from "./PageTransition";
+import { HomeIcon } from "./NavIcons";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like the rest of the app's nav) instead of a wall of 17
@@ -53,6 +54,7 @@ const groups = [
         label: "Platform",
         tabs: [
             { to: "/admin/admins", label: "Admins" },
+            { to: "/admin/maintenance", label: "Maintenance" },
             { to: "/admin/audit-logs", label: "Audit logs" },
             { to: "/admin/settings", label: "Settings" }
         ]
@@ -94,30 +96,40 @@ export default function AdminLayout() {
                 crammed under a "Control room" heading. Desktop keeps the
                 original always-visible sidebar below, untouched. */}
             <div className="md:hidden glass-strong border-b border-line/60 px-4 py-3">
-                <button
-                    type="button"
-                    onClick={() => setDrawerOpen((v) => !v)}
-                    aria-expanded={drawerOpen}
-                    aria-controls="admin-mobile-drawer"
-                    className="w-full flex items-center justify-between gap-3 focus-ring rounded-md"
-                >
-                    <span className="min-w-0 text-left">
-                        <span className="block text-xs uppercase tracking-widest text-ash">Admin</span>
-                        <span className="block font-display text-lg truncate">
-                            {currentTab?.label ?? "Control room"}
-                        </span>
-                    </span>
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className={`w-5 h-5 shrink-0 text-ink/70 transition-transform ${drawerOpen ? "rotate-180" : ""}`}
+                <div className="flex items-center gap-2">
+                    <Link
+                        to="/"
+                        aria-label="Home"
+                        title="Home"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring transition-colors"
                     >
-                        <path d="m6 9 6 6 6-6" />
-                    </svg>
-                </button>
+                        <HomeIcon className="w-5 h-5" />
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setDrawerOpen((v) => !v)}
+                        aria-expanded={drawerOpen}
+                        aria-controls="admin-mobile-drawer"
+                        className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
+                    >
+                        <span className="min-w-0 text-left">
+                            <span className="block text-xs uppercase tracking-widest text-ash">Admin</span>
+                            <span className="block font-display text-lg truncate">
+                                {currentTab?.label ?? "Control room"}
+                            </span>
+                        </span>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className={`w-5 h-5 shrink-0 text-ink/70 transition-transform ${drawerOpen ? "rotate-180" : ""}`}
+                        >
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </button>
+                </div>
 
                 {drawerOpen && (
                     <nav
@@ -154,7 +166,14 @@ export default function AdminLayout() {
                 can never drift out of sync with each other. */}
             <aside className="hidden md:block glass-strong rounded-lg p-4 md:sticky md:top-20 md:self-start">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Admin</p>
-                <p className="font-display text-lg mb-6">Control room</p>
+                <p className="font-display text-lg mb-3">Control room</p>
+                <Link
+                    to="/"
+                    className="flex items-center gap-2 text-sm text-ink/70 hover:text-ink mb-6 px-3 py-2 rounded-md hover:bg-line/50 transition-colors"
+                >
+                    <HomeIcon className="w-4 h-4 shrink-0" />
+                    Back to Home
+                </Link>
 
                 <nav className="flex flex-col gap-4">
                     {groups.map((group) => (

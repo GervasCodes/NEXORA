@@ -80,6 +80,17 @@ exports.confirmBooking = async (req, res) => {
     }
 };
 
+exports.rejectBooking = async (req, res) => {
+    try {
+        await bookingService.rejectBooking(req.params.id, req.user.id);
+
+        return res.json({ success: true, message: "Booking rejected" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.cancelBooking = async (req, res) => {
     try {
         await bookingService.cancelBooking(req.params.id, req.user.id);

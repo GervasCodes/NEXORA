@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 
 export default function SellerCollections() {
@@ -112,7 +113,7 @@ export default function SellerCollections() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading your collections…</p>;
+    if (loading) return <PageLoader />;
 
     // Only products not already in the selected collection are offered -
     // there's no point letting a seller pick one that's already there

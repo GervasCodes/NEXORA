@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -28,7 +29,7 @@ export default function SellerDisputes() {
         api.get("/disputes/seller").then(({ data }) => setDisputes(data.data)).finally(() => setLoading(false));
     }, []);
 
-    if (loading) return <p className="text-ash">Loading disputes…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

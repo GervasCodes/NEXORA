@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import PageLoader from "../../components/PageLoader";
 
 export default function AdminProducts() {
     const [products, setProducts] = useState([]);
@@ -27,7 +28,7 @@ export default function AdminProducts() {
         }
     };
 
-    if (loading) return <p className="text-ash">Loading products…</p>;
+    if (loading) return <PageLoader />;
 
     return (
         <div>

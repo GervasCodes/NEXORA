@@ -22,6 +22,7 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | Role-based authorization | ✅ | `authorize.middleware.js`, checked per-route (`admin`/`super_admin`/`seller`/`buyer`/`agent`) |
 | Password reset / OTP flow abuse resistance | ✅ | Same `authLimiter` covers OTP verify/resend |
 | Session revocation on password change | ⚠️ | Reviewer should confirm whether existing tokens are invalidated on password change, or only on explicit logout — flagging for verification, not confirmed either way in this pass |
+| Socket.IO handshake re-checks account status, not just JWT signature | ✅ | Phase 2: `socket.js#io.use` now calls the same `authRepository.findAccountStatusById` fresh DB check as `auth.middleware.js` (`is_active`/suspension/`token_version`) before allowing the connection at all — closes the "signature-valid-but-suspended/stale-tv token still opens a socket" gap; see `PHASE2_SECURITY_CHANGELOG.md`. Room-level authorization itself (`assertParticipant`/`assertCanTrackOrder`/`admins` role gate) was already in place and unchanged |
 
 ## 2. Payments & webhooks
 
@@ -33,7 +34,7 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | Webhook idempotency (no double-credit on retry) | ✅ | `payment.status === 'completed' \|\| 'failed'` short-circuit in both `_handleOrderPaymentWebhook` and `_handleBookingPaymentWebhook` |
 | Open-redirect protection on payment return URLs | ✅ | `assertAllowedRedirect` in `payment.controller.js` validates `successUrl`/`cancelUrl`/`returnUrl` origins against `CORS_ORIGIN` |
 | Seller funds held until delivery + dispute window (escrow) | ✅ | `held_balance`/`balance` split, `escrowRelease.job.js` — see `docs/ESCROW_PAYMENT_FLOW.md` |
-| Webhook replay protection beyond idempotency (nonce/timestamp) | ❌ | Not implemented; mitigated in practice by idempotency (a replay of an already-completed payment is a no-op) but no explicit anti-replay check exists — see `docs/WEBHOOK_VALIDATION.md` §6 |
+| Webhook replay protection beyond idempotency (nonce/timestamp) | ✅ | Phase 2: timestamp-freshness check (where a provider supplies one) + SHA-256 payload-hash dedup against `webhook_replay_guard` (migration 072) for all three providers — `utils/webhookReplayGuard.js`, wired into `webhookAuth.middleware.js` (MalipoPay/Selcom) and `payment.controller.js#snippeWebhook` (Snippe) — see `PHASE2_SECURITY_CHANGELOG.md` |
 | Provider payload shape verified against live sandbox | ⚠️ | MalipoPay/Selcom field names follow commonly documented patterns, not confirmed against real provider docs/sandbox — see `docs/WEBHOOK_VALIDATION.md` §6 |
 | Withdrawal amount validated against available balance | ✅ | `requestWithdrawal` rejects `amount > wallet.balance`; `held_balance` isn't withdrawable by construction |
 
@@ -44,7 +45,7 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | SQL parameterization | ✅ | Spot-checked across repositories (e.g. `product.repository.js`) — all queries use `?` placeholders via `mysql2`, no string-concatenated SQL found in the sampled files |
 | Request body/query validation | ✅ | Per-module `*.validator.js` files (e.g. `payment.validator.js`) |
 | File upload type/size restriction | ✅ | `multer` memory storage, 5 MB limit, MIME-type allowlist (`image/*`) — `upload.middleware.js`; separate middlewares exist for video/audio/document/chat-attachment uploads with their own limits |
-| Uploaded file content validated server-side (not just MIME sniffing) | ⚠️ | `fileFilter` trusts the client-reported `mimetype`; reviewer should confirm whether Cloudinary or an additional server-side check validates actual file content before storage |
+| Uploaded file content validated server-side (not just MIME sniffing) | ✅ | Phase 2: magic-byte content classifier (`utils/fileContentValidator.js`) runs after multer buffers the file, independent of the client-reported `mimetype` — wired into all five upload middlewares via `utils/wrapUploadMiddleware.js`; see `PHASE2_SECURITY_CHANGELOG.md` |
 | Open redirect protection (general, beyond payment return URLs) | ⚠️ | Confirmed for payment flows (§2); reviewer should check any other user-supplied-URL redirect surfaces |
 
 ## 4. Transport & platform hardening
@@ -52,7 +53,7 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | Item | Status | Notes |
 |---|---|---|
 | HTTPS-only in production | ⚠️ | Enforced at the hosting/reverse-proxy layer (Render), not in application code — reviewer should confirm the deployment target terminates TLS and doesn't accept plaintext HTTP |
-| Security headers | ✅ | `helmet()` — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, etc. CSP explicitly disabled (documented rationale: JSON API + one static `/health` page) |
+| Security headers | ✅ | `helmet()` — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, etc. CSP re-enabled and scoped in Phase 2 (`default-src 'none'`, per-response nonce for `/health`'s one inline `<style>` block) — see `PHASE2_SECURITY_CHANGELOG.md`. Frontend (separately deployed, Netlify) gets its own scoped CSP via `frontend/public/_headers`, also added in Phase 2 — the `connect-src` origin there needs a manual production value; see that file's header comment |
 | CORS restricted to known origins in production | ✅ | `CORS_ORIGIN` env var, comma-separated allowlist; falls back to `*` only if unset (dev default) — `.env.example` calls out setting it explicitly in production |
 | `trust proxy` configured correctly for rate limiting | ✅ | `app.set("trust proxy", 1)` — trusts exactly one hop (the platform's own proxy), not the full `X-Forwarded-For` chain, preventing IP-spoofing around rate limits |
 | Response compression | ✅ | `compression()` — not a security control, noted for completeness |
@@ -105,8 +106,6 @@ than assuming silence means "checked and fine":
 - Frontend XSS surface (React's default escaping wasn't independently
   re-audited for `dangerouslySetInnerHTML` usage or similar escape
   hatches).
-- Socket.IO channel authorization (whether a user can only subscribe to
-  their own order/chat rooms) wasn't re-verified in this pass.
 - Infrastructure/hosting-level review (network segmentation, database
   access controls, backup encryption) — outside this repo's scope.
 - Penetration testing / dynamic testing of any kind. This checklist is a

@@ -1,0 +1,51 @@
+# Phase 2 (Security Hardening). Netlify reads this file to attach
+# response headers by path (see the existing public/_redirects, which
+# confirms Netlify is the actual deploy target for this frontend) - see
+# https://docs.netlify.com/routing/headers/ for the exact matching
+# rules this depends on.
+#
+# There was no Content-Security-Policy at all before this - anything
+# that ever ends up rendered as HTML on this origin (a reflected value,
+# a future bug) had no browser-side backstop. This is scoped to what the
+# app actually loads today:
+#   - script-src 'self' only - index.html has no inline <script>, just
+#     Vite's own bundled module script, so this is a real restriction,
+#     not a formality.
+#   - style-src allows Google Fonts' stylesheet host (index.html's
+#     <link rel="stylesheet" href="https://fonts.googleapis.com/...">)
+#     plus 'unsafe-inline', which React's `style={{...}}` prop and
+#     several UI libraries (Leaflet map tiles/markers, react-leaflet)
+#     rely on - locking this down further would need an app-wide
+#     nonce/hash pipeline this build doesn't have yet (see "Not covered
+#     by this file" below).
+#   - font-src covers Google Fonts' font-file host.
+#   - img-src covers Cloudinary (product/store photo delivery - see
+#     backend/src/config/cloudinary.js) and OpenStreetMap's tile hosts
+#     (AdminDispatchMap.jsx/LocationPicker.jsx/DeliveryTrackingMap.jsx).
+#   - connect-src MUST include your actual deployed backend API and
+#     Socket.IO origins - see "REQUIRED MANUAL STEP" below. Left as
+#     'self' only for now, which will break the app in production if a
+#     cross-origin backend is used - this file can't see your build's
+#     VITE_API_URL/VITE_SOCKET_URL, which are only known at build/deploy
+#     time, not when this static file is written.
+#
+# REQUIRED MANUAL STEP: replace the two placeholder origins below with
+# your actual deployed backend API and Socket.IO URLs (the same values
+# you set for VITE_API_URL/VITE_SOCKET_URL - see frontend/.env.example)
+# before relying on this in production. Until you do, the app will work
+# in development (no CSP applies to `npm run dev`) but a cross-origin
+# API/socket connection will be silently blocked once this header is
+# live on Netlify.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://*.tile.openstreetmap.org; connect-src 'self' https://your-backend-api-domain.example wss://your-backend-api-domain.example; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), camera=(), microphone=()
+
+# offline.html (the PWA service-worker fallback page - see public/sw.js)
+# has its own inline <style> block and isn't part of the React app - a
+# more specific path match here overrides style-src for this one file
+# only, per Netlify's header-matching precedence, rather than loosening
+# the site-wide rule above.
+/offline.html
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'

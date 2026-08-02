@@ -187,7 +187,36 @@ exports.initiateSnippeVerificationFeePayment = async (req, res) => {
 exports.snippeWebhook = async (req, res) => {
     try {
         const snippeProvider = require("./providers/snippe.provider");
+        const replayGuard = require("../../utils/webhookReplayGuard");
         const event = snippeProvider.constructWebhookEvent(req.body, req.headers["snippe-signature"]);
+
+        // Phase 2 (Security Hardening) - replay protection. HMAC
+        // signature verification above proves this came from Snippe; it
+        // doesn't prove this exact delivery hasn't already been consumed
+        // (a captured, validly-signed request replayed later would still
+        // pass it). If the event carries a `created` timestamp (the
+        // commonly documented shape for a hosted-checkout event, same
+        // caveat as the rest of this provider's integration - see
+        // snippe.provider.js's header comment), reject anything
+        // stale/future first; either way, dedup on the raw request bytes
+        // themselves (req.body is still the raw Buffer here - see the
+        // express.raw() wiring in app.js) so a byte-for-byte replay is
+        // caught even if this event shape turns out not to include a
+        // timestamp at all.
+        if (!replayGuard.isTimestampFresh(event.created)) {
+            logger.warn({ provider: "snippe", reqId: req.id }, "Snippe webhook rejected: stale/future event timestamp (possible replay)");
+            Sentry.captureMessage("Snippe webhook rejected", {
+                level: "warning",
+                tags: { area: "payment-webhook", provider: "snippe" },
+                extra: { reason: "stale timestamp" }
+            });
+            return res.status(400).json({ success: false });
+        }
+
+        const isFreshDelivery = await replayGuard.recordDelivery("snippe", req.body);
+        if (!isFreshDelivery) {
+            return res.status(400).json({ success: false });
+        }
 
         await paymentService.handleSnippeWebhookEvent(event);
 

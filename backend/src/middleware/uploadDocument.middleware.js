@@ -1,4 +1,6 @@
 const multer = require("multer");
+const { validateFileContent } = require("./fileContentValidation.middleware");
+const { wrapUpload } = require("../utils/wrapUploadMiddleware");
 
 // Separate from upload.middleware.js (which is image-only for
 // product/store photos) because verification documents like a business
@@ -19,4 +21,10 @@ const uploadDocument = multer({
     }
 });
 
-module.exports = uploadDocument;
+// Phase 2 (Security Hardening): second, content-based check independent
+// of the client-reported mimetype above - see
+// utils/fileContentValidator.js. "document" here covers PDF specifically
+// (the classifier's zip/OLE office signatures aren't reachable through
+// this middleware's own fileFilter above, which only ever admits
+// image/* or application/pdf in the first place).
+module.exports = wrapUpload(uploadDocument, validateFileContent(["image", "document"]));

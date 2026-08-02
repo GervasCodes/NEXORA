@@ -28,6 +28,7 @@
 
 const crypto = require("crypto");
 const logger = require("../utils/logger");
+const replayGuard = require("../utils/webhookReplayGuard");
 
 // --- MalipoPay --------------------------------------------------------
 // Per developers.malipopay.co.tz/integration/webhooks: every callback
@@ -36,7 +37,7 @@ const logger = require("../utils/logger");
 // where `secret` is the same project API secret used as the `apiToken`
 // header on outbound requests (malipopay.provider.js's own header
 // comment: MalipoPay has one key, not a separate secret+key pair).
-exports.verifyMalipopayWebhook = (req, res, next) => {
+exports.verifyMalipopayWebhook = async (req, res, next) => {
     const secret = process.env.MOBILE_MONEY_API_KEY;
     const payload = req.body || {};
     const { reference, timestamp, amount, customer, payloadSignature } = payload;
@@ -76,6 +77,29 @@ exports.verifyMalipopayWebhook = (req, res, next) => {
         return res.status(200).json({ success: false });
     }
 
+    // Phase 2 (Security Hardening) - replay protection. Signature
+    // verification above proves this came from MalipoPay at some point;
+    // it doesn't prove this exact delivery hasn't already been consumed
+    // once (a captured, validly-signed payload replayed later would
+    // still pass the check above). MalipoPay's documented payload
+    // includes its own `timestamp`, so reject anything stale/outside the
+    // tolerance window before even checking for a duplicate. See
+    // utils/webhookReplayGuard.js for both halves of this.
+    if (!replayGuard.isTimestampFresh(timestamp)) {
+        logger.warn({ provider: "malipopay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected malipopay webhook with a stale/future timestamp (possible replay)");
+        return res.status(200).json({ success: false });
+    }
+
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery("malipopay", JSON.stringify(payload));
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: false });
+        }
+    } catch (error) {
+        logger.error({ err: error, provider: "malipopay", reqId: req.id }, "[webhook auth] replay-guard check failed");
+        return res.status(200).json({ success: false });
+    }
+
     next();
 };
 
@@ -86,7 +110,7 @@ exports.verifyMalipopayWebhook = (req, res, next) => {
 // with a static bearer token Selcom's team shares with you directly, not
 // a per-request signature:
 //   Authorization: Bearer <token>
-exports.verifySelcomWebhook = (req, res, next) => {
+exports.verifySelcomWebhook = async (req, res, next) => {
     const configuredToken = process.env.SELCOM_WEBHOOK_SECRET;
     const authHeader = req.headers.authorization || "";
     const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -104,6 +128,22 @@ exports.verifySelcomWebhook = (req, res, next) => {
 
     if (!providedToken || expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
         logger.warn({ provider: "selcom", reqId: req.id, ip: req.ip }, "[webhook auth] rejected selcom webhook with invalid/missing Authorization bearer token");
+        return res.status(200).json({ success: false });
+    }
+
+    // Phase 2 (Security Hardening) - replay protection. Selcom's
+    // documented C2B payload (transid/resultcode/result) carries no
+    // timestamp/nonce of its own (see webhookReplayGuard.js's
+    // isTimestampFresh - a no-op when there's nothing to check), so the
+    // payload-hash dedup below is this provider's only guard against a
+    // captured bearer-token-authenticated request being replayed later.
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery("selcom", JSON.stringify(req.body || {}));
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: false });
+        }
+    } catch (error) {
+        logger.error({ err: error, provider: "selcom", reqId: req.id }, "[webhook auth] replay-guard check failed");
         return res.status(200).json({ success: false });
     }
 

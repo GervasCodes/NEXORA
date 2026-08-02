@@ -162,15 +162,17 @@ Flagging rather than silently presenting as resolved:
   supports HMAC-signed payloads (common for mobile money gateways),
   that should replace the static shared-secret check in §1 — strictly
   stronger, same "fail closed when unconfigured" posture should be kept.
-- **No replay-window / nonce check.** A captured, valid MalipoPay/Selcom
-  webhook payload replayed later would still pass the shared-secret
-  check (the secret alone doesn't bind the payload to a single
-  delivery). In practice this is mitigated by the idempotency check in
-  `_handleOrderPaymentWebhook`/`_handleBookingPaymentWebhook` (a
-  replayed webhook for an already-completed payment is a no-op — see
-  `docs/ESCROW_PAYMENT_FLOW.md` §5), so a replay can't double-credit a
-  wallet, but it's still worth an external reviewer confirming that's
-  sufficient rather than adding a timestamp/nonce check.
+- **Replay-window / nonce check — implemented in Phase 2.** A captured,
+  valid webhook payload replayed later used to still pass the
+  shared-secret/HMAC check (the secret alone doesn't bind the payload to
+  a single delivery) - mitigated only indirectly by the idempotency
+  check described above. `utils/webhookReplayGuard.js` now adds two
+  explicit, independent guards on top of that idempotency check: a
+  timestamp-freshness window (5 minutes) where a provider supplies its
+  own timestamp (MalipoPay does), and a SHA-256(provider + raw payload)
+  dedup against the `webhook_replay_guard` table (migration 072) that
+  works regardless of whether a timestamp/nonce field exists at all —
+  see `PHASE2_SECURITY_CHANGELOG.md`.
 - **No IP allowlisting.** Neither shared-secret nor HMAC verification is
   paired with restricting the source IP to the provider's published
   webhook IP ranges (where providers publish one). This would be

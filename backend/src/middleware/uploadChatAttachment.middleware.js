@@ -1,4 +1,6 @@
 const multer = require("multer");
+const { validateFileContent } = require("./fileContentValidation.middleware");
+const { wrapUpload } = require("../utils/wrapUploadMiddleware");
 
 // Chat attachments cover more ground than the image-only upload.middleware.js
 // (a "premium modern chat" needs photos, short clips, voice notes, and
@@ -34,4 +36,14 @@ const uploadChatAttachment = multer({
     }
 });
 
-module.exports = uploadChatAttachment;
+// Phase 2 (Security Hardening): second, content-based check independent
+// of the client-reported mimetype above - see
+// utils/fileContentValidator.js. Chat attachments are the widest
+// category here (image/video/audio/PDF/Word/Excel/plain text), so this
+// is also the one place `allowPlainText` matters - .txt has no magic
+// number, so a declared "text/plain" file instead falls back to the
+// content heuristic in fileContentValidator.js#looksLikePlainText.
+module.exports = wrapUpload(
+    uploadChatAttachment,
+    validateFileContent(["image", "video", "audio", "document"], { allowPlainText: true })
+);

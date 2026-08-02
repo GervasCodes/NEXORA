@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -68,12 +69,44 @@ const corsOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
     : "*";
 app.use(cors({ origin: corsOrigins, credentials: true }));
+// Phase 2 (Security Hardening). Generates a fresh per-response nonce so
+// the one inline <style> block this backend actually serves (/health,
+// below) can be explicitly allow-listed by the CSP without falling back
+// to 'unsafe-inline' (which would allow ANY inline style/script, not
+// just this one). Registered before helmet so its CSP directive
+// callbacks (which read res.locals.cspNonce) always see it set.
+app.use((req, res, next) => {
+    res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+    next();
+});
+
 // Sets X-Content-Type-Options, X-Frame-Options, HSTS, and friends.
-// contentSecurityPolicy is off: this is a JSON API (the frontend is a
-// separate deployed app), and the one HTML page it does serve (/health)
-// uses an inline <style> block that a default CSP would block for no
-// real security benefit here.
-app.use(helmet({ contentSecurityPolicy: false }));
+// contentSecurityPolicy used to be entirely disabled here - this is
+// mostly a JSON API (the frontend is a separate deployed app) and a
+// default CSP would have blocked /health's inline <style> - but "no CSP
+// at all" throws away real defense-in-depth for the one HTML response
+// this backend does serve, and for any future accidental HTML/script
+// reflection in an error page. Scoped instead of removed: nothing here
+// needs to load a script, a frame, or content from another origin, so
+// almost everything is locked to 'none', with 'self' only where a JSON
+// API response might plausibly be fetched by its own frontend.
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'none'"],
+            // /health's inline <style> block only - see the nonce
+            // middleware above and the tag itself further down.
+            styleSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+            imgSrc: ["'self'"],
+            connectSrc: ["'self'"],
+            scriptSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            frameAncestors: ["'none'"],
+            baseUri: ["'none'"],
+            formAction: ["'none'"]
+        }
+    }
+}));
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
@@ -158,7 +191,7 @@ app.get("/health", async (req, res) => {
     <meta charset="UTF-8" />
     <title>NEXORA API Status</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
+    <style nonce="${res.locals.cspNonce}">
         body {
             margin: 0;
             min-height: 100vh;

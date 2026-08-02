@@ -8,6 +8,7 @@ const departmentSponsorshipExpiryJob = require("./departmentSponsorshipExpiry.jo
 const escrowReleaseJob = require("./escrowRelease.job");
 const bookingLifecycleJob = require("./bookingLifecycle.job");
 const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
+const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick.
@@ -67,5 +68,10 @@ exports.startJobs = () => {
     // and category.service.js#applyDueMaintenanceSchedules.
     cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
 
-    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute)");
+    // Once a day at 03:10 server time (just after otpCleanup, same low-
+    // traffic housekeeping slot): prune webhook_replay_guard rows older
+    // than the replay window matters for - see webhookReplayCleanup.job.js.
+    cron.schedule("10 3 * * *", safeRun("webhookReplayCleanup", webhookReplayCleanupJob));
+
+    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute)");
 };

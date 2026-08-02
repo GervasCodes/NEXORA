@@ -20,9 +20,22 @@ describe("POST /api/v1/payments/webhooks/malipopay - payloadSignature verificati
         .update(`${reference}${timestamp}${amount}${phoneNumber}${process.env.MOBILE_MONEY_API_KEY}`)
         .digest("hex");
 
+    // Phase 2 (Security Hardening) added a replay-protection timestamp
+    // freshness check (see utils/webhookReplayGuard.js) - MalipoPay's
+    // documented "yyyyMMddHHmmss" timestamp must be within a few minutes
+    // of "now" or the webhook is rejected as a possible replay. Generate
+    // it fresh at test-run time rather than hardcoding a calendar date,
+    // which would otherwise start failing the moment it falls outside
+    // that window.
+    const nowAsMalipopayTimestamp = () => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+    };
+
     const basePayload = {
         reference: "ORDER-1",
-        timestamp: "20260802120000",
+        timestamp: nowAsMalipopayTimestamp(),
         amount: 10000,
         status: "SUCCESS",
         customer: { firstname: "John", lastname: "Doe", phoneNumber: "255655128812", mno: "Tigo" }
@@ -41,6 +54,7 @@ describe("POST /api/v1/payments/webhooks/malipopay - payloadSignature verificati
 
     it("processes a webhook with a correctly computed payloadSignature", async () => {
         db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // paymentRepository.findByOrderId
             .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]) // orderRepository.findOrderById (orderForNotify, fetched up front)
             .mockResolvedValueOnce([{}]) // markCompleted
@@ -88,6 +102,7 @@ describe("POST /api/v1/payments/webhooks/selcom - Bearer token auth", () => {
 
     it("processes a webhook with the correct bearer token", async () => {
         db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]])
             .mockResolvedValueOnce([[{ id: 6, is_parent: 0, buyer_id: 1 }]])
             .mockResolvedValueOnce([{}])
@@ -155,6 +170,7 @@ describe("POST /api/v1/payments/webhooks/snippe - raw-body HMAC signature", () =
         });
 
         db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // findByOrderId
             .mockResolvedValueOnce([[{ id: 9, is_parent: 0, buyer_id: 1 }]]) // findOrderById (orderForNotify, fetched up front)
             .mockResolvedValueOnce([{}]) // markCompleted

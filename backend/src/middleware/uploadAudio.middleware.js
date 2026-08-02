@@ -1,4 +1,6 @@
 const multer = require("multer");
+const { validateFileContent } = require("./fileContentValidation.middleware");
+const { wrapUpload } = require("../utils/wrapUploadMiddleware");
 
 // Separate from upload.middleware.js (image, 5 MB), uploadDocument.middleware.js
 // (image/PDF, 8 MB), and uploadVideo.middleware.js (video, 50 MB) - audio
@@ -20,4 +22,7 @@ const uploadAudio = multer({
     }
 });
 
-module.exports = uploadAudio;
+// Phase 2 (Security Hardening): second, content-based check independent
+// of the client-reported mimetype above - see
+// utils/fileContentValidator.js.
+module.exports = wrapUpload(uploadAudio, validateFileContent(["audio"]));

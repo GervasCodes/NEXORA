@@ -2,6 +2,7 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 
 const chatService = require("../modules/chat/chat.service");
+const authRepository = require("../modules/auth/auth.repository");
 
 let io = null;
 
@@ -90,8 +91,24 @@ exports.init = (httpServer) => {
         pingTimeout: 10000
     });
 
-    // Authenticate the socket using the same JWT used for REST requests
-    io.use((socket, next) => {
+    // Authenticate the socket using the same JWT used for REST requests.
+    //
+    // Phase 2 (Security Hardening). This used to stop at "is the
+    // signature valid" - unlike auth.middleware.js on the REST side,
+    // which also re-checks is_active/suspension/token_version fresh from
+    // the database on every request (see that file's comments). A
+    // signature-valid JWT for a since-suspended/deleted account, or one
+    // issued before a password change bumped token_version, would still
+    // open a socket connection and could join `conversation:*`/
+    // `order:*`/`user:*`/`admins` rooms indefinitely for the rest of the
+    // token's 7-day life - flagged as an unverified gap in
+    // docs/SECURITY_REVIEW_CHECKLIST.md #9 ("Socket.IO channel
+    // authorization ... wasn't re-verified"). This mirrors
+    // auth.middleware.js's checks exactly, using the same repository
+    // function, so a suspended/deleted account or a stale (pre-password-
+    // change) token is rejected at the handshake the same way it would
+    // be on any REST request.
+    io.use(async (socket, next) => {
         try {
             const token = socket.handshake.auth?.token;
 
@@ -100,6 +117,24 @@ exports.init = (httpServer) => {
             }
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            // Short-lived pre-auth/reauth tokens (see auth.middleware.js)
+            // are never valid as a general session token, socket or
+            // otherwise.
+            if (decoded.typ) {
+                return next(new Error("Invalid or expired token"));
+            }
+
+            const status = await authRepository.findAccountStatusById(decoded.id);
+
+            if (!status || !status.is_active) {
+                return next(new Error("Account is not active"));
+            }
+
+            if ((decoded.tv || 0) !== (status.token_version || 0)) {
+                return next(new Error("Invalid or expired token"));
+            }
+
             socket.user = decoded;
             next();
 

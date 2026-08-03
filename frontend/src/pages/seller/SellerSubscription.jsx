@@ -121,6 +121,24 @@ export default function SellerSubscription() {
         }
     };
 
+    // MalipoPay Card equivalent of payWithSnippe above.
+    const payWithMalipopayCard = async () => {
+        setError("");
+        setBusy("malipopay_card");
+        try {
+            const origin = window.location.origin;
+            const { data } = await api.post("/subscriptions/subscribe/malipopay-card", {
+                planCode: selectedPlan.code,
+                successUrl: `${origin}${returnPath}?payment=success`,
+                cancelUrl: `${origin}${returnPath}?payment=cancelled`
+            });
+            window.location.href = data.data.url;
+        } catch (err) {
+            setError(extractErrorMessage(err));
+            setBusy(null);
+        }
+    };
+
     const payWithPaypal = async () => {
         setError("");
         setBusy("paypal");
@@ -251,6 +269,10 @@ export default function SellerSubscription() {
                         <button type="button" onClick={payWithSnippe} disabled={busy === "snippe" || awaitingConfirmation}
                             className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
                             {busy === "snippe" ? "Redirecting…" : "Pay with card (Snippe)"}
+                        </button>
+                        <button type="button" onClick={payWithMalipopayCard} disabled={busy === "malipopay_card" || awaitingConfirmation}
+                            className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
+                            {busy === "malipopay_card" ? "Redirecting…" : "Pay with card (MalipoPay)"}
                         </button>
                         <button type="button" onClick={payWithPaypal} disabled={busy === "paypal" || awaitingConfirmation}
                             className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">

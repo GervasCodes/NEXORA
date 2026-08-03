@@ -30,6 +30,7 @@ const orderRepository = require("../order/order.repository");
 const auditService = require("../audit/audit.service");
 const mobileMoneyProvider = require("../payment/providers/mobileMoney.provider");
 const snippeProvider = require("../payment/providers/snippe.provider");
+const malipopayCardProvider = require("../payment/providers/malipopayCard.provider");
 const paypalProvider = require("../payment/providers/paypal.provider");
 
 const MAX_ATTEMPTS = 3;
@@ -96,6 +97,18 @@ const callProvider = async (refund, payment) => {
             return { success: false, error: "Payment has no Snippe transaction reference on file" };
         }
         const result = await snippeProvider.refundPayment({
+            transactionReference: payment.transaction_reference,
+            amountTzs: refund.amount,
+            reason: `dispute_${refund.dispute_id}`
+        });
+        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
+    }
+
+    if (payment.method === "malipopay_card") {
+        if (!payment.transaction_reference) {
+            return { success: false, error: "Payment has no MalipoPay Card transaction reference on file" };
+        }
+        const result = await malipopayCardProvider.refundPayment({
             transactionReference: payment.transaction_reference,
             amountTzs: refund.amount,
             reason: `dispute_${refund.dispute_id}`

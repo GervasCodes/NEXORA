@@ -240,6 +240,24 @@ export default function OrderDetail() {
         }
     };
 
+    // MalipoPay Card equivalent of handleRetrySnippe above - same
+    // hosted-checkout retry shape, different route/provider.
+    const handleRetryMalipopayCard = async () => {
+        setBusy(true);
+        setActionError("");
+        try {
+            const origin = window.location.origin;
+            const { data } = await api.post(`/payments/${id}/malipopay-card/checkout`, {
+                successUrl: `${origin}/orders/${id}?payment=success`,
+                cancelUrl: `${origin}/orders/${id}?payment=cancelled`
+            });
+            window.location.href = data.data.url;
+        } catch (err) {
+            setActionError(extractErrorMessage(err));
+            setBusy(false);
+        }
+    };
+
     const handleRetryPaypal = async () => {
         setBusy(true);
         setActionError("");
@@ -395,6 +413,12 @@ export default function OrderDetail() {
                     <button onClick={handleRetrySnippe} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Redirecting…" : "Pay with Card (Snippe)"}
+                    </button>
+                )}
+                {!order.parent_order_id && order.payment_method === "malipopay_card" && order.payment_status === "unpaid" && (
+                    <button onClick={handleRetryMalipopayCard} disabled={busy}
+                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                        {busy ? "Redirecting…" : "Pay with Card (MalipoPay)"}
                     </button>
                 )}
                 {!order.parent_order_id && order.payment_method === "paypal" && order.payment_status === "unpaid" && (

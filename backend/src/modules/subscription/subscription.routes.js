@@ -36,6 +36,15 @@ router.post(
 );
 
 router.post(
+    "/subscribe/malipopay-card",
+    authMiddleware,
+    authorize("seller"),
+    subscribeRedirectValidation,
+    validationMiddleware,
+    subscriptionController.subscribeMalipopayCard
+);
+
+router.post(
     "/subscribe/paypal",
     authMiddleware,
     authorize("seller"),

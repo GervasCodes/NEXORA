@@ -15,10 +15,16 @@ const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middlewar
 // secret header so this can't be forged by a random POST request - see
 // webhookAuth.middleware.js for why that mattered.
 //
-// NOTE: the Snippe webhook (POST /webhooks/snippe) is NOT defined here -
-// it's registered directly in app.js, before the global JSON body
-// parser, because Snippe's signature verification needs the raw request
+// NOTE: the Snippe webhook (POST /webhooks/snippe) and the MalipoPay
+// Card webhook (POST /webhooks/malipopay-card) are NOT defined here -
+// they're registered directly in app.js, before the global JSON body
+// parser, because their signature verification needs the raw request
 // body. See the comment in app.js for why.
+//
+// "/webhooks/malipopay" below is the MOBILE MONEY MalipoPay rail's
+// webhook (shared-secret header, not HMAC-over-body) - a completely
+// separate integration/credentials from the MalipoPay Card webhook. Do
+// not merge these two; see malipopayCard.provider.js's header comment.
 router.post("/webhooks/malipopay", verifyMalipopayWebhook, paymentController.malipopayWebhook);
 router.post("/webhooks/selcom", verifySelcomWebhook, paymentController.selcomWebhook);
 
@@ -41,6 +47,13 @@ router.post(
     authMiddleware,
     authorize("seller"),
     paymentController.initiateSnippeVerificationFeePayment
+);
+
+router.post(
+    "/verification-fee/malipopay-card/checkout",
+    authMiddleware,
+    authorize("seller"),
+    paymentController.initiateMalipopayCardVerificationFeePayment
 );
 
 router.post(
@@ -85,6 +98,15 @@ router.post(
 );
 
 router.post(
+    "/booking/:bookingId/malipopay-card/checkout",
+    authMiddleware,
+    authorize("buyer"),
+    bookingIdValidation,
+    validationMiddleware,
+    paymentController.initiateMalipopayCardBookingPayment
+);
+
+router.post(
     "/booking/:bookingId/paypal/create",
     authMiddleware,
     authorize("buyer"),
@@ -120,6 +142,15 @@ router.post(
     orderIdValidation,
     validationMiddleware,
     paymentController.initiateSnippeOrderPayment
+);
+
+router.post(
+    "/:orderId/malipopay-card/checkout",
+    authMiddleware,
+    authorize("buyer"),
+    orderIdValidation,
+    validationMiddleware,
+    paymentController.initiateMalipopayCardOrderPayment
 );
 
 router.post(

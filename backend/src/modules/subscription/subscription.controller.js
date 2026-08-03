@@ -59,6 +59,24 @@ exports.subscribeSnippe = async (req, res) => {
     }
 };
 
+exports.subscribeMalipopayCard = async (req, res) => {
+    try {
+        const { planCode, successUrl, cancelUrl } = req.body;
+        const plan = await subscriptionRepository.findPlanByCode(planCode);
+        if (!plan || !plan.is_active) {
+            return res.status(404).json({ success: false, message: "Plan not found" });
+        }
+        if (Number(plan.price) <= 0) {
+            return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
+        }
+
+        const result = await paymentService.initiateMalipopayCardSubscriptionPayment(req.user.id, plan.id, { successUrl, cancelUrl });
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.subscribePaypal = async (req, res) => {
     try {
         const { planCode, returnUrl, cancelUrl } = req.body;

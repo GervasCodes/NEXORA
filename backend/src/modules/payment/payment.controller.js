@@ -243,6 +243,95 @@ exports.snippeWebhook = async (req, res) => {
     }
 };
 
+// --- MalipoPay Card ---------------------------------------------------
+// A separate card-checkout product from MalipoPay's mobile-money rail
+// (see malipopayWebhook above / malipopayCard.provider.js's header
+// comment) - own routes, own webhook, own credentials.
+
+exports.initiateMalipopayCardOrderPayment = async (req, res) => {
+    try {
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+
+        const result = await paymentService.initiateMalipopayCardOrderPayment(
+            req.params.orderId,
+            req.user.id,
+            { successUrl, cancelUrl }
+        );
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.initiateMalipopayCardVerificationFeePayment = async (req, res) => {
+    try {
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+        const settingsService = require("../settings/settings.service");
+        const amount = await settingsService.getVerificationFee();
+
+        const result = await paymentService.initiateMalipopayCardVerificationFeePayment(
+            req.user.id,
+            amount,
+            { successUrl, cancelUrl }
+        );
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// MalipoPay calls this URL directly (server-to-server), signed with
+// MALIPOPAY_CARD_WEBHOOK_SECRET. Give MalipoPay this exact path in their
+// dashboard's card-product webhook setting:
+//   https://<your-domain>/api/v1/payments/webhooks/malipopay-card
+//
+// IMPORTANT: this route must receive the RAW request body (not JSON-
+// parsed) for signature verification to work - see the express.raw()
+// wiring in app.js, mirroring the Snippe webhook exactly.
+exports.malipopayCardWebhook = async (req, res) => {
+    try {
+        const malipopayCardProvider = require("./providers/malipopayCard.provider");
+        const replayGuard = require("../../utils/webhookReplayGuard");
+        const event = malipopayCardProvider.constructWebhookEvent(req.body, req.headers["malipopay-signature"]);
+
+        // Same replay protection as the Snippe webhook - see the comment
+        // there and webhookReplayGuard.js for the full reasoning.
+        if (!replayGuard.isTimestampFresh(event.created)) {
+            logger.warn({ provider: "malipopay-card", reqId: req.id }, "MalipoPay Card webhook rejected: stale/future event timestamp (possible replay)");
+            Sentry.captureMessage("MalipoPay Card webhook rejected", {
+                level: "warning",
+                tags: { area: "payment-webhook", provider: "malipopay-card" },
+                extra: { reason: "stale timestamp" }
+            });
+            return res.status(400).json({ success: false });
+        }
+
+        const isFreshDelivery = await replayGuard.recordDelivery("malipopay-card", req.body);
+        if (!isFreshDelivery) {
+            return res.status(400).json({ success: false });
+        }
+
+        await paymentService.handleMalipopayCardWebhookEvent(event);
+
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        logger.error({ err: error, provider: "malipopay-card", reqId: req.id }, "MalipoPay Card webhook error");
+        Sentry.captureMessage("MalipoPay Card webhook rejected", {
+            level: "warning",
+            tags: { area: "payment-webhook", provider: "malipopay-card" },
+            extra: { reason: error.message }
+        });
+        // 400 here (unlike the mobile money webhooks) is correct: an
+        // invalid signature means this request didn't come from
+        // MalipoPay's card product, same reasoning as the Snippe webhook.
+        return res.status(400).json({ success: false });
+    }
+};
+
 // --- PayPal ---------------------------------------------------------
 
 exports.initiatePaypalOrderPayment = async (req, res) => {
@@ -325,6 +414,23 @@ exports.initiateSnippeBookingPayment = async (req, res) => {
         const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
 
         const result = await paymentService.initiateSnippeBookingPayment(
+            req.params.bookingId,
+            req.user.id,
+            { successUrl, cancelUrl }
+        );
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.initiateMalipopayCardBookingPayment = async (req, res) => {
+    try {
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+
+        const result = await paymentService.initiateMalipopayCardBookingPayment(
             req.params.bookingId,
             req.user.id,
             { successUrl, cancelUrl }

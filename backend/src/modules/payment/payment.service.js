@@ -3,6 +3,7 @@ const orderRepository = require("../order/order.repository");
 const bookingRepository = require("../booking/booking.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
 const snippeProvider = require("./providers/snippe.provider");
+const malipopayCardProvider = require("./providers/malipopayCard.provider");
 const paypalProvider = require("./providers/paypal.provider");
 const providerRegistry = require("./providers/registry");
 const walletService = require("../wallet/wallet.service");
@@ -194,6 +195,35 @@ exports.initiateSnippeSubscriptionPayment = async (sellerId, planId, { successUr
     return { status: "redirect", url: session.url };
 };
 
+// MalipoPay Card equivalent of initiateSnippeSubscriptionPayment above -
+// same shape, different provider module/payment method string.
+exports.initiateMalipopayCardSubscriptionPayment = async (sellerId, planId, { successUrl, cancelUrl }) => {
+    const subscriptionRepository = require("../subscription/subscription.repository");
+    const plan = await subscriptionRepository.findPlanById(planId);
+    if (!plan) throw new Error("Plan not found");
+
+    let subscription = await subscriptionRepository.findPendingForSeller(sellerId, planId);
+    const subscriptionId = subscription
+        ? subscription.id
+        : await subscriptionRepository.createSubscription(sellerId, planId);
+
+    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "malipopay_card");
+
+    const reference = `SUB-${subscriptionId}`;
+
+    const session = await malipopayCardProvider.createCheckoutSession({
+        amountTzs: plan.price,
+        reference,
+        description: `NEXORA ${plan.name} subscription`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
 exports.initiatePaypalSubscriptionPayment = async (sellerId, planId, { returnUrl, cancelUrl }) => {
     const subscriptionRepository = require("../subscription/subscription.repository");
     const plan = await subscriptionRepository.findPlanById(planId);
@@ -317,6 +347,38 @@ exports.initiateSnippeBookingPayment = async (bookingId, buyerId, { successUrl, 
     const reference = `BOOKING-${bookingId}`;
 
     const session = await snippeProvider.createCheckoutSession({
+        amountTzs: booking.amount,
+        reference,
+        description: `NEXORA booking ${booking.booking_reference}`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+// MalipoPay Card equivalent of initiateSnippeBookingPayment above.
+exports.initiateMalipopayCardBookingPayment = async (bookingId, buyerId, { successUrl, cancelUrl }) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.customer_id !== buyerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (booking.payment_status === "paid") {
+        throw new Error("This booking has already been paid");
+    }
+
+    const existingPending = await paymentRepository.findPendingBookingPayment(bookingId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createBookingPayment(bookingId, booking.amount, "malipopay_card");
+
+    const reference = `BOOKING-${bookingId}`;
+
+    const session = await malipopayCardProvider.createCheckoutSession({
         amountTzs: booking.amount,
         reference,
         description: `NEXORA booking ${booking.booking_reference}`,
@@ -526,6 +588,18 @@ exports.refundBookingPayment = async (bookingId, amount) => {
         return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
     }
 
+    if (payment.method === "malipopay_card") {
+        if (!payment.transaction_reference) {
+            return { success: false, error: "Payment has no MalipoPay Card transaction reference on file" };
+        }
+        const result = await malipopayCardProvider.refundPayment({
+            transactionReference: payment.transaction_reference,
+            amountTzs: amount,
+            reason: `booking_${bookingId}_cancelled`
+        });
+        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
+    }
+
     if (payment.method === "paypal") {
         if (!payment.transaction_reference) {
             return { success: false, error: "Payment has no PayPal capture id on file" };
@@ -722,6 +796,91 @@ exports.initiateSnippeVerificationFeePayment = async (sellerId, amount, { succes
 // Called from the Snippe webhook controller with an already
 // signature-verified event (see snippeProvider.constructWebhookEvent).
 exports.handleSnippeWebhookEvent = async (event) => {
+    if (event.type !== "checkout.session.completed") {
+        return { ignored: true };
+    }
+
+    const session = event.data || event.session || event;
+    const reference = session.reference || session.client_reference_id;
+
+    return exports.handleProviderWebhook({
+        providerReference: reference,
+        success: session.payment_status === "paid" || session.status === "completed",
+        transactionReference: session.payment_id || session.id
+    });
+};
+
+// --- MalipoPay Card (card payments) -------------------------------------
+// A separate card-checkout product from MalipoPay - do not confuse with
+// the mobile_money rail's malipopay.provider.js (see that file's and
+// malipopayCard.provider.js's header comments). Used for order checkout
+// and the seller verification fee, same as Snippe above; amounts are
+// sent as decimal TZS, so no currency conversion is needed.
+
+exports.initiateMalipopayCardOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order || order.buyer_id !== buyerId) {
+        throw new Error("Order not found");
+    }
+
+    if (order.payment_method !== "malipopay_card") {
+        throw new Error("This order is not set up for MalipoPay Card payment");
+    }
+
+    if (order.payment_status === "paid") {
+        throw new Error("This order has already been paid");
+    }
+
+    let payment = await paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+        const paymentId = await paymentRepository.create(orderId, "malipopay_card", order.total_amount);
+        payment = { id: paymentId };
+    }
+
+    const reference = `ORDER-${orderId}`;
+
+    const session = await malipopayCardProvider.createCheckoutSession({
+        amountTzs: order.total_amount,
+        reference,
+        description: `NEXORA order #${orderId}`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(payment.id, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+exports.initiateMalipopayCardVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
+    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
+    const paymentId = existingPending
+        ? existingPending.id
+        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "malipopay_card");
+
+    const reference = `VERIFY-${sellerId}`;
+
+    const session = await malipopayCardProvider.createCheckoutSession({
+        amountTzs: amount,
+        reference,
+        description: "NEXORA seller verification fee",
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+// Called from the MalipoPay Card webhook controller with an already
+// signature-verified event (see
+// malipopayCardProvider.constructWebhookEvent). Mirrors
+// handleSnippeWebhookEvent exactly - same hosted-checkout event shape
+// assumption, same caveat about confirming the real field names against
+// MalipoPay's docs.
+exports.handleMalipopayCardWebhookEvent = async (event) => {
     if (event.type !== "checkout.session.completed") {
         return { ignored: true };
     }

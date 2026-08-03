@@ -14,17 +14,51 @@ const initialForm = {
     payment_method: "mobile_money"
 };
 
-const PAYMENT_METHODS = [
+// Non-card, non-provider-agnostic options - these keep their own fixed
+// label/checkout wiring below. Card providers (Snippe, MalipoPay Card,
+// and any future card rail) are NOT listed here - they're generated from
+// GET /payments/methods at render time (see cardPaymentMethods below) so
+// checkout never needs a frontend change to pick up a newly-configured
+// card gateway. Split into "before" and "after" so the dynamic card
+// options can be inserted between them, preserving the original
+// mobile money -> cash on delivery -> card(s) -> PayPal ordering.
+const PAYMENT_METHODS_BEFORE_CARDS = [
     { value: "mobile_money", label: "Mobile Money" },
-    { value: "cash_on_delivery", label: "Cash on Delivery" },
-    { value: "snippe", label: "Card (Snippe)" },
+    { value: "cash_on_delivery", label: "Cash on Delivery" }
+];
+const PAYMENT_METHODS_AFTER_CARDS = [
     { value: "paypal", label: "PayPal", hint: "(charged in USD)" }
 ];
 
 // Phase 5 (Resilience & Growth): cash_on_delivery isn't a payment-provider
 // rail at all (no gateway involved), so it's never filtered by
-// GET /payments/methods below - only the three provider-backed options are.
-const PROVIDER_GATED_METHODS = new Set(["mobile_money", "snippe", "paypal"]);
+// GET /payments/methods below - only the provider-backed static options
+// are (card rails are filtered separately - see cardPaymentMethods).
+const PROVIDER_GATED_METHODS = new Set(["mobile_money", "paypal"]);
+
+// Human-friendly labels for known card provider keys - falls back to the
+// registry's own `label` for any key not listed here, so a brand-new
+// card rail still renders sensibly with zero frontend changes.
+const CARD_PROVIDER_LABELS = {
+    snippe: "Card (Snippe)",
+    malipopay_card: "Card (MalipoPay)"
+};
+
+// Fail-open fallback for the card rails specifically. If GET
+// /payments/methods errors out entirely, `configuredProviders` has no
+// data to build card rows from, so without this fallback the card
+// options would silently disappear on failure while the static
+// methods (mobile_money/paypal) correctly stay visible via
+// `configuredKeys === null` below - an inconsistent fail-open story.
+// Falling back to every known card provider keeps checkout usable
+// (worst case, someone selects a card rail that happens to be
+// unconfigured, which the backend still validates) instead of
+// quietly hiding a valid way to pay.
+const DEFAULT_CARD_PROVIDERS = Object.keys(CARD_PROVIDER_LABELS).map((key) => ({
+    key,
+    type: "card",
+    label: CARD_PROVIDER_LABELS[key]
+}));
 
 export default function Checkout() {
     const { format } = useCurrency();
@@ -37,34 +71,70 @@ export default function Checkout() {
     const [errorTick, setErrorTick] = useState(0);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // Phase 5 (Resilience & Growth). null = still loading / endpoint
-    // unavailable - in either case every method stays visible (fail-open),
-    // so this new, optional lookup can never make checkout show FEWER
-    // options than it did before this phase if something's wrong with it.
-    const [configuredKeys, setConfiguredKeys] = useState(null);
+    // Phase 5 (Resilience & Growth), extended for MalipoPay Card: null =
+    // still loading / endpoint unavailable - in either case every method
+    // stays visible (fail-open), so this lookup can never make checkout
+    // show FEWER options than it did before this phase if something's
+    // wrong with it. Holds the full provider objects (not just keys) so
+    // card options below can be built entirely from what the registry
+    // reports, instead of a hardcoded card provider list.
+    const [configuredProviders, setConfiguredProviders] = useState(null);
+    const [providersFetchFailed, setProvidersFetchFailed] = useState(false);
+    const configuredKeys = configuredProviders && configuredProviders.map((provider) => provider.key);
 
     useEffect(() => {
         let cancelled = false;
         api.get("/payments/methods")
             .then(({ data }) => {
                 if (cancelled) return;
-                setConfiguredKeys(data.data.map((provider) => provider.key));
+                setConfiguredProviders(data.data);
             })
             .catch(() => {
-                // Fail-open: leave configuredKeys null so nothing gets
-                // hidden - a checkout page that can't reach this brand-new
-                // endpoint should still let people pay, not lose options.
+                if (cancelled) return;
+                // Fail-open: leave configuredProviders null so the static
+                // methods (mobile_money/paypal) keep showing via
+                // `configuredKeys === null` below, and flag the failure so
+                // the card rails (which have no static list of their own)
+                // fall back to DEFAULT_CARD_PROVIDERS instead of vanishing.
+                setProvidersFetchFailed(true);
             });
         return () => {
             cancelled = true;
         };
     }, []);
 
-    const visiblePaymentMethods = PAYMENT_METHODS.filter((method) => {
+    // Card payment providers, loaded dynamically from the centralized
+    // registry (GET /payments/methods) rather than hardcoded here - if
+    // both Snippe and MalipoPay Card are enabled/configured, both show
+    // up; if only one is, only that one does; a third card rail (added
+    // server-side per docs/PAYMENT_PROVIDERS.md §4) would appear with no
+    // frontend change at all. While still loading, no card rows render
+    // (rather than guessing) - they appear as soon as the registry
+    // responds, same "fail-open only for already-known statics" posture
+    // as visiblePaymentMethods below.
+    const cardPaymentMethods = (configuredProviders || (providersFetchFailed ? DEFAULT_CARD_PROVIDERS : []))
+        .filter((provider) => provider.type === "card")
+        .map((provider) => ({
+            value: provider.key,
+            label: CARD_PROVIDER_LABELS[provider.key] || provider.label,
+            // "malipopay_card" -> "malipopay-card" to match the route
+            // segments registered in payment.routes.js (POST
+            // /:orderId/<segment>/checkout) - Snippe's own key already
+            // matches its route segment with no translation needed.
+            routeSegment: provider.key.replace(/_/g, "-")
+        }));
+
+    const filterStatic = (methods) => methods.filter((method) => {
         if (!PROVIDER_GATED_METHODS.has(method.value)) return true;
         if (configuredKeys === null) return true;
         return configuredKeys.includes(method.value);
     });
+
+    const visiblePaymentMethods = [
+        ...filterStatic(PAYMENT_METHODS_BEFORE_CARDS),
+        ...cardPaymentMethods,
+        ...filterStatic(PAYMENT_METHODS_AFTER_CARDS)
+    ];
 
     // If the currently-selected method turns out not to be configured
     // (e.g. someone lands here with mobile_money selected but only cash
@@ -72,13 +142,13 @@ export default function Checkout() {
     // to the first visible option rather than submitting a payment method
     // the checkout form no longer shows as selectable.
     useEffect(() => {
-        if (configuredKeys === null) return;
+        if (configuredProviders === null) return;
         const stillVisible = visiblePaymentMethods.some((method) => method.value === form.payment_method);
         if (!stillVisible && visiblePaymentMethods.length > 0) {
             setForm((current) => ({ ...current, payment_method: visiblePaymentMethods[0].value }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [configuredKeys]);
+    }, [configuredProviders]);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -104,12 +174,18 @@ export default function Checkout() {
             const { data } = await api.post("/orders", payload);
             const orderId = data.data.orderId;
 
+            const selectedCardMethod = cardPaymentMethods.find((method) => method.value === form.payment_method);
+
             if (form.payment_method === "mobile_money") {
                 await api.post(`/payments/${orderId}/initiate`);
 
-            } else if (form.payment_method === "snippe") {
+            } else if (selectedCardMethod) {
+                // Drives whichever card rail was selected (Snippe,
+                // MalipoPay Card, or any future one) through the same
+                // hosted-checkout request shape - no provider-specific
+                // branch needed here.
                 const origin = window.location.origin;
-                const { data: checkout } = await api.post(`/payments/${orderId}/snippe/checkout`, {
+                const { data: checkout } = await api.post(`/payments/${orderId}/${selectedCardMethod.routeSegment}/checkout`, {
                     successUrl: `${origin}/orders/${orderId}?payment=success`,
                     cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
                 });

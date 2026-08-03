@@ -1,11 +1,24 @@
 /**
  * Payment-provider registry — Phase 5 (Resilience & Growth).
  *
- * NEXORA has three payment rails, each with a genuinely different shape:
+ * NEXORA has four payment rails, each with a genuinely different shape:
  *   - mobile_money: a router (mobileMoney.provider.js) over malipopay /
  *     selcom / azampay, USSD-push style (phone, amount, meta) -> pending.
  *   - snippe: hosted checkout session, redirect-based (createCheckoutSession).
+ *   - malipopay_card: MalipoPay's separate card-checkout product (Visa /
+ *     Mastercard / Amex / UnionPay) - also hosted checkout session,
+ *     redirect-based (createCheckoutSession), same shape as snippe but a
+ *     fully independent integration/credentials from the mobile_money
+ *     rail's own MalipoPay adapter. See malipopayCard.provider.js's
+ *     header comment for why these two never share config.
  *   - paypal: hosted order/capture flow, redirect-based (createOrder/captureOrder).
+ *
+ * `type: "card"` on an entry's metadata marks it as a redirect-based card
+ * gateway - the frontend checkout page reads this to build its card
+ * payment options dynamically instead of hardcoding provider keys (see
+ * Checkout.jsx). Every rail below still keeps its capabilities object for
+ * the order/booking/verificationFee/refund/disbursement/requiresRedirect
+ * questions that predate this field.
  *
  * payment.service.js already knows how to drive each of these directly
  * (that code is untouched by this file — see "what this file is NOT"
@@ -33,6 +46,7 @@
 
 const mobileMoneyProvider = require("./mobileMoney.provider");
 const snippeProvider = require("./snippe.provider");
+const malipopayCardProvider = require("./malipopayCard.provider");
 const paypalProvider = require("./paypal.provider");
 
 // One entry per rail. `key` matches (or, for mobile_money, subsumes) the
@@ -67,6 +81,7 @@ const PROVIDERS = [
     {
         key: "snippe",
         label: "Snippe (cards)",
+        type: "card",
         module: snippeProvider,
         capabilities: {
             order: true,
@@ -77,6 +92,25 @@ const PROVIDERS = [
             requiresRedirect: true
         },
         isConfigured: () => snippeProvider.isConfigured()
+    },
+    {
+        key: "malipopay_card",
+        label: "MalipoPay (cards)",
+        type: "card",
+        module: malipopayCardProvider,
+        // Buyer-facing checkout can read this to render "Visa,
+        // Mastercard, ..." next to the option - not used anywhere else in
+        // this registry, purely descriptive metadata for this rail.
+        brands: () => malipopayCardProvider.getEnabledBrands(),
+        capabilities: {
+            order: true,
+            booking: true,
+            verificationFee: true,
+            refund: true,
+            disbursement: false,
+            requiresRedirect: true
+        },
+        isConfigured: () => malipopayCardProvider.isConfigured()
     },
     {
         key: "paypal",
@@ -96,9 +130,15 @@ const PROVIDERS = [
 
 exports.getProvider = (key) => PROVIDERS.find((provider) => provider.key === key) || null;
 
-exports.listProviders = () => PROVIDERS.map(({ key, label, capabilities, isConfigured }) => ({
+exports.listProviders = () => PROVIDERS.map(({ key, label, type, capabilities, isConfigured, brands }) => ({
     key,
     label,
+    // Optional - only card-type rails set this today. Left undefined
+    // (not defaulted to some generic value) for every other rail so
+    // existing consumers of this list that don't know about `type` keep
+    // seeing exactly the shape they always have.
+    ...(type ? { type } : {}),
+    ...(brands ? { brands: brands() } : {}),
     capabilities,
     configured: Boolean(isConfigured())
 }));

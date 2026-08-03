@@ -241,6 +241,23 @@ export default function BookingDetail() {
         }
     };
 
+    // MalipoPay Card equivalent of handlePaySnippe above.
+    const handlePayMalipopayCard = async () => {
+        setBusy(true);
+        setError("");
+        try {
+            const origin = window.location.origin;
+            const { data } = await api.post(`/payments/booking/${id}/malipopay-card/checkout`, {
+                successUrl: `${origin}/bookings/${id}?payment=success`,
+                cancelUrl: `${origin}/bookings/${id}?payment=cancelled`
+            });
+            window.location.href = data.data.url;
+        } catch (err) {
+            setError(extractErrorMessage(err));
+            setBusy(false);
+        }
+    };
+
     const handlePayPaypal = async () => {
         setBusy(true);
         setError("");
@@ -384,6 +401,10 @@ export default function BookingDetail() {
                         <button onClick={handlePaySnippe} disabled={busy}
                             className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
                             {busy ? t("booking.payment.redirecting") : t("booking.payment.payCard")}
+                        </button>
+                        <button onClick={handlePayMalipopayCard} disabled={busy}
+                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                            {busy ? t("booking.payment.redirecting") : t("booking.payment.payCardMalipopay")}
                         </button>
                         <button onClick={handlePayPaypal} disabled={busy}
                             className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">

@@ -134,6 +134,19 @@ app.post(
     require("./modules/payment/payment.controller").snippeWebhook
 );
 
+// MalipoPay Card webhook signature verification (malipopayCard.provider.js
+// -> constructWebhookEvent) needs the exact raw request bytes too - same
+// reasoning and wiring as the Snippe route directly above. This is the
+// card-checkout product's webhook only; the mobile-money MalipoPay
+// webhook (POST /api/v1/payments/webhooks/malipopay) verifies a
+// shared-secret header instead and goes through the normal JSON body
+// parser below, unchanged.
+app.post(
+    "/api/v1/payments/webhooks/malipopay-card",
+    express.raw({ type: "application/json" }),
+    require("./modules/payment/payment.controller").malipopayCardWebhook
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

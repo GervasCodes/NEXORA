@@ -104,6 +104,11 @@ describe("admin.service.permanentlyDeleteUser (real DB)", () => {
     it("scrubs the account's PII and marks it permanently deleted", async () => {
         const admin = await fixtures.createUser({ role: "admin" });
         const target = await fixtures.createUser({ first_name: "Amina", last_name: "Hassan" });
+        // An order (buyer_id has no ON DELETE CASCADE) is exactly the kind
+        // of financial-record history that blocks attemptHardDeleteUser and
+        // forces the anonymize/scrub tombstone path this test asserts on -
+        // without it, a history-free user is hard-deleted outright instead.
+        await fixtures.createOrder(target.id);
 
         await adminService.permanentlyDeleteUser(target.id, admin.id);
 
@@ -196,6 +201,11 @@ describe("admin.service.permanentlyDeleteUser (real DB)", () => {
     it("rejects deleting an already-permanently-deleted account, and rejects an admin deleting themself", async () => {
         const admin = await fixtures.createUser({ role: "admin" });
         const target = await fixtures.createUser();
+        // Blocking history forces the scrub/tombstone path (row survives
+        // with permanently_deleted_at set) rather than a hard delete, so
+        // there's actually a row left for the second call to find and
+        // reject against - see the "scrubs PII" test above for why.
+        await fixtures.createOrder(target.id);
 
         await adminService.permanentlyDeleteUser(target.id, admin.id);
         await expect(adminService.permanentlyDeleteUser(target.id, admin.id)).rejects.toThrow(
@@ -210,6 +220,12 @@ describe("admin.service.permanentlyDeleteUser (real DB)", () => {
     it("uses a critical-severity, admin-specific admin notification when the deleted account was itself an admin", async () => {
         const actingAdmin = await fixtures.createUser({ role: "admin" });
         const deletedAdmin = await fixtures.createUser({ role: "admin", first_name: "Baraka", last_name: "Juma" });
+        // Without blocking history this account is hard-deleted outright,
+        // which means related_user_id can no longer point at it (see
+        // admin.service.js's hardDeleted ? null : userId) - this test
+        // specifically wants a related_user_id-bearing row, so force the
+        // scrub path the same way the tests above do.
+        await fixtures.createOrder(deletedAdmin.id);
 
         await adminService.permanentlyDeleteUser(deletedAdmin.id, actingAdmin.id);
 

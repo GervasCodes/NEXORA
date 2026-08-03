@@ -38,10 +38,15 @@ describe("wallet.service.creditSellersForOrder (real database)", () => {
 
         await walletService.creditSellersForOrder(order.id);
 
+        // The fixture order defaults to payment_method "mobile_money", which
+        // wallet.service.js treats as escrowed - proceeds land in
+        // held_balance (pending release) rather than the withdrawable
+        // balance. See docs/ESCROW_ANALYSIS.md / migration 054.
         const [[wallet]] = await db.query(
-            "SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]
+            "SELECT balance, held_balance FROM seller_wallets WHERE seller_id = ?", [seller.id]
         );
-        expect(Number(wallet.balance)).toBe(1800); // 2000 - 10%
+        expect(Number(wallet.held_balance)).toBe(1800); // 2000 - 10%
+        expect(Number(wallet.balance)).toBe(0);
 
         const [transactions] = await db.query(
             "SELECT * FROM wallet_transactions WHERE seller_id = ?", [seller.id]
@@ -74,10 +79,11 @@ describe("wallet.service.creditSellersForOrder (real database)", () => {
 
         await walletService.creditSellersForOrder(order.id);
 
-        const [[walletA]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [sellerA.id]);
-        const [[walletB]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [sellerB.id]);
-        expect(Number(walletA.balance)).toBe(900);   // 1000 - 10%
-        expect(Number(walletB.balance)).toBe(1800);  // 2000 - 10%
+        // Escrowed (default mobile_money order) - see the first test above.
+        const [[walletA]] = await db.query("SELECT held_balance FROM seller_wallets WHERE seller_id = ?", [sellerA.id]);
+        const [[walletB]] = await db.query("SELECT held_balance FROM seller_wallets WHERE seller_id = ?", [sellerB.id]);
+        expect(Number(walletA.held_balance)).toBe(900);   // 1000 - 10%
+        expect(Number(walletB.held_balance)).toBe(1800);  // 2000 - 10%
     });
 
     it("is idempotent: a second call for the same order does not double-credit", async () => {
@@ -90,8 +96,9 @@ describe("wallet.service.creditSellersForOrder (real database)", () => {
         await walletService.creditSellersForOrder(order.id);
         await walletService.creditSellersForOrder(order.id); // re-run, e.g. a retried webhook
 
-        const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
-        expect(Number(wallet.balance)).toBe(900); // still just the one 10%-off credit
+        // Escrowed (default mobile_money order) - see the first test above.
+        const [[wallet]] = await db.query("SELECT held_balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
+        expect(Number(wallet.held_balance)).toBe(900); // still just the one 10%-off credit
 
         const [transactions] = await db.query("SELECT * FROM wallet_transactions WHERE seller_id = ?", [seller.id]);
         expect(transactions).toHaveLength(1);
@@ -110,8 +117,9 @@ describe("wallet.service.creditSellersForOrder (real database)", () => {
         await fixtures.createOrderItem(orderTwo.id, product.id, seller.id, { subtotal: 500, unit_price: 500 });
         await walletService.creditSellersForOrder(orderTwo.id);
 
-        const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
-        expect(Number(wallet.balance)).toBe(1350); // 900 + 450
+        // Escrowed (default mobile_money order) - see the first test above.
+        const [[wallet]] = await db.query("SELECT held_balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
+        expect(Number(wallet.held_balance)).toBe(1350); // 900 + 450
 
         const [transactions] = await db.query(
             "SELECT * FROM wallet_transactions WHERE seller_id = ? ORDER BY id", [seller.id]

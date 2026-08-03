@@ -191,7 +191,14 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         title: user.role === "admin" ? "Admin account permanently deleted" : "Account permanently deleted",
         message: `${user.first_name} ${user.last_name} (${user.email}, ${user.role}) was permanently deleted by an admin${hardDeleted ? "" : " (order/review history retained; account anonymized)"}.`,
         metadata: { role: user.role, target_user_id: Number(userId), hard_deleted: hardDeleted },
-        relatedUserId: userId
+        // When hardDeleted is true, the users row is genuinely gone -
+        // inserting a new admin_notifications row with related_user_id
+        // pointing at it violates the FK (ON DELETE SET NULL only nulls
+        // out *existing* rows when a referenced user is deleted later,
+        // it doesn't let a fresh insert reference a user that's already
+        // gone). The target's identity is still fully captured in the
+        // message text above, so relatedUserId is safe to omit here.
+        relatedUserId: hardDeleted ? null : userId
     });
 
     if (failedDeletes.length) {

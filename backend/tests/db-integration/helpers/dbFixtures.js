@@ -13,7 +13,7 @@ const unique = (prefix) => `${prefix}-${Date.now()}-${++counter}`;
 
 exports.createUser = async ({ role = "buyer", ...overrides } = {}) => {
     const email = overrides.email || `${unique("user")}@example.test`;
-    const phone = overrides.phone || `+2557${String(Date.now()).slice(-8)}${counter}`;
+    const phone = overrides.phone || `+2557${String(Date.now()).slice(-8)}${++counter}`;
 
     const [result] = await db.query(
         `INSERT INTO users

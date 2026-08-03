@@ -23,7 +23,8 @@ exports.requestWithdrawal = async (req, res) => {
             req.user.id,
             req.body.amount,
             req.body.payout_method,
-            req.body.payout_details
+            req.body.payout_details,
+            req.body.payout_currency || "TZS"
         );
 
         return res.status(201).json({

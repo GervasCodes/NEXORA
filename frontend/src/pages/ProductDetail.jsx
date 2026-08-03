@@ -6,6 +6,7 @@ import { useCart } from "../context/CartContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
+import RecommendedProducts from "../components/RecommendedProducts";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -378,6 +379,8 @@ export default function ProductDetail() {
                     ))}
                 </ul>
             </section>
+
+            <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title="You may also like" />
         </div>
     );
 }

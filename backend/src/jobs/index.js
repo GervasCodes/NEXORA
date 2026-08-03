@@ -1,4 +1,5 @@
 const cron = require("node-cron");
+const { withLock } = require("../utils/dbLock");
 
 const staleOrdersJob = require("./staleOrders.job");
 const otpCleanupJob = require("./otpCleanup.job");
@@ -11,10 +12,22 @@ const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedul
 const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
-// crashes the process - it just logs and waits for the next tick.
+// crashes the process - it just logs and waits for the next tick. Also
+// wraps the run in a MySQL advisory lock (see utils/dbLock.js) named
+// after the job, so that if this scheduler ever runs from more than one
+// process/replica at once (a horizontally-scaled worker - see worker.js
+// and docs/SCALABILITY_REPORT.md), only one replica actually executes a
+// given tick; the rest see the lock held and skip that tick silently.
+// This is a no-op safety net in the common single-replica case (the
+// lock is acquired and released on every tick with nothing to contend
+// with) but makes future worker scaling safe without further changes
+// here.
 const safeRun = (name, job) => async () => {
     try {
-        await job.run();
+        const { acquired } = await withLock(`nexora:job:${name}`, () => job.run());
+        if (!acquired) {
+            console.log(`[jobs] ${name} skipped this tick - lock held by another instance`);
+        }
     } catch (error) {
         console.error(`[jobs] ${name} failed:`, error.message);
     }

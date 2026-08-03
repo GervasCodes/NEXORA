@@ -121,6 +121,129 @@ exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
     };
 };
 
+// ---- Subscription payments (Revenue & Product Enhancements) ---------------
+// Follows initiateVerificationFeePayment's shape exactly - a
+// subscription_id (not an order_id/booking_id) identifies what's being
+// paid for, and the SUB-<subscriptionId> reference routes the webhook
+// back here (see handleProviderWebhook below).
+
+exports.initiateMobileMoneySubscriptionPayment = async (sellerId, planId, phone) => {
+    const subscriptionRepository = require("../subscription/subscription.repository");
+    const plan = await subscriptionRepository.findPlanById(planId);
+    if (!plan) throw new Error("Plan not found");
+
+    let subscription = await subscriptionRepository.findPendingForSeller(sellerId, planId);
+    const subscriptionId = subscription
+        ? subscription.id
+        : await subscriptionRepository.createSubscription(sellerId, planId);
+
+    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "mobile_money");
+
+    const reference = `SUB-${subscriptionId}`;
+
+    let providerResult;
+    try {
+        providerResult = await mobileMoneyProvider.initiate(phone, plan.price, {
+            reference,
+            purpose: "seller_subscription",
+            description: `NEXORA ${plan.name} subscription`
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        throw error;
+    }
+
+    if (!providerResult.success) {
+        await paymentRepository.markFailed(paymentId);
+        throw new Error("Payment could not be initiated. Please try again");
+    }
+
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+
+    return {
+        status: "pending",
+        message: "Check your phone to complete the payment. Your plan will activate automatically once payment is confirmed.",
+        transactionReference: providerResult.transactionReference
+    };
+};
+
+exports.initiateSnippeSubscriptionPayment = async (sellerId, planId, { successUrl, cancelUrl }) => {
+    const subscriptionRepository = require("../subscription/subscription.repository");
+    const plan = await subscriptionRepository.findPlanById(planId);
+    if (!plan) throw new Error("Plan not found");
+
+    let subscription = await subscriptionRepository.findPendingForSeller(sellerId, planId);
+    const subscriptionId = subscription
+        ? subscription.id
+        : await subscriptionRepository.createSubscription(sellerId, planId);
+
+    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "snippe");
+
+    const reference = `SUB-${subscriptionId}`;
+
+    const session = await snippeProvider.createCheckoutSession({
+        amountTzs: plan.price,
+        reference,
+        description: `NEXORA ${plan.name} subscription`,
+        successUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, session.sessionId);
+
+    return { status: "redirect", url: session.url };
+};
+
+exports.initiatePaypalSubscriptionPayment = async (sellerId, planId, { returnUrl, cancelUrl }) => {
+    const subscriptionRepository = require("../subscription/subscription.repository");
+    const plan = await subscriptionRepository.findPlanById(planId);
+    if (!plan) throw new Error("Plan not found");
+
+    let subscription = await subscriptionRepository.findPendingForSeller(sellerId, planId);
+    const subscriptionId = subscription
+        ? subscription.id
+        : await subscriptionRepository.createSubscription(sellerId, planId);
+
+    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "paypal");
+
+    const usdExchangeRate = await settingsService.getUsdExchangeRate();
+    const reference = `SUB-${subscriptionId}`;
+
+    const result = await paypalProvider.createOrder({
+        amountTzs: plan.price,
+        usdExchangeRate,
+        reference,
+        description: `NEXORA ${plan.name} subscription`,
+        returnUrl,
+        cancelUrl
+    });
+
+    await paymentRepository.markPending(paymentId, result.paypalOrderId);
+
+    return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
+};
+
+exports._handleSubscriptionPaymentWebhook = async (subscriptionId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
+    const payment = await paymentRepository.findPendingSubscriptionPayment(subscriptionId);
+
+    if (!payment) {
+        return { alreadyProcessed: true };
+    }
+
+    if (!success) {
+        await paymentRepository.markFailed(payment.id);
+        return { subscriptionId, success: false };
+    }
+
+    const receiptNumber = generateReceiptNumber();
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
+
+    const subscriptionService = require("../subscription/subscription.service");
+    await subscriptionService.activateSubscription(subscriptionId);
+
+    return { subscriptionId, success: true, receiptNumber };
+};
+
 // ---- Booking payments (Phase 3 - Financial Integration) --------------------
 // Follow initiateVerificationFeePayment's shape, not the order-payment
 // functions' - see migration 064's design notes: a booking has no
@@ -268,6 +391,7 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
     const orderMatch = /^ORDER-(\d+)$/.exec(providerReference || "");
     const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
     const bookingMatch = /^BOOKING-(\d+)$/.exec(providerReference || "");
+    const subscriptionMatch = /^SUB-(\d+)$/.exec(providerReference || "");
 
     if (orderMatch) {
         return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
@@ -279,6 +403,10 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
 
     if (bookingMatch) {
         return exports._handleBookingPaymentWebhook(Number(bookingMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
+    }
+
+    if (subscriptionMatch) {
+        return exports._handleSubscriptionPaymentWebhook(Number(subscriptionMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
     throw new Error(`Unrecognized payment reference: ${providerReference}`);

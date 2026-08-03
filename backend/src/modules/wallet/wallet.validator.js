@@ -17,5 +17,10 @@ exports.requestWithdrawalValidation = [
         .notEmpty()
         .withMessage("Payout details (e.g. mobile money number) are required")
         .isLength({ max: 255 })
-        .withMessage("Payout details are too long")
+        .withMessage("Payout details are too long"),
+
+    body("payout_currency")
+        .optional()
+        .isIn(["TZS", "USD"])
+        .withMessage("Unsupported payout currency")
 ];

@@ -36,7 +36,8 @@ const groups = [
         tabs: [
             { to: "/admin/sponsorship", label: "Sponsorship" },
             { to: "/admin/featured-stores", label: "Featured stores" },
-            { to: "/admin/department-sponsorship", label: "Department sponsorship" }
+            { to: "/admin/department-sponsorship", label: "Department sponsorship" },
+            { to: "/admin/subscriptions", label: "Subscriptions" }
         ]
     },
     {
@@ -55,6 +56,7 @@ const groups = [
         tabs: [
             { to: "/admin/admins", label: "Admins" },
             { to: "/admin/maintenance", label: "Maintenance" },
+            { to: "/admin/status-incidents", label: "Status incidents" },
             { to: "/admin/audit-logs", label: "Audit logs" },
             { to: "/admin/settings", label: "Settings" }
         ]

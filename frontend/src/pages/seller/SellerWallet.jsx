@@ -22,6 +22,7 @@ export default function SellerWallet() {
     const [amount, setAmount] = useState("");
     const [payoutMethod, setPayoutMethod] = useState("mobile_money");
     const [payoutDetails, setPayoutDetails] = useState("");
+    const [payoutCurrency, setPayoutCurrency] = useState("TZS");
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState("");
 
@@ -58,10 +59,12 @@ export default function SellerWallet() {
             await api.post("/wallet/withdrawals", {
                 amount: Number(amount),
                 payout_method: payoutMethod,
-                payout_details: payoutDetails
+                payout_details: payoutDetails,
+                payout_currency: payoutCurrency
             });
             setAmount("");
             setPayoutDetails("");
+            setPayoutCurrency("TZS");
             setShowForm(false);
             load();
         } catch (err) {
@@ -137,6 +140,18 @@ export default function SellerWallet() {
                     </div>
 
                     <div>
+                        <label className="text-xs text-ash block mb-1">Payout currency</label>
+                        <select
+                            value={payoutCurrency}
+                            onChange={(e) => setPayoutCurrency(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        >
+                            <option value="TZS">TZS</option>
+                            <option value="USD">USD (converted at today's platform rate)</option>
+                        </select>
+                    </div>
+
+                    <div>
                         <label className="text-xs text-ash block mb-1">
                             {payoutMethod === "mobile_money" ? "Mobile money number" : "Bank account details"}
                         </label>
@@ -199,6 +214,11 @@ export default function SellerWallet() {
                                     <p className="text-xs text-ash">
                                         {w.payout_method === "mobile_money" ? "Mobile money" : "Bank transfer"} · {w.payout_details}
                                     </p>
+                                    {w.payout_currency === "USD" && w.payout_amount && (
+                                        <p className="text-xs text-ash">
+                                            Paid out as ~${w.payout_amount} USD (rate {w.payout_exchange_rate})
+                                        </p>
+                                    )}
                                     {w.admin_note && <p className="text-xs text-ash mt-1">Note: {w.admin_note}</p>}
                                     <p className="text-xs text-ash mt-1">{formatDate(w.requested_at)}</p>
                                 </li>

@@ -76,6 +76,18 @@ module.exports = async (req, res, next) => {
 
         req.user = decoded;
 
+        // Revenue & Product Enhancements roadmap - "active users" metric
+        // (see admin.repository.js#getActiveUsersMetrics). Throttled to
+        // roughly once per 5 minutes per user so this doesn't add a write
+        // to every authenticated request, and fire-and-forget (not
+        // awaited) so a slow/failed update never adds latency to the
+        // response or fails the request it's piggybacking on.
+        const staleThresholdMs = 5 * 60 * 1000;
+        const lastActive = status.last_active_at ? new Date(status.last_active_at).getTime() : 0;
+        if (Date.now() - lastActive > staleThresholdMs) {
+            authRepository.touchLastActive(decoded.id).catch(() => {});
+        }
+
         // The account's saved language (see auth/login.service.js, which
         // bakes it into the token at login) is authoritative for a signed-in
         // user - unless the request explicitly asked for a different locale

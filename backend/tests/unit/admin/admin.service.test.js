@@ -617,3 +617,46 @@ describe("admin.service.permanentlyDeleteUser (Phase 4 - Permanent Account Remov
         );
     });
 });
+
+// ---- Phase 3 (Revenue & Product) - active-users metrics (076) -------------
+
+describe("admin.service.getBusinessMetrics - active users breakdown", () => {
+    const emptyGmv = { gmv_all_time: 0, gmv_today: 0, gmv_7d: 0, gmv_30d: 0, paid_count: 0 };
+    const emptyTake = { gmv: 0, commission_revenue: 0 };
+
+    beforeEach(() => {
+        adminRepository.getGmvBreakdown.mockResolvedValue({ products: emptyGmv, bookings: emptyGmv });
+        adminRepository.getTakeRateBreakdown.mockResolvedValue({ products: emptyTake, bookings: emptyTake });
+        adminRepository.getBuyerRetentionMetrics.mockResolvedValue({
+            allTime: { total_buyers: 0, repeat_buyers: 0 },
+            period: { active_buyers: 0, returning_buyers: 0 }
+        });
+        adminRepository.getProviderRetentionMetrics.mockResolvedValue({
+            activeCurrent: 0, activePrior: 0, retained: 0
+        });
+    });
+
+    it("groups DAU/WAU/MAU by role and rolls up a platform-wide total", async () => {
+        adminRepository.getActiveUsersMetrics.mockResolvedValue([
+            { role: "buyer", dau: 40, wau: 120, mau: 300 },
+            { role: "seller", dau: 5, wau: 20, mau: 50 }
+        ]);
+
+        const result = await adminService.getBusinessMetrics();
+
+        expect(result.activeUsers.byRole).toEqual({
+            buyer: { dau: 40, wau: 120, mau: 300 },
+            seller: { dau: 5, wau: 20, mau: 50 }
+        });
+        expect(result.activeUsers.total).toEqual({ dau: 45, wau: 140, mau: 350 });
+    });
+
+    it("treats no active-users rows as all zeros rather than throwing", async () => {
+        adminRepository.getActiveUsersMetrics.mockResolvedValue([]);
+
+        const result = await adminService.getBusinessMetrics();
+
+        expect(result.activeUsers.byRole).toEqual({});
+        expect(result.activeUsers.total).toEqual({ dau: 0, wau: 0, mau: 0 });
+    });
+});

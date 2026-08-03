@@ -35,10 +35,20 @@ exports.findByPhone = async (phone) => {
 // FALSE and surface the reason on the full-screen suspended page.
 exports.findAccountStatusById = async (id) => {
     const [rows] = await db.query(
-        "SELECT is_active, deleted_at, suspended_at, suspension_reason, token_version FROM users WHERE id = ?",
+        "SELECT is_active, deleted_at, suspended_at, suspension_reason, token_version, last_active_at FROM users WHERE id = ?",
         [id]
     );
     return rows[0];
+};
+
+// Revenue & Product Enhancements roadmap - "active users" metric.
+// auth.middleware.js calls this (fire-and-forget, throttled) so
+// last_active_at reflects real authenticated activity without adding a
+// write to every single request. Deliberately swallows nothing here -
+// the caller decides whether a failure should be logged; this is just
+// the query.
+exports.touchLastActive = async (id) => {
+    await db.query("UPDATE users SET last_active_at = NOW() WHERE id = ?", [id]);
 };
 
 // Every function below takes an optional `conn` (a checked-out

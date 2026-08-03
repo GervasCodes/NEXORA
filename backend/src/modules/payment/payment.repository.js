@@ -40,6 +40,31 @@ exports.findPendingVerificationFeePayment = async (sellerId) => {
     return rows[0];
 };
 
+// ---- Subscription payments (Revenue & Product Enhancements) ---------------
+// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// exactly - a subscription payment has no order/booking, just a seller
+// and a subscription_id, the same shape as a verification fee's
+// seller_id.
+
+exports.createSubscriptionPayment = async (sellerId, subscriptionId, amount, method) => {
+    const [result] = await db.query(
+        `INSERT INTO payments (order_id, seller_id, subscription_id, method, status, amount, purpose)
+        VALUES (NULL, ?, ?, ?, 'pending', ?, 'subscription_payment')`,
+        [sellerId, subscriptionId, method, amount]
+    );
+    return result.insertId;
+};
+
+exports.findPendingSubscriptionPayment = async (subscriptionId) => {
+    const [rows] = await db.query(
+        `SELECT * FROM payments
+        WHERE subscription_id = ? AND purpose = 'subscription_payment' AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1`,
+        [subscriptionId]
+    );
+    return rows[0];
+};
+
 // Looks up a payment by the reference stored when it was initiated
 // (Snippe Checkout Session id, or PayPal order id) - used when a
 // provider only gives us that id back (e.g. PayPal's capture response,

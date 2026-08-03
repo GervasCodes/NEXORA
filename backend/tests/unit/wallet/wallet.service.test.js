@@ -5,6 +5,7 @@ jest.mock("../../../src/modules/dispute/dispute.repository");
 jest.mock("../../../src/modules/settings/settings.service");
 jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/fraud/fraud.service");
+jest.mock("../../../src/modules/subscription/subscription.service");
 
 const db = require("../../../src/config/db");
 const walletRepository = require("../../../src/modules/wallet/wallet.repository");
@@ -13,6 +14,7 @@ const disputeRepository = require("../../../src/modules/dispute/dispute.reposito
 const settingsService = require("../../../src/modules/settings/settings.service");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const fraudService = require("../../../src/modules/fraud/fraud.service");
+const subscriptionService = require("../../../src/modules/subscription/subscription.service");
 
 const walletService = require("../../../src/modules/wallet/wallet.service");
 
@@ -21,6 +23,12 @@ const connection = db.__mockConnection;
 beforeEach(() => {
     notificationService.notify.mockResolvedValue(undefined);
     fraudService.evaluateWithdrawal.mockResolvedValue(undefined);
+    // Every seller/provider defaults to the platform rate in these tests
+    // (i.e. as if nobody has a paid subscription override) - see
+    // subscription.service.js#getEffectiveCommissionRate, which
+    // wallet.service.js now calls per-seller instead of
+    // settingsService.getCommissionRate() directly.
+    subscriptionService.getEffectiveCommissionRate.mockResolvedValue(10);
 });
 
 describe("wallet.service.creditSellersForOrder", () => {
@@ -152,6 +160,49 @@ describe("wallet.service.requestWithdrawal", () => {
         await expect(walletService.requestWithdrawal(10, 500, "mobile_money", {})).resolves.toMatchObject({ withdrawalId: 77 });
 
         consoleSpy.mockRestore();
+    });
+});
+
+// ---- Phase 3 (Revenue & Product) - multi-currency payouts ------------------
+
+describe("wallet.service.requestWithdrawal - multi-currency payouts", () => {
+    it("defaults to a TZS payout with no exchange-rate conversion", async () => {
+        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "5000.00" });
+        walletRepository.incrementBalance.mockResolvedValue(4500);
+        walletRepository.createWithdrawal.mockResolvedValue(77);
+
+        await walletService.requestWithdrawal(10, 500, "mobile_money", {});
+
+        expect(settingsService.getUsdExchangeRate).not.toHaveBeenCalled();
+        expect(walletRepository.createWithdrawal).toHaveBeenCalledWith(
+            10, 500, "mobile_money", {}, connection, "TZS", null, null
+        );
+    });
+
+    it("converts to a USD-equivalent payout amount using the current exchange rate, snapshotting the rate used", async () => {
+        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "5000000.00" });
+        walletRepository.incrementBalance.mockResolvedValue(4500000);
+        walletRepository.createWithdrawal.mockResolvedValue(78);
+        settingsService.getUsdExchangeRate.mockResolvedValue(2500);
+
+        const result = await walletService.requestWithdrawal(10, 500000, "mobile_money", {}, "USD");
+
+        expect(settingsService.getUsdExchangeRate).toHaveBeenCalled();
+        expect(walletRepository.createWithdrawal).toHaveBeenCalledWith(
+            10, 500000, "mobile_money", {}, connection, "USD", 200, 2500
+        );
+        expect(result).toEqual({ withdrawalId: 78, balance: 4500000 });
+    });
+
+    it("still debits the TZS-denominated wallet balance itself, unaffected by the payout currency", async () => {
+        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "5000.00" });
+        walletRepository.incrementBalance.mockResolvedValue(4500);
+        walletRepository.createWithdrawal.mockResolvedValue(78);
+        settingsService.getUsdExchangeRate.mockResolvedValue(2500);
+
+        await walletService.requestWithdrawal(10, 500, "mobile_money", {}, "USD");
+
+        expect(walletRepository.incrementBalance).toHaveBeenCalledWith(10, -500, connection);
     });
 });
 

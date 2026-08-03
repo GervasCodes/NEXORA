@@ -66,6 +66,11 @@ export default function AdminWithdrawals() {
                         <p className="text-sm text-ink/80 mb-1">
                             {w.payout_method === "mobile_money" ? "Mobile money" : "Bank transfer"} · {w.payout_details}
                         </p>
+                        {w.payout_currency === "USD" && w.payout_amount && (
+                            <p className="text-sm text-ink/80 mb-1">
+                                Seller expects ~${w.payout_amount} USD (rate {w.payout_exchange_rate} at request time)
+                            </p>
+                        )}
                         <p className="text-xs text-ash mb-3">Requested {formatDate(w.requested_at)}</p>
                         {w.admin_note && <p className="text-xs text-ash mb-3">Note: {w.admin_note}</p>}
 

@@ -145,6 +145,22 @@ export default function AdminDashboard() {
                         <Stat label="GMV (all-time)" value={formatMoney(businessMetrics.gmv.allTime)} mono />
                     </div>
 
+                    <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                        Active users · anyone with an authenticated request in the window
+                    </p>
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                        <Stat label="Daily active" value={businessMetrics.activeUsers.total.dau} />
+                        <Stat label="Weekly active" value={businessMetrics.activeUsers.total.wau} />
+                        <Stat label="Monthly active" value={businessMetrics.activeUsers.total.mau} />
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-xs text-ash mb-6">
+                        {Object.entries(businessMetrics.activeUsers.byRole).map(([role, counts]) => (
+                            <span key={role} className="capitalize">
+                                {role.replace("_", " ")}: {counts.dau} today / {counts.wau} this week / {counts.mau} this month
+                            </span>
+                        ))}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
                         <div className="border border-line rounded-lg p-5">
                             <p className="text-xs uppercase tracking-widest text-ash mb-3">Take rate</p>

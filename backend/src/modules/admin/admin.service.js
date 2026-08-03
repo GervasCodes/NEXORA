@@ -603,11 +603,12 @@ function forecastRevenue(rows, windowDays, forecastDays) {
 // defensively against a zero denominator (a brand-new/empty platform
 // shouldn't show NaN or divide-by-zero errors, just 0%).
 exports.getBusinessMetrics = async () => {
-    const [gmv, takeRate, buyerRetention, providerRetention] = await Promise.all([
+    const [gmv, takeRate, buyerRetention, providerRetention, activeUsersRows] = await Promise.all([
         adminRepository.getGmvBreakdown(),
         adminRepository.getTakeRateBreakdown(),
         adminRepository.getBuyerRetentionMetrics(),
-        adminRepository.getProviderRetentionMetrics()
+        adminRepository.getProviderRetentionMetrics(),
+        adminRepository.getActiveUsersMetrics()
     ]);
 
     const productsGmv = {
@@ -647,6 +648,18 @@ exports.getBusinessMetrics = async () => {
     const activePriorProviders = Number(providerRetention.activePrior) || 0;
     const retainedProviders = Number(providerRetention.retained) || 0;
 
+    const activeUsersByRole = {};
+    const activeUsersTotal = { dau: 0, wau: 0, mau: 0 };
+    for (const row of activeUsersRows) {
+        const dau = Number(row.dau) || 0;
+        const wau = Number(row.wau) || 0;
+        const mau = Number(row.mau) || 0;
+        activeUsersByRole[row.role] = { dau, wau, mau };
+        activeUsersTotal.dau += dau;
+        activeUsersTotal.wau += wau;
+        activeUsersTotal.mau += mau;
+    }
+
     return {
         gmv: {
             today: productsGmv.today + servicesGmv.today,
@@ -681,6 +694,10 @@ exports.getBusinessMetrics = async () => {
             churned: Math.max(0, activePriorProviders - retainedProviders),
             newProviders: Math.max(0, activeCurrentProviders - retainedProviders),
             retentionRatePercent: activePriorProviders > 0 ? Number(((retainedProviders / activePriorProviders) * 100).toFixed(2)) : 0
+        },
+        activeUsers: {
+            total: activeUsersTotal,
+            byRole: activeUsersByRole
         }
     };
 };

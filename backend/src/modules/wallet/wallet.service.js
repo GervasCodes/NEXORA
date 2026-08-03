@@ -47,12 +47,25 @@ exports.creditSellersForOrder = async (orderId) => {
         const order = await orderRepository.findOrderById(orderId);
         const isEscrowed = order && order.payment_method !== "cash_on_delivery";
 
-        const commissionRate = await settingsService.getCommissionRate();
+        // Revenue & Product Enhancements roadmap: commission is no longer
+        // one flat platform rate for every seller - a seller on a paid
+        // subscription plan may have a lower commission_rate_override
+        // (see subscription.service.js#getEffectiveCommissionRate, which
+        // falls back to settingsService.getCommissionRate() for anyone on
+        // the Free plan). Looked up per item's seller_id below rather
+        // than once up front, since a multi-vendor order can mix sellers
+        // on different plans.
+        const subscriptionService = require("../subscription/subscription.service");
 
         // Group this order's uncredited items by seller so a multi-vendor
         // order results in one wallet credit (and one ledger row) per seller.
+        // rateBySeller is tracked alongside bySeller purely for the ledger
+        // description text below - all of a given seller's items share the
+        // same rate (it's the seller's own plan, not an item property).
         const bySeller = new Map();
+        const rateBySeller = new Map();
         for (const item of items) {
+            const commissionRate = await subscriptionService.getEffectiveCommissionRate(item.seller_id);
             const sellerSubtotal = Number(item.subtotal);
             const commissionAmount = Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
             const netAmount = Number((sellerSubtotal - commissionAmount).toFixed(2));
@@ -63,11 +76,13 @@ exports.creditSellersForOrder = async (orderId) => {
 
             const existing = bySeller.get(item.seller_id) || 0;
             bySeller.set(item.seller_id, existing + netAmount);
+            rateBySeller.set(item.seller_id, commissionRate);
         }
 
         for (const [sellerId, netAmount] of bySeller.entries()) {
             await walletRepository.ensureWallet(sellerId, connection);
             await walletRepository.getWalletForUpdate(sellerId, connection);
+            const sellerCommissionRate = rateBySeller.get(sellerId);
 
             if (isEscrowed) {
                 const heldAfter = await walletRepository.incrementHeldBalance(sellerId, netAmount, connection);
@@ -79,7 +94,7 @@ exports.creditSellersForOrder = async (orderId) => {
                     balanceAfter: heldAfter,
                     referenceType: "order",
                     referenceId: orderId,
-                    description: `Sale earnings for order #${orderId} held pending release (${commissionRate}% platform commission deducted)`
+                    description: `Sale earnings for order #${orderId} held pending release (${sellerCommissionRate}% platform commission deducted)`
                 }, connection);
             } else {
                 const balanceAfter = await walletRepository.incrementBalance(sellerId, netAmount, connection);
@@ -91,7 +106,7 @@ exports.creditSellersForOrder = async (orderId) => {
                     balanceAfter,
                     referenceType: "order",
                     referenceId: orderId,
-                    description: `Sale earnings for order #${orderId} (${commissionRate}% platform commission deducted)`
+                    description: `Sale earnings for order #${orderId} (${sellerCommissionRate}% platform commission deducted)`
                 }, connection);
             }
         }
@@ -146,8 +161,9 @@ exports.creditProvidersForBooking = async (bookingId) => {
             return;
         }
 
-        const commissionRate = await settingsService.getCommissionRate();
+        const subscriptionService = require("../subscription/subscription.service");
         const providerId = items[0].provider_id;
+        const commissionRate = await subscriptionService.getEffectiveCommissionRate(providerId);
         let netTotal = 0;
 
         for (const item of items) {
@@ -489,7 +505,17 @@ exports.releaseOrderEarnings = async (orderId) => {
     return releaseItems(items);
 };
 
-exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails) => {
+// Phase 3c - multi-currency payouts. payoutCurrency defaults to "TZS"
+// (existing behavior, unchanged) - a seller can instead request "USD",
+// in which case the withdrawal is still debited from the wallet in TZS
+// (the wallet itself stays TZS-denominated - order/booking commission
+// math elsewhere is untouched) but the *payout* amount is converted
+// using the same admin-editable usd_exchange_rate setting
+// paypal.provider.js already uses, and both the converted amount and
+// the rate actually used are snapshotted onto the withdrawal row so a
+// later admin change to the rate never rewrites what this seller was
+// quoted.
+exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, payoutCurrency = "TZS") => {
     const connection = await db.getConnection();
 
     try {
@@ -506,10 +532,17 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
             throw new Error("Withdrawal amount exceeds your wallet balance");
         }
 
+        let payoutAmount = null;
+        let payoutExchangeRate = null;
+        if (payoutCurrency === "USD") {
+            payoutExchangeRate = await settingsService.getUsdExchangeRate();
+            payoutAmount = Number((Number(amount) / payoutExchangeRate).toFixed(2));
+        }
+
         const balanceAfter = await walletRepository.incrementBalance(sellerId, -Number(amount), connection);
 
         const withdrawalId = await walletRepository.createWithdrawal(
-            sellerId, amount, payoutMethod, payoutDetails, connection
+            sellerId, amount, payoutMethod, payoutDetails, connection, payoutCurrency, payoutAmount, payoutExchangeRate
         );
 
         await walletRepository.insertTransaction({
@@ -519,7 +552,9 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
             balanceAfter,
             referenceType: "withdrawal",
             referenceId: withdrawalId,
-            description: `Withdrawal request #${withdrawalId} (${payoutMethod})`
+            description: payoutCurrency === "USD"
+                ? `Withdrawal request #${withdrawalId} (${payoutMethod}, paid out as ~$${payoutAmount} USD)`
+                : `Withdrawal request #${withdrawalId} (${payoutMethod})`
         }, connection);
 
         await connection.commit();

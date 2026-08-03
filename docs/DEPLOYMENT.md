@@ -85,6 +85,32 @@ be set to your real frontend URL(s) in production — the API and the
 socket.io server both fall back to `*` (allow any origin) if it's left
 unset, which is fine for local dev only.
 
+### 3.1 Scheduled jobs: in-process (default) or a dedicated worker
+
+By default `npm start` runs the HTTP server *and* every scheduled job
+(escrow release, booking lifecycle, sponsorship expiry, etc. — see
+`backend/src/jobs/index.js`) in the same process, exactly as before
+Phase 4 — no extra setup needed for a single-instance deployment.
+
+To scale the web process horizontally (2+ instances) without
+multiplying job runs, move jobs to a separate process instead — see
+`docs/SCALABILITY_REPORT.md` §1-2 for the full design:
+
+```bash
+# On the web process(es):
+RUN_JOBS_IN_PROCESS=false npm start
+
+# As a separate process/service (e.g. a second Render service, a
+# second Docker container, a second PM2 process) pointed at the SAME
+# database:
+npm run worker
+```
+
+A per-job MySQL advisory lock (`src/utils/dbLock.js`) makes it safe to
+run more than one worker replica too, or to leave `RUN_JOBS_IN_PROCESS`
+unset alongside a running worker during a migration — only one instance
+ever actually executes a given job tick either way.
+
 ## 4. Frontend setup
 
 ```bash
@@ -93,8 +119,15 @@ cp .env.example .env
 # set VITE_API_URL to point at your backend, e.g. https://api.yourdomain.com/api/v1
 npm install
 npm run dev      # local development
-npm run build    # production build (outputs to frontend/dist)
+npm run build    # production build (outputs to frontend/dist, cleaned first - see below)
 ```
+
+`npm run build` always clears `frontend/dist/` before building
+(`prebuild` script + Vite's `emptyOutDir`) — if your deploy pipeline
+copies `frontend/dist` elsewhere, make sure that step doesn't skip
+cleaning the destination too, or a stale previous build's chunks can
+linger alongside the new ones (see `docs/SCALABILITY_REPORT.md` §4 for
+the bug this guards against).
 
 Serve `frontend/dist` behind your usual static host / reverse proxy (Nginx,
 Vercel, Netlify, etc.), pointed at the backend's public URL.

@@ -599,6 +599,25 @@ exports.getGmvSeries = async (days) => {
 // seller_verification_documents (migration 029); see accountVerification
 // module for the centralized replacement.
 
+// Active users (Revenue & Product Enhancements roadmap) - DAU/WAU/MAU
+// off users.last_active_at (076), broken down by role. This measures
+// platform activity broadly (anyone making an authenticated request),
+// distinct from getBuyerRetentionMetrics/getProviderRetentionMetrics
+// above which only count users who actually transacted.
+exports.getActiveUsersMetrics = async () => {
+    const [rows] = await db.query(
+        `SELECT
+            role,
+            COALESCE(SUM(last_active_at >= (NOW() - INTERVAL 1 DAY)), 0) AS dau,
+            COALESCE(SUM(last_active_at >= (NOW() - INTERVAL 7 DAY)), 0) AS wau,
+            COALESCE(SUM(last_active_at >= (NOW() - INTERVAL 30 DAY)), 0) AS mau
+        FROM users
+        WHERE role IN ('buyer', 'seller', 'delivery_agent', 'admin')
+        GROUP BY role`
+    );
+    return rows;
+};
+
 // --- Admin management (super admin only) ---
 
 exports.findAllAdmins = async () => {

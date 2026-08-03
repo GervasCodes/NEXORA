@@ -5,7 +5,7 @@
 // Bumped on every SW logic change so stale, possibly-buggy service
 // workers still installed on returning visitors' devices are replaced
 // rather than continuing to run their old (broken) fetch handler.
-const CACHE_VERSION = "nexora-v3";
+const CACHE_VERSION = "nexora-v4";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const OFFLINE_URL = "/offline.html";
@@ -17,7 +17,26 @@ const OFFLINE_URL = "/offline.html";
 // app next on a shared device, or just serving stale personal data.
 // This is what "offline browsing" means in practice: the catalog you've
 // already looked at stays browsable, not "the whole app works offline".
-const CACHEABLE_API_PATHS = [/^\/api\/v1\/products(\/|\?|$)/, /^\/api\/v1\/categories(\/|\?|$)/];
+//
+// Mobile experience roadmap (Phase 3c): extended beyond products/
+// categories to the services vertical (service-categories, services)
+// and store-types/stores, so offline browsing has the same coverage on
+// the services side of the marketplace as it always has on products -
+// none of these require auth (verified against their route files), so
+// the same reasoning that already applied to products/categories holds.
+// Recommendations endpoints (recommendation.routes.js) are deliberately
+// NOT added here even though they're technically public: they
+// personalize per signed-in buyer via the same URL, and a cached
+// response could show one person's recommendations to whoever opens a
+// shared device next - the exact risk this comment block warns about.
+const CACHEABLE_API_PATHS = [
+    /^\/api\/v1\/products(\/|\?|$)/,
+    /^\/api\/v1\/categories(\/|\?|$)/,
+    /^\/api\/v1\/service-categories(\/|\?|$)/,
+    /^\/api\/v1\/services(\/|\?|$)/,
+    /^\/api\/v1\/store-types(\/|\?|$)/,
+    /^\/api\/v1\/stores(\/|\?|$)/
+];
 
 // Belt-and-suspenders: anything checkout/payment/order/auth/webhook
 // related is NEVER handled by the service worker, regardless of method,

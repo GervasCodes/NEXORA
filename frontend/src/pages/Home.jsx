@@ -4,6 +4,7 @@ import api from "../api/client";
 import DepartmentCard from "../components/DepartmentCard";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
+import RecommendedProducts from "../components/RecommendedProducts";
 import { useLanguage } from "../context/LanguageContext";
 
 function DepartmentCardSkeleton() {
@@ -147,6 +148,8 @@ export default function Home() {
                                 Or browse every product →
                             </Link>
                         </div>
+
+                        <RecommendedProducts endpoint="/recommendations/for-me" title="Recommended for you" />
                     </>
                 )}
 

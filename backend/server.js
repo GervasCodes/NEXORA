@@ -43,7 +43,19 @@ const PORT = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
 
 socket.init(httpServer);
-startJobs();
+
+// Phase 4 (Engineering & Scalability): jobs can now run from a separate
+// process instead - see worker.js and docs/SCALABILITY_REPORT.md.
+// Defaults to `true` (jobs run in this process, exactly as before) so
+// an existing single-process deployment that hasn't set up the worker
+// keeps working unchanged. Set RUN_JOBS_IN_PROCESS=false here once a
+// dedicated worker is deployed, so jobs run in exactly one place. Even
+// left unset alongside a running worker, this is redundant rather than
+// unsafe - the per-job advisory lock in src/utils/dbLock.js means only
+// one of the two ever actually executes a given tick.
+if (process.env.RUN_JOBS_IN_PROCESS !== "false") {
+    startJobs();
+}
 
 // Phase 5 (Resilience & Growth): catch a malformed payment-provider entry
 // (bad merge, renamed export) at boot rather than mid-checkout. Warn-only

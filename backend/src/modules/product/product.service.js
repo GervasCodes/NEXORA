@@ -22,6 +22,20 @@ const assertCategoryIsActive = async (categoryId) => {
 exports.createProduct = async (sellerId, data) => {
     await assertCategoryIsActive(data.category_id);
 
+    // Revenue & Product Enhancements roadmap: a seller's subscription
+    // plan caps how many active listings (products + services combined)
+    // they can have - see subscription.service.js#canCreateListing. The
+    // Free plan's own seeded limit (20) applies if the seller has never
+    // subscribed to anything.
+    const subscriptionService = require("../subscription/subscription.service");
+    const listingCheck = await subscriptionService.canCreateListing(sellerId);
+    if (!listingCheck.allowed) {
+        throw Object.assign(new Error(listingCheck.message), {
+            code: "LISTING_LIMIT_REACHED",
+            status: 403
+        });
+    }
+
     const slug = data.name
         .toLowerCase()
         .trim()

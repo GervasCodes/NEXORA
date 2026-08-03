@@ -48,6 +48,7 @@ const Disputes = lazy(() => import("./pages/Disputes"));
 const NewDispute = lazy(() => import("./pages/NewDispute"));
 const DisputeDetail = lazy(() => import("./pages/DisputeDetail"));
 const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
+const StatusPage = lazy(() => import("./pages/StatusPage"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
@@ -66,6 +67,7 @@ const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
+const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"));
 const SellerSponsorship = lazy(() => import("./pages/seller/SellerSponsorship"));
 const SellerFeaturedStore = lazy(() => import("./pages/seller/SellerFeaturedStore"));
 const SellerDepartmentSponsorship = lazy(() => import("./pages/seller/SellerDepartmentSponsorship"));
@@ -84,12 +86,14 @@ const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminMaintenance = lazy(() => import("./pages/admin/AdminMaintenance"));
+const AdminStatusIncidents = lazy(() => import("./pages/admin/AdminStatusIncidents"));
 const AdminServiceCategories = lazy(() => import("./pages/admin/AdminServiceCategories"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
+const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminFeaturedStores = lazy(() => import("./pages/admin/AdminFeaturedStores"));
 const AdminDepartmentSponsorship = lazy(() => import("./pages/admin/AdminDepartmentSponsorship"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
@@ -168,6 +172,7 @@ export default function App() {
                         {/* Shared: buyer or provider - booking.service.js#getBookingById enforces per-booking access */}
                         <Route path="/bookings/:id" element={<RequireAuth><BookingDetail /></RequireAuth>} />
                         <Route path="/legal/:slug" element={<LegalPage />} />
+                        <Route path="/status" element={<StatusPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
                         <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
                         <Route path="/disputes/new" element={<RequireBuyer><NewDispute /></RequireBuyer>} />
@@ -201,6 +206,7 @@ export default function App() {
                             <Route path="sponsorship" element={<SellerSponsorship />} />
                             <Route path="featured-store" element={<SellerFeaturedStore />} />
                             <Route path="department-sponsorship" element={<SellerDepartmentSponsorship />} />
+                            <Route path="subscription" element={<SellerSubscription />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                         </Route>
 
@@ -220,12 +226,14 @@ export default function App() {
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="categories" element={<AdminCategories />} />
                             <Route path="maintenance" element={<AdminMaintenance />} />
+                            <Route path="status-incidents" element={<AdminStatusIncidents />} />
                             <Route path="service-categories" element={<AdminServiceCategories />} />
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="sponsorship" element={<AdminSponsorship />} />
+                            <Route path="subscriptions" element={<AdminSubscriptions />} />
                             <Route path="featured-stores" element={<AdminFeaturedStores />} />
                             <Route path="department-sponsorship" element={<AdminDepartmentSponsorship />} />
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />

@@ -231,18 +231,23 @@ exports.markBookingItemReleased = async (itemId, executor = db) => {
 
 // ---- Withdrawal requests ----------------------------------------------------
 
-exports.createWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, executor = db) => {
+// payoutCurrency/payoutAmount/payoutExchangeRate (Phase 3c - multi-
+// currency payouts) default to TZS/null/null when the caller doesn't
+// pass them, so any existing call site keeps behaving exactly as
+// before this column existed.
+exports.createWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, executor = db, payoutCurrency = "TZS", payoutAmount = null, payoutExchangeRate = null) => {
     const [result] = await executor.query(
-        `INSERT INTO withdrawal_requests (seller_id, amount, payout_method, payout_details)
-        VALUES (?, ?, ?, ?)`,
-        [sellerId, amount, payoutMethod, payoutDetails]
+        `INSERT INTO withdrawal_requests (seller_id, amount, payout_method, payout_details, payout_currency, payout_amount, payout_exchange_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sellerId, amount, payoutMethod, payoutDetails, payoutCurrency, payoutAmount, payoutExchangeRate]
     );
     return result.insertId;
 };
 
 exports.findWithdrawalsBySeller = async (sellerId) => {
     const [rows] = await db.query(
-        `SELECT id, amount, status, payout_method, payout_details, admin_note, requested_at, processed_at
+        `SELECT id, amount, status, payout_method, payout_details, admin_note, requested_at, processed_at,
+                payout_currency, payout_amount, payout_exchange_rate
         FROM withdrawal_requests
         WHERE seller_id = ?
         ORDER BY requested_at DESC`,
@@ -255,6 +260,7 @@ exports.findAllWithdrawals = async () => {
     const [rows] = await db.query(
         `SELECT wr.id, wr.seller_id, wr.amount, wr.status, wr.payout_method, wr.payout_details,
                 wr.admin_note, wr.requested_at, wr.processed_at,
+                wr.payout_currency, wr.payout_amount, wr.payout_exchange_rate,
                 sp.store_name, u.first_name, u.last_name, u.email
         FROM withdrawal_requests wr
         JOIN users u ON u.id = wr.seller_id

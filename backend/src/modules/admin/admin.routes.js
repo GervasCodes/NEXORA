@@ -31,6 +31,21 @@ router.get("/analytics/services", adminController.getServicesAnalytics);
 // daily GMV series.
 router.get("/analytics/business", adminController.getBusinessMetrics);
 router.get("/analytics/business/export", adminController.exportGmvCsv);
+
+// Revenue & Product Enhancements roadmap - seller subscription plan
+// management. Mounted here (not a separate top-level namespace) since
+// these are admin-only management endpoints over the same
+// subscription_plans/seller_subscriptions tables the public
+// /subscriptions/* routes (subscription.routes.js) read from - kept in
+// their own controller module (subscription.controller.js) rather than
+// admin.controller.js so the subscription domain's logic isn't split
+// across two controllers.
+const subscriptionController = require("../subscription/subscription.controller");
+const { createPlanValidation, updatePlanValidation } = require("../subscription/subscription.validator");
+router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
+router.post("/subscription-plans", createPlanValidation, validationMiddleware, subscriptionController.createPlan);
+router.put("/subscription-plans/:id", updatePlanValidation, validationMiddleware, subscriptionController.updatePlan);
+router.get("/subscriptions", subscriptionController.listAllSubscriptions);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 router.get("/audit-logs", adminController.listAuditLogs);

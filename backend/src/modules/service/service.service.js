@@ -25,6 +25,18 @@ const toSlug = (title) =>
 exports.createService = async (providerId, data) => {
     await assertCategoryIsActive(data.category_id);
 
+    // Same listing-limit enforcement as product.service.js#createProduct
+    // - services and products share one combined active-listing count
+    // per seller/provider (see subscription.repository.js#countActiveListingsForSeller).
+    const subscriptionService = require("../subscription/subscription.service");
+    const listingCheck = await subscriptionService.canCreateListing(providerId);
+    if (!listingCheck.allowed) {
+        throw Object.assign(new Error(listingCheck.message), {
+            code: "LISTING_LIMIT_REACHED",
+            status: 403
+        });
+    }
+
     const slug = `${toSlug(data.title)}-${Date.now().toString(36)}`;
 
     const serviceId = await serviceRepository.create({

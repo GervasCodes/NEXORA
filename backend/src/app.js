@@ -44,6 +44,9 @@ const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
 const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
+const subscriptionRoutes = require("./modules/subscription/subscription.routes");
+const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
+const statusRoutes = require("./modules/status/status.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -315,6 +318,9 @@ app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
 app.use("/api/v1/disputes", disputeRoutes);
+app.use("/api/v1/subscriptions", subscriptionRoutes);
+app.use("/api/v1/recommendations", recommendationRoutes);
+app.use("/api/v1/status", statusRoutes);
 
 app.get("/api/v1/me", authMiddleware, (req, res) => {
     res.json({

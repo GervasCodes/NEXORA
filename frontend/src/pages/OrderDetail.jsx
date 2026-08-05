@@ -403,25 +403,25 @@ export default function OrderDetail() {
             )}
 
             <div className="flex flex-wrap gap-3">
-                {!order.parent_order_id && order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryPayment} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Processing…" : "Pay with Mobile Money"}
                     </button>
                 )}
-                {!order.parent_order_id && order.payment_method === "snippe" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "snippe" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetrySnippe} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Redirecting…" : "Pay with Card (Snippe)"}
                     </button>
                 )}
-                {!order.parent_order_id && order.payment_method === "malipopay_card" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "malipopay_card" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryMalipopayCard} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Redirecting…" : "Pay with Card (MalipoPay)"}
                     </button>
                 )}
-                {!order.parent_order_id && order.payment_method === "paypal" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "paypal" && order.payment_status === "unpaid" && (
                     <button onClick={handleRetryPaypal} disabled={busy}
                         className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
                         {busy ? "Redirecting…" : "Pay with PayPal"}

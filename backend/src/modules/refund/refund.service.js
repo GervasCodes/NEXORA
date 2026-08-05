@@ -108,8 +108,18 @@ const callProvider = async (refund, payment) => {
         if (!payment.transaction_reference) {
             return { success: false, error: "Payment has no MalipoPay Card transaction reference on file" };
         }
+        // MalipoPay's real API has no dedicated card-refund endpoint (see
+        // malipopayCard.provider.js's comments) - a refund is issued as a
+        // mobile money disbursement back to the buyer instead, same as
+        // the mobile_money branch above, so it needs a phone number to
+        // pay out to rather than just the original transaction reference.
+        const order = await orderRepository.findOrderById(refund.order_id);
+        if (!order || !order.shipping_phone) {
+            return { success: false, error: "Order has no phone number on file to refund to" };
+        }
         const result = await malipopayCardProvider.refundPayment({
             transactionReference: payment.transaction_reference,
+            phoneNumber: order.shipping_phone,
             amountTzs: refund.amount,
             reason: `dispute_${refund.dispute_id}`
         });

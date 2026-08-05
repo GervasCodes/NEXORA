@@ -137,6 +137,14 @@ exports.setOnlineStatus = async (agentId, isOnline) => {
     await db.query("UPDATE users SET is_online = ? WHERE id = ?", [isOnline, agentId]);
 };
 
+// Read path for shift-status persistence (see delivery.service.js#getAgentOnlineStatus) -
+// lets the frontend hydrate its shift toggle on page load/reconnect
+// instead of always defaulting to "off" until the next manual toggle.
+exports.getOnlineStatus = async (agentId) => {
+    const [rows] = await db.query("SELECT is_online FROM users WHERE id = ?", [agentId]);
+    return !!rows[0]?.is_online;
+};
+
 exports.updateLocation = async (agentId, lat, lng) => {
     await db.query(
         `UPDATE users

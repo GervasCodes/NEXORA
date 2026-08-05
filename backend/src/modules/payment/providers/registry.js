@@ -91,12 +91,25 @@ const PROVIDERS = [
             disbursement: false,
             requiresRedirect: true
         },
-        isConfigured: () => snippeProvider.isConfigured()
+        // Phase 3: MalipoPay Card is now the primary/default card gateway
+        // (see the malipopay_card entry below) - Snippe carries a higher
+        // per-transaction fee than MalipoPay's advertised 3.0% card rate,
+        // so it's off by default rather than removed outright (an admin
+        // who's already relying on it, or wants a second card rail as a
+        // fallback, can still turn it back on). Requires both real
+        // credentials AND this explicit opt-in - credentials alone are no
+        // longer enough to surface it at checkout.
+        isConfigured: () => process.env.PAYMENT_ENABLE_SNIPPE === "true" && snippeProvider.isConfigured()
     },
     {
         key: "malipopay_card",
         label: "MalipoPay (cards)",
         type: "card",
+        // Phase 3: the primary/default card gateway - see checkout
+        // ordering in Checkout.jsx, which now sorts a `primary` rail
+        // first among same-`type` options instead of using whatever
+        // order the API happened to return them in.
+        primary: true,
         module: malipopayCardProvider,
         // Buyer-facing checkout can read this to render "Visa,
         // Mastercard, ..." next to the option - not used anywhere else in
@@ -124,13 +137,19 @@ const PROVIDERS = [
             disbursement: false,
             requiresRedirect: true
         },
-        isConfigured: () => paypalProvider.isConfigured()
+        // Phase 3: PayPal charges are meaningfully more expensive than
+        // MalipoPay's local card rate and add a currency-conversion step
+        // most TZS-based buyers don't need - kept available (it's the
+        // only rail international/diaspora buyers without local mobile
+        // money or a TZS-issued card can use) but off by default, same
+        // opt-in pattern as Snippe above.
+        isConfigured: () => process.env.PAYMENT_ENABLE_PAYPAL === "true" && paypalProvider.isConfigured()
     }
 ];
 
 exports.getProvider = (key) => PROVIDERS.find((provider) => provider.key === key) || null;
 
-exports.listProviders = () => PROVIDERS.map(({ key, label, type, capabilities, isConfigured, brands }) => ({
+exports.listProviders = () => PROVIDERS.map(({ key, label, type, primary, capabilities, isConfigured, brands }) => ({
     key,
     label,
     // Optional - only card-type rails set this today. Left undefined
@@ -138,10 +157,16 @@ exports.listProviders = () => PROVIDERS.map(({ key, label, type, capabilities, i
     // existing consumers of this list that don't know about `type` keep
     // seeing exactly the shape they always have.
     ...(type ? { type } : {}),
+    ...(primary ? { primary: true } : {}),
     ...(brands ? { brands: brands() } : {}),
     capabilities,
     configured: Boolean(isConfigured())
-}));
+}))
+    // MalipoPay Card (primary: true) sorts first among configured rails -
+    // Checkout.jsx renders in this order, so the primary gateway is
+    // always the first/default option a buyer sees rather than whatever
+    // order they happen to be declared in above.
+    .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0));
 
 // Buyer-facing: only rails an admin has actually set credentials for
 // (or, for mobile_money, that will resolve in production) - a checkout

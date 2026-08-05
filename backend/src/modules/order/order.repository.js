@@ -259,7 +259,12 @@ exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus) =>
     );
 };
 
-// Orders that contain at least one item belonging to this seller
+// Orders that contain at least one item belonging to this seller.
+// Payment Security: a seller must not see (or be able to accept/process)
+// an order that requires upfront online payment until that payment is
+// actually verified - only Cash on Delivery orders are legitimately
+// visible before payment_status flips to 'paid' (COD is only marked paid
+// after the buyer confirms receipt, see payment.service.js#confirmDeliveryReceipt).
 exports.findOrdersBySeller = async (sellerId) => {
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
@@ -267,6 +272,7 @@ exports.findOrdersBySeller = async (sellerId) => {
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         WHERE oi.seller_id = ?
+            AND (o.payment_method = 'cash_on_delivery' OR o.payment_status = 'paid')
         ORDER BY o.created_at DESC`,
         [sellerId]
     );

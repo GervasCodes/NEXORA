@@ -14,20 +14,32 @@ import { formatDateTime } from "../../utils/format";
 // category.service.js#scheduleMaintenance) - services and modules stay
 // instant-only, so only the departments section renders schedule fields
 // and the "Departments under maintenance" dashboard panel above it.
+// Departments and services now have three fully separate statuses
+// (see migration 078): 'active' (live), 'maintenance' (still linked,
+// shoppers see a maintenance page/message), and 'deactivated' (hidden
+// completely - no listing, no maintenance page, not even reachable by
+// direct link). Modules stay a plain on/off switch - there's no
+// "hide the feature but still let people navigate to it" concept for
+// those, so they keep the old two-state activate/deactivate pattern.
 const SECTION_COPY = {
     departments: {
         title: "Departments",
-        blurb: "Storefront departments shoppers browse from the homepage. Turning one off shows shoppers a maintenance page instead of its products.",
+        blurb: "Storefront departments shoppers browse from the homepage. Maintenance keeps the page reachable with a maintenance message; Deactivate hides the department completely.",
         activatePath: (item) => `/categories/${item.id}/activate`,
+        maintenancePath: (item) => `/categories/${item.id}/maintenance`,
+        deactivatePath: (item) => `/categories/${item.id}/deactivate`,
         schedulePath: (item) => `/categories/${item.id}/schedule-maintenance`,
         cancelSchedulePath: (item) => `/categories/${item.id}/cancel-scheduled-maintenance`,
-        schedulable: true
+        schedulable: true,
+        hasStatus: true
     },
     services: {
         title: "Services",
-        blurb: "Service categories under the Services department. Turning one off shows a maintenance page instead of its listings.",
+        blurb: "Service categories under the Services department. Maintenance keeps the page reachable with a maintenance message; Deactivate hides the category completely.",
         activatePath: (item) => `/service-categories/${item.id}/activate`,
-        deactivatePath: (item) => `/service-categories/${item.id}/deactivate`
+        maintenancePath: (item) => `/service-categories/${item.id}/maintenance`,
+        deactivatePath: (item) => `/service-categories/${item.id}/deactivate`,
+        hasStatus: true
     },
     modules: {
         title: "Modules",
@@ -37,11 +49,55 @@ const SECTION_COPY = {
     }
 };
 
-function StatusBadge({ isActive }) {
+function StatusBadge({ isActive, status }) {
+    if (status === "deactivated") {
+        return <span className="text-xs font-medium px-2 py-1 rounded-full bg-ash/10 text-ash">Deactivated</span>;
+    }
+    if (status === "maintenance") {
+        return <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">Under maintenance</span>;
+    }
     return (
         <span className={`text-xs font-medium px-2 py-1 rounded-full ${isActive ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
             {isActive ? "Live" : "Under maintenance"}
         </span>
+    );
+}
+
+// Simple confirm prompt for true deactivation - no message field, since
+// nothing is ever shown to shoppers for a deactivated item.
+function DeactivateConfirmPrompt({ open, onCancel, onConfirm, itemName }) {
+    const [submitting, setSubmitting] = useState(false);
+
+    if (!open) return null;
+
+    const submit = async () => {
+        setSubmitting(true);
+        await onConfirm();
+        setSubmitting(false);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-abyss/40 flex items-center justify-center z-50 px-4">
+            <div className="bg-frost rounded-lg p-5 w-full max-w-sm">
+                <h3 className="font-display text-lg mb-1">Deactivate "{itemName}"?</h3>
+                <p className="text-xs text-ash mb-4">
+                    This hides it completely - no listing, no maintenance page, not reachable by direct link either.
+                    Use "Put into maintenance" instead if you just want to show a maintenance message.
+                </p>
+                <div className="flex justify-end gap-2">
+                    <button onClick={onCancel} className="text-sm text-ash hover:text-ink px-3 py-2">
+                        Cancel
+                    </button>
+                    <button
+                        onClick={submit}
+                        disabled={submitting}
+                        className="bg-coral text-frost px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
+                    >
+                        {submitting ? "Deactivating…" : "Deactivate"}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -214,7 +270,7 @@ function DepartmentSchedulePrompt({ open, onCancel, onConfirm, itemName }) {
 // checking in on the site actually wants to see first, rather than
 // scrolling the full department list below to spot which ones are off.
 function DepartmentsUnderMaintenance({ departments, busyId, onActivate }) {
-    const affected = departments.filter((d) => !d.is_active);
+    const affected = departments.filter((d) => d.status === "maintenance");
 
     return (
         <div className="mb-10 glass-strong border border-coral/20 rounded-lg p-4">
@@ -252,7 +308,7 @@ function DepartmentsUnderMaintenance({ departments, busyId, onActivate }) {
     );
 }
 
-function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestDeactivate, onCancelSchedule }) {
+function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestMaintenance, onRequestDeactivate, onCancelSchedule }) {
     const copy = SECTION_COPY[sectionKey];
 
     return (
@@ -263,13 +319,17 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestDe
             <ul className="divide-y divide-line border-y border-line">
                 {items.map((item) => {
                     const id = item.key || item.id;
-                    const showCancelSchedule = copy.schedulable && item.is_active && item.maintenance_scheduled_start;
+                    const showCancelSchedule = copy.schedulable && item.status === "active" && item.maintenance_scheduled_start;
+                    const busy = busyId === `${sectionKey}-${id}`;
 
                     return (
                         <li key={id} className="py-3 flex flex-wrap items-center gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium">{item.name}</p>
-                                {!item.is_active && item.maintenance_message && (
+                                {item.status === "maintenance" && item.maintenance_message && (
+                                    <p className="text-xs text-ash truncate">"{item.maintenance_message}"</p>
+                                )}
+                                {sectionKey === "modules" && !item.is_active && item.maintenance_message && (
                                     <p className="text-xs text-ash truncate">"{item.maintenance_message}"</p>
                                 )}
                                 {sectionKey === "modules" && item.description && (
@@ -278,29 +338,61 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestDe
                                 {copy.schedulable && <ScheduleNote item={item} />}
                             </div>
 
-                            <StatusBadge isActive={item.is_active} />
+                            <StatusBadge isActive={item.is_active} status={item.status} />
 
                             {showCancelSchedule && (
                                 <button
                                     onClick={() => onCancelSchedule(sectionKey, item)}
-                                    disabled={busyId === `${sectionKey}-${id}`}
+                                    disabled={busy}
                                     className="text-xs px-3 py-1.5 rounded-md border border-line text-ash hover:text-ink transition-colors disabled:opacity-50"
                                 >
                                     Cancel schedule
                                 </button>
                             )}
 
-                            <button
-                                onClick={() => (item.is_active ? onRequestDeactivate(sectionKey, item) : onActivate(sectionKey, item))}
-                                disabled={busyId === `${sectionKey}-${id}`}
-                                className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
-                                    item.is_active
-                                        ? "border border-coral/40 text-coral hover:bg-coral/10"
-                                        : "border border-teal/40 text-teal hover:bg-teal/10"
-                                }`}
-                            >
-                                {busyId === `${sectionKey}-${id}` ? "Working…" : item.is_active ? "Deactivate" : "Activate"}
-                            </button>
+                            {copy.hasStatus ? (
+                                <>
+                                    {item.status !== "active" && (
+                                        <button
+                                            onClick={() => onActivate(sectionKey, item)}
+                                            disabled={busy}
+                                            className="text-xs px-3 py-1.5 rounded-md border border-teal/40 text-teal hover:bg-teal/10 transition-colors disabled:opacity-50"
+                                        >
+                                            {busy ? "Working…" : "Activate"}
+                                        </button>
+                                    )}
+                                    {item.status !== "maintenance" && (
+                                        <button
+                                            onClick={() => onRequestMaintenance(sectionKey, item)}
+                                            disabled={busy}
+                                            className="text-xs px-3 py-1.5 rounded-md border border-mango/40 text-mango-dark hover:bg-mango/10 transition-colors disabled:opacity-50"
+                                        >
+                                            {busy ? "Working…" : "Put into maintenance"}
+                                        </button>
+                                    )}
+                                    {item.status !== "deactivated" && (
+                                        <button
+                                            onClick={() => onRequestDeactivate(sectionKey, item, true)}
+                                            disabled={busy}
+                                            className="text-xs px-3 py-1.5 rounded-md border border-coral/40 text-coral hover:bg-coral/10 transition-colors disabled:opacity-50"
+                                        >
+                                            {busy ? "Working…" : "Deactivate"}
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <button
+                                    onClick={() => (item.is_active ? onRequestDeactivate(sectionKey, item, false) : onActivate(sectionKey, item))}
+                                    disabled={busy}
+                                    className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
+                                        item.is_active
+                                            ? "border border-coral/40 text-coral hover:bg-coral/10"
+                                            : "border border-teal/40 text-teal hover:bg-teal/10"
+                                    }`}
+                                >
+                                    {busy ? "Working…" : item.is_active ? "Deactivate" : "Activate"}
+                                </button>
+                            )}
                         </li>
                     );
                 })}
@@ -317,7 +409,7 @@ export default function AdminMaintenance() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [busyId, setBusyId] = useState(null);
-    const [prompt, setPrompt] = useState(null); // { sectionKey, item }
+    const [prompt, setPrompt] = useState(null); // { sectionKey, item, mode: "maintenance" | "deactivate" }
 
     const load = () => {
         api.get("/admin/maintenance/overview")
@@ -342,12 +434,49 @@ export default function AdminMaintenance() {
         }
     };
 
+    // Modules only (no separate "maintenance" concept for those - see
+    // copy.hasStatus check in MaintenanceSection): toggles the single
+    // on/off switch, optionally with a message.
     const deactivate = async (sectionKey, item, message) => {
         const id = item.key || item.id;
         setBusyId(`${sectionKey}-${id}`);
         setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].deactivatePath(item), { message });
+            setPrompt(null);
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    // Departments/services only: puts the item into maintenance (still
+    // linked, shoppers see a maintenance message) - distinct from
+    // trueDeactivate below.
+    const enterMaintenance = async (sectionKey, item, message) => {
+        const id = item.id;
+        setBusyId(`${sectionKey}-${id}`);
+        setError("");
+        try {
+            await api.put(SECTION_COPY[sectionKey].maintenancePath(item), { message });
+            setPrompt(null);
+            load();
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    // Departments/services only: hides the item completely.
+    const trueDeactivate = async (sectionKey, item) => {
+        const id = item.id;
+        setBusyId(`${sectionKey}-${id}`);
+        setError("");
+        try {
+            await api.put(SECTION_COPY[sectionKey].deactivatePath(item));
             setPrompt(null);
             load();
         } catch (err) {
@@ -410,7 +539,8 @@ export default function AdminMaintenance() {
                 items={overview.departments}
                 busyId={busyId}
                 onActivate={activate}
-                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item })}
+                onRequestMaintenance={(sectionKey, item) => setPrompt({ sectionKey, item, mode: "maintenance" })}
+                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item, mode: "deactivate" })}
                 onCancelSchedule={cancelSchedule}
             />
             <MaintenanceSection
@@ -418,7 +548,8 @@ export default function AdminMaintenance() {
                 items={overview.services}
                 busyId={busyId}
                 onActivate={activate}
-                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item })}
+                onRequestMaintenance={(sectionKey, item) => setPrompt({ sectionKey, item, mode: "maintenance" })}
+                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item, mode: "deactivate" })}
                 onCancelSchedule={cancelSchedule}
             />
             <MaintenanceSection
@@ -426,11 +557,18 @@ export default function AdminMaintenance() {
                 items={overview.modules}
                 busyId={busyId}
                 onActivate={activate}
-                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item })}
+                onRequestDeactivate={(sectionKey, item) => setPrompt({ sectionKey, item, mode: "maintenance" })}
                 onCancelSchedule={cancelSchedule}
             />
 
-            {prompt?.sectionKey === "departments" ? (
+            {prompt?.mode === "deactivate" ? (
+                <DeactivateConfirmPrompt
+                    open={!!prompt}
+                    itemName={prompt?.item?.name}
+                    onCancel={() => setPrompt(null)}
+                    onConfirm={() => trueDeactivate(prompt.sectionKey, prompt.item)}
+                />
+            ) : prompt?.sectionKey === "departments" ? (
                 <DepartmentSchedulePrompt
                     open={!!prompt}
                     itemName={prompt?.item?.name}
@@ -442,7 +580,11 @@ export default function AdminMaintenance() {
                     open={!!prompt}
                     itemName={prompt?.item?.name}
                     onCancel={() => setPrompt(null)}
-                    onConfirm={(message) => deactivate(prompt.sectionKey, prompt.item, message)}
+                    onConfirm={(message) => (
+                        prompt.sectionKey === "modules"
+                            ? deactivate(prompt.sectionKey, prompt.item, message)
+                            : enterMaintenance(prompt.sectionKey, prompt.item, message)
+                    )}
                 />
             )}
         </div>

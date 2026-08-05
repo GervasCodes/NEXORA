@@ -1,8 +1,10 @@
 const db = require("../../config/db");
 
+// Only genuinely 'active' categories - one in 'maintenance' or
+// 'deactivated' must never appear here (backs every public listing).
 exports.findAllActive = async () => {
     const [rows] = await db.query(
-        "SELECT * FROM service_categories WHERE is_active = 1 ORDER BY display_order ASC, name ASC"
+        "SELECT * FROM service_categories WHERE status = 'active' ORDER BY display_order ASC, name ASC"
     );
     return rows;
 };
@@ -62,9 +64,20 @@ exports.updateCoverImage = async (id, coverImageUrl) => {
     );
 };
 
+// Manual reactivation, or entering maintenance (still linked, shoppers
+// see a maintenance page) - mirrors category.repository.js#setActive.
 exports.setActive = async (id, isActive, maintenanceMessage) => {
     await db.query(
-        "UPDATE service_categories SET is_active = ?, maintenance_message = ? WHERE id = ?",
-        [isActive, isActive ? null : (maintenanceMessage || null), id]
+        "UPDATE service_categories SET is_active = ?, status = ?, maintenance_message = ? WHERE id = ?",
+        [isActive, isActive ? "active" : "maintenance", isActive ? null : (maintenanceMessage || null), id]
+    );
+};
+
+// True deactivation - hides the category completely (no listing, no
+// maintenance page). Distinct from setActive(id, false, ...) above.
+exports.setDeactivated = async (id) => {
+    await db.query(
+        "UPDATE service_categories SET is_active = 0, status = 'deactivated', maintenance_message = NULL WHERE id = ?",
+        [id]
     );
 };

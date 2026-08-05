@@ -33,6 +33,10 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
         throw new Error("This order has already been paid");
     }
 
+    if (order.status === "cancelled") {
+        throw new Error("This order has been cancelled and can no longer be paid");
+    }
+
     let payment = await paymentRepository.findByOrderId(orderId);
 
     if (!payment) {
@@ -637,6 +641,36 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
         return { alreadyProcessed: true };
     }
 
+    // The order may have been cancelled (buyer-initiated, or the
+    // staleOrders auto-cancel job) after payment was initiated but before
+    // the provider's webhook arrived - a real race, not a hypothetical
+    // one now that initiation itself is blocked for cancelled orders (see
+    // initiateMobileMoneyPayment etc. above). Money may have actually
+    // moved on the provider's side, so the payment record is still marked
+    // completed (for refund tracking / admin visibility) but the order
+    // itself is never silently treated as a normal successful purchase:
+    // no seller wallet credit, no "payment successful" notice - just a
+    // flag for manual refund review.
+    if (success && orderForNotify && orderForNotify.status === "cancelled") {
+        const receiptNumber = generateReceiptNumber();
+        await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
+
+        auditService.log({
+            eventType: "payment_processed",
+            description: `Payment succeeded for order #${orderId} after it was already cancelled - needs manual refund review`,
+            metadata: { orderId, success: true, transactionReference, receiptNumber, requiresRefundReview: true }
+        });
+        logger.warn({ orderId, transactionReference }, "Payment confirmed for a cancelled order - flagged for refund review");
+        Sentry.captureMessage("Payment confirmed for a cancelled order", { level: "warning", extra: { orderId, transactionReference } });
+
+        require("../../socket/socket").emitToUser(orderForNotify.buyer_id, "payment:updated", {
+            orderId, success: false, paymentStatus: "unpaid",
+            message: "Your order was cancelled before this payment could be applied. We'll be in touch about a refund."
+        });
+
+        return { orderId, success: false, cancelledOrderRefundNeeded: true };
+    }
+
     if (!success) {
         await paymentRepository.markFailed(payment.id);
         auditService.log({
@@ -751,6 +785,10 @@ exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, canc
         throw new Error("This order has already been paid");
     }
 
+    if (order.status === "cancelled") {
+        throw new Error("This order has been cancelled and can no longer be paid");
+    }
+
     let payment = await paymentRepository.findByOrderId(orderId);
     if (!payment) {
         const paymentId = await paymentRepository.create(orderId, "snippe", order.total_amount);
@@ -830,6 +868,10 @@ exports.initiateMalipopayCardOrderPayment = async (orderId, buyerId, { successUr
 
     if (order.payment_status === "paid") {
         throw new Error("This order has already been paid");
+    }
+
+    if (order.status === "cancelled") {
+        throw new Error("This order has been cancelled and can no longer be paid");
     }
 
     let payment = await paymentRepository.findByOrderId(orderId);
@@ -914,6 +956,10 @@ exports.initiatePaypalOrderPayment = async (orderId, buyerId, { returnUrl, cance
 
     if (order.payment_status === "paid") {
         throw new Error("This order has already been paid");
+    }
+
+    if (order.status === "cancelled") {
+        throw new Error("This order has been cancelled and can no longer be paid");
     }
 
     let payment = await paymentRepository.findByOrderId(orderId);

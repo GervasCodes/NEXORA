@@ -38,7 +38,8 @@ export default function DepartmentPage() {
                 if (err.response?.data?.code === "DEPARTMENT_MAINTENANCE") {
                     setMaintenance({
                         name: err.response.data.data?.name,
-                        message: err.response.data.message
+                        message: err.response.data.message,
+                        estimatedReturn: err.response.data.data?.estimatedReturn
                     });
                 } else if (err.response?.status === 404) {
                     setError("This department couldn't be found.");
@@ -74,8 +75,12 @@ export default function DepartmentPage() {
             if (payload.slug !== slug) return;
 
             if (payload.status === "entered") {
-                setMaintenance({ name: payload.name, message: payload.message });
+                setMaintenance({ name: payload.name, message: payload.message, estimatedReturn: null });
             } else {
+                // "exited" (reactivated) or "deactivated" - either way the
+                // page's own GET call is the source of truth: reactivated
+                // loads normally, deactivated now correctly 404s (hidden
+                // completely) instead of showing a maintenance page.
                 loadDepartment();
             }
         };
@@ -102,6 +107,7 @@ export default function DepartmentPage() {
             <MaintenanceScreen
                 title={maintenance.name ? `${maintenance.name} is under maintenance` : "This department is under maintenance"}
                 message={maintenance.message}
+                estimatedReturn={maintenance.estimatedReturn}
                 onRetry={loadDepartment}
             />
         );

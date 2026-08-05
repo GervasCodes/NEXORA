@@ -272,6 +272,18 @@ exports.setAgentOnline = async (agentId, isOnline) => {
     socket().emitToAdmins("dispatch:agent_status", { agentId, isOnline });
 };
 
+// Lets the frontend hydrate its shift toggle from the persisted value on
+// page load, refresh, or session restoration instead of always defaulting
+// to "off" (see useAgentShift.js) - is_online itself was always being
+// persisted correctly; the toggle turning off on refresh was the
+// frontend never reading it back, compounded by the socket "disconnect"
+// handler treating a page refresh's momentary disconnect the same as the
+// agent actually going offline (see socket.js's reconnect grace period).
+exports.getAgentOnlineStatus = async (agentId) => {
+    const isOnline = await deliveryRepository.getOnlineStatus(agentId);
+    return { isOnline };
+};
+
 // Updates the agent's stored position and returns, for each order they're
 // currently delivering, the road-routing distance-remaining + ETA from
 // this new position to that order's destination - so the socket layer can

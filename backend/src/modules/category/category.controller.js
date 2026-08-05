@@ -73,7 +73,7 @@ exports.getDepartment = async (req, res) => {
                 success: false,
                 code: "DEPARTMENT_MAINTENANCE",
                 message: error.message,
-                data: { name: error.departmentName }
+                data: { name: error.departmentName, estimatedReturn: error.estimatedReturn }
             });
         }
 
@@ -141,13 +141,35 @@ exports.uploadCover = async (req, res) => {
     }
 };
 
+// True deactivation - hides the department completely (no listing, no
+// maintenance page). See enterMaintenance below for the "still linked,
+// shoppers see a maintenance page" alternative.
 exports.deactivateCategory = async (req, res) => {
+    try {
+        await categoryService.deactivateDepartment(req.params.id);
+
+        return res.json({
+            success: true,
+            message: "Department deactivated - it's now hidden everywhere"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Puts a department into maintenance - still reachable by direct link,
+// shoppers see a maintenance page/message instead of its products.
+exports.enterMaintenance = async (req, res) => {
     try {
         await categoryService.setCategoryActive(req.params.id, false, req.body?.message);
 
         return res.json({
             success: true,
-            message: "Category deactivated"
+            message: "Department put into maintenance"
         });
 
     } catch (error) {

@@ -66,16 +66,24 @@ exports.getDepartmentBySlug = async (slug) => {
         return null;
     }
 
-    // Deliberately deactivated by an admin (Maintenance Management) is a
-    // different case from "doesn't exist": the frontend shows a
-    // maintenance page instead of a 404 for this one. See
+    // A truly deactivated department must disappear completely - same as
+    // if the row didn't exist at all. No maintenance page, not even
+    // reachable by direct link.
+    if (category.status === "deactivated") {
+        return null;
+    }
+
+    // A department in maintenance is a different case from "doesn't
+    // exist": the frontend shows a maintenance page instead of a 404 for
+    // this one, and the page is still reachable by direct link. See
     // category.controller.js#getDepartment.
-    if (!category.is_active) {
+    if (category.status === "maintenance") {
         const error = new Error(
             category.maintenance_message || `${category.name} is temporarily unavailable for maintenance.`
         );
         error.isMaintenance = true;
         error.departmentName = category.name;
+        error.estimatedReturn = category.maintenance_scheduled_end || null;
         throw error;
     }
 
@@ -156,6 +164,30 @@ exports.setCategoryActive = async (id, isActive, maintenanceMessage) => {
 
     await categoryRepository.setActive(id, isActive, maintenanceMessage);
     notifyMaintenanceChange(category, isActive ? "exited" : "entered", isActive ? null : maintenanceMessage);
+};
+
+// True deactivation - distinct from setCategoryActive(id, false, ...)
+// above, which only puts a department into maintenance. A deactivated
+// department is hidden completely (see getDepartmentBySlug), so shoppers
+// currently on its page need to be routed away rather than shown a
+// maintenance screen - reuse the same "department:maintenance" socket
+// event shoppers already listen for with a distinct status so
+// DepartmentPage.jsx can tell the two apart.
+exports.deactivateDepartment = async (id) => {
+    const category = await categoryRepository.findById(id);
+    if (!category) {
+        throw new Error("Category not found");
+    }
+
+    await categoryRepository.setDeactivated(id);
+
+    socket.emitToAll("department:maintenance", {
+        categoryId: category.id,
+        slug: category.slug,
+        name: category.name,
+        status: "deactivated",
+        message: null
+    });
 };
 
 // Schedules (or immediately applies, if startAt has already arrived) a

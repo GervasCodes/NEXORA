@@ -141,13 +141,33 @@ exports.uploadCover = async (req, res) => {
     }
 };
 
+// True deactivation - hides the category completely.
 exports.deactivateCategory = async (req, res) => {
+    try {
+        await serviceCategoryService.deactivateCategory(req.params.id);
+
+        return res.json({
+            success: true,
+            message: "Service category deactivated - it's now hidden everywhere"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Puts a category into maintenance - still reachable by direct link,
+// shoppers see a maintenance page/message instead of its listings.
+exports.enterMaintenance = async (req, res) => {
     try {
         await serviceCategoryService.setCategoryActive(req.params.id, false, req.body?.message);
 
         return res.json({
             success: true,
-            message: "Service category deactivated"
+            message: "Service category put into maintenance"
         });
 
     } catch (error) {

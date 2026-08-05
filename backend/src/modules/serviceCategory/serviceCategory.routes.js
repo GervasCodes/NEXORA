@@ -76,4 +76,15 @@ router.put(
     serviceCategoryController.activateCategory
 );
 
+// Distinct from /deactivate above - puts a category into maintenance
+// (still linked, shoppers see a maintenance page) rather than hiding it.
+router.put(
+    "/:id/maintenance",
+    authMiddleware,
+    authorize("admin"),
+    serviceCategoryIdValidation,
+    validationMiddleware,
+    serviceCategoryController.enterMaintenance
+);
+
 module.exports = router;

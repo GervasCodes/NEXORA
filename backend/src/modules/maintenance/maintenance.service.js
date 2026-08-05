@@ -71,6 +71,7 @@ exports.getOverview = async () => {
             name: d.name,
             slug: d.slug,
             is_active: !!d.is_active,
+            status: d.status,
             maintenance_message: d.maintenance_message,
             maintenance_scheduled_start: d.maintenance_scheduled_start,
             maintenance_scheduled_end: d.maintenance_scheduled_end
@@ -81,6 +82,7 @@ exports.getOverview = async () => {
             name: s.name,
             slug: s.slug,
             is_active: !!s.is_active,
+            status: s.status,
             maintenance_message: s.maintenance_message
         })),
         modules: modules.map((m) => ({

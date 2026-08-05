@@ -34,9 +34,13 @@ exports.getBySlug = async (slug) => {
         return null;
     }
 
-    // Same maintenance-vs-not-found distinction as
+    // Same Active/Maintenance/Deactivated distinction as
     // category.service.js#getDepartmentBySlug - see that comment.
-    if (!category.is_active) {
+    if (category.status === "deactivated") {
+        return null;
+    }
+
+    if (category.status === "maintenance") {
         const error = new Error(
             category.maintenance_message || `${category.name} is temporarily unavailable for maintenance.`
         );
@@ -96,4 +100,15 @@ exports.setCategoryActive = async (id, isActive, maintenanceMessage) => {
     }
 
     await serviceCategoryRepository.setActive(id, isActive, maintenanceMessage);
+};
+
+// True deactivation - distinct from setCategoryActive(id, false, ...)
+// above, which only puts a category into maintenance.
+exports.deactivateCategory = async (id) => {
+    const category = await serviceCategoryRepository.findById(id);
+    if (!category) {
+        throw new Error("Service category not found");
+    }
+
+    await serviceCategoryRepository.setDeactivated(id);
 };

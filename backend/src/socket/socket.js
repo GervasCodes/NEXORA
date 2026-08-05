@@ -6,6 +6,30 @@ const authRepository = require("../modules/auth/auth.repository");
 
 let io = null;
 
+// Shift-persistence fix (Phase 2): a page refresh always fires the
+// socket's "disconnect" event before the new page's socket reconnects -
+// treating that the same as the agent actually going offline (closing
+// the tab, losing signal) meant is_online got flipped back to false in
+// the database within milliseconds of every refresh, even though the
+// frontend had correctly persisted "online" via PUT /delivery/online
+// moments earlier. Give a short grace period: on disconnect, schedule
+// the offline flip instead of applying it immediately, and cancel that
+// timer if the same agent's socket reconnects before it fires (which a
+// refresh does almost instantly). An explicit "go offline" action
+// (agent:offline, or PUT /delivery/online with isOnline:false) is
+// intentional and still takes effect immediately - only the passive
+// "the socket died" signal gets debounced.
+const DISCONNECT_GRACE_MS = 12000;
+const pendingOfflineTimers = new Map(); // agentId -> Timeout
+
+const cancelPendingOffline = (agentId) => {
+    const timer = pendingOfflineTimers.get(agentId);
+    if (timer) {
+        clearTimeout(timer);
+        pendingOfflineTimers.delete(agentId);
+    }
+};
+
 // Other modules (chat.service) call this to broadcast a saved message
 // to everyone currently in that conversation's room.
 exports.emitNewMessage = (conversationId, payload) => {
@@ -147,6 +171,19 @@ exports.init = (httpServer) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
 
+        // A delivery agent reconnecting (page refresh, brief network
+        // blip, new tab) cancels any pending "mark offline" scheduled by
+        // a previous socket's disconnect - see DISCONNECT_GRACE_MS above.
+        // This alone doesn't re-mark them online (a genuinely new session
+        // - e.g. after actually closing the app and reopening later, past
+        // the grace period - still starts from whatever is_online
+        // currently is; the frontend's mount-time GET /delivery/online
+        // plus its own goOnline() call is what re-establishes "online"
+        // for that case).
+        if (socket.user.role === "delivery_agent") {
+            cancelPendingOffline(socket.user.id);
+        }
+
 // Join shared admin room
 if (
     socket.user.role === "admin" ||
@@ -242,12 +279,17 @@ if (
         // Agent goes on/off shift.
         socket.on("agent:online", async () => {
             if (socket.user.role !== "delivery_agent") return;
+            cancelPendingOffline(socket.user.id);
             const deliveryService = require("../modules/delivery/delivery.service");
             await deliveryService.setAgentOnline(socket.user.id, true);
         });
 
         socket.on("agent:offline", async () => {
             if (socket.user.role !== "delivery_agent") return;
+            // Explicit, intentional action - takes effect immediately,
+            // no grace period (unlike the passive disconnect handler
+            // below).
+            cancelPendingOffline(socket.user.id);
             const deliveryService = require("../modules/delivery/delivery.service");
             await deliveryService.setAgentOnline(socket.user.id, false);
         });
@@ -317,11 +359,21 @@ if (
 
         socket.on("disconnect", async () => {
             if (socket.user.role !== "delivery_agent") return;
-            // Best-effort: mark the agent offline so stale offers don't get
-            // routed to someone whose tab just closed. If they still have
-            // another tab open, its next join will just re-set this true.
-            const deliveryService = require("../modules/delivery/delivery.service");
-            await deliveryService.setAgentOnline(socket.user.id, false).catch(() => {});
+            // Debounced, not immediate: a page refresh fires this exact
+            // event too, and the new page's socket will normally
+            // reconnect and cancel this timer within a second or two -
+            // see cancelPendingOffline above. Only a socket that stays
+            // disconnected for the full grace period (tab actually
+            // closed, signal actually lost) results in is_online really
+            // flipping to false, so stale offers don't get routed to
+            // someone who's genuinely gone.
+            cancelPendingOffline(socket.user.id);
+            const timer = setTimeout(async () => {
+                pendingOfflineTimers.delete(socket.user.id);
+                const deliveryService = require("../modules/delivery/delivery.service");
+                await deliveryService.setAgentOnline(socket.user.id, false).catch(() => {});
+            }, DISCONNECT_GRACE_MS);
+            pendingOfflineTimers.set(socket.user.id, timer);
         });
     });
 

@@ -89,6 +89,21 @@ exports.setOnlineStatus = async (req, res) => {
     }
 };
 
+// Lets the frontend hydrate its shift toggle from the persisted value -
+// called on mount/reconnect by useAgentShift.js so a page refresh (or
+// returning after login/logout) shows the agent's real current shift
+// status instead of resetting the toggle to "off".
+exports.getOnlineStatus = async (req, res) => {
+    try {
+        const status = await deliveryService.getAgentOnlineStatus(req.user.id);
+
+        return res.json({ success: true, data: status });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.rateDelivery = async (req, res) => {
     try {
         const { rating, comment } = req.body;

@@ -25,6 +25,8 @@ export default function DepartmentMaintenanceListener() {
                 toast?.info(
                     message ? `${name} is now under maintenance: ${message}` : `${name} is now under maintenance.`
                 );
+            } else if (status === "deactivated") {
+                toast?.info(`${name} is no longer available.`);
             } else {
                 toast?.success(`${name} is back and available again.`);
             }

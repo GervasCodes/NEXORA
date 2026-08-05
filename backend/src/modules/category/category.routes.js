@@ -78,6 +78,18 @@ router.put(
     categoryController.activateCategory
 );
 
+// Distinct from /deactivate above - this puts a department into
+// maintenance (still linked, shoppers see a maintenance page) rather than
+// hiding it completely.
+router.put(
+    "/:id/maintenance",
+    authMiddleware,
+    authorize("admin"),
+    categoryIdValidation,
+    validationMiddleware,
+    categoryController.enterMaintenance
+);
+
 // Schedule a future maintenance window (start/end times) for a
 // department - see category.service.js#scheduleMaintenance. If start_at
 // is omitted or already past, maintenance begins immediately and

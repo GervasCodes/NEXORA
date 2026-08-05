@@ -43,6 +43,14 @@ router.put(
 );
 
 router.get(
+    "/online",
+    authMiddleware,
+    authorize("delivery_agent"),
+    requireApprovedDeliveryAgent,
+    deliveryController.getOnlineStatus
+);
+
+router.get(
     "/my/list",
     authMiddleware,
     authorize("delivery_agent"),

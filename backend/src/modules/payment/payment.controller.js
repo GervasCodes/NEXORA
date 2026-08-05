@@ -296,7 +296,12 @@ exports.malipopayCardWebhook = async (req, res) => {
     try {
         const malipopayCardProvider = require("./providers/malipopayCard.provider");
         const replayGuard = require("../../utils/webhookReplayGuard");
-        const event = malipopayCardProvider.constructWebhookEvent(req.body, req.headers["malipopay-signature"]);
+        // Real header name confirmed via MalipoPay's official malipopay-php
+        // SDK (reads HTTP_X_MALIPOPAY_SIGNATURE) - see
+        // malipopayCard.provider.js's file header for the full rundown of
+        // what else changed in this rewrite. Express lower-cases incoming
+        // header names, so this is read as all-lowercase.
+        const event = malipopayCardProvider.constructWebhookEvent(req.body, req.headers["x-malipopay-signature"]);
 
         // Same replay protection as the Snippe webhook - see the comment
         // there and webhookReplayGuard.js for the full reasoning.

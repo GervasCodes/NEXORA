@@ -244,6 +244,13 @@ exports.getSellerOrderDetail = async (orderId, sellerId) => {
         throw new Error("Order not found");
     }
 
+    // Payment Security: same rule as getSellerOrders - an order requiring
+    // upfront online payment that hasn't been verified paid yet doesn't
+    // exist as far as a seller is concerned, even by direct order id.
+    if (order.payment_method !== "cash_on_delivery" && order.payment_status !== "paid") {
+        throw new Error("Order not found");
+    }
+
     const items = await orderRepository.findOrderItemsBySeller(orderId, sellerId);
 
     // Only expose what a seller needs - not the buyer's payment method internals
@@ -273,6 +280,15 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
 
     if (!ownsItem) {
         throw new Error("Order not found");
+    }
+
+    // Payment Security: a seller must never accept/process an order that
+    // requires upfront online payment until it's actually verified paid -
+    // this is the enforcement point (not just a listing/detail filter),
+    // since a seller could otherwise still hit this endpoint directly
+    // with an order id they'd learned some other way.
+    if (order.payment_method !== "cash_on_delivery" && order.payment_status !== "paid") {
+        throw new Error("This order can't be accepted yet - payment hasn't been verified");
     }
 
     const allowedNext = SELLER_STATUS_TRANSITIONS[order.status] || [];

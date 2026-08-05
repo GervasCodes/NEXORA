@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../utils/format";
 
 // Shown in place of a single page/section's content when the admin has
 // put that department, service, or module into maintenance mode (see
@@ -14,6 +15,7 @@ import { Link } from "react-router-dom";
 export default function MaintenanceScreen({
     title = "Under maintenance",
     message = "This is temporarily unavailable while we make some improvements. Please check back soon.",
+    estimatedReturn,
     onRetry
 }) {
     return (
@@ -63,9 +65,15 @@ export default function MaintenanceScreen({
                 <h1 className="font-display text-2xl sm:text-3xl text-ink mb-2 animate-slide-up">
                     {title}
                 </h1>
-                <p className="text-ash text-sm leading-relaxed mb-8 animate-slide-up" style={{ animationDelay: "80ms" }}>
+                <p className="text-ash text-sm leading-relaxed mb-2 animate-slide-up" style={{ animationDelay: "80ms" }}>
                     {message}
                 </p>
+                {estimatedReturn && (
+                    <p className="text-xs text-mango-dark mb-6 animate-slide-up" style={{ animationDelay: "100ms" }}>
+                        Expected back {formatDateTime(estimatedReturn)}
+                    </p>
+                )}
+                {!estimatedReturn && <div className="mb-8" />}
 
                 <div className="flex items-center justify-center gap-3 animate-slide-up" style={{ animationDelay: "140ms" }}>
                     {onRetry && (

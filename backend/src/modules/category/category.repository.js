@@ -1,8 +1,11 @@
 const db = require("../../config/db");
 
+// Only genuinely 'active' departments - a department in 'maintenance' or
+// 'deactivated' status must never appear here (this backs every public
+// dropdown/listing, so both offline states have to be equally invisible).
 exports.findAllActive = async () => {
     const [rows] = await db.query(
-        "SELECT * FROM categories WHERE is_active = 1 ORDER BY display_order ASC, name ASC"
+        "SELECT * FROM categories WHERE status = 'active' ORDER BY display_order ASC, name ASC"
     );
     return rows;
 };
@@ -203,7 +206,7 @@ exports.findAllActiveWithSponsorship = async () => {
         LEFT JOIN department_sponsorship_campaigns dsc
             ON dsc.category_id = c.id
             AND dsc.status = 'active' AND dsc.ends_at > NOW()
-        WHERE c.is_active = 1
+        WHERE c.status = 'active'
         GROUP BY c.id
         ORDER BY is_sponsored DESC, c.display_order ASC, c.name ASC`
     );
@@ -245,36 +248,57 @@ exports.updateCoverImage = async (id, coverImageUrl) => {
     );
 };
 
-// Manual, instant activate/deactivate (Admin Panel "Deactivate"/"Activate"
-// buttons). Always clears any pending schedule columns too - a manual
+// Manual, instant reactivation (Admin Panel "Activate" button) - clears a
+// department out of either 'maintenance' or 'deactivated' back to
+// 'active'. Always clears any pending schedule columns too - a manual
 // override takes precedence over a schedule set earlier, and leaving a
 // past-dated maintenance_scheduled_start behind would otherwise cause the
 // next cron tick (departmentMaintenanceSchedule.job.js) to immediately
 // re-apply a maintenance window the admin just manually cleared.
+// is_active is kept in sync with status (1 only when status='active') so
+// every other module gating on categories.is_active keeps working as-is.
 exports.setActive = async (id, isActive, maintenanceMessage) => {
     await db.query(
         `UPDATE categories
-        SET is_active = ?, maintenance_message = ?,
+        SET is_active = ?, status = ?, maintenance_message = ?,
             maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
         WHERE id = ?`,
-        [isActive, isActive ? null : (maintenanceMessage || null), id]
+        [isActive, isActive ? "active" : "maintenance", isActive ? null : (maintenanceMessage || null), id]
     );
 };
 
-// Schedules a future maintenance window. Doesn't touch is_active directly -
-// departmentMaintenanceSchedule.job.js flips it at the scheduled moment -
-// except when startAt has already arrived (or is missing/past), in which
-// case the window is applied immediately so admins can also use this as
-// an "activate now, auto-restore at endAt" shortcut instead of two calls.
+// True deactivation (Admin Panel "Deactivate" button) - distinct from
+// maintenance. A deactivated department is meant to disappear completely:
+// no listing, no maintenance page, not reachable by direct link either
+// (see category.service.js#getDepartmentBySlug). No message needed since
+// nothing is ever shown for it.
+exports.setDeactivated = async (id) => {
+    await db.query(
+        `UPDATE categories
+        SET is_active = 0, status = 'deactivated', maintenance_message = NULL,
+            maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
+        WHERE id = ?`,
+        [id]
+    );
+};
+
+// Schedules a future maintenance window. Doesn't touch status/is_active
+// directly - departmentMaintenanceSchedule.job.js flips it at the
+// scheduled moment - except when startAt has already arrived (or is
+// missing/past), in which case the window is applied immediately so
+// admins can also use this as an "enter maintenance now, auto-restore at
+// endAt" shortcut instead of two calls. Only ever moves a department
+// active -> maintenance, never touches a 'deactivated' department.
 exports.scheduleMaintenance = async (id, startAt, endAt, message) => {
     const startsNow = !startAt || new Date(startAt) <= new Date();
     await db.query(
         `UPDATE categories
         SET maintenance_scheduled_start = ?, maintenance_scheduled_end = ?,
             maintenance_message = ?,
-            is_active = IF(?, 0, is_active)
+            is_active = IF(?, 0, is_active),
+            status = IF(?, 'maintenance', status)
         WHERE id = ?`,
-        [startAt || null, endAt || null, message || null, startsNow, id]
+        [startAt || null, endAt || null, message || null, startsNow, startsNow, id]
     );
     return startsNow;
 };
@@ -289,11 +313,13 @@ exports.cancelScheduledMaintenance = async (id) => {
 };
 
 // Due windows whose start has arrived but the department is still marked
-// active - the cron job flips these into maintenance.
+// active - the cron job flips these into maintenance. Restricted to
+// status='active' so a department that was manually deactivated in the
+// meantime is never pulled back into maintenance by a stale schedule.
 exports.findDueToEnterMaintenance = async () => {
     const [rows] = await db.query(
         `SELECT * FROM categories
-        WHERE is_active = 1
+        WHERE status = 'active'
             AND maintenance_scheduled_start IS NOT NULL
             AND maintenance_scheduled_start <= NOW()
             AND (maintenance_scheduled_end IS NULL OR maintenance_scheduled_end > NOW())`
@@ -304,10 +330,12 @@ exports.findDueToEnterMaintenance = async () => {
 // Due windows whose end has arrived and the department is still in
 // maintenance - the cron job flips these back to active and clears the
 // schedule/message so the department comes back exactly as it was.
+// Restricted to status='maintenance' so a since-deactivated department is
+// never accidentally reactivated by a stale schedule.
 exports.findDueToExitMaintenance = async () => {
     const [rows] = await db.query(
         `SELECT * FROM categories
-        WHERE is_active = 0
+        WHERE status = 'maintenance'
             AND maintenance_scheduled_end IS NOT NULL
             AND maintenance_scheduled_end <= NOW()`
     );
@@ -315,13 +343,13 @@ exports.findDueToExitMaintenance = async () => {
 };
 
 exports.applyScheduledEntry = async (id) => {
-    await db.query("UPDATE categories SET is_active = 0 WHERE id = ?", [id]);
+    await db.query("UPDATE categories SET is_active = 0, status = 'maintenance' WHERE id = ?", [id]);
 };
 
 exports.applyScheduledExit = async (id) => {
     await db.query(
         `UPDATE categories
-        SET is_active = 1, maintenance_message = NULL,
+        SET is_active = 1, status = 'active', maintenance_message = NULL,
             maintenance_scheduled_start = NULL, maintenance_scheduled_end = NULL
         WHERE id = ?`,
         [id]

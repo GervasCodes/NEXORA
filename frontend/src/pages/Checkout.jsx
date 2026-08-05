@@ -40,8 +40,8 @@ const PROVIDER_GATED_METHODS = new Set(["mobile_money", "paypal"]);
 // registry's own `label` for any key not listed here, so a brand-new
 // card rail still renders sensibly with zero frontend changes.
 const CARD_PROVIDER_LABELS = {
-    snippe: "Card (Snippe)",
-    malipopay_card: "Card (MalipoPay)"
+    malipopay_card: "Card (MalipoPay)",
+    snippe: "Card (Snippe)"
 };
 
 // Fail-open fallback for the card rails specifically. If GET

@@ -462,7 +462,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
     });
 
     it("rejects a status transition that isn't allowed from the current status", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money" });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
 
         await expect(orderService.updateOrderStatusBySeller(1, 10, "delivered")).rejects.toThrow(
@@ -473,7 +473,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("assigns a roster agent on shipment: prices the delivery, marks it 'own', and notifies the agent", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         sellerRepository.isInRoster.mockResolvedValue(true);
@@ -496,7 +496,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("rejects assigning an agent who isn't in the seller's roster", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         sellerRepository.isInRoster.mockResolvedValue(false);
@@ -510,7 +510,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("rejects assigning a roster agent when the order already has a delivery", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         sellerRepository.isInRoster.mockResolvedValue(true);
@@ -525,7 +525,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("kicks off nearest-agent matching when shipped without a specific roster agent", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         deliveryService.startMatching.mockResolvedValue(undefined);
@@ -539,7 +539,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("does not let a matching failure block or fail the status update (fire-and-forget)", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         deliveryService.startMatching.mockRejectedValue(new Error("no agents nearby"));
@@ -549,7 +549,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
 
     it("notifies the buyer on a plain status update", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1"
+            id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
 

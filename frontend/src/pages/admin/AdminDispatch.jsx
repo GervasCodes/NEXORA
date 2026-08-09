@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../../api/client";
 import { useSocket } from "../../context/SocketContext";
 import { formatMoney } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
+import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
 
 const statusStyles = {
@@ -82,7 +82,39 @@ export default function AdminDispatch() {
         [deliveries]
     );
 
-    if (loading) return <PageLoader />;
+    // Skeleton mirrors the real page's shape (header, 4 summary cards,
+    // map, 2 lists) rather than a full-page blocking spinner - Phase 8
+    // UX Polish ("heavy dashboards" / "Admin Dispatch Map" call-outs).
+    // Live-updates via the socket connection below don't touch `loading`
+    // again after the first load, so this only ever shows once per page
+    // visit, not on every real-time refresh.
+    if (loading) {
+        return (
+            <div className="animate-fade-in">
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="font-display text-2xl">Dispatch dashboard</h1>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="border border-line rounded-lg p-4">
+                            <Skeleton className="h-3 w-20 mb-2" />
+                            <Skeleton className="h-7 w-12" />
+                        </div>
+                    ))}
+                </div>
+
+                <h2 className="font-display text-lg mb-3">Live map</h2>
+                <Skeleton className="w-full h-72 mb-10" />
+
+                <h2 className="font-display text-lg mb-3">Active deliveries</h2>
+                <SkeletonList rows={3} />
+
+                <h2 className="font-display text-lg mt-10 mb-3">Online agents</h2>
+                <SkeletonList rows={3} />
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fade-in">

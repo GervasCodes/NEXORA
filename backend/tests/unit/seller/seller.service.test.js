@@ -292,6 +292,7 @@ describe("seller.service verification fee / badge sync", () => {
 
     it("payVerificationFee rejects without a phone number", async () => {
         sellerRepository.findByUserId.mockResolvedValue({ verification_fee_paid: 0 });
+        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(true);
         await expect(sellerService.payVerificationFee(1, null)).rejects.toThrow(
             "A mobile money phone number is required."
         );
@@ -299,6 +300,7 @@ describe("seller.service verification fee / badge sync", () => {
 
     it("payVerificationFee looks up the fee and kicks off payment via payment.service", async () => {
         sellerRepository.findByUserId.mockResolvedValue({ verification_fee_paid: 0 });
+        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(true);
         settingsService.getVerificationFee.mockResolvedValue(20000);
         paymentService.initiateVerificationFeePayment.mockResolvedValue({ status: "pending" });
 
@@ -306,6 +308,31 @@ describe("seller.service verification fee / badge sync", () => {
 
         expect(paymentService.initiateVerificationFeePayment).toHaveBeenCalledWith(1, "0700000000", 20000);
         expect(result).toEqual({ status: "pending" });
+    });
+
+    // Monetization Master Switch (Phase 1): when verification-fee
+    // monetization is off, payVerificationFee skips payment entirely
+    // and waives the fee immediately instead of requiring a phone
+    // number or calling payment.service at all.
+    it("payVerificationFee waives the fee instantly when verification-fee monetization is disabled", async () => {
+        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(false);
+        sellerRepository.setVerificationFeePaid.mockResolvedValue(undefined);
+        authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
+        // First call is payVerificationFee's own lookup (fee not yet
+        // paid); second is the one syncBadge makes internally after
+        // confirmVerificationFeePaid marks it waived.
+        sellerRepository.findByUserId
+            .mockResolvedValueOnce({ verification_fee_paid: 0 })
+            .mockResolvedValueOnce({ verification_fee_paid: 1, is_verified: 0 });
+
+        const result = await sellerService.payVerificationFee(1, null);
+
+        expect(sellerRepository.setVerificationFeePaid).toHaveBeenCalledWith(1, 0, "waived_free_launch");
+        expect(paymentService.initiateVerificationFeePayment).not.toHaveBeenCalled();
+        expect(result).toEqual({
+            status: "waived",
+            message: "Verification is free during launch - your badge is now active."
+        });
     });
 
     it("confirmVerificationFeePaid marks the fee paid then syncs the badge", async () => {

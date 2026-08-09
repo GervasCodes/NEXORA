@@ -50,9 +50,18 @@ function DepartmentDiscovery() {
 
     return (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
-            {departments.map((department, i) => (
-                <DepartmentCard key={department.id} department={department} index={i} />
-            ))}
+            {/* The "services" category row (migration 065) is deliberately
+                excluded here - it's rendered below as its own purpose-built
+                tile (accurate service count, distinct icon) instead of a
+                generic DepartmentCard, which would show a product count of
+                0 since services aren't linked into the products table the
+                way every other department's count is. Rendering both used
+                to show two separate "Services" tiles on the homepage. */}
+            {departments
+                .filter((department) => department.slug !== "services")
+                .map((department, i) => (
+                    <DepartmentCard key={department.id} department={department} index={i} />
+                ))}
 
             {/* Services lives alongside product departments - entering it is
                 the same tap-a-tile gesture as any department, not a separate

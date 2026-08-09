@@ -58,6 +58,7 @@ describe("sponsorship.service.createCampaign", () => {
     it("rejects when the wallet balance can't cover the total cost, without touching the ledger", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
+        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "10000.00" });
 
         // 5 days * 5000/day = 25000, more than the 10000 balance
@@ -73,6 +74,7 @@ describe("sponsorship.service.createCampaign", () => {
     it("debits the wallet, opens the campaign, flips is_sponsored, and commits", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
+        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "100000.00" });
         sponsorshipRepository.create.mockResolvedValue(77);
         walletRepository.incrementBalance.mockResolvedValue(75000);
@@ -97,6 +99,7 @@ describe("sponsorship.service.createCampaign", () => {
     it("rolls back if the campaign insert fails mid-transaction", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
+        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "100000.00" });
         sponsorshipRepository.create.mockRejectedValue(new Error("db write failed"));
 
@@ -104,6 +107,29 @@ describe("sponsorship.service.createCampaign", () => {
         expect(connection.rollback).toHaveBeenCalled();
         expect(connection.commit).not.toHaveBeenCalled();
         expect(connection.release).toHaveBeenCalled();
+    });
+
+    // Monetization Master Switch (Phase 1): while sponsorship
+    // monetization is off, campaigns are free - no balance check, no
+    // wallet debit, but the campaign still opens (auto-approved).
+    it("opens the campaign for free, without touching the wallet, when sponsorship monetization is disabled", async () => {
+        productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
+        settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
+        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
+        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "0.00" });
+        sponsorshipRepository.create.mockResolvedValue(78);
+
+        const result = await sponsorshipService.createCampaign(10, 1, 5);
+
+        expect(sponsorshipRepository.create).toHaveBeenCalledWith(
+            expect.objectContaining({ sellerId: 10, productId: 1, dailyRate: 0, days: 5, totalCost: 0 }),
+            connection
+        );
+        expect(walletRepository.incrementBalance).not.toHaveBeenCalled();
+        expect(walletRepository.insertTransaction).not.toHaveBeenCalled();
+        expect(productRepository.setSponsored).toHaveBeenCalledWith(1, true, connection);
+        expect(connection.commit).toHaveBeenCalled();
+        expect(result).toMatchObject({ campaignId: 78, totalCost: 0 });
     });
 });
 

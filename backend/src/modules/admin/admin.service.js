@@ -2,6 +2,7 @@ const db = require("../../config/db");
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
+const monetizationScheduleService = require("../monetizationSchedule/monetizationSchedule.service");
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
@@ -757,6 +758,28 @@ exports.getSettings = async () => {
 
 exports.updateSettings = async (data) => {
     return settingsService.updateSettings(data);
+};
+
+// --- Monetization Master Switch (Admin Billing Control Center) ---
+
+exports.getMonetizationStatus = async () => {
+    return settingsService.getMonetizationStatus();
+};
+
+exports.updateMonetizationSettings = async (data, adminId) => {
+    return settingsService.updateMonetizationSettings(data, adminId);
+};
+
+exports.listMonetizationSchedule = async () => {
+    return monetizationScheduleService.listPending();
+};
+
+exports.createMonetizationSchedule = async (settingKey, enabled, scheduledAt, adminId) => {
+    return monetizationScheduleService.schedule(settingKey, enabled, scheduledAt, adminId);
+};
+
+exports.cancelMonetizationSchedule = async (scheduleId, adminId) => {
+    return monetizationScheduleService.cancel(scheduleId, adminId);
 };
 
 // --- Sponsorship campaigns (Phase 8A - read-only oversight; the manual

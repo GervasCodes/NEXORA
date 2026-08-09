@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
+import BillingStatusBanner from "../../components/BillingStatusBanner";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -118,6 +119,8 @@ export default function SellerVerification() {
                 Verified sellers can add and sell products, and unlock the paid Verified Seller badge with advanced
                 analytics, revenue reports, and premium tools.
             </p>
+
+            <BillingStatusBanner flagKey="monetization_verification_fee_enabled" label="Verification fee" />
 
             <div className="mb-6 flex flex-wrap items-center gap-2">
                 <StatusPill status={verification.verification_status} />

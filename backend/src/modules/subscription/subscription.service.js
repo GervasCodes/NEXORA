@@ -46,7 +46,18 @@ exports.getMySubscription = async (sellerId) => {
 // apply for a specific seller - falls back to the platform default the
 // same way every other rate lookup in this codebase does when nothing
 // more specific is set.
+//
+// Monetization Master Switch: when monetization_commission_enabled is
+// off, commission is flat 0% for everyone, full stop - plan overrides
+// and the platform default commission_rate setting are both ignored
+// rather than consulted, matching a genuinely free launch rather than
+// "free unless a plan says otherwise".
 exports.getEffectiveCommissionRate = async (sellerId) => {
+    const commissionEnabled = await settingsService.isCommissionMonetizationEnabled();
+    if (!commissionEnabled) {
+        return 0;
+    }
+
     const current = await subscriptionRepository.findCurrentForSeller(sellerId);
     if (current && current.status === "active" && current.commission_rate_override !== null) {
         return Number(current.commission_rate_override);
@@ -119,6 +130,39 @@ exports.cancelMySubscription = async (sellerId) => {
     // lapses (a future renewal job, out of scope here, would flip it to
     // "expired" once current_period_end passes with auto_renew off).
     return { message: "Auto-renew turned off. Your plan benefits remain active until the end of the current billing period." };
+};
+
+// ---- Monetization Master Switch: free-launch activation -------------------
+
+// Called by subscription.controller.js's subscribe* actions instead of
+// initiating a payment when monetization_subscriptions_enabled is off -
+// creates the subscription row and activates it immediately, same
+// transaction shape payment.service.js's webhook handler uses via
+// activateSubscription() above, just without any payment in between.
+// Works for paid plans too (not just the free plan): "sellers can select
+// plans normally... subscription activates automatically" per the
+// monetization roadmap - a seller isn't limited to the free plan just
+// because billing hasn't started yet.
+exports.subscribeFree = async (sellerId, planCode) => {
+    const plan = await subscriptionRepository.findPlanByCode(planCode);
+    if (!plan || !plan.is_active) {
+        throw new Error("Plan not found");
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        const subscriptionId = await subscriptionRepository.createSubscription(sellerId, plan.id, connection);
+        await subscriptionRepository.activateSubscription(subscriptionId, sellerId, plan.billing_cycle, connection);
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+
+    return exports.getMySubscription(sellerId);
 };
 
 // ---- Admin ----------------------------------------------------------------

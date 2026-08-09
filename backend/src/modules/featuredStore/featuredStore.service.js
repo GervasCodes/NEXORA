@@ -68,7 +68,8 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
     }
 
     const dailyRate = await settingsService.getFeaturedStoreDailyRate();
-    const totalCost = Number((dailyRate * parsedDays).toFixed(2));
+    const sponsorshipEnabled = await settingsService.isSponsorshipMonetizationEnabled();
+    const totalCost = sponsorshipEnabled ? Number((dailyRate * parsedDays).toFixed(2)) : 0;
 
     const connection = await db.getConnection();
 
@@ -78,7 +79,10 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
         await walletRepository.ensureWallet(sellerId, connection);
         const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
 
-        if (totalCost > Number(wallet.balance)) {
+        // Monetization Master Switch: while sponsorship monetization is
+        // off, campaigns are free - skip the balance check and debit
+        // entirely (totalCost is already 0 above) and auto-approve.
+        if (sponsorshipEnabled && totalCost > Number(wallet.balance)) {
             throw new Error(
                 "Insufficient wallet balance to fund this campaign. Top up from your order earnings, or choose a shorter duration."
             );
@@ -87,21 +91,24 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
         const endsAt = new Date(Date.now() + parsedDays * MS_PER_DAY);
 
         const campaignId = await featuredStoreRepository.create(
-            { sellerId, categoryId, dailyRate, days: parsedDays, totalCost, endsAt },
+            { sellerId, categoryId, dailyRate: sponsorshipEnabled ? dailyRate : 0, days: parsedDays, totalCost, endsAt },
             connection
         );
 
-        const balanceAfter = await walletRepository.incrementBalance(sellerId, -totalCost, connection);
+        let balanceAfter = Number(wallet.balance);
+        if (sponsorshipEnabled && totalCost > 0) {
+            balanceAfter = await walletRepository.incrementBalance(sellerId, -totalCost, connection);
 
-        await walletRepository.insertTransaction({
-            sellerId,
-            type: "debit",
-            amount: totalCost,
-            balanceAfter,
-            referenceType: "featured_store_campaign",
-            referenceId: campaignId,
-            description: `Featured store campaign #${campaignId} in "${category.name}" (${parsedDays} day${parsedDays === 1 ? "" : "s"} at ${dailyRate}/day)`
-        }, connection);
+            await walletRepository.insertTransaction({
+                sellerId,
+                type: "debit",
+                amount: totalCost,
+                balanceAfter,
+                referenceType: "featured_store_campaign",
+                referenceId: campaignId,
+                description: `Featured store campaign #${campaignId} in "${category.name}" (${parsedDays} day${parsedDays === 1 ? "" : "s"} at ${dailyRate}/day)`
+            }, connection);
+        }
 
         await connection.commit();
 

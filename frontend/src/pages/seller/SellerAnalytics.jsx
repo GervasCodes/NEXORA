@@ -4,7 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatShortDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
 import VerificationFeeGate from "../../components/VerificationFeeGate";
-import PageLoader from "../../components/PageLoader";
+import Skeleton from "../../components/Skeleton";
 
 const STATUS_LABELS = {
     pending: "Pending",
@@ -96,7 +96,42 @@ export default function SellerAnalytics() {
 
     useEffect(load, [showServices]);
 
-    if (loading) return <PageLoader />;
+    // Skeleton mirrors the real dashboard's shape (stat cards, chart,
+    // two product/service lists) rather than a full-page blocking
+    // spinner - Phase 8 UX Polish ("heavy dashboards" call-out).
+    if (loading) {
+        return (
+            <div className="animate-fade-in">
+                <Skeleton className="h-7 w-40 mb-2" />
+                <Skeleton className="h-4 w-56 mb-8" />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="border border-line rounded-lg p-4">
+                            <Skeleton className="h-3 w-16 mb-2" />
+                            <Skeleton className="h-6 w-20" />
+                        </div>
+                    ))}
+                </div>
+
+                <div className="border border-line rounded-lg p-4 mb-10">
+                    <Skeleton className="h-4 w-40 mb-4" />
+                    <Skeleton className="w-full h-40" />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                        <div key={i} className="border border-line rounded-lg p-4">
+                            <Skeleton className="h-4 w-32 mb-4" />
+                            <Skeleton className="h-3 w-full mb-2" />
+                            <Skeleton className="h-3 w-5/6 mb-2" />
+                            <Skeleton className="h-3 w-2/3" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     if (feeRequired !== null) {
         return (

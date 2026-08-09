@@ -28,6 +28,33 @@ exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
 
+const MONETIZATION_KEYS = [
+    "monetization_subscriptions_enabled",
+    "monetization_commission_enabled",
+    "monetization_sponsorship_enabled",
+    "monetization_verification_fee_enabled"
+];
+
+exports.updateMonetizationSettingsValidation = MONETIZATION_KEYS.map((key) =>
+    body(key).optional().isBoolean().withMessage(`${key} must be true or false`).toBoolean()
+);
+
+exports.createMonetizationScheduleValidation = [
+    body("setting_key")
+        .notEmpty().withMessage("setting_key is required")
+        .isIn(MONETIZATION_KEYS).withMessage("Unknown monetization setting"),
+    body("enabled")
+        .isBoolean().withMessage("enabled must be true or false")
+        .toBoolean(),
+    body("scheduled_at")
+        .notEmpty().withMessage("scheduled_at is required")
+        .isISO8601().withMessage("scheduled_at must be a valid date/time")
+];
+
+exports.monetizationScheduleIdValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid scheduled change")
+];
+
 exports.updateSettingsValidation = [
     body("commission_rate")
         .optional()

@@ -15,6 +15,9 @@ const {
     orderIdValidation,
     bookingIdValidation,
     updateSettingsValidation,
+    updateMonetizationSettingsValidation,
+    createMonetizationScheduleValidation,
+    monetizationScheduleIdValidation,
     createAdminValidation,
     updateAdminPermissionsValidation
 } = require("./admin.validator");
@@ -116,6 +119,31 @@ router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddle
 
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);
+
+// Monetization Master Switch (Admin Billing Control Center) - lets
+// NEXORA launch free and turn each monetization stream on later without
+// a redeploy. See settings.service.js#isXMonetizationEnabled for the
+// enforcement points.
+router.get("/monetization", adminController.getMonetizationStatus);
+router.put(
+    "/monetization",
+    updateMonetizationSettingsValidation,
+    validationMiddleware,
+    adminController.updateMonetizationSettings
+);
+router.get("/monetization/schedule", adminController.listMonetizationSchedule);
+router.post(
+    "/monetization/schedule",
+    createMonetizationScheduleValidation,
+    validationMiddleware,
+    adminController.createMonetizationSchedule
+);
+router.delete(
+    "/monetization/schedule/:id",
+    monetizationScheduleIdValidation,
+    validationMiddleware,
+    adminController.cancelMonetizationSchedule
+);
 
 // Read-only oversight of seller-paid sponsorship campaigns (Phase 8A).
 // The manual sponsor/unsponsor toggle above (/products/:id/sponsor) stays

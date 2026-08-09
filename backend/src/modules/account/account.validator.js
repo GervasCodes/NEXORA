@@ -1,10 +1,11 @@
 const { body } = require("express-validator");
+const phoneValidator = require("../../validators/sharedPhoneValidator");
 
 exports.updateProfileValidation = [
     body("first_name").optional().trim().notEmpty().withMessage("First name can't be empty"),
     body("last_name").optional().trim().notEmpty().withMessage("Last name can't be empty"),
     body("email").optional().isEmail().withMessage("Invalid email address"),
-    body("phone").optional().isLength({ min: 8, max: 20 }).withMessage("Invalid phone number")
+    phoneValidator("phone", { optional: true })
 ];
 
 exports.updateSettingsValidation = [

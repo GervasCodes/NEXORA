@@ -4,7 +4,8 @@ import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
-import { HomeIcon } from "./NavIcons";
+import MobileBottomNav from "./MobileBottomNav";
+import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon } from "./NavIcons";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like /admin's) instead of an 18-item horizontal-scroll
@@ -152,6 +153,24 @@ export default function SellerLayout() {
     }, [isApproved, loading, profile, location.pathname, navigate]);
 
     const merchantType = profile?.merchant_type || "product";
+
+    // Seller's mobile bottom nav (Phase 6: Mobile Navigation
+    // Unification) - the Orders/Bookings slot follows the seller's own
+    // merchant_type, same category logic the sidebar/drawer tabs above
+    // already use: a service-only seller's most-reached-for list is
+    // their bookings, not an orders page they'd immediately get
+    // redirected out of (see the direct-access guard effect below).
+    // Hybrid sellers default to Orders, matching this layout's own
+    // "Orders" group ordering.
+    const sellerBottomNavItems = [
+        { to: "/seller", label: "Home", icon: DashboardIcon, end: true },
+        merchantType === "service"
+            ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
+            : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
+        { to: "/messages", label: "Messages", icon: MessagesIcon },
+        { to: "/seller/wallet", label: "Wallet", icon: WalletIcon },
+        { to: "/account", label: "Profile", icon: AccountIcon }
+    ];
 
     // Phase 1 direct-access guard: only for tabs whose page has no
     // merchant-type fallback UI of its own (selfGated tabs - Services,
@@ -329,6 +348,8 @@ export default function SellerLayout() {
                     <Outlet context={{ profile, refreshProfile: loadProfile }} />
                 </PageTransition>
             </div>
+
+            <MobileBottomNav items={sellerBottomNavItems} />
         </div>
     );
 }

@@ -1,5 +1,6 @@
 const { body } = require("express-validator");
 const { STORE_THEMES } = require("./seller.constants");
+const phoneValidator = require("../../validators/sharedPhoneValidator");
 
 exports.createSellerValidation = [
     body("store_name")
@@ -37,10 +38,7 @@ exports.updateSellerValidation = [
         .isEmail()
         .withMessage("Invalid email address."),
 
-    body("business_phone")
-        .optional()
-        .isLength({ min: 10, max: 20 })
-        .withMessage("Invalid phone number."),
+    phoneValidator("business_phone", { optional: true }),
 
     body("store_type_id")
         .optional()
@@ -109,12 +107,7 @@ exports.addCollectionProductValidation = [
 ];
 
 exports.payVerificationFeeValidation = [
-    body("phone")
-        .trim()
-        .notEmpty()
-        .withMessage("A mobile money phone number is required")
-        .isLength({ min: 10, max: 20 })
-        .withMessage("Invalid phone number.")
+    phoneValidator("phone", { optional: true })
 ];
 
 // Nexora Services Phase 1 - Merchant Type System

@@ -53,6 +53,21 @@ const resolveProvider = () => {
     return simulateProvider;
 };
 
+// Used by providers/registry.js so checkout only lists Mobile Money when
+// the actively selected MOBILE_MONEY_PROVIDER genuinely has working
+// credentials right now - mirrors resolveProvider()'s own resolution
+// logic without throwing or falling back to the simulate provider, since
+// this is a read-only "can it actually be used" check, not a payment
+// attempt. Previously the registry only checked that MOBILE_MONEY_PROVIDER
+// was set to something other than "simulate", without checking whether
+// that provider's own credentials (API keys, etc.) were actually present -
+// which is how checkout could show Mobile Money as available while the
+// real initiate() call then failed with "Mobile money is not configured".
+exports.isConfigured = () => {
+    const provider = activeProvider();
+    return Boolean(provider) && provider.isConfigured();
+};
+
 exports.initiate = async (phone, amount, meta = {}) => {
     return resolveProvider().initiate(phone, amount, meta);
 };

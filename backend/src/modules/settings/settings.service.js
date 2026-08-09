@@ -46,8 +46,22 @@ const DEFAULTS = {
     // order earnings become withdrawable (migration 054, Phase 9B). Not
     // read anywhere yet - Phase 9D's release job is the first caller of
     // getEscrowHoldDays() below.
-    escrow_hold_days: "5"
+    escrow_hold_days: "5",
+
+    // Monetization Master Switch (migration 079). Each flag lets NEXORA
+    // launch fully free and turn a specific monetization stream on later
+    // from the admin panel, with no redeploy or code change - see
+    // updateMonetizationSettings()/getMonetizationFlags() below and
+    // docs/DATABASE.md. Stored as the strings "true"/"false" (not "1"/"0")
+    // to read unambiguously in the admin UI and audit log metadata.
+    // Default OFF for every flag, matching a free launch.
+    monetization_subscriptions_enabled: "false",
+    monetization_commission_enabled: "false",
+    monetization_sponsorship_enabled: "false",
+    monetization_verification_fee_enabled: "false"
 };
+
+const isEnabled = (value) => value === "true" || value === true;
 
 // platform_settings is read on nearly every order (commission),
 // completed delivery (rider fee), and verification page load (fee
@@ -142,6 +156,141 @@ exports.getDepartmentSponsorshipDailyRate = async () => {
 exports.getEscrowHoldDays = async () => {
     const map = await getCachedAll();
     return Number(map.escrow_hold_days);
+};
+
+// ---- Monetization Master Switch ------------------------------------------
+// Each getter below is the single enforcement point its domain module
+// reads before creating a payment request:
+//   - subscription.service.js#getEffectiveCommissionRate reads commission
+//   - subscription.controller.js's subscribe* actions read subscriptions
+//   - sponsorship/featuredStore/departmentSponsorship .service.js#createCampaign read sponsorship
+//   - requireVerificationFeePaid.middleware.js + seller.service.js#payVerificationFee read verificationFee
+// All default OFF (see DEFAULTS above) so a fresh launch is free by default.
+
+exports.isSubscriptionsMonetizationEnabled = async () => {
+    const map = await getCachedAll();
+    return isEnabled(map.monetization_subscriptions_enabled);
+};
+
+exports.isCommissionMonetizationEnabled = async () => {
+    const map = await getCachedAll();
+    return isEnabled(map.monetization_commission_enabled);
+};
+
+exports.isSponsorshipMonetizationEnabled = async () => {
+    const map = await getCachedAll();
+    return isEnabled(map.monetization_sponsorship_enabled);
+};
+
+exports.isVerificationFeeMonetizationEnabled = async () => {
+    const map = await getCachedAll();
+    return isEnabled(map.monetization_verification_fee_enabled);
+};
+
+// All four monetization flags at once, plus each one's last-changed
+// actor/timestamp pulled from audit_logs (event_type
+// "monetization_setting_changed") - the Admin Billing Control Center
+// reads this directly rather than combining getAll() with a separate
+// audit query itself. Reuses audit_logs per the roadmap's instruction
+// instead of adding updated_by/updated_at columns to platform_settings.
+exports.getMonetizationStatus = async () => {
+    const map = await getCachedAll();
+    const auditRepository = require("../audit/audit.repository");
+
+    const flags = [
+        "monetization_subscriptions_enabled",
+        "monetization_commission_enabled",
+        "monetization_sponsorship_enabled",
+        "monetization_verification_fee_enabled"
+    ];
+
+    // search() (not findRecent()) since it LEFT JOINs users - gives the
+    // Admin Billing Control Center a ready-to-render actor name/email,
+    // same shape AdminAuditLogs.jsx already renders for other events.
+    const { rows: recentChanges } = await auditRepository.search({
+        eventTypes: ["monetization_setting_changed"],
+        pageSize: 100
+    });
+
+    const lastChangeFor = (key) => recentChanges.find((row) => {
+        const metadata = typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata;
+        return metadata?.setting_key === key;
+    });
+
+    return flags.reduce((acc, key) => {
+        const lastChange = lastChangeFor(key);
+        acc[key] = {
+            enabled: isEnabled(map[key]),
+            lastChangedBy: lastChange
+                ? {
+                    userId: lastChange.user_id,
+                    firstName: lastChange.actor_first_name,
+                    lastName: lastChange.actor_last_name,
+                    email: lastChange.actor_email
+                }
+                : null,
+            lastChangedAt: lastChange ? lastChange.created_at : null
+        };
+        return acc;
+    }, {});
+};
+
+// Admin-only. Flips one or more of the four monetization flags and
+// writes an audit_logs entry per changed flag (old -> new value),
+// reusing the existing audit_logs table per the roadmap rather than
+// adding new tracking columns. Only writes/logs keys that actually
+// changed, so toggling one flag doesn't spam four audit rows.
+exports.updateMonetizationSettings = async (data, adminId) => {
+    const auditService = require("../audit/audit.service");
+    const map = await getCachedAll();
+
+    const flagKeys = [
+        "monetization_subscriptions_enabled",
+        "monetization_commission_enabled",
+        "monetization_sponsorship_enabled",
+        "monetization_verification_fee_enabled"
+    ];
+
+    for (const key of flagKeys) {
+        if (data[key] === undefined) continue;
+
+        const nextValue = Boolean(data[key]) ? "true" : "false";
+        const previousValue = map[key];
+        if (nextValue === previousValue) continue;
+
+        await settingsRepository.upsert(key, nextValue);
+
+        auditService.log({
+            userId: adminId,
+            eventType: "monetization_setting_changed",
+            description: `Admin ${nextValue === "true" ? "enabled" : "disabled"} ${key}`,
+            metadata: { setting_key: key, previous_value: previousValue, new_value: nextValue }
+        });
+    }
+
+    invalidateCache();
+    return exports.getMonetizationStatus();
+};
+
+// Public: same 4 monetization flags the Admin Billing Control Center
+// manages (settings.service.js), but without the audit/actor detail -
+// this is what sellers/providers see on their own billing status
+// banners (Trust & Monetization Communication roadmap section), not an
+// admin-only view.
+exports.getPublicMonetizationStatus = async () => {
+    const map = await getCachedAll();
+
+    const flagKeys = [
+        "monetization_subscriptions_enabled",
+        "monetization_commission_enabled",
+        "monetization_sponsorship_enabled",
+        "monetization_verification_fee_enabled"
+    ];
+
+    return flagKeys.reduce((acc, key) => {
+        acc[key] = { enabled: isEnabled(map[key]) };
+        return acc;
+    }, {});
 };
 
 exports.updateSettings = async (data) => {

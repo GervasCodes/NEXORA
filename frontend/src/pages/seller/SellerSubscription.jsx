@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import BillingStatusBanner from "../../components/BillingStatusBanner";
+import PhoneInput from "../../components/PhoneInput";
 
 export default function SellerSubscription() {
     const [plans, setPlans] = useState([]);
@@ -181,6 +183,8 @@ export default function SellerSubscription() {
                 </p>
             </div>
 
+            <BillingStatusBanner flagKey="monetization_subscriptions_enabled" label="Subscriptions" />
+
             {error && <p role="alert" className="text-coral text-sm">{error}</p>}
             {message && <p className="text-teal text-sm">{message}</p>}
 
@@ -250,10 +254,12 @@ export default function SellerSubscription() {
                     <form onSubmit={payWithMobileMoney} className="space-y-3 mb-4">
                         <div>
                             <label className="block text-sm mb-1">Mobile money phone number</label>
-                            <input value={phone} onChange={(e) => setPhone(e.target.value)} required
+                            <PhoneInput
+                                value={phone}
+                                onChange={setPhone}
+                                required
                                 disabled={awaitingConfirmation}
-                                placeholder="e.g. 0712345678"
-                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring disabled:opacity-60" />
+                            />
                         </div>
                         <button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation}
                             className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
@@ -278,6 +284,7 @@ export default function SellerSubscription() {
                             className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
                             {busy === "paypal" ? "Redirecting…" : "Pay with PayPal"}
                         </button>
+                        <p className="text-xs text-ash text-center -mt-1">PayPal charges in USD, converted from the price shown above.</p>
                     </div>
 
                     <button onClick={() => setSelectedPlan(null)} className="w-full text-center text-sm text-ash hover:underline mt-3">

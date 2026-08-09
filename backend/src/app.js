@@ -32,6 +32,7 @@ const reviewRoutes = require("./modules/review/review.routes");
 const notificationRoutes = require("./modules/notification/notification.routes");
 const chatRoutes = require("./modules/chat/chat.routes");
 const pushRoutes = require("./modules/push/push.routes");
+const settingsRoutes = require("./modules/settings/settings.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
 const adminNotificationRoutes = require("./modules/adminNotification/adminNotification.routes");
 const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
@@ -314,6 +315,7 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/push", pushRoutes);
+app.use("/api/v1/settings", settingsRoutes);
 // Must be mounted BEFORE /api/v1/admin: it's a more specific prefix of
 // that path, and Express falls through an unmatched router to the next
 // app.use() rather than stopping - so with the general /admin mount

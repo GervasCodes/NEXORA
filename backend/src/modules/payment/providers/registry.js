@@ -65,17 +65,22 @@ const PROVIDERS = [
             disbursement: true,
             requiresRedirect: false
         },
-        // The router itself has no isConfigured() (it defers to whichever
-        // underlying rail MOBILE_MONEY_PROVIDER selects, falling back to
-        // the simulate provider outside production) — so "configured"
-        // here means "resolvable in production without throwing", which
-        // is exactly what NODE_ENV=production + a working underlying
-        // rail guarantees. Outside production this always reports true
-        // since the simulate provider is always available as a fallback.
+        // Delegates to mobileMoney.provider.js#isConfigured, which resolves
+        // MOBILE_MONEY_PROVIDER to its real underlying rail (malipopay /
+        // selcom / azampay) and checks THAT rail's actual isConfigured() -
+        // i.e. whether its API credentials are genuinely present, not just
+        // whether an env var names it. Outside production this always
+        // reports true since resolveProvider() always has the simulate
+        // provider to fall back to there.
+        //
+        // This used to only check that MOBILE_MONEY_PROVIDER was set to
+        // something other than "simulate", without checking the named
+        // provider's real credentials - so checkout could list Mobile
+        // Money as available while the actual initiate() call then failed
+        // with "Mobile money is not configured" (see docs/PAYMENT_PROVIDERS.md).
         isConfigured: () => {
             if (process.env.NODE_ENV !== "production") return true;
-            const active = (process.env.MOBILE_MONEY_PROVIDER || "").toLowerCase();
-            return Boolean(active) && active !== "simulate";
+            return mobileMoneyProvider.isConfigured();
         }
     },
     {

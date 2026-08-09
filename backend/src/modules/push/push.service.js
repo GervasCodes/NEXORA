@@ -61,3 +61,16 @@ exports.sendToAdmins = async (payload) => {
     const subscriptions = await pushRepository.findByRoles(["admin", "super_admin"]);
     await sendToSubscriptions(subscriptions, payload);
 };
+
+// Generic role-based fan-out - e.g. every "seller" device (which
+// includes service providers, since they're the same account role
+// with a different merchant_type) for a platform-wide notice like a
+// monetization billing reminder. sendToAdmins above is really just
+// this with a fixed role list; kept both since sendToAdmins' name is
+// clearer at its call sites than sendToRoles(["admin", "super_admin"])
+// would be.
+exports.sendToRoles = async (roles, payload) => {
+    if (!isConfigured) return;
+    const subscriptions = await pushRepository.findByRoles(roles);
+    await sendToSubscriptions(subscriptions, payload);
+};

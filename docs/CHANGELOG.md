@@ -242,9 +242,211 @@ homepage/marketplace phases above). Migrations `058`–`060`.
   were reviewed for coverage of the Phase 1–5 changes above; no
   production code or schema changed.
 
-## Phase 7 — Documentation *(this phase)*
+## Phase 7 — Documentation
 
 - Brought `docs/API.md` and `docs/DATABASE.md` up to date with every
   Phase 1–5 change above (new/changed endpoints, new tables/columns,
   new Socket.IO events) and added this changelog section. See
   `README-phase-7.md` for the phase write-up.
+
+## Monetization Master Switch & Payment Reliability (2026-08-08)
+
+- Migration `079_monetization_master_switch.sql`: four new
+  `platform_settings` rows (`monetization_subscriptions_enabled`,
+  `monetization_commission_enabled`, `monetization_sponsorship_enabled`,
+  `monetization_verification_fee_enabled`), all seeded OFF — a fresh
+  launch is fully free by default. New `monetization_schedule` table for
+  scheduling a flag flip at a future date/time.
+- New Admin Billing Control Center: `GET/PUT /admin/monetization`,
+  `GET/POST /admin/monetization/schedule`,
+  `DELETE /admin/monetization/schedule/:id`, and a matching
+  `AdminBillingControl.jsx` page. Every flag change is recorded in the
+  existing `audit_logs` table rather than new tracking columns.
+- Enforcement wired into the four monetization surfaces: subscriptions
+  (`subscription.controller.js`'s `subscribe*` actions activate for free
+  instead of creating a payment request when disabled), commission
+  (`subscription.service.js#getEffectiveCommissionRate` returns flat 0%),
+  sponsorship/featured-store/department-sponsorship (`createCampaign` in
+  each service skips the wallet charge and auto-approves), and seller
+  verification fee (`payVerificationFee` waives instantly;
+  `requireVerificationFeePaid.middleware.js` no longer blocks access
+  while the fee isn't actually being charged).
+- New every-minute `monetizationSchedule` cron job applies due scheduled
+  activations, same idempotent pattern as `departmentMaintenanceSchedule`
+  (`069`).
+- Payment reliability fix: `providers/registry.js`'s
+  `mobile_money.isConfigured()` previously only checked that
+  `MOBILE_MONEY_PROVIDER` named a real rail, not whether that rail's own
+  credentials were actually present — so checkout could list Mobile
+  Money as available while the real payment then failed with "Mobile
+  money is not configured". `mobileMoney.provider.js` now exports a real
+  `isConfigured()` that resolves to the actively-selected rail's own
+  check, and the registry uses it. Regression test added:
+  `tests/unit/payment/registry.test.js`.
+- See `README-phase-1.md` for the full write-up.
+
+## Mobile Number Country Code System (2026-08-08)
+
+Phase 3 of the "Monetization Control, Payment Reliability & UX
+Improvement" roadmap (roadmap's Section 3 — numbered Phase 3 since
+Section 2's payment fix was folded into Phase 1 alongside the
+Monetization Master Switch).
+
+- New `backend/src/utils/phoneNumber.js`: centralized phone
+  normalization/validation. Every stored phone number is now E.164
+  (`+255712345678`), regardless of how it was typed in (with/without a
+  leading `0`, with/without a `+`, with/without the dial code already
+  attached). Covers Tanzania/Kenya/Uganda/Rwanda/Burundi with exact
+  national-number-length validation, plus a pass-through path for
+  already-international numbers so it stays compatible with the
+  frontend's existing ~50-country registration picker
+  (`frontend/src/data/countryCodes.js`).
+- New `backend/src/validators/sharedPhoneValidator.js`: one reusable
+  express-validator chain, applied everywhere a phone number is
+  collected instead of each module's own ad-hoc length check —
+  registration (all 3 roles), profile updates, checkout shipping phone,
+  seller business phone, seller verification-fee mobile-money phone,
+  subscription mobile-money phone, and booking mobile-money payment
+  (this last one had **no phone validation at all** before this phase —
+  a real gap closed here, not just a consistency cleanup).
+- No schema change needed — `users.phone`/`seller_profiles.business_phone`/
+  `orders.shipping_phone` were already `VARCHAR(30)`, wide enough for
+  E.164.
+- New shared frontend `PhoneInput.jsx` component (country selector +
+  number field), wired into every standalone phone entry point:
+  profile settings, seller business phone, checkout contact phone,
+  booking mobile-money payment, seller-verification mobile-money
+  payment, subscription mobile-money payment. `Register.jsx` needed no
+  changes — it already sends fully-qualified international numbers via
+  its own existing country picker.
+- New test suite: `backend/tests/unit/utils/phoneNumber.test.js`.
+- See `README-phase-3.md` for the full write-up.
+
+## Duplicate Service Department Cleanup (2026-08-08)
+
+Phase 4 of the "Monetization Control, Payment Reliability & UX
+Improvement" roadmap (roadmap Section 5, "PWA Install Prompt Review",
+was reviewed during Phase 1's analysis and found to already be
+correctly implemented — skipped rather than given its own phase).
+
+- **Root cause** (found during Phase 1's analysis, fixed now):
+  `Home.jsx` rendered the "Services" department twice — once as the
+  real `services` category card (from `/categories/departments`,
+  re-enabled in migration `065`) via the departments loop, and again as
+  a second, hardcoded static tile pointing to `/services`. Both linked
+  to the same destination concept, so the homepage showed two "Services"
+  tiles.
+- **Fix:** the departments loop now filters out the `services` slug
+  before mapping, keeping only the purpose-built static tile (which
+  already shows an accurate service count and a distinct icon — a
+  generic `DepartmentCard` for that row would show a product count of 0,
+  since services aren't linked into the products table the way every
+  other department's count is).
+- Single-file, frontend-only change. See `README-phase-4.md`.
+
+## Mobile Navigation Unification (2026-08-08)
+
+Phase 6 of the "Monetization Control, Payment Reliability & UX
+Improvement" roadmap (roadmap Section 6). Phase 5 (Section 7, PWA
+Install Prompt) was already resolved during Phase 1's analysis with no
+code change needed, so numbering continues straight to Phase 6.
+
+- New shared `frontend/src/components/MobileBottomNav.jsx` — one fixed
+  bottom tab bar component (5 slots, `md:hidden`, `env(safe-area-inset-bottom)`
+  padding for the iOS home-indicator area, 52px-tall full-width tap
+  targets per tab), reused across all three role-specific mount points
+  below instead of each role inventing its own.
+- **Buyer** — mounted from `Header.jsx`: Home (`/`), Orders, Messages,
+  Cart (substituting for Wallet, which doesn't apply to buyers), Profile.
+- **Seller / Service Provider** — mounted from `SellerLayout.jsx`:
+  Home (`/seller`), Orders **or** Bookings (follows the seller's own
+  `merchant_type`, so a service-only seller's tab points at Bookings
+  and never bounces them through the existing product/service
+  direct-access guard), Messages, Wallet, Profile. Supplements — does
+  not replace — the existing grouped mobile drawer covering all 18
+  other tabs.
+- **Delivery Agent** — mounted from `DeliveryLayout.jsx`: Home
+  (`/delivery`), Deliveries (`/delivery/mine`), Messages, Earnings
+  (fills the Wallet slot — delivery agents don't have a separate wallet
+  page), Profile. Also bumped the existing top tab row's touch target
+  height (`py-2.5` → `py-3`) while in this file.
+- `App.jsx` adds bottom padding to page content for any role that gets
+  a bottom nav, so it doesn't get covered by the fixed bar.
+- New `WalletIcon` added to `NavIcons.jsx`.
+- Hover-only-interaction audit: the existing desktop nav tooltips
+  already pair `group-hover` with `group-focus-visible` (no keyboard/touch
+  gap), and are `hidden` below `md` anyway, so nothing to fix there. The
+  new bottom nav has no hover-dependent affordances — labels are always
+  visible.
+- See `README-phase-6.md` for the full write-up, including what was
+  deliberately left out of this phase's scope.
+
+## Trust & Monetization Communication (2026-08-08)
+
+Phase 7 of the "Monetization Control, Payment Reliability & UX
+Improvement" roadmap (roadmap Section 6, "Trust & Monetization
+Communication" — numbered Phase 7 in this delivery sequence since
+Section 6's other half, "Mobile Navigation Unification", was already
+delivered as Phase 6; the roadmap document numbers its sections, not
+delivery phases, and these two ended up sharing a section number).
+
+- New `GET /settings/monetization-status` (authenticated, any role) —
+  the seller-facing counterpart to the admin-only
+  `GET /admin/monetization` from Phase 1, returning each flag's
+  enabled/disabled state plus any pending scheduled activation, without
+  the audit/actor detail that's admin-only information.
+- New `frontend/src/components/BillingStatusBanner.jsx` — one
+  self-fetching banner ("free during launch" / "Billing starts on
+  [date]"), dropped onto `SellerSubscription.jsx`, `SellerSponsorship.jsx`,
+  `SellerFeaturedStore.jsx`, `SellerDepartmentSponsorship.jsx`, and
+  `SellerVerification.jsx`. Shows nothing once a flag is live (billing
+  already active), so it's a no-op the moment monetization actually
+  turns on for that stream.
+- Push notification reminders: `monetizationSchedule.job.js` (the
+  every-minute cron from Phase 1) now also sends a push notification to
+  every seller/provider 3 days and 1 day before a scheduled billing
+  change takes effect, idempotently (never re-sent). New
+  `pushService.sendToRoles()` (generalizes the existing
+  `sendToAdmins()`), migration `080_monetization_communication_reminders.sql`
+  adds the two reminder-tracking columns.
+- **SMS reminders were not implemented** — there is no SMS sending
+  capability anywhere in this codebase (OTP delivery uses email via
+  Brevo, not SMS). Flagged rather than fabricated; see
+  `README-phase-7.md`.
+- **Onboarding checklist update was not implemented** — no onboarding
+  checklist component exists anywhere in the codebase for this phase to
+  update. Also flagged rather than fabricated.
+- See `README-phase-7.md` for the full write-up.
+
+## UX Polish (2026-08-08)
+
+Phase 8 of the "Monetization Control, Payment Reliability & UX
+Improvement" roadmap (roadmap Section 8) — the final phase.
+
+- **Skeleton loading states**, replacing full-page-blocking
+  `<PageLoader />` spinners with layout-matching skeletons on the pages
+  the roadmap specifically named: `AdminDispatch.jsx` (heavy dashboard +
+  the Admin Dispatch Map), `BookingDetail.jsx` (booking pages), and
+  `SellerAnalytics.jsx` (heavy dashboard). Each skeleton mirrors that
+  page's actual shape (stat cards, chart area, map placeholder, list
+  rows) so the layout doesn't visibly jump once real data arrives.
+- **Currency display for PayPal**: added a small clarifying line under
+  the "Pay with PayPal" button on `SellerSubscription.jsx` and
+  `VerificationFeeGate.jsx` — PayPal always charges in USD
+  (`paypal.provider.js` converts every amount to USD before charging),
+  while the price shown elsewhere on the page follows the seller's own
+  selected display currency (which already defaults to TZS — verified,
+  not changed, since `CurrencyContext.jsx` already falls back to TZS).
+  This was a real gap: nothing on either page previously indicated
+  PayPal doesn't charge in the displayed currency.
+- **Empty states**: reviewed `AdminDispatch.jsx`, `Bookings.jsx`,
+  `Orders.jsx`, and the sponsorship pages — all already have meaningful,
+  specific empty-state copy ("No active deliveries right now.", not a
+  generic blank list), so no changes were needed there.
+- **Checkout.jsx**: reviewed — its one async section (the dynamically-
+  loaded card payment methods list) already fails open gracefully
+  (static payment methods stay visible; card rows simply appear a
+  moment after the registry call resolves, rather than the whole form
+  blocking or flashing empty), so no change was made there either.
+- See `README-phase-8.md` for the full write-up, including what was
+  scoped out and why.

@@ -125,6 +125,59 @@ exactly one row). Full reasoning, including why this isn't a simple
 header. `provider_payouts` (escrow/payout wiring) is deferred to Phase 3
 (Financial Integration).
 
+**Monetization Master Switch & Payment Reliability** (`079`)
+Four new `platform_settings` rows —
+`monetization_subscriptions_enabled`, `monetization_commission_enabled`,
+`monetization_sponsorship_enabled`, `monetization_verification_fee_enabled`
+— stored as the strings `"true"`/`"false"`, all seeded OFF. No new
+columns on `platform_settings` itself: it was already an EAV key/value
+table (`017`), so these are just new rows, read via
+`settings.service.js#isXMonetizationEnabled()`. **Default OFF means a
+fresh launch is fully free** — sellers can subscribe to any plan, run
+sponsorship/featured-store/department-sponsorship campaigns, and skip
+the seller verification fee, all without a payment ever being created;
+commission is a flat 0%. An admin flips each flag independently from
+the new Billing Control Center (`GET/PUT /admin/monetization`) with no
+redeploy or code change, and every change is recorded in the existing
+`audit_logs` table (`event_type = "monetization_setting_changed"`)
+rather than new tracking columns.
+
+`monetization_schedule` (new table) — lets an admin schedule a flag
+flip for a future date/time (e.g. "enable subscriptions on 1 January
+2027 at 00:00") instead of only flipping it live. One row per scheduled
+change, applied by a new every-minute cron job
+(`jobs/monetizationSchedule.job.js`) using the same idempotent
+"find due, still-pending rows" pattern `jobs/departmentMaintenanceSchedule.job.js`
+(`069`) already established for department maintenance windows.
+
+Enforcement points this migration's flags feed into (no schema change
+in these files, listed here for one place to find them all):
+`subscription.service.js#getEffectiveCommissionRate` (commission),
+`subscription.controller.js`'s `subscribe*` actions (subscriptions),
+`sponsorship`/`featuredStore`/`departmentSponsorship` `.service.js#createCampaign`
+(sponsorship), and `seller.service.js#payVerificationFee` +
+`middleware/requireVerificationFeePaid.middleware.js` (verification fee).
+
+Also in this phase, no schema change: `providers/registry.js`'s
+`mobile_money.isConfigured()` now calls the actively-selected mobile
+money rail's own `isConfigured()` (via a new export on
+`mobileMoney.provider.js`) instead of only checking that
+`MOBILE_MONEY_PROVIDER` named something other than `"simulate"` — fixes
+checkout showing Mobile Money as available when the real provider
+credentials were missing. See `docs/PAYMENT_PROVIDERS.md`.
+
+**Trust & Monetization Communication** (`080`)
+Two new columns on `monetization_schedule` (`079`):
+`reminder_3d_sent_at`, `reminder_1d_sent_at` (both `DATETIME NULL`) —
+let `monetizationSchedule.job.js`'s reminder pass send a push
+notification to sellers/providers 3 days and 1 day before a scheduled
+billing change, exactly once each, without re-sending on every
+subsequent minute-tick (see `monetizationSchedule.repository.js#findDueForReminder`).
+No other schema change - the new `GET /settings/monetization-status`
+endpoint (seller-facing counterpart to the admin-only
+`GET /admin/monetization`) reads the same `platform_settings` rows
+`079` already added.
+
 ## Testing against the database
 
 The backend has three Jest suites (`backend/jest.config.js` /

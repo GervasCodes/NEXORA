@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import BillingStatusBanner from "../../components/BillingStatusBanner";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -91,6 +92,8 @@ export default function SellerSponsorship() {
                 Pay to feature one of your products in each department's "Sponsored" row.
                 Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance.
             </p>
+
+            <BillingStatusBanner flagKey="monetization_sponsorship_enabled" label="Sponsorship" />
 
             <div className="border border-line rounded-lg p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>

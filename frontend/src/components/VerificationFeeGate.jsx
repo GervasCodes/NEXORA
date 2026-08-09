@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { formatMoney } from "../utils/format";
+import PhoneInput from "./PhoneInput";
 
 
 export default function VerificationFeeGate({ requiredFee, onPaid, returnPath }) {
@@ -164,10 +165,12 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
             <form onSubmit={payWithMobileMoney} className="space-y-3 mb-4">
                 <div>
                     <label className="block text-sm mb-1">Mobile money phone number</label>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} required
+                    <PhoneInput
+                        value={phone}
+                        onChange={setPhone}
+                        required
                         disabled={awaitingConfirmation}
-                        placeholder="e.g. 0712345678"
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring disabled:opacity-60" />
+                    />
                 </div>
                 <button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation}
                     className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
@@ -192,6 +195,7 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
                     className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
                     {busy === "paypal" ? "Redirecting…" : "Pay with PayPal"}
                 </button>
+                <p className="text-xs text-ash text-center -mt-1">PayPal charges in USD, converted from the fee shown above.</p>
             </div>
         </div>
     );

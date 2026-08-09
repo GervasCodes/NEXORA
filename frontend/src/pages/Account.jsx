@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage, LANGUAGES } from "../context/LanguageContext";
 import { useCurrency, CURRENCIES } from "../context/CurrencyContext";
+import PhoneInput from "../components/PhoneInput";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -196,9 +197,10 @@ export default function Account() {
                     </div>
                     <div>
                         <label className="block text-sm mb-1">Phone</label>
-                        <input value={profileForm.phone}
-                            onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        <PhoneInput
+                            value={profileForm.phone}
+                            onChange={(phone) => setProfileForm({ ...profileForm, phone })}
+                        />
                     </div>
 
                     {status.profile && (

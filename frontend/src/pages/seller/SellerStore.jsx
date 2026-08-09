@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import LocationPicker from "../../components/LocationPicker";
+import PhoneInput from "../../components/PhoneInput";
 import { STORE_THEMES } from "../../utils/storeThemes";
 
 // Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
@@ -298,8 +299,10 @@ export default function SellerStore() {
                     </div>
                     <div>
                         <label className="block text-sm mb-1">Business phone</label>
-                        <input value={form.business_phone} onChange={update("business_phone")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        <PhoneInput
+                            value={form.business_phone}
+                            onChange={(business_phone) => setForm({ ...form, business_phone })}
+                        />
                     </div>
                 </div>
 

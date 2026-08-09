@@ -8,7 +8,8 @@ import { useLanguage } from "../context/LanguageContext";
 import { useSocket } from "../context/SocketContext";
 import BookingStatusBadge from "../components/BookingStatusBadge";
 import BookingProgressTimeline from "../components/BookingProgressTimeline";
-import PageLoader from "../components/PageLoader";
+import PhoneInput from "../components/PhoneInput";
+import Skeleton from "../components/Skeleton";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
 // allows either side to cancel a pending or confirmed booking. A
@@ -142,7 +143,24 @@ export default function BookingDetail() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected, id]);
 
-    if (loading) return <PageLoader />;
+    // Skeleton mirrors the real page's shape (header block, status
+    // timeline, details card) rather than a full-page blocking spinner
+    // - Phase 8 UX Polish ("Booking pages" call-out).
+    if (loading) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8">
+                <Skeleton className="h-3 w-24 mb-4" />
+                <Skeleton className="h-7 w-2/3 mb-2" />
+                <Skeleton className="h-4 w-1/3 mb-8" />
+                <Skeleton className="w-full h-16 mb-8" />
+                <div className="border border-line rounded-lg p-4 space-y-3">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
+                </div>
+            </div>
+        );
+    }
 
     if (!booking) {
         return (
@@ -384,12 +402,10 @@ export default function BookingDetail() {
                     <p className="text-xs text-ash mb-3">{t("booking.payment.escrowNote")}</p>
 
                     <div className="flex flex-col gap-2 mb-3">
-                        <input
-                            type="tel"
+                        <PhoneInput
                             value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
+                            onChange={setPhone}
                             placeholder={t("booking.payment.phonePlaceholder")}
-                            className="border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                         />
                         <button onClick={handlePayMobileMoney} disabled={busy}
                             className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">

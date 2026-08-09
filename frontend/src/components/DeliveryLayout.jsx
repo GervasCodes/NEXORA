@@ -4,7 +4,8 @@ import IncomingOfferModal from "./IncomingOfferModal";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
-import { HomeIcon } from "./NavIcons";
+import MobileBottomNav from "./MobileBottomNav";
+import { HomeIcon, DeliveryIcon, OrdersIcon, MessagesIcon, WalletIcon, AccountIcon } from "./NavIcons";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
@@ -17,6 +18,19 @@ function ApprovedDeliveryLayout() {
     const { online, goOnline, goOffline, locationError, pushWarning } = useAgentShift();
 
     const toggleShift = () => (online ? goOffline() : goOnline());
+
+    // Delivery agent's mobile bottom nav (Phase 6: Mobile Navigation
+    // Unification) - "My deliveries" fills the Orders/Bookings slot
+    // (it's the agent's own equivalent of an order list), and Earnings
+    // fills the Wallet slot (delivery agents don't have a separate
+    // wallet page - Earnings already is that balance/history view).
+    const deliveryBottomNavItems = [
+        { to: "/delivery", label: "Home", icon: DeliveryIcon, end: true },
+        { to: "/delivery/mine", label: "Deliveries", icon: OrdersIcon },
+        { to: "/messages", label: "Messages", icon: MessagesIcon },
+        { to: "/delivery/earnings", label: "Earnings", icon: WalletIcon },
+        { to: "/account", label: "Profile", icon: AccountIcon }
+    ];
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -64,7 +78,7 @@ function ApprovedDeliveryLayout() {
                         to={tab.to}
                         end={tab.end}
                         className={({ isActive }) =>
-                            `text-sm px-4 py-2.5 -mb-px border-b-2 transition-colors ${
+                            `text-sm px-4 py-3 -mb-px border-b-2 transition-colors ${
                                 isActive ? "border-mango text-ink font-medium" : "border-transparent text-ash hover:text-ink"
                             }`
                         }
@@ -77,6 +91,8 @@ function ApprovedDeliveryLayout() {
             <PageTransition granular>
                 <Outlet />
             </PageTransition>
+
+            <MobileBottomNav items={deliveryBottomNavItems} />
         </div>
     );
 }

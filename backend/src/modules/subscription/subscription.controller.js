@@ -1,6 +1,24 @@
 const subscriptionService = require("./subscription.service");
 const subscriptionRepository = require("./subscription.repository");
 const paymentService = require("../payment/payment.service");
+const settingsService = require("../settings/settings.service");
+
+// Shared by every subscribeX action below. Monetization Master Switch:
+// when monetization_subscriptions_enabled is off, NO plan requires
+// payment (not just the seeded $0 Free plan) - the subscription
+// activates immediately instead of a payment request being created, per
+// the roadmap's "Sellers can select plans normally... Subscription
+// activates automatically" requirement. Returns true if it fully
+// handled the response itself, in which case the caller should return
+// without falling through to its own payment-initiation logic.
+const tryFreeLaunchActivation = async (req, res, planCode) => {
+    const subscriptionsEnabled = await settingsService.isSubscriptionsMonetizationEnabled();
+    if (subscriptionsEnabled) return false;
+
+    const subscription = await subscriptionService.subscribeFree(req.user.id, planCode);
+    res.json({ success: true, message: "Subscribed - free during launch", data: subscription, freeLaunch: true });
+    return true;
+};
 
 exports.listPlans = async (req, res) => {
     try {
@@ -30,6 +48,7 @@ exports.subscribeMobileMoney = async (req, res) => {
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
         }
+        if (await tryFreeLaunchActivation(req, res, planCode)) return;
         if (Number(plan.price) <= 0) {
             return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
         }
@@ -48,6 +67,7 @@ exports.subscribeSnippe = async (req, res) => {
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
         }
+        if (await tryFreeLaunchActivation(req, res, planCode)) return;
         if (Number(plan.price) <= 0) {
             return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
         }
@@ -66,6 +86,7 @@ exports.subscribeMalipopayCard = async (req, res) => {
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
         }
+        if (await tryFreeLaunchActivation(req, res, planCode)) return;
         if (Number(plan.price) <= 0) {
             return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
         }
@@ -84,6 +105,7 @@ exports.subscribePaypal = async (req, res) => {
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
         }
+        if (await tryFreeLaunchActivation(req, res, planCode)) return;
         if (Number(plan.price) <= 0) {
             return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
         }

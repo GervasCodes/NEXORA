@@ -120,7 +120,7 @@ describe("Checkout page", () => {
             shipping_address: "123 Uhuru St",
             shipping_city: "Dar es Salaam",
             shipping_region: "Dar es Salaam",
-            shipping_phone: "0712345678",
+            shipping_phone: "+255712345678",
             payment_method: "mobile_money",
             delivery_lat: null,
             delivery_lng: null

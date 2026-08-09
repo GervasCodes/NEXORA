@@ -91,6 +91,7 @@ const AdminServiceCategories = lazy(() => import("./pages/admin/AdminServiceCate
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminBillingControl = lazy(() => import("./pages/admin/AdminBillingControl"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
@@ -106,8 +107,15 @@ export default function App() {
     const [showSplash, setShowSplash] = useState(
         () => !sessionStorage.getItem("nexora_splash_shown")
     );
-    const { suspension, clearSuspension } = useAuth();
+    const { suspension, clearSuspension, user } = useAuth();
     const navigate = useNavigate();
+
+    // Roles that get a fixed mobile bottom nav (Header.jsx for buyer,
+    // SellerLayout.jsx for seller, DeliveryLayout.jsx for delivery_agent)
+    // need their page content to clear it, or the bar covers whatever's
+    // at the bottom of the page - matched to MobileBottomNav's own
+    // min-h-[52px] tab height plus a little breathing room.
+    const hasMobileBottomNav = ["buyer", "seller", "delivery_agent"].includes(user?.role);
 
     // Phase 3: when a push notification is clicked and it focuses an
     // already-open tab (see sw.js#notificationclick), that only brings the
@@ -147,7 +155,7 @@ export default function App() {
 
             <RouteProgressBar />
 
-            <main className="flex-1">
+            <main className={`flex-1 ${hasMobileBottomNav ? "pb-16 md:pb-0" : ""}`}>
                 <Suspense fallback={<PageLoader />}>
                     <PageTransition>
                         <Routes>
@@ -231,6 +239,7 @@ export default function App() {
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
+                            <Route path="billing-control" element={<AdminBillingControl />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="sponsorship" element={<AdminSponsorship />} />
                             <Route path="subscriptions" element={<AdminSubscriptions />} />

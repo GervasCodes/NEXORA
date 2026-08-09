@@ -6,7 +6,7 @@ const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
 const paymentController = require("./payment.controller");
-const { orderIdValidation, bookingIdValidation } = require("./payment.validator");
+const { orderIdValidation, bookingIdValidation, bookingMobileMoneyPhoneValidation } = require("./payment.validator");
 const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middleware/webhookAuth.middleware");
 
 // Provider webhooks - called directly by MalipoPay/Selcom's servers, not
@@ -84,6 +84,7 @@ router.post(
     authMiddleware,
     authorize("buyer"),
     bookingIdValidation,
+    bookingMobileMoneyPhoneValidation,
     validationMiddleware,
     paymentController.initiateMobileMoneyBookingPayment
 );

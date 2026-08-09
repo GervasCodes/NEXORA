@@ -6,7 +6,8 @@ import { useLanguage } from "../context/LanguageContext";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
-import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import MobileBottomNav from "./MobileBottomNav";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -102,6 +103,28 @@ export default function Header() {
         logout();
         navigate("/");
     };
+
+    // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
+    // Unification) - Wallet doesn't apply to buyers (that's a
+    // seller/delivery-agent earning concept), so Cart takes that slot
+    // instead, matching how prominently Cart already sits in this
+    // header's own mobile icon row above.
+    const buyerBottomNavItems = [
+        { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
+        { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
+        { to: "/messages", label: t("nav.messages"), icon: MessagesIcon },
+        {
+            to: "/cart",
+            label: t("nav.cart"),
+            icon: CartIcon,
+            badge: itemCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                    {itemCount}
+                </span>
+            )
+        },
+        { to: "/account", label: t("nav.account"), icon: AccountIcon }
+    ];
 
     const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
@@ -325,6 +348,8 @@ export default function Header() {
                     </nav>
                 </div>
             )}
+
+            {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
         </header>
     );
 }

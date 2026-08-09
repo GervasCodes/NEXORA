@@ -1,8 +1,9 @@
 const { body, param } = require("express-validator");
+const phoneValidator = require("../../validators/sharedPhoneValidator");
 
 exports.subscribeMobileMoneyValidation = [
     body("planCode").trim().notEmpty().withMessage("Select a plan"),
-    body("phone").trim().notEmpty().withMessage("A mobile money phone number is required")
+    phoneValidator("phone", { optional: true })
 ];
 
 exports.subscribeRedirectValidation = [

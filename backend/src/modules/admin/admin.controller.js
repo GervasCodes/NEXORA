@@ -278,6 +278,64 @@ exports.updateSettings = async (req, res) => {
     }
 };
 
+// --- Monetization Master Switch (Admin Billing Control Center) ---
+
+exports.getMonetizationStatus = async (req, res) => {
+    try {
+        const status = await adminService.getMonetizationStatus();
+
+        return res.json({ success: true, data: status });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateMonetizationSettings = async (req, res) => {
+    try {
+        const status = await adminService.updateMonetizationSettings(req.body, req.user.id);
+
+        return res.json({ success: true, message: "Monetization settings updated", data: status });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.listMonetizationSchedule = async (req, res) => {
+    try {
+        const schedule = await adminService.listMonetizationSchedule();
+
+        return res.json({ success: true, data: schedule });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.createMonetizationSchedule = async (req, res) => {
+    try {
+        const { setting_key, enabled, scheduled_at } = req.body;
+        const result = await adminService.createMonetizationSchedule(setting_key, enabled, scheduled_at, req.user.id);
+
+        return res.json({ success: true, message: "Scheduled", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.cancelMonetizationSchedule = async (req, res) => {
+    try {
+        await adminService.cancelMonetizationSchedule(req.params.id, req.user.id);
+
+        return res.json({ success: true, message: "Scheduled change cancelled" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.listSponsorshipCampaigns = async (req, res) => {
     try {
         const campaigns = await adminService.listSponsorshipCampaigns();

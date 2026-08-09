@@ -23,6 +23,18 @@ module.exports = async (req, res, next) => {
         }
 
         if (!seller.verification_fee_paid) {
+            // Monetization Master Switch: while verification-fee
+            // monetization is off, nobody should be blocked behind a fee
+            // that isn't actually being charged - let the request through
+            // rather than 403ing sellers who haven't (and can't yet)
+            // pay it. seller.service.js#payVerificationFee still waives
+            // and marks it paid the next time they hit that endpoint, but
+            // this middleware doesn't require that to have happened yet.
+            const verificationFeeEnabled = await settingsService.isVerificationFeeMonetizationEnabled();
+            if (!verificationFeeEnabled) {
+                return next();
+            }
+
             const requiredFee = await settingsService.getVerificationFee();
 
             return res.status(403).json({

@@ -261,12 +261,11 @@ const syncBadge = async (userId) => {
     return shouldBeVerified;
 };
 
-// Kicks off the fee payment. Does NOT mark the fee paid - it only sends
-// the mobile money prompt to the seller's phone and returns "pending".
-// The fee is marked paid, and the badge synced, only once
-// confirmVerificationFeePaid() is called below - which happens from
-// payment.service's webhook handler after MalipoPay/Selcom confirm the
-// seller actually completed the payment on their end.
+// Kicks off the fee payment - or, while monetization_verification_fee_enabled
+// is off (Monetization Master Switch), skips payment entirely and marks
+// the fee waived immediately, syncing the badge right away instead of
+// waiting on a webhook. amount is recorded as 0 with a "waived_free_launch"
+// reference so it's visibly distinct from a real payment in the ledger/history.
 exports.payVerificationFee = async (userId, phone) => {
     const seller = await sellerRepository.findByUserId(userId);
 
@@ -276,6 +275,12 @@ exports.payVerificationFee = async (userId, phone) => {
 
     if (seller.verification_fee_paid) {
         throw new Error("The verification fee has already been paid.");
+    }
+
+    const verificationFeeEnabled = await settingsService.isVerificationFeeMonetizationEnabled();
+    if (!verificationFeeEnabled) {
+        await exports.confirmVerificationFeePaid(userId, 0, "waived_free_launch");
+        return { status: "waived", message: "Verification is free during launch - your badge is now active." };
     }
 
     if (!phone) {

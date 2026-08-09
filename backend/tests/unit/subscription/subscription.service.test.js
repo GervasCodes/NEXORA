@@ -64,6 +64,7 @@ describe("subscription.service.getMySubscription", () => {
 describe("subscription.service.getEffectiveCommissionRate", () => {
     it("falls back to the platform default when the seller has no active override", async () => {
         subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -76,6 +77,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "cancelled",
             commission_rate_override: "5.00"
         });
+        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -88,6 +90,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "active",
             commission_rate_override: null
         });
+        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -100,11 +103,29 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "active",
             commission_rate_override: "5.00"
         });
+        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
 
         expect(rate).toBe(5);
         expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
+    });
+
+    // Monetization Master Switch (Phase 1): commission is flat 0% when
+    // commission monetization is off, ignoring plan overrides and the
+    // platform default alike - not even consulted, let alone applied.
+    it("returns flat 0% and ignores plan overrides when commission monetization is disabled", async () => {
+        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+            status: "active",
+            commission_rate_override: "5.00"
+        });
+        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(false);
+
+        const rate = await subscriptionService.getEffectiveCommissionRate(10);
+
+        expect(rate).toBe(0);
+        expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
+        expect(subscriptionRepository.findCurrentForSeller).not.toHaveBeenCalled();
     });
 });
 

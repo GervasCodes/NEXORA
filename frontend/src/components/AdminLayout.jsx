@@ -58,6 +58,7 @@ const groups = [
             { to: "/admin/maintenance", label: "Maintenance" },
             { to: "/admin/status-incidents", label: "Status incidents" },
             { to: "/admin/audit-logs", label: "Audit logs" },
+            { to: "/admin/billing-control", label: "Billing control" },
             { to: "/admin/settings", label: "Settings" }
         ]
     }

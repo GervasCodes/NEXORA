@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import LocationPicker from "../components/LocationPicker";
+import PhoneInput from "../components/PhoneInput";
 
 const initialForm = {
     shipping_address: "",
@@ -253,8 +254,11 @@ export default function Checkout() {
 
                 <div>
                     <label className="block text-sm mb-1">Contact phone</label>
-                    <input required value={form.shipping_phone} onChange={update("shipping_phone")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring transition-colors focus:border-teal" />
+                    <PhoneInput
+                        required
+                        value={form.shipping_phone}
+                        onChange={(shipping_phone) => setForm({ ...form, shipping_phone })}
+                    />
                 </div>
 
                 <LocationPicker value={pin} onChange={setPin} />

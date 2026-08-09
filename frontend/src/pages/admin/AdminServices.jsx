@@ -5,16 +5,14 @@ import PageLoader from "../../components/PageLoader";
 
 const PAGE_SIZE = 20;
 
-export default function AdminProducts() {
-    const [products, setProducts] = useState([]);
+export default function AdminServices() {
+    const [services, setServices] = useState([]);
     const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [error, setError] = useState("");
 
-    // Search box is free text over name/store - debounced so every
-    // keystroke doesn't fire a request (same pattern AdminAuditLogs uses).
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [categoryId, setCategoryId] = useState("");
@@ -30,7 +28,7 @@ export default function AdminProducts() {
     }, [searchInput]);
 
     useEffect(() => {
-        api.get("/categories/admin/all").then(({ data }) => setCategories(data.data)).catch(() => {});
+        api.get("/service-categories/admin/all").then(({ data }) => setCategories(data.data)).catch(() => {});
     }, []);
 
     const load = () => {
@@ -41,9 +39,9 @@ export default function AdminProducts() {
         if (categoryId) params.category_id = categoryId;
         if (status) params.status = status;
 
-        api.get("/admin/products", { params })
+        api.get("/admin/services", { params })
             .then(({ data }) => {
-                setProducts(data.data);
+                setServices(data.data);
                 setPagination(data.pagination || { page: 1, totalPages: 1, total: data.data.length });
                 setSelectedIds([]);
             })
@@ -53,11 +51,11 @@ export default function AdminProducts() {
 
     useEffect(load, [search, categoryId, status, page]);
 
-    const toggleActive = async (product) => {
-        setBusyId(product.id);
+    const toggleActive = async (service) => {
+        setBusyId(service.id);
         setError("");
         try {
-            await api.put(`/admin/products/${product.id}/${product.is_active ? "deactivate" : "activate"}`);
+            await api.put(`/admin/services/${service.id}/${service.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -66,26 +64,13 @@ export default function AdminProducts() {
         }
     };
 
-    const toggleSponsored = async (product) => {
-        setBusyId(product.id);
-        setError("");
-        try {
-            await api.put(`/admin/products/${product.id}/${product.is_sponsored ? "unsponsor" : "sponsor"}`);
-            load();
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setBusyId(null);
-        }
-    };
-
-    const allOnPageSelected = products.length > 0 && products.every((p) => selectedIds.includes(p.id));
+    const allOnPageSelected = services.length > 0 && services.every((s) => selectedIds.includes(s.id));
 
     const toggleSelectAll = () => {
         if (allOnPageSelected) {
-            setSelectedIds((ids) => ids.filter((id) => !products.some((p) => p.id === id)));
+            setSelectedIds((ids) => ids.filter((id) => !services.some((s) => s.id === id)));
         } else {
-            setSelectedIds((ids) => [...new Set([...ids, ...products.map((p) => p.id)])]);
+            setSelectedIds((ids) => [...new Set([...ids, ...services.map((s) => s.id)])]);
         }
     };
 
@@ -97,7 +82,7 @@ export default function AdminProducts() {
         setBulkBusy(true);
         setError("");
         try {
-            await api.put("/admin/products/bulk-status", { ids: selectedIds, is_active: isActive });
+            await api.put("/admin/services/bulk-status", { ids: selectedIds, is_active: isActive });
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -116,13 +101,13 @@ export default function AdminProducts() {
 
     return (
         <div>
-            <h1 className="font-display text-2xl mb-6">Products</h1>
+            <h1 className="font-display text-2xl mb-6">Services</h1>
 
             <div className="border border-line rounded-lg p-4 mb-6">
                 <div className="flex flex-wrap gap-3">
                     <input
                         type="text"
-                        placeholder="Search product or store name…"
+                        placeholder="Search service or store name…"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         className="flex-1 min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
@@ -186,8 +171,8 @@ export default function AdminProducts() {
 
             {loading ? (
                 <PageLoader />
-            ) : products.length === 0 ? (
-                <p className="text-ash text-sm">No products match these filters.</p>
+            ) : services.length === 0 ? (
+                <p className="text-ash text-sm">No services match these filters.</p>
             ) : (
                 <>
                     <div className="border-y border-line divide-y divide-line">
@@ -196,64 +181,50 @@ export default function AdminProducts() {
                                 type="checkbox"
                                 checked={allOnPageSelected}
                                 onChange={toggleSelectAll}
-                                aria-label="Select all products on this page"
+                                aria-label="Select all services on this page"
                             />
                             Select all on page
                         </div>
 
-                        {products.map((p) => (
-                            <div key={p.id} className="py-3 flex flex-wrap items-center gap-3">
+                        {services.map((s) => (
+                            <div key={s.id} className="py-3 flex flex-wrap items-center gap-3">
                                 <input
                                     type="checkbox"
-                                    checked={selectedIds.includes(p.id)}
-                                    onChange={() => toggleSelectOne(p.id)}
-                                    aria-label={`Select ${p.name}`}
+                                    checked={selectedIds.includes(s.id)}
+                                    onChange={() => toggleSelectOne(s.id)}
+                                    aria-label={`Select ${s.name}`}
                                 />
 
                                 <div className="w-11 h-11 bg-line/40 rounded-md overflow-hidden shrink-0">
-                                    {p.image_url && (
-                                        <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                    {s.image_url && (
+                                        <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                     )}
                                 </div>
 
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium truncate">{p.name}</p>
-                                    <p className="text-xs text-ash truncate">{p.store_name}</p>
+                                    <p className="text-sm font-medium truncate">{s.name}</p>
+                                    <p className="text-xs text-ash truncate">{s.store_name}</p>
                                 </div>
 
-                                <p className="price text-sm">{formatMoney(p.price)}</p>
-                                <p className="text-xs text-ash">stock {p.stock}</p>
+                                <p className="price text-sm">{formatMoney(s.price)}</p>
 
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${p.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
-                                    {p.is_active ? "Live" : "Removed"}
+                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
+                                    {s.is_active ? "Live" : "Removed"}
                                 </span>
-                                {p.is_sponsored ? (
-                                    <span className="text-xs font-medium px-2 py-1 rounded-full bg-mango/10 text-mango-dark">
-                                        Sponsored
-                                    </span>
-                                ) : null}
 
                                 <button
-                                    onClick={() => toggleSponsored(p)}
-                                    disabled={busyId === p.id}
+                                    onClick={() => toggleActive(s)}
+                                    disabled={busyId === s.id}
                                     className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
                                 >
-                                    {p.is_sponsored ? "Unsponsor" : "Sponsor"}
-                                </button>
-
-                                <button
-                                    onClick={() => toggleActive(p)}
-                                    disabled={busyId === p.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
-                                >
-                                    {p.is_active ? "Remove" : "Restore"}
+                                    {s.is_active ? "Remove" : "Restore"}
                                 </button>
                             </div>
                         ))}
                     </div>
 
                     <div className="flex items-center justify-between mt-6 text-sm">
-                        <p className="text-ash text-xs">{pagination.total} total products</p>
+                        <p className="text-ash text-xs">{pagination.total} total services</p>
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}

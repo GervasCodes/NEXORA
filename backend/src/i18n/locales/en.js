@@ -72,6 +72,11 @@ module.exports = {
         "product.removed.title": "Product removed",
         "product.removed.message": "Your product \"{productName}\" was removed by an administrator for review.",
 
+        "service.reactivated.title": "Service reactivated",
+        "service.reactivated.message": "Your service \"{serviceName}\" is visible again.",
+        "service.removed.title": "Service removed",
+        "service.removed.message": "Your service \"{serviceName}\" was removed by an administrator for review.",
+
         "delivery.update.title": "Delivery update",
         "delivery.update.message": "Your order {orderNumber} delivery status is now \"{status}\".",
         "delivery.pickedUp.title": "A delivery agent is on the way to pick up your order",

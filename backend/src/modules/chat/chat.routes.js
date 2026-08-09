@@ -33,6 +33,8 @@ router.post(
 
 router.get("/conversations", chatController.getMyConversations);
 
+router.get("/unread-count", chatController.getUnreadCount);
+
 router.get(
     "/conversations/:id/messages",
     conversationIdValidation,

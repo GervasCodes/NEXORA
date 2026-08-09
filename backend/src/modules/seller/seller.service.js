@@ -228,6 +228,68 @@ exports.getAnalytics = async (sellerId) => {
     };
 };
 
+// Phase A5 (Advanced Analytics) - period comparison + top customers for
+// this seller's product sales. Gated behind the same requireVerificationFeePaid
+// middleware as GET /seller/analytics (see seller.routes.js).
+function growthPercent(current, previous) {
+    if (!previous) return current > 0 ? 100 : 0;
+    return Number((((current - previous) / previous) * 100).toFixed(1));
+}
+
+exports.getAdvancedAnalytics = async (sellerId) => {
+    const [periods, topCustomers] = await Promise.all([
+        sellerRepository.getPeriodComparison(sellerId),
+        sellerRepository.getTopCustomers(sellerId, 5)
+    ]);
+
+    return {
+        periodComparison: {
+            week: {
+                current: periods.thisWeek,
+                previous: periods.lastWeek,
+                growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
+            },
+            month: {
+                current: periods.thisMonth,
+                previous: periods.lastMonth,
+                growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
+            }
+        },
+        topCustomers: topCustomers.map((c) => ({
+            ...c,
+            total_spend: Number(c.total_spend) || 0,
+            transaction_count: Number(c.transaction_count) || 0
+        }))
+    };
+};
+
+// CSV export - "products" downloads this seller's top products (from
+// the existing getTopProducts query), "customers" downloads their top
+// customers. Defaults to products.
+exports.exportAnalyticsCsv = async (sellerId, type) => {
+    if (type === "customers") {
+        const rows = await sellerRepository.getTopCustomers(sellerId, 500);
+        const header = "customer_id,name,total_spend,transaction_count";
+        const lines = [header, ...rows.map((r) => [
+            r.id,
+            `"${String(r.name).replace(/"/g, '""')}"`,
+            (Number(r.total_spend) || 0).toFixed(2),
+            Number(r.transaction_count) || 0
+        ].join(","))];
+        return lines.join("\n");
+    }
+
+    const rows = await sellerRepository.getTopProducts(sellerId, 500);
+    const header = "product_id,name,units_sold,revenue";
+    const lines = [header, ...rows.map((r) => [
+        r.id,
+        `"${String(r.name).replace(/"/g, '""')}"`,
+        Number(r.units_sold) || 0,
+        (Number(r.revenue) || 0).toFixed(2)
+    ].join(","))];
+    return lines.join("\n");
+};
+
 // --- Verification fee / paid "Verified Seller" badge ---
 // The document-based per-seller verification_status flow this used to
 // depend on was removed in migration 029 - approval now comes from the

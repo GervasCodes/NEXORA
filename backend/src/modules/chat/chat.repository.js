@@ -125,6 +125,39 @@ exports.findConversationsByUser = async (userId) => {
     return rows;
 };
 
+// Total unread-message count across every conversation the user is a
+// participant in, for the header's "Messages" nav badge (Phase A3) -
+// same per-conversation unread definition findConversationsByUser uses
+// (unread = not mine, unread, not deleted, and after my own clear point),
+// just summed server-side instead of pulling every conversation row down
+// to the client to add up.
+exports.countUnreadMessages = async (userId) => {
+    const [rows] = await db.query(
+        `SELECT COALESCE(SUM(unread), 0) AS total_unread FROM (
+            SELECT (
+                SELECT COUNT(*) FROM messages m
+                WHERE m.conversation_id = c.id
+                AND m.sender_id != ? AND m.is_read = 0
+                AND m.is_deleted = 0
+                AND (
+                    (c.buyer_id = ? AND (c.buyer_cleared_at IS NULL OR m.created_at > c.buyer_cleared_at)) OR
+                    (c.seller_id = ? AND (c.seller_cleared_at IS NULL OR m.created_at > c.seller_cleared_at)) OR
+                    (c.delivery_agent_id = ? AND (c.agent_cleared_at IS NULL OR m.created_at > c.agent_cleared_at))
+                )
+            ) AS unread
+            FROM conversations c
+            WHERE (c.buyer_id = ? OR c.seller_id = ? OR c.delivery_agent_id = ?)
+            AND NOT (
+                (c.buyer_id = ? AND c.buyer_deleted_at IS NOT NULL AND c.updated_at <= c.buyer_deleted_at) OR
+                (c.seller_id = ? AND c.seller_deleted_at IS NOT NULL AND c.updated_at <= c.seller_deleted_at) OR
+                (c.delivery_agent_id = ? AND c.agent_deleted_at IS NOT NULL AND c.updated_at <= c.agent_deleted_at)
+            )
+        ) t`,
+        [userId, userId, userId, userId, userId, userId, userId, userId, userId, userId]
+    );
+    return rows[0].total_unread;
+};
+
 exports.touchConversation = async (conversationId) => {
     await db.query(
         "UPDATE conversations SET updated_at = NOW() WHERE id = ?",

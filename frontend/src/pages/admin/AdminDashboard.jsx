@@ -4,6 +4,8 @@ import api from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import { useSocket } from "../../context/SocketContext";
 import BarChart from "../../components/BarChart";
+import LineChart from "../../components/LineChart";
+import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import PageLoader from "../../components/PageLoader";
 
 export default function AdminDashboard() {
@@ -14,21 +16,30 @@ export default function AdminDashboard() {
     // Phase 4 (Analytics & Business Metrics) - GMV / take rate / repeat
     // buyers / provider retention, blended across products + services.
     const [businessMetrics, setBusinessMetrics] = useState(null);
+    // Phase A5 (Advanced Analytics) - period comparison, top customers,
+    // seller leaderboard.
+    const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [live, setLive] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [exportingType, setExportingType] = useState(null);
+    // Trend view toggle - Bar/Line render the exact same chartData, this
+    // just swaps which of the two chart components draws it.
+    const [chartView, setChartView] = useState("bar");
 
     const load = useCallback(() => {
         return Promise.all([
             api.get("/admin/dashboard"),
             api.get("/admin/analytics"),
             api.get("/admin/analytics/services"),
-            api.get("/admin/analytics/business")
-        ]).then(([dashboardRes, analyticsRes, servicesAnalyticsRes, businessMetricsRes]) => {
+            api.get("/admin/analytics/business"),
+            api.get("/admin/analytics/advanced")
+        ]).then(([dashboardRes, analyticsRes, servicesAnalyticsRes, businessMetricsRes, advancedRes]) => {
             setStats(dashboardRes.data.data);
             setAnalytics(analyticsRes.data.data);
             setServicesAnalytics(servicesAnalyticsRes.data.data);
             setBusinessMetrics(businessMetricsRes.data.data);
+            setAdvancedAnalytics(advancedRes.data.data);
         });
     }, []);
 
@@ -49,6 +60,25 @@ export default function AdminDashboard() {
                 window.URL.revokeObjectURL(url);
             })
             .finally(() => setExporting(false));
+    }, []);
+
+    // Same blob-download pattern as handleExportCsv above, parameterized
+    // for the two Advanced Analytics CSVs (top customers / seller
+    // leaderboard).
+    const handleExportAdvancedCsv = useCallback((type) => {
+        setExportingType(type);
+        api.get(`/admin/analytics/advanced/export?type=${type}`, { responseType: "blob" })
+            .then((response) => {
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `nexora-${type}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .finally(() => setExportingType(null));
     }, []);
 
     useEffect(() => {
@@ -213,17 +243,45 @@ export default function AdminDashboard() {
                             <p className="text-xs uppercase tracking-widest text-ash">
                                 Daily sales · last 14 days + 7-day forecast
                             </p>
-                            <span className="text-[10px] text-ash flex items-center gap-1">
-                                <span className="w-2 h-2 bg-mango/40 border border-dashed border-mango-dark rounded-sm" /> Projected
-                            </span>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center border border-line rounded-md overflow-hidden text-[11px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setChartView("bar")}
+                                        className={`px-2 py-1 transition-colors ${chartView === "bar" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                    >
+                                        Bar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChartView("line")}
+                                        className={`px-2 py-1 transition-colors ${chartView === "line" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                    >
+                                        Line
+                                    </button>
+                                </div>
+                                <span className="text-[10px] text-ash flex items-center gap-1">
+                                    <span className="w-2 h-2 bg-mango/40 border border-dashed border-mango-dark rounded-sm" /> Projected
+                                </span>
+                            </div>
                         </div>
-                        <BarChart
-                            data={chartData}
-                            labelKey="label"
-                            valueKey="revenue"
-                            formatValue={(v) => formatMoney(v)}
-                            highlightKey="projected"
-                        />
+                        {chartView === "bar" ? (
+                            <BarChart
+                                data={chartData}
+                                labelKey="label"
+                                valueKey="revenue"
+                                formatValue={(v) => formatMoney(v)}
+                                highlightKey="projected"
+                            />
+                        ) : (
+                            <LineChart
+                                data={chartData}
+                                labelKey="label"
+                                valueKey="revenue"
+                                formatValue={(v) => formatMoney(v)}
+                                highlightKey="projected"
+                            />
+                        )}
                         <p className="text-[11px] text-ash mt-3">
                             Forecast is a straight trend line fit to the last 30 days of revenue - a rough
                             directional estimate, not a guarantee.
@@ -281,6 +339,99 @@ export default function AdminDashboard() {
                 </>
             )}
 
+            {advancedAnalytics && (
+                <div className="mb-10">
+                    <h2 className="font-display text-xl mb-4">Advanced analytics</h2>
+
+                    <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                        Period comparison · blended GMV, products + services
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                        <PeriodComparisonCard
+                            label="This week vs last week"
+                            current={advancedAnalytics.periodComparison.week.current}
+                            previous={advancedAnalytics.periodComparison.week.previous}
+                            growthPercent={advancedAnalytics.periodComparison.week.growthPercent}
+                            formatValue={formatMoney}
+                        />
+                        <PeriodComparisonCard
+                            label="Last 30 days vs prior 30 days"
+                            current={advancedAnalytics.periodComparison.month.current}
+                            previous={advancedAnalytics.periodComparison.month.previous}
+                            growthPercent={advancedAnalytics.periodComparison.month.growthPercent}
+                            formatValue={formatMoney}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="border border-line rounded-lg p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <p className="text-xs uppercase tracking-widest text-ash">Top customers · platform-wide</p>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportAdvancedCsv("customers")}
+                                    disabled={exportingType === "customers"}
+                                    className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {exportingType === "customers" ? "Preparing CSV…" : "Export CSV ↓"}
+                                </button>
+                            </div>
+                            {advancedAnalytics.topCustomers.length === 0 ? (
+                                <p className="text-ash text-sm">No paid orders or bookings yet.</p>
+                            ) : (
+                                <ul className="divide-y divide-line">
+                                    {advancedAnalytics.topCustomers.map((c, i) => (
+                                        <li key={c.id} className="py-2.5 flex items-center gap-3 text-sm">
+                                            <span className="text-ash text-xs w-4 shrink-0">{i + 1}</span>
+                                            <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                                            <span className="price text-xs text-ash shrink-0">{c.transaction_count} orders</span>
+                                            <span className="price text-xs font-medium shrink-0">{formatMoney(c.total_spend)}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
+                        <div className="border border-line rounded-lg p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <p className="text-xs uppercase tracking-widest text-ash">Seller leaderboard</p>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExportAdvancedCsv("leaderboard")}
+                                    disabled={exportingType === "leaderboard"}
+                                    className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {exportingType === "leaderboard" ? "Preparing CSV…" : "Export CSV ↓"}
+                                </button>
+                            </div>
+                            {advancedAnalytics.sellerLeaderboard.length === 0 ? (
+                                <p className="text-ash text-sm">No paid orders or bookings yet.</p>
+                            ) : (
+                                <ul className="divide-y divide-line">
+                                    {advancedAnalytics.sellerLeaderboard.map((s) => (
+                                        <li key={s.user_id} className="py-2.5 flex items-center gap-2 text-sm">
+                                            <span className="text-ash text-xs w-4 shrink-0">{s.rank}</span>
+                                            <span className="flex-1 min-w-0 truncate">
+                                                {s.store_name}
+                                                {(s.is_verified === 1 || s.is_verified === true) && (
+                                                    <span className="ml-1.5 text-[10px] text-teal font-semibold uppercase align-middle">Verified</span>
+                                                )}
+                                            </span>
+                                            <span className="price text-xs text-ash shrink-0">{s.total_transactions} txns</span>
+                                            <span className="price text-xs font-medium shrink-0">{formatMoney(s.total_revenue)}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <p className="text-[11px] text-ash mt-3">
+                                Blends product-sale revenue and service-booking revenue for each seller, so
+                                hybrid merchants are ranked on their full storefront, not just one side of it.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {servicesAnalytics && (
                 <>
                     <h2 className="font-display text-xl mb-4">Services marketplace</h2>
@@ -290,17 +441,45 @@ export default function AdminDashboard() {
                             <p className="text-xs uppercase tracking-widest text-ash">
                                 Daily booking revenue · last 14 days + 7-day forecast
                             </p>
-                            <span className="text-[10px] text-ash flex items-center gap-1">
-                                <span className="w-2 h-2 bg-mango/40 border border-dashed border-mango-dark rounded-sm" /> Projected
-                            </span>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center border border-line rounded-md overflow-hidden text-[11px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setChartView("bar")}
+                                        className={`px-2 py-1 transition-colors ${chartView === "bar" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                    >
+                                        Bar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChartView("line")}
+                                        className={`px-2 py-1 transition-colors ${chartView === "line" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                    >
+                                        Line
+                                    </button>
+                                </div>
+                                <span className="text-[10px] text-ash flex items-center gap-1">
+                                    <span className="w-2 h-2 bg-mango/40 border border-dashed border-mango-dark rounded-sm" /> Projected
+                                </span>
+                            </div>
                         </div>
-                        <BarChart
-                            data={bookingChartData}
-                            labelKey="label"
-                            valueKey="revenue"
-                            formatValue={(v) => formatMoney(v)}
-                            highlightKey="projected"
-                        />
+                        {chartView === "bar" ? (
+                            <BarChart
+                                data={bookingChartData}
+                                labelKey="label"
+                                valueKey="revenue"
+                                formatValue={(v) => formatMoney(v)}
+                                highlightKey="projected"
+                            />
+                        ) : (
+                            <LineChart
+                                data={bookingChartData}
+                                labelKey="label"
+                                valueKey="revenue"
+                                formatValue={(v) => formatMoney(v)}
+                                highlightKey="projected"
+                            />
+                        )}
                         <p className="text-[11px] text-ash mt-3">
                             Forecast is a straight trend line fit to the last 30 days of booking revenue - a
                             rough directional estimate, not a guarantee.

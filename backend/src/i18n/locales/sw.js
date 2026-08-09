@@ -72,6 +72,11 @@ module.exports = {
         "product.removed.title": "Bidhaa imeondolewa",
         "product.removed.message": "Bidhaa yako \"{productName}\" iliondolewa na msimamizi kwa ukaguzi.",
 
+        "service.reactivated.title": "Huduma imewashwa tena",
+        "service.reactivated.message": "Huduma yako \"{serviceName}\" inaonekana tena.",
+        "service.removed.title": "Huduma imeondolewa",
+        "service.removed.message": "Huduma yako \"{serviceName}\" iliondolewa na msimamizi kwa ukaguzi.",
+
         "delivery.update.title": "Taarifa ya usafirishaji",
         "delivery.update.message": "Hali ya usafirishaji wa agizo lako {orderNumber} sasa ni \"{status}\".",
         "delivery.pickedUp.title": "Wakala wa usafirishaji anaelekea kuchukua agizo lako",

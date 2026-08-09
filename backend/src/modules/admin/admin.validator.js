@@ -16,6 +16,22 @@ exports.productIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid product")
 ];
 
+exports.serviceIdValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid service")
+];
+
+exports.bulkProductStatusValidation = [
+    body("ids").isArray({ min: 1 }).withMessage("At least one product must be selected"),
+    body("ids.*").isInt({ gt: 0 }).withMessage("Invalid product id"),
+    body("is_active").isBoolean().withMessage("is_active must be true or false").toBoolean()
+];
+
+exports.bulkServiceStatusValidation = [
+    body("ids").isArray({ min: 1 }).withMessage("At least one service must be selected"),
+    body("ids.*").isInt({ gt: 0 }).withMessage("Invalid service id"),
+    body("is_active").isBoolean().withMessage("is_active must be true or false").toBoolean()
+];
+
 exports.withdrawalIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid withdrawal request")
 ];

@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { buildProductSearchPlan } = require("../../utils/productSearch");
 
 // --- Users ---
 // Deleted accounts (deleted_at set - see migration 056) are deliberately
@@ -95,16 +96,63 @@ exports.setSellerVerified = async (userId, isVerified) => {
 };
 
 // --- Products ---
-exports.findAllProducts = async () => {
+// Phase A4: search (name/brand/store) + category + status filters, plus
+// pagination - same shape as product.repository.js#findAll (search plan,
+// LIMIT/OFFSET, separate COUNT(*) for total), minus the is_active=1
+// restriction that query applies since admin needs to see removed
+// products too (that's what the status filter is for here).
+exports.findAllProducts = async ({ search, categoryId, status, page, limit }) => {
+    const offset = (page - 1) * limit;
+    const conditions = [];
+    const params = [];
+
+    if (categoryId) {
+        conditions.push("p.category_id = ?");
+        params.push(categoryId);
+    }
+
+    if (status === "active") {
+        conditions.push("p.is_active = 1");
+    } else if (status === "inactive") {
+        conditions.push("p.is_active = 0");
+    }
+
+    const searchPlan = buildProductSearchPlan(search);
+    if (searchPlan.mode === "fulltext") {
+        conditions.push("(MATCH(p.name, p.brand, p.description) AGAINST (? IN BOOLEAN MODE) OR sp.store_name LIKE ?)");
+        params.push(searchPlan.booleanQuery, `%${searchPlan.raw}%`);
+    } else if (searchPlan.mode === "like") {
+        conditions.push("(p.name LIKE ? OR sp.store_name LIKE ?)");
+        params.push(`%${searchPlan.raw}%`, `%${searchPlan.raw}%`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const [rows] = await db.query(
         `SELECT p.id, p.name, p.slug, p.price, p.stock, p.is_active, p.is_sponsored, p.created_at,
-                sp.store_name
+                sp.store_name,
+                (
+                    SELECT pi.image_url FROM product_images pi
+                    WHERE pi.product_id = p.id AND pi.is_primary = 1
+                    LIMIT 1
+                ) AS image_url
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
+        ${whereClause}
         ORDER BY p.created_at DESC
-        LIMIT 200`
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total
+        FROM products p
+        JOIN seller_profiles sp ON sp.user_id = p.seller_id
+        ${whereClause}`,
+        params
+    );
+
+    return { rows, total };
 };
 
 exports.findProductById = async (productId) => {
@@ -112,8 +160,23 @@ exports.findProductById = async (productId) => {
     return rows[0];
 };
 
+// Bulk counterpart of findProductById, for the bulk activate/deactivate
+// action - one query for every selected row's seller_id/name instead of
+// N, so the per-product notification loop in admin.service.js doesn't
+// also cost N extra SELECTs.
+exports.findProductsByIds = async (ids) => {
+    if (!ids.length) return [];
+    const [rows] = await db.query("SELECT * FROM products WHERE id IN (?)", [ids]);
+    return rows;
+};
+
 exports.setProductActive = async (productId, isActive) => {
     await db.query("UPDATE products SET is_active = ? WHERE id = ?", [isActive, productId]);
+};
+
+exports.setProductsActiveBulk = async (ids, isActive) => {
+    if (!ids.length) return;
+    await db.query("UPDATE products SET is_active = ? WHERE id IN (?)", [isActive, ids]);
 };
 
 // Phase 2C's "Sponsored products" department section. Just the display
@@ -121,6 +184,83 @@ exports.setProductActive = async (productId, isActive) => {
 // separate, later piece of work (Phase 8A).
 exports.setProductSponsored = async (productId, isSponsored) => {
     await db.query("UPDATE products SET is_sponsored = ? WHERE id = ?", [isSponsored, productId]);
+};
+
+// --- Services ---
+// Same search/category/status/pagination shape as findAllProducts above -
+// see that function's comment for what each filter does.
+exports.findAllServices = async ({ search, categoryId, status, page, limit }) => {
+    const offset = (page - 1) * limit;
+    const conditions = [];
+    const params = [];
+
+    if (categoryId) {
+        conditions.push("s.category_id = ?");
+        params.push(categoryId);
+    }
+
+    if (status === "active") {
+        conditions.push("s.is_active = 1");
+    } else if (status === "inactive") {
+        conditions.push("s.is_active = 0");
+    }
+
+    const searchPlan = buildProductSearchPlan(search);
+    if (searchPlan.mode === "fulltext") {
+        conditions.push("(MATCH(s.title, s.description) AGAINST (? IN BOOLEAN MODE) OR sp.store_name LIKE ?)");
+        params.push(searchPlan.booleanQuery, `%${searchPlan.raw}%`);
+    } else if (searchPlan.mode === "like") {
+        conditions.push("(s.title LIKE ? OR sp.store_name LIKE ?)");
+        params.push(`%${searchPlan.raw}%`, `%${searchPlan.raw}%`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const [rows] = await db.query(
+        `SELECT s.id, s.title AS name, s.slug, s.base_price AS price, s.is_active, s.status, s.created_at,
+                sp.store_name,
+                (
+                    SELECT sm.media_url FROM service_media sm
+                    WHERE sm.service_id = s.id AND sm.is_primary = 1
+                    LIMIT 1
+                ) AS image_url
+        FROM services s
+        JOIN seller_profiles sp ON sp.user_id = s.provider_id
+        ${whereClause}
+        ORDER BY s.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total
+        FROM services s
+        JOIN seller_profiles sp ON sp.user_id = s.provider_id
+        ${whereClause}`,
+        params
+    );
+
+    return { rows, total };
+};
+
+exports.findServiceById = async (serviceId) => {
+    const [rows] = await db.query("SELECT * FROM services WHERE id = ?", [serviceId]);
+    return rows[0];
+};
+
+exports.findServicesByIds = async (ids) => {
+    if (!ids.length) return [];
+    const [rows] = await db.query("SELECT * FROM services WHERE id IN (?)", [ids]);
+    return rows;
+};
+
+exports.setServiceActive = async (serviceId, isActive) => {
+    await db.query("UPDATE services SET is_active = ? WHERE id = ?", [isActive, serviceId]);
+};
+
+exports.setServicesActiveBulk = async (ids, isActive) => {
+    if (!ids.length) return;
+    await db.query("UPDATE services SET is_active = ? WHERE id IN (?)", [isActive, ids]);
 };
 
 // --- Orders (platform-wide view) ---
@@ -905,4 +1045,133 @@ exports.scrubUserPII = async (userId, executor = db) => {
         WHERE id = ?`,
         [userId]
     );
+};
+
+// --- Phase A5 (Advanced Analytics) -------------------------------------
+//
+// Three additions beyond getAnalytics/getServicesAnalytics/getBusinessMetrics
+// above: period-over-period comparison (this week vs last week, and the
+// 30-day rolling equivalent of month-over-month), a platform-wide top-
+// customers breakdown (blended across orders + bookings, same pattern
+// getBusinessMetrics already uses for GMV), and an admin-only seller
+// performance leaderboard blending each seller's product revenue with
+// their service revenue where a merchant sells both.
+//
+// Rolling windows (last 7 days vs the 7 days before that; last 30 vs the
+// 30 before that) rather than calendar week/month boundaries - this
+// matches every other "Nd" window already in this file (gmv_7d/gmv_30d
+// in getGmvBreakdown, DAYS/REGRESSION_WINDOW_DAYS in getAnalytics), so a
+// week/month here means the same thing it means everywhere else in this
+// dashboard.
+
+// Blended (products + bookings) GMV and transaction count for a single
+// [start, end) window. Shared by getPeriodComparison's four windows so
+// the "paid orders + paid bookings, summed" definition only lives once.
+async function getBlendedTotalsForWindow(start, end) {
+    const [[row]] = await db.query(
+        `SELECT
+            (SELECT COALESCE(SUM(total_amount), 0) FROM orders
+                WHERE payment_status = 'paid' AND parent_order_id IS NULL
+                AND created_at >= ? AND created_at < ?) AS product_gmv,
+            (SELECT COUNT(*) FROM orders
+                WHERE payment_status = 'paid' AND parent_order_id IS NULL
+                AND created_at >= ? AND created_at < ?) AS product_count,
+            (SELECT COALESCE(SUM(amount), 0) FROM bookings
+                WHERE payment_status = 'paid'
+                AND created_at >= ? AND created_at < ?) AS booking_gmv,
+            (SELECT COUNT(*) FROM bookings
+                WHERE payment_status = 'paid'
+                AND created_at >= ? AND created_at < ?) AS booking_count`,
+        [start, end, start, end, start, end, start, end]
+    );
+
+    return {
+        gmv: (Number(row.product_gmv) || 0) + (Number(row.booking_gmv) || 0),
+        transactionCount: (Number(row.product_count) || 0) + (Number(row.booking_count) || 0)
+    };
+}
+
+exports.getPeriodComparison = async () => {
+    const now = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const daysAgo = (n) => new Date(now.getTime() - n * dayMs);
+
+    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all([
+        getBlendedTotalsForWindow(daysAgo(7), now),
+        getBlendedTotalsForWindow(daysAgo(14), daysAgo(7)),
+        getBlendedTotalsForWindow(daysAgo(30), now),
+        getBlendedTotalsForWindow(daysAgo(60), daysAgo(30))
+    ]);
+
+    return { thisWeek, lastWeek, thisMonth, lastMonth };
+};
+
+// Platform-wide top customers by total spend, blended across paid
+// orders (as buyer) and paid bookings (as customer) - same buyer can
+// show up via either or both, so this outer-joins both aggregates onto
+// users rather than unioning two separate top-N lists.
+exports.getTopCustomers = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT u.id, CONCAT(u.first_name, ' ', u.last_name) AS name, u.email,
+                COALESCE(o.order_spend, 0) + COALESCE(b.booking_spend, 0) AS total_spend,
+                COALESCE(o.order_count, 0) + COALESCE(b.booking_count, 0) AS transaction_count
+        FROM users u
+        LEFT JOIN (
+            SELECT buyer_id, SUM(total_amount) AS order_spend, COUNT(*) AS order_count
+            FROM orders
+            WHERE payment_status = 'paid' AND parent_order_id IS NULL
+            GROUP BY buyer_id
+        ) o ON o.buyer_id = u.id
+        LEFT JOIN (
+            SELECT customer_id, SUM(amount) AS booking_spend, COUNT(*) AS booking_count
+            FROM bookings
+            WHERE payment_status = 'paid'
+            GROUP BY customer_id
+        ) b ON b.customer_id = u.id
+        WHERE o.buyer_id IS NOT NULL OR b.customer_id IS NOT NULL
+        ORDER BY total_spend DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+// Admin-only, platform-wide: every seller_profiles row ranked by
+// blended revenue (product sales via order_items + service bookings via
+// bookings.provider_id) - a hybrid merchant's two revenue streams land
+// on the same leaderboard row instead of splitting them across the
+// separate getTopSellers/getTopProviders lists above.
+exports.getSellerLeaderboard = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT sp.user_id, sp.store_name, sp.is_verified, sp.country,
+                COALESCE(p.product_revenue, 0) AS product_revenue,
+                COALESCE(s.service_revenue, 0) AS service_revenue,
+                COALESCE(p.product_revenue, 0) + COALESCE(s.service_revenue, 0) AS total_revenue,
+                COALESCE(p.product_orders, 0) AS product_orders,
+                COALESCE(s.service_bookings, 0) AS service_bookings,
+                COALESCE(p.product_orders, 0) + COALESCE(s.service_bookings, 0) AS total_transactions
+        FROM seller_profiles sp
+        LEFT JOIN (
+            SELECT oi.seller_id,
+                    SUM(oi.subtotal) AS product_revenue,
+                    COUNT(DISTINCT oi.order_id) AS product_orders
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.payment_status = 'paid'
+            GROUP BY oi.seller_id
+        ) p ON p.seller_id = sp.user_id
+        LEFT JOIN (
+            SELECT b.provider_id,
+                    SUM(b.amount) AS service_revenue,
+                    COUNT(*) AS service_bookings
+            FROM bookings b
+            WHERE b.payment_status = 'paid'
+            GROUP BY b.provider_id
+        ) s ON s.provider_id = sp.user_id
+        WHERE p.seller_id IS NOT NULL OR s.provider_id IS NOT NULL
+        ORDER BY total_revenue DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
 };

@@ -330,8 +330,26 @@ exports.setSellerVerified = async (sellerUserId, isVerified) => {
     });
 };
 
-exports.listProducts = async () => {
-    return adminRepository.findAllProducts();
+// Phase A4: page/limit clamped the same way product.service.js#listProducts
+// clamps them (max 50/page); search/category_id/status pass straight
+// through to the repository, which treats a missing/unrecognized status
+// as "no filter" (both active and inactive rows).
+exports.listProducts = async (query) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 20));
+
+    const { rows, total } = await adminRepository.findAllProducts({
+        search: query.search || null,
+        categoryId: query.category_id || null,
+        status: query.status || null,
+        page,
+        limit
+    });
+
+    return {
+        products: rows,
+        pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }
+    };
 };
 
 exports.setProductActive = async (productId, isActive) => {
@@ -353,6 +371,33 @@ exports.setProductActive = async (productId, isActive) => {
     });
 };
 
+// Bulk activate/deactivate (Phase A4's AdminProducts bulk action). Reuses
+// the same notification as the single-product toggle above, once per
+// affected product, so a seller sees the same per-listing notice either
+// way - just fetched/updated as one batch instead of N round trips.
+exports.bulkSetProductActive = async (productIds, isActive) => {
+    const ids = [...new Set((productIds || []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        throw new Error("No products selected");
+    }
+
+    const products = await adminRepository.findProductsByIds(ids);
+
+    await adminRepository.setProductsActiveBulk(ids, isActive);
+
+    await Promise.all(products.map((product) => notificationService.notify({
+        userId: product.seller_id,
+        type: "product_moderation",
+        titleKey: isActive ? "notifications.product.reactivated.title" : "notifications.product.removed.title",
+        messageKey: isActive ? "notifications.product.reactivated.message" : "notifications.product.removed.message",
+        messageParams: { productName: product.name },
+        withEmail: true
+    })));
+
+    return { updated: products.length };
+};
+
 exports.setProductSponsored = async (productId, isSponsored) => {
     const product = await adminRepository.findProductById(productId);
 
@@ -361,6 +406,67 @@ exports.setProductSponsored = async (productId, isSponsored) => {
     }
 
     await adminRepository.setProductSponsored(productId, isSponsored);
+};
+
+exports.listServices = async (query) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 20));
+
+    const { rows, total } = await adminRepository.findAllServices({
+        search: query.search || null,
+        categoryId: query.category_id || null,
+        status: query.status || null,
+        page,
+        limit
+    });
+
+    return {
+        services: rows,
+        pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }
+    };
+};
+
+exports.setServiceActive = async (serviceId, isActive) => {
+    const service = await adminRepository.findServiceById(serviceId);
+
+    if (!service) {
+        throw new Error("Service not found");
+    }
+
+    await adminRepository.setServiceActive(serviceId, isActive);
+
+    await notificationService.notify({
+        userId: service.provider_id,
+        type: "service_moderation",
+        titleKey: isActive ? "notifications.service.reactivated.title" : "notifications.service.removed.title",
+        messageKey: isActive ? "notifications.service.reactivated.message" : "notifications.service.removed.message",
+        messageParams: { serviceName: service.title },
+        withEmail: true
+    });
+};
+
+// Bulk counterpart, same shape as bulkSetProductActive above.
+exports.bulkSetServiceActive = async (serviceIds, isActive) => {
+    const ids = [...new Set((serviceIds || []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        throw new Error("No services selected");
+    }
+
+    const services = await adminRepository.findServicesByIds(ids);
+
+    await adminRepository.setServicesActiveBulk(ids, isActive);
+
+    await Promise.all(services.map((service) => notificationService.notify({
+        userId: service.provider_id,
+        type: "service_moderation",
+        titleKey: isActive ? "notifications.service.reactivated.title" : "notifications.service.removed.title",
+        messageKey: isActive ? "notifications.service.reactivated.message" : "notifications.service.removed.message",
+        messageParams: { serviceName: service.title },
+        withEmail: true
+    })));
+
+    return { updated: services.length };
 };
 
 exports.listAllOrders = async () => {
@@ -749,6 +855,86 @@ exports.exportGmvCsv = async (days) => {
         ].join(","));
     }
 
+    return lines.join("\n");
+};
+
+// --- Phase A5 (Advanced Analytics) --------------------------------------
+// Period comparison + platform-wide top customers + seller leaderboard.
+// Deliberately its own endpoint rather than folded into getBusinessMetrics
+// - that one is a single point-in-time snapshot of blended health metrics,
+// this is comparison/ranking data meant to be paged through and exported.
+
+function growthPercent(current, previous) {
+    if (!previous) return current > 0 ? 100 : 0;
+    return Number((((current - previous) / previous) * 100).toFixed(1));
+}
+
+exports.getAdvancedAnalytics = async () => {
+    const [periods, topCustomers, sellerLeaderboard] = await Promise.all([
+        adminRepository.getPeriodComparison(),
+        adminRepository.getTopCustomers(10),
+        adminRepository.getSellerLeaderboard(10)
+    ]);
+
+    return {
+        periodComparison: {
+            week: {
+                current: periods.thisWeek,
+                previous: periods.lastWeek,
+                growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
+            },
+            month: {
+                current: periods.thisMonth,
+                previous: periods.lastMonth,
+                growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
+            }
+        },
+        topCustomers: topCustomers.map((c) => ({
+            ...c,
+            total_spend: Number(c.total_spend) || 0,
+            transaction_count: Number(c.transaction_count) || 0
+        })),
+        sellerLeaderboard: sellerLeaderboard.map((s, i) => ({
+            ...s,
+            rank: i + 1,
+            product_revenue: Number(s.product_revenue) || 0,
+            service_revenue: Number(s.service_revenue) || 0,
+            total_revenue: Number(s.total_revenue) || 0,
+            total_transactions: Number(s.total_transactions) || 0
+        }))
+    };
+};
+
+// CSV export for the two tabular sections above (top customers / seller
+// leaderboard) - period comparison isn't included, it's four numbers
+// already visible on the dashboard, not something worth downloading.
+exports.exportAdvancedAnalyticsCsv = async (type) => {
+    if (type === "customers") {
+        const rows = await adminRepository.getTopCustomers(500);
+        const header = "customer_id,name,email,total_spend,transaction_count";
+        const lines = [header, ...rows.map((r) => [
+            r.id,
+            `"${String(r.name).replace(/"/g, '""')}"`,
+            r.email,
+            (Number(r.total_spend) || 0).toFixed(2),
+            Number(r.transaction_count) || 0
+        ].join(","))];
+        return lines.join("\n");
+    }
+
+    const rows = await adminRepository.getSellerLeaderboard(500);
+    const header = "rank,seller_id,store_name,verified,country,product_revenue,service_revenue,total_revenue,total_transactions";
+    const lines = [header, ...rows.map((r, i) => [
+        i + 1,
+        r.user_id,
+        `"${String(r.store_name).replace(/"/g, '""')}"`,
+        r.is_verified ? 1 : 0,
+        r.country || "",
+        (Number(r.product_revenue) || 0).toFixed(2),
+        (Number(r.service_revenue) || 0).toFixed(2),
+        (Number(r.total_revenue) || 0).toFixed(2),
+        Number(r.total_transactions) || 0
+    ].join(","))];
     return lines.join("\n");
 };
 

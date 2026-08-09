@@ -155,6 +155,26 @@ router.get(
     sellerController.getAnalytics
 );
 
+// Phase A5 (Advanced Analytics) - period comparison + top customers,
+// plus a CSV export of top customers/products. Same gates as /analytics.
+router.get(
+    "/analytics/advanced",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireVerificationFeePaid,
+    sellerController.getAdvancedAnalytics
+);
+
+router.get(
+    "/analytics/export",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireVerificationFeePaid,
+    sellerController.exportAnalyticsCsv
+);
+
 // --- Verification fee (paid "Verified Seller" badge) ---
 // The old post-registration document-upload flow (national ID, voter
 // ID, business registration) that used to live here was removed -

@@ -69,6 +69,116 @@ describe("admin.service user/seller/product moderation", () => {
             })
         );
     });
+
+    it("setServiceActive rejects an unknown service", async () => {
+        adminRepository.findServiceById.mockResolvedValue(undefined);
+        await expect(adminService.setServiceActive(1, false)).rejects.toThrow("Service not found");
+    });
+
+    it("setServiceActive notifies the owning provider, not a hardcoded user", async () => {
+        adminRepository.findServiceById.mockResolvedValue({ provider_id: 42, title: "Airport Pickup" });
+        await adminService.setServiceActive(1, false);
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 42,
+                titleKey: "notifications.service.removed.title",
+                messageParams: { serviceName: "Airport Pickup" }
+            })
+        );
+    });
+});
+
+// Phase A4 - Products & Services List UI/UX (search/category/status
+// filters, pagination, bulk activate/deactivate).
+describe("admin.service.listProducts (Phase A4)", () => {
+    it("clamps page/limit and forwards search/category/status filters as-is", async () => {
+        adminRepository.findAllProducts.mockResolvedValue({ rows: [{ id: 1 }], total: 1 });
+
+        const result = await adminService.listProducts({ page: "2", limit: "999", search: "shoes", category_id: "3", status: "active" });
+
+        expect(adminRepository.findAllProducts).toHaveBeenCalledWith({
+            search: "shoes", categoryId: "3", status: "active", page: 2, limit: 50
+        });
+        expect(result).toEqual({
+            products: [{ id: 1 }],
+            pagination: { page: 2, limit: 50, total: 1, totalPages: 1 }
+        });
+    });
+
+    it("defaults page/limit and nulls out unset filters when the query is empty", async () => {
+        adminRepository.findAllProducts.mockResolvedValue({ rows: [], total: 0 });
+
+        await adminService.listProducts({});
+
+        expect(adminRepository.findAllProducts).toHaveBeenCalledWith({
+            search: null, categoryId: null, status: null, page: 1, limit: 20
+        });
+    });
+});
+
+describe("admin.service.bulkSetProductActive (Phase A4)", () => {
+    it("rejects when no valid ids are given", async () => {
+        await expect(adminService.bulkSetProductActive([], true)).rejects.toThrow("No products selected");
+        await expect(adminService.bulkSetProductActive(["not-a-number"], true)).rejects.toThrow("No products selected");
+    });
+
+    it("dedupes ids, updates in bulk, and notifies each affected seller once", async () => {
+        adminRepository.findProductsByIds.mockResolvedValue([
+            { id: 1, seller_id: 10, name: "Widget" },
+            { id: 2, seller_id: 20, name: "Gadget" }
+        ]);
+
+        const result = await adminService.bulkSetProductActive([1, 1, 2], false);
+
+        expect(adminRepository.findProductsByIds).toHaveBeenCalledWith([1, 2]);
+        expect(adminRepository.setProductsActiveBulk).toHaveBeenCalledWith([1, 2], false);
+        expect(notificationService.notify).toHaveBeenCalledTimes(2);
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: 10, titleKey: "notifications.product.removed.title", messageParams: { productName: "Widget" } })
+        );
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: 20, titleKey: "notifications.product.removed.title", messageParams: { productName: "Gadget" } })
+        );
+        expect(result).toEqual({ updated: 2 });
+    });
+});
+
+describe("admin.service.listServices (Phase A4)", () => {
+    it("clamps page/limit and forwards search/category/status filters as-is", async () => {
+        adminRepository.findAllServices.mockResolvedValue({ rows: [{ id: 5 }], total: 1 });
+
+        const result = await adminService.listServices({ page: "0", search: "clean", category_id: "7", status: "inactive" });
+
+        expect(adminRepository.findAllServices).toHaveBeenCalledWith({
+            search: "clean", categoryId: "7", status: "inactive", page: 1, limit: 20
+        });
+        expect(result).toEqual({
+            services: [{ id: 5 }],
+            pagination: { page: 1, limit: 20, total: 1, totalPages: 1 }
+        });
+    });
+});
+
+describe("admin.service.bulkSetServiceActive (Phase A4)", () => {
+    it("rejects when no valid ids are given", async () => {
+        await expect(adminService.bulkSetServiceActive([], true)).rejects.toThrow("No services selected");
+    });
+
+    it("dedupes ids, updates in bulk, and notifies each affected provider once", async () => {
+        adminRepository.findServicesByIds.mockResolvedValue([
+            { id: 1, provider_id: 11, title: "Airport Pickup" }
+        ]);
+
+        const result = await adminService.bulkSetServiceActive([1, 1], true);
+
+        expect(adminRepository.findServicesByIds).toHaveBeenCalledWith([1]);
+        expect(adminRepository.setServicesActiveBulk).toHaveBeenCalledWith([1], true);
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: 11, titleKey: "notifications.service.reactivated.title", messageParams: { serviceName: "Airport Pickup" } })
+        );
+        expect(result).toEqual({ updated: 1 });
+    });
 });
 
 describe("admin.service.getDashboard", () => {

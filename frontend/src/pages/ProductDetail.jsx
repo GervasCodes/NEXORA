@@ -253,7 +253,7 @@ export default function ProductDetail() {
 
                     <button
                         onClick={handleMessageSeller}
-                        className="text-sm text-azure-deep hover:underline mt-3 inline-block"
+                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring"
                     >
                         💬 Message {product.store_name || "seller"}
                     </button>

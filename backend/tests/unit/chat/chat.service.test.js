@@ -234,6 +234,17 @@ describe("chat.service.getMyConversations", () => {
     });
 });
 
+describe("chat.service.getUnreadCount", () => {
+    it("delegates straight to the repository for the given user", async () => {
+        chatRepository.countUnreadMessages.mockResolvedValue(5);
+
+        const result = await chatService.getUnreadCount(7);
+
+        expect(chatRepository.countUnreadMessages).toHaveBeenCalledWith(7);
+        expect(result).toBe(5);
+    });
+});
+
 describe("chat.service.sendAttachment", () => {
     it("rejects when no file was uploaded", async () => {
         await expect(chatService.sendAttachment(1, 5, null, "caption")).rejects.toThrow("No file uploaded");

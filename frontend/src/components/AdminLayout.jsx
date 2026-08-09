@@ -21,6 +21,7 @@ const groups = [
             { to: "/admin/products", label: "Products" },
             { to: "/admin/categories", label: "Categories" },
             { to: "/admin/service-categories", label: "Service categories" },
+            { to: "/admin/services", label: "Services" },
             { to: "/admin/store-types", label: "Store types" }
         ]
     },
@@ -92,7 +93,7 @@ export default function AdminLayout() {
     const currentTab = allTabs.find((tab) => tabIsActive(tab, pathname));
 
     return (
-        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-8">
+        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-8 md:h-[calc(100vh-5rem)] md:overflow-hidden">
             {/* Mobile: a single toggle bar showing the current page, opening
                 a grouped drawer - replaces what used to be a cramped
                 horizontal-scrolling strip of all 17 tabs at equal weight
@@ -167,7 +168,7 @@ export default function AdminLayout() {
             {/* Desktop sidebar - unchanged layout, just now fed from the
                 same grouped `groups` data as the mobile drawer so the two
                 can never drift out of sync with each other. */}
-            <aside className="hidden md:block glass-strong rounded-lg p-4 md:sticky md:top-20 md:self-start">
+            <aside className="hidden md:block glass-strong rounded-lg p-4 md:h-full md:overflow-y-auto">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Admin</p>
                 <p className="font-display text-lg mb-3">Control room</p>
                 <Link
@@ -203,7 +204,7 @@ export default function AdminLayout() {
                 </nav>
             </aside>
 
-            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
+            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
                 <PageTransition granular>
                     <Outlet />
                 </PageTransition>

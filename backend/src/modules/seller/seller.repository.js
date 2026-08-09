@@ -338,3 +338,55 @@ exports.getRepeatCustomerCount = async (sellerId) => {
     );
     return row.repeat_customers;
 };
+
+// --- Phase A5 (Advanced Analytics) --------------------------------------
+// Seller-scoped period comparison (product sales only, matching
+// getDailySales/getTopProducts above) and top customers - the services
+// side of "advanced analytics" is computed client-side in
+// SellerAnalytics.jsx from the same GET /bookings/provider/mine payload
+// summarizeBookings() already uses, so no separate booking-comparison
+// query is needed here.
+
+async function getSellerWindowTotal(sellerId, start, end) {
+    const [[row]] = await db.query(
+        `SELECT COALESCE(SUM(oi.subtotal), 0) AS gmv, COUNT(DISTINCT oi.order_id) AS transaction_count
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.seller_id = ? AND o.created_at >= ? AND o.created_at < ?`,
+        [sellerId, start, end]
+    );
+    return { gmv: Number(row.gmv) || 0, transactionCount: Number(row.transaction_count) || 0 };
+}
+
+exports.getPeriodComparison = async (sellerId) => {
+    const now = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const daysAgo = (n) => new Date(now.getTime() - n * dayMs);
+
+    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all([
+        getSellerWindowTotal(sellerId, daysAgo(7), now),
+        getSellerWindowTotal(sellerId, daysAgo(14), daysAgo(7)),
+        getSellerWindowTotal(sellerId, daysAgo(30), now),
+        getSellerWindowTotal(sellerId, daysAgo(60), daysAgo(30))
+    ]);
+
+    return { thisWeek, lastWeek, thisMonth, lastMonth };
+};
+
+// Top customers of this seller's products by total spend.
+exports.getTopCustomers = async (sellerId, limit = 5) => {
+    const [rows] = await db.query(
+        `SELECT o.buyer_id AS id, CONCAT(u.first_name, ' ', u.last_name) AS name,
+                SUM(oi.subtotal) AS total_spend,
+                COUNT(DISTINCT oi.order_id) AS transaction_count
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN users u ON u.id = o.buyer_id
+        WHERE oi.seller_id = ?
+        GROUP BY o.buyer_id, u.first_name, u.last_name
+        ORDER BY total_spend DESC
+        LIMIT ?`,
+        [sellerId, limit]
+    );
+    return rows;
+};

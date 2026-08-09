@@ -118,11 +118,12 @@ not blocked.
 | POST | `/:id/images` | Upload product images |
 | POST | `/:id/videos` | Upload product video (Phase 6A) |
 | POST | `/:id/audio` | Upload product audio (Phase 6B) |
-| GET | `/mine/list` | Own products (seller) |
+| GET | `/mine/list` | Own products (seller) — supports `search`, `category_id`, `status` (`active`/`inactive`), `page`, `limit` (Phase A4) |
 | GET | `/mine/:id` | Own product detail (seller) |
 | PUT | `/:id` | Update product |
 | PUT | `/:id/deactivate` | Deactivate product |
 | PUT | `/:id/activate` | Reactivate product |
+| PUT | `/bulk/status` | Bulk activate/deactivate own products — body `{ ids: [...], is_active }` (Phase A4) |
 
 ## Categories — `/categories`
 
@@ -434,9 +435,13 @@ for the underlying columns.
 | DELETE | `/users/:id` *(super_admin)* | Permanently delete a user (Phase 1 — no longer requires prior self-deletion; scrubs PII, cart items, push subscriptions, deactivates any live seller listings; keeps financial/legal records per the FK architecture). Same underlying action as `DELETE /deleted-users/:id` below. |
 | GET | `/sellers` | List sellers |
 | PUT | `/sellers/:id/verify` / `/unverify` | Toggle seller verification |
-| GET | `/products` | List products |
+| GET | `/products` | List products — supports `search`, `category_id`, `status` (`active`/`inactive`), `page`, `limit` (Phase A4) |
 | PUT | `/products/:id/deactivate` / `/activate` | Toggle a product |
 | PUT | `/products/:id/sponsor` / `/unsponsor` | Toggle `is_sponsored` (Phase 2C) |
+| PUT | `/products/bulk-status` | Bulk activate/deactivate products — body `{ ids: [...], is_active }` (Phase A4) |
+| GET | `/services` | List services — supports `search`, `category_id`, `status` (`active`/`inactive`), `page`, `limit` (Phase A4) |
+| PUT | `/services/:id/deactivate` / `/activate` | Toggle a service |
+| PUT | `/services/bulk-status` | Bulk activate/deactivate services — body `{ ids: [...], is_active }` (Phase A4) |
 | GET | `/orders` | List orders |
 | PUT | `/orders/:id/release-escrow` | Release held payment to seller wallet (Phase 9D) |
 | PUT | `/bookings/:id/release-escrow` | Release held payment to provider wallet (Phase 3) |

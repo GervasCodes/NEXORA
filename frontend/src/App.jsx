@@ -88,6 +88,7 @@ const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminMaintenance = lazy(() => import("./pages/admin/AdminMaintenance"));
 const AdminStatusIncidents = lazy(() => import("./pages/admin/AdminStatusIncidents"));
 const AdminServiceCategories = lazy(() => import("./pages/admin/AdminServiceCategories"));
+const AdminServices = lazy(() => import("./pages/admin/AdminServices"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
@@ -236,6 +237,7 @@ export default function App() {
                             <Route path="maintenance" element={<AdminMaintenance />} />
                             <Route path="status-incidents" element={<AdminStatusIncidents />} />
                             <Route path="service-categories" element={<AdminServiceCategories />} />
+                            <Route path="services" element={<AdminServices />} />
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />

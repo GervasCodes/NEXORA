@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatShortDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
+import LineChart from "../../components/LineChart";
+import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import VerificationFeeGate from "../../components/VerificationFeeGate";
 import Skeleton from "../../components/Skeleton";
 
@@ -68,9 +70,16 @@ export default function SellerAnalytics() {
 
     const [analytics, setAnalytics] = useState(null);
     const [bookingStats, setBookingStats] = useState(null);
+    // Phase A5 (Advanced Analytics) - period comparison + top customers
+    // for this seller's product sales.
+    const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [feeRequired, setFeeRequired] = useState(null); // required_fee amount, or null if not locked
+    const [exportingType, setExportingType] = useState(null);
+    // Trend view toggle - Bar/Line render the exact same dailySales data,
+    // this just swaps which of the two chart components draws it.
+    const [chartView, setChartView] = useState("bar");
 
     const load = () => {
         setLoading(true);
@@ -79,10 +88,14 @@ export default function SellerAnalytics() {
         api.get("/seller/analytics")
             .then(({ data }) => {
                 setAnalytics(data.data);
-                return showServices ? api.get("/bookings/provider/mine") : null;
+                return Promise.all([
+                    showServices ? api.get("/bookings/provider/mine") : null,
+                    showProducts ? api.get("/seller/analytics/advanced") : null
+                ]);
             })
-            .then((res) => {
-                if (res) setBookingStats(summarizeBookings(res.data.data));
+            .then(([bookingsRes, advancedRes]) => {
+                if (bookingsRes) setBookingStats(summarizeBookings(bookingsRes.data.data));
+                if (advancedRes) setAdvancedAnalytics(advancedRes.data.data);
             })
             .catch((err) => {
                 if (err.response?.data?.code === "VERIFICATION_FEE_REQUIRED") {
@@ -94,7 +107,25 @@ export default function SellerAnalytics() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [showServices]);
+    useEffect(load, [showServices, showProducts]);
+
+    // Same blob-download pattern the admin dashboard uses for its CSV
+    // exports - Bearer auth means a plain <a href> can't be used.
+    const handleExportCsv = useCallback((type) => {
+        setExportingType(type);
+        api.get(`/seller/analytics/export?type=${type}`, { responseType: "blob" })
+            .then((response) => {
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `nexora-seller-${type}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .finally(() => setExportingType(null));
+    }, []);
 
     // Skeleton mirrors the real dashboard's shape (stat cards, chart,
     // two product/service lists) rather than a full-page blocking
@@ -178,8 +209,30 @@ export default function SellerAnalytics() {
                     </div>
 
                     <div className="border border-line rounded-lg p-4 mb-10 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "320ms" }}>
-                        <p className="text-sm font-medium mb-4">Sales - last 30 days</p>
-                        <BarChart data={dailySales} labelKey="day" valueKey="amount" formatValue={formatMoney} />
+                        <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-medium">Sales - last 30 days</p>
+                            <div className="flex items-center border border-line rounded-md overflow-hidden text-[11px]">
+                                <button
+                                    type="button"
+                                    onClick={() => setChartView("bar")}
+                                    className={`px-2 py-1 transition-colors ${chartView === "bar" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                >
+                                    Bar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setChartView("line")}
+                                    className={`px-2 py-1 transition-colors ${chartView === "line" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
+                                >
+                                    Line
+                                </button>
+                            </div>
+                        </div>
+                        {chartView === "bar" ? (
+                            <BarChart data={dailySales} labelKey="day" valueKey="amount" formatValue={formatMoney} />
+                        ) : (
+                            <LineChart data={dailySales} labelKey="day" valueKey="amount" formatValue={formatMoney} />
+                        )}
                         {dailySales.length > 0 && (
                             <div className="flex justify-between text-xs text-ash mt-2">
                                 <span>{formatShortDate(dailySales[0].day)}</span>
@@ -212,6 +265,69 @@ export default function SellerAnalytics() {
                             <Stat label="Repeat customers" value={repeatCustomers} />
                         </div>
                     </div>
+
+                    {advancedAnalytics && (
+                        <div className="mb-10">
+                            <p className="text-sm font-medium mb-4">Advanced analytics</p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                                <PeriodComparisonCard
+                                    label="This week vs last week"
+                                    current={advancedAnalytics.periodComparison.week.current}
+                                    previous={advancedAnalytics.periodComparison.week.previous}
+                                    growthPercent={advancedAnalytics.periodComparison.week.growthPercent}
+                                    formatValue={formatMoney}
+                                    transactionLabel="orders"
+                                />
+                                <PeriodComparisonCard
+                                    label="Last 30 days vs prior 30 days"
+                                    current={advancedAnalytics.periodComparison.month.current}
+                                    previous={advancedAnalytics.periodComparison.month.previous}
+                                    growthPercent={advancedAnalytics.periodComparison.month.growthPercent}
+                                    formatValue={formatMoney}
+                                    transactionLabel="orders"
+                                />
+                            </div>
+
+                            <div className="border border-line rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <p className="text-sm font-medium">Top customers</p>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExportCsv("customers")}
+                                            disabled={exportingType === "customers"}
+                                            className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {exportingType === "customers" ? "Preparing…" : "Export customers ↓"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExportCsv("products")}
+                                            disabled={exportingType === "products"}
+                                            className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {exportingType === "products" ? "Preparing…" : "Export products ↓"}
+                                        </button>
+                                    </div>
+                                </div>
+                                {advancedAnalytics.topCustomers.length === 0 ? (
+                                    <p className="text-ash text-sm">No sales yet.</p>
+                                ) : (
+                                    <ul className="space-y-3">
+                                        {advancedAnalytics.topCustomers.map((c) => (
+                                            <li key={c.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
+                                                <span className="truncate pr-3">{c.name}</span>
+                                                <span className="text-ash whitespace-nowrap">
+                                                    {c.transaction_count} orders · <span className="price">{formatMoney(c.total_spend)}</span>
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 

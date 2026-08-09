@@ -202,8 +202,38 @@ exports.addProductAudio = async (sellerId, productId, file) => {
     return { audioUrl: result.secure_url };
 };
 
-exports.getMyProducts = async (sellerId) => {
-    return productRepository.findAllBySeller(sellerId);
+exports.getMyProducts = async (sellerId, query = {}) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 20));
+
+    const { rows, total } = await productRepository.findAllBySeller({
+        sellerId,
+        search: query.search || null,
+        categoryId: query.category_id || null,
+        status: query.status || null,
+        page,
+        limit
+    });
+
+    return {
+        products: rows,
+        pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }
+    };
+};
+
+// Bulk counterpart of setProductActiveBySeller below - ownership is
+// enforced in the repository's UPDATE itself (seller_id in the WHERE
+// clause), not by loading and checking each row first.
+exports.bulkSetProductActiveBySeller = async (sellerId, productIds, isActive) => {
+    const ids = [...new Set((productIds || []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        throw new Error("No products selected");
+    }
+
+    await productRepository.setActiveBulkBySeller(sellerId, ids, isActive);
+
+    return { updated: ids.length };
 };
 
 exports.getMyProductById = async (sellerId, productId) => {

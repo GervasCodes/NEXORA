@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
@@ -78,6 +79,10 @@ export default function Header() {
     const [menuOpen, setMenuOpen] = useState(false);
     const links = useNavLinks();
 
+    // Only buyers/sellers ever see a "/messages" link (see useNavLinks
+    // above), so there's no point polling for anyone else.
+    const unreadMessages = useUnreadMessagesCount(user?.role === "buyer" || user?.role === "seller");
+
     const isActive = (to) => location.pathname === to || location.pathname.startsWith(`${to}/`);
 
     // Close the drawer whenever who's signed in changes (login/logout),
@@ -112,7 +117,11 @@ export default function Header() {
     const buyerBottomNavItems = [
         { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
         { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
-        { to: "/messages", label: t("nav.messages"), icon: MessagesIcon },
+        { to: "/messages", label: t("nav.messages"), icon: MessagesIcon, badge: unreadMessages > 0 && (
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+        ) },
         {
             to: "/cart",
             label: t("nav.cart"),
@@ -180,6 +189,10 @@ export default function Header() {
                                 link.to === "/cart" && itemCount > 0 ? (
                                     <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center">
                                         {itemCount}
+                                    </span>
+                                ) : link.to === "/messages" && unreadMessages > 0 ? (
+                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center">
+                                        {unreadMessages > 9 ? "9+" : unreadMessages}
                                     </span>
                                 ) : null
                             }
@@ -313,6 +326,11 @@ export default function Header() {
                                     {link.to === "/cart" && itemCount > 0 && (
                                         <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
                                             {itemCount}
+                                        </span>
+                                    )}
+                                    {link.to === "/messages" && unreadMessages > 0 && (
+                                        <span className="bg-coral text-frost text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
+                                            {unreadMessages > 9 ? "9+" : unreadMessages}
                                         </span>
                                     )}
                                 </Link>

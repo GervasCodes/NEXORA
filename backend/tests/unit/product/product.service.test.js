@@ -121,3 +121,49 @@ describe("product.service.getProductBySlug", () => {
         await expect(productService.getProductBySlug("missing")).rejects.toThrow("Product not found");
     });
 });
+
+// Phase A4 - Products & Services List UI/UX (seller's own product list:
+// search/category/status filters, pagination, bulk activate/deactivate).
+describe("product.service.getMyProducts (Phase A4)", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it("clamps page/limit, scopes to the seller, and forwards filters", async () => {
+        productRepository.findAllBySeller.mockResolvedValue({ rows: [{ id: 1 }], total: 1 });
+
+        const result = await productService.getMyProducts(9, { page: "3", limit: "1000", search: "mug", category_id: "4", status: "active" });
+
+        expect(productRepository.findAllBySeller).toHaveBeenCalledWith({
+            sellerId: 9, search: "mug", categoryId: "4", status: "active", page: 3, limit: 50
+        });
+        expect(result).toEqual({
+            products: [{ id: 1 }],
+            pagination: { page: 3, limit: 50, total: 1, totalPages: 1 }
+        });
+    });
+
+    it("defaults page/limit and nulls out unset filters when no query is given", async () => {
+        productRepository.findAllBySeller.mockResolvedValue({ rows: [], total: 0 });
+
+        await productService.getMyProducts(9);
+
+        expect(productRepository.findAllBySeller).toHaveBeenCalledWith({
+            sellerId: 9, search: null, categoryId: null, status: null, page: 1, limit: 20
+        });
+    });
+});
+
+describe("product.service.bulkSetProductActiveBySeller (Phase A4)", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it("rejects when no valid ids are given", async () => {
+        await expect(productService.bulkSetProductActiveBySeller(9, [], true)).rejects.toThrow("No products selected");
+        await expect(productService.bulkSetProductActiveBySeller(9, ["nope"], true)).rejects.toThrow("No products selected");
+    });
+
+    it("dedupes ids and delegates ownership enforcement to the repository's UPDATE", async () => {
+        const result = await productService.bulkSetProductActiveBySeller(9, [3, 3, 4], false);
+
+        expect(productRepository.setActiveBulkBySeller).toHaveBeenCalledWith(9, [3, 4], false);
+        expect(result).toEqual({ updated: 2 });
+    });
+});

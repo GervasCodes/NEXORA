@@ -22,3 +22,9 @@ exports.createProductValidation = [
         .isNumeric()
         .withMessage("Stock must be a number")
 ];
+
+exports.bulkProductStatusValidation = [
+    body("ids").isArray({ min: 1 }).withMessage("At least one product must be selected"),
+    body("ids.*").isInt({ gt: 0 }).withMessage("Invalid product id"),
+    body("is_active").isBoolean().withMessage("is_active must be true or false").toBoolean()
+];

@@ -8,7 +8,7 @@ const requireProductProvider = require("../../middleware/requireProductProvider.
 const upload = require("../../middleware/upload.middleware");
 const uploadVideo = require("../../middleware/uploadVideo.middleware");
 const uploadAudio = require("../../middleware/uploadAudio.middleware");
-const { createProductValidation } = require("./product.validator");
+const { createProductValidation, bulkProductStatusValidation } = require("./product.validator");
 
 const productController = require("./product.controller");
 
@@ -68,6 +68,15 @@ router.get(
     authorize("seller"),
     requireProductProvider,
     productController.getMyProducts
+);
+
+router.put(
+    "/bulk/status",
+    authMiddleware,
+    authorize("seller"),
+    requireProductProvider,
+    bulkProductStatusValidation,
+    productController.bulkProductStatus
 );
 
 router.get(

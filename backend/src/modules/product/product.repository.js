@@ -318,7 +318,39 @@ exports.countExistingAudio = async (productId) => {
     return rows[0].count;
 };
 
-exports.findAllBySeller = async (sellerId) => {
+// Seller's own product list, with the same search/category/status/
+// pagination shape admin.repository.js#findAllProducts uses (search plan,
+// LIMIT/OFFSET, separate COUNT(*)) - see that function's comment. Scoped
+// to a single seller_id throughout, so there's no is_active/status
+// ambiguity to resolve: "active"/"inactive" here just means this
+// seller's own listing, never anyone else's.
+exports.findAllBySeller = async ({ sellerId, search, categoryId, status, page, limit }) => {
+    const offset = (page - 1) * limit;
+    const conditions = ["p.seller_id = ?"];
+    const params = [sellerId];
+
+    if (categoryId) {
+        conditions.push("p.category_id = ?");
+        params.push(categoryId);
+    }
+
+    if (status === "active") {
+        conditions.push("p.is_active = 1");
+    } else if (status === "inactive") {
+        conditions.push("p.is_active = 0");
+    }
+
+    const searchPlan = buildProductSearchPlan(search);
+    if (searchPlan.mode === "fulltext") {
+        conditions.push("MATCH(p.name, p.brand, p.description) AGAINST (? IN BOOLEAN MODE)");
+        params.push(searchPlan.booleanQuery);
+    } else if (searchPlan.mode === "like") {
+        conditions.push("(p.name LIKE ? OR p.brand LIKE ? OR p.description LIKE ?)");
+        params.push(`%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`);
+    }
+
+    const whereClause = conditions.join(" AND ");
+
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
@@ -329,11 +361,31 @@ exports.findAllBySeller = async (sellerId) => {
                 LIMIT 1
             ) AS image_url
         FROM products p
-        WHERE p.seller_id = ?
-        ORDER BY p.created_at DESC`,
-        [sellerId]
+        WHERE ${whereClause}
+        ORDER BY p.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total FROM products p WHERE ${whereClause}`,
+        params
+    );
+
+    return { rows, total };
+};
+
+// Bulk activate/deactivate for a seller's own products (Phase A4). The
+// seller_id condition is what keeps this ownership-scoped - a seller
+// can never flip a product that isn't theirs by passing someone else's
+// id, since it's just silently excluded from the UPDATE rather than
+// erroring per-id.
+exports.setActiveBulkBySeller = async (sellerId, ids, isActive) => {
+    if (!ids.length) return;
+    await db.query(
+        "UPDATE products SET is_active = ? WHERE seller_id = ? AND id IN (?)",
+        [isActive, sellerId, ids]
+    );
 };
 
 // Distinct departments (categories) a seller currently has at least one

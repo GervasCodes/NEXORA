@@ -11,12 +11,15 @@ const {
     userIdValidation,
     suspendUserValidation,
     productIdValidation,
+    serviceIdValidation,
     withdrawalIdValidation,
     orderIdValidation,
     bookingIdValidation,
     updateSettingsValidation,
     updateMonetizationSettingsValidation,
     createMonetizationScheduleValidation,
+    bulkProductStatusValidation,
+    bulkServiceStatusValidation,
     monetizationScheduleIdValidation,
     createAdminValidation,
     updateAdminPermissionsValidation
@@ -34,6 +37,12 @@ router.get("/analytics/services", adminController.getServicesAnalytics);
 // daily GMV series.
 router.get("/analytics/business", adminController.getBusinessMetrics);
 router.get("/analytics/business/export", adminController.exportGmvCsv);
+
+// Phase A5 (Advanced Analytics) - period comparison (week/month over
+// week/month), platform-wide top customers, and the admin-only seller
+// performance leaderboard, plus a CSV export of the latter two.
+router.get("/analytics/advanced", adminController.getAdvancedAnalytics);
+router.get("/analytics/advanced/export", adminController.exportAdvancedAnalyticsCsv);
 
 // Revenue & Product Enhancements roadmap - seller subscription plan
 // management. Mounted here (not a separate top-level namespace) since
@@ -99,10 +108,16 @@ router.put("/sellers/:id/verify", userIdValidation, validationMiddleware, adminC
 router.put("/sellers/:id/unverify", userIdValidation, validationMiddleware, adminController.unverifySeller);
 
 router.get("/products", adminController.listProducts);
+router.put("/products/bulk-status", bulkProductStatusValidation, validationMiddleware, adminController.bulkProductStatus);
 router.put("/products/:id/deactivate", productIdValidation, validationMiddleware, adminController.deactivateProduct);
 router.put("/products/:id/activate", productIdValidation, validationMiddleware, adminController.activateProduct);
 router.put("/products/:id/sponsor", productIdValidation, validationMiddleware, adminController.sponsorProduct);
 router.put("/products/:id/unsponsor", productIdValidation, validationMiddleware, adminController.unsponsorProduct);
+
+router.get("/services", adminController.listServices);
+router.put("/services/bulk-status", bulkServiceStatusValidation, validationMiddleware, adminController.bulkServiceStatus);
+router.put("/services/:id/deactivate", serviceIdValidation, validationMiddleware, adminController.deactivateService);
+router.put("/services/:id/activate", serviceIdValidation, validationMiddleware, adminController.activateService);
 
 router.get("/orders", adminController.listOrders);
 

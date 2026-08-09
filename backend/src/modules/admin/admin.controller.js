@@ -112,9 +112,24 @@ exports.unverifySeller = async (req, res) => {
 
 exports.listProducts = async (req, res) => {
     try {
-        const products = await adminService.listProducts();
+        const result = await adminService.listProducts(req.query);
 
-        return res.json({ success: true, data: products });
+        return res.json({ success: true, data: result.products, pagination: result.pagination });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.bulkProductStatus = async (req, res) => {
+    try {
+        const result = await adminService.bulkSetProductActive(req.body.ids, req.body.is_active);
+
+        return res.json({
+            success: true,
+            message: req.body.is_active ? "Products activated" : "Products deactivated",
+            data: result
+        });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -137,6 +152,54 @@ exports.activateProduct = async (req, res) => {
         await adminService.setProductActive(req.params.id, true);
 
         return res.json({ success: true, message: "Product activated" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.listServices = async (req, res) => {
+    try {
+        const result = await adminService.listServices(req.query);
+
+        return res.json({ success: true, data: result.services, pagination: result.pagination });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.bulkServiceStatus = async (req, res) => {
+    try {
+        const result = await adminService.bulkSetServiceActive(req.body.ids, req.body.is_active);
+
+        return res.json({
+            success: true,
+            message: req.body.is_active ? "Services activated" : "Services deactivated",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.deactivateService = async (req, res) => {
+    try {
+        await adminService.setServiceActive(req.params.id, false);
+
+        return res.json({ success: true, message: "Service deactivated" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.activateService = async (req, res) => {
+    try {
+        await adminService.setServiceActive(req.params.id, true);
+
+        return res.json({ success: true, message: "Service activated" });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -247,6 +310,35 @@ exports.exportGmvCsv = async (req, res) => {
 
         res.setHeader("Content-Type", "text/csv");
         res.setHeader("Content-Disposition", `attachment; filename="nexora-gmv-${days}d.csv"`);
+        return res.status(200).send(csv);
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase A5 (Advanced Analytics) - period comparison, platform-wide top
+// customers, and the admin-only seller performance leaderboard.
+exports.getAdvancedAnalytics = async (req, res) => {
+    try {
+        const data = await adminService.getAdvancedAnalytics();
+
+        return res.json({ success: true, data });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// ?type=customers for the top-customers CSV, anything else (default)
+// exports the seller leaderboard.
+exports.exportAdvancedAnalyticsCsv = async (req, res) => {
+    try {
+        const type = req.query.type === "customers" ? "customers" : "leaderboard";
+        const csv = await adminService.exportAdvancedAnalyticsCsv(type);
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="nexora-${type}.csv"`);
         return res.status(200).send(csv);
 
     } catch (error) {

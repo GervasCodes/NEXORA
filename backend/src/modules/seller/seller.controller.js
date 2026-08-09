@@ -308,6 +308,34 @@ exports.getAnalytics = async (req, res) => {
     }
 };
 
+// Phase A5 (Advanced Analytics) - period comparison + top customers.
+exports.getAdvancedAnalytics = async (req, res) => {
+    try {
+        const data = await sellerService.getAdvancedAnalytics(req.user.id);
+
+        return res.json({ success: true, data });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// ?type=customers for the top-customers CSV, anything else (default)
+// exports top products.
+exports.exportAnalyticsCsv = async (req, res) => {
+    try {
+        const type = req.query.type === "customers" ? "customers" : "products";
+        const csv = await sellerService.exportAnalyticsCsv(req.user.id, type);
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="nexora-seller-${type}.csv"`);
+        return res.status(200).send(csv);
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.setMerchantType = async (req, res) => {
     try {
         const result = await sellerService.setMerchantType(req.user.id, req.body.merchant_type);

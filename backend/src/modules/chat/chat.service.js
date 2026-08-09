@@ -44,6 +44,10 @@ exports.getMyConversations = async (userId) => {
     return chatRepository.findConversationsByUser(userId);
 };
 
+exports.getUnreadCount = async (userId) => {
+    return chatRepository.countUnreadMessages(userId);
+};
+
 // Throws if the given user isn't a participant in the conversation
 exports.assertParticipant = async (conversationId, userId) => {
     const conversation = await chatRepository.findConversationById(conversationId);

@@ -190,11 +190,38 @@ exports.uploadProductAudio = async (req, res) => {
 
 exports.getMyProducts = async (req, res) => {
     try {
-        const products = await productService.getMyProducts(req.user.id);
+        const result = await productService.getMyProducts(req.user.id, req.query);
 
         return res.json({
             success: true,
-            data: products
+            data: result.products,
+            pagination: result.pagination
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.bulkProductStatus = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            success: false,
+            errors: errors.array()
+        });
+    }
+
+    try {
+        const result = await productService.bulkSetProductActiveBySeller(req.user.id, req.body.ids, req.body.is_active);
+
+        return res.json({
+            success: true,
+            message: req.body.is_active ? "Products activated" : "Products deactivated",
+            data: result
         });
 
     } catch (error) {

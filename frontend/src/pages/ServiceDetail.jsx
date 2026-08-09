@@ -200,12 +200,15 @@ function BookingWidget({ service }) {
 export default function ServiceDetail() {
     const { format } = useCurrency();
     const { slug } = useParams();
+    const { user } = useAuth();
+    const navigate = useNavigate();
 
     const [service, setService] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeMedia, setActiveMedia] = useState(0);
     const [reviews, setReviews] = useState(null);
     const [reviewSort, setReviewSort] = useState("newest");
+    const [messageStatus, setMessageStatus] = useState("");
 
     useEffect(() => {
         setLoading(true);
@@ -225,6 +228,34 @@ export default function ServiceDetail() {
             .then(({ data }) => setReviews(data.data))
             .catch(() => {});
     }, [service, reviewSort]);
+
+    const handleMessageProvider = async () => {
+        if (!user) {
+            navigate("/login");
+            return;
+        }
+        if (user.role !== "buyer") {
+            setMessageStatus("Only buyer accounts can message service providers.");
+            return;
+        }
+
+        try {
+            // Chat conversations only carry a product_id or order_id context
+            // today (see chat.repository.js#contextColumn) - there's no
+            // service_id context column yet, so this starts a plain,
+            // context-less conversation with the provider (same as any
+            // "seller" role conversation with contextId omitted). Wiring a
+            // service context through is a schema change that belongs to a
+            // dedicated chat phase, not this UI-focused one.
+            const { data } = await api.post("/chat/conversations", {
+                other_user_id: service.provider_id,
+                role: "seller"
+            });
+            navigate(`/messages/${data.data.id}`);
+        } catch (err) {
+            setMessageStatus(extractErrorMessage(err) || "Couldn't start a conversation. Please try again.");
+        }
+    };
 
     if (loading) {
         return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">Loading…</div>;
@@ -334,6 +365,15 @@ export default function ServiceDetail() {
                     {service.description && (
                         <p className="text-sm text-ink/80 mt-4 whitespace-pre-line">{service.description}</p>
                     )}
+
+                    {messageStatus && <p className="text-sm text-coral mt-3">{messageStatus}</p>}
+
+                    <button
+                        onClick={handleMessageProvider}
+                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring"
+                    >
+                        💬 Message {service.store_name || "provider"}
+                    </button>
 
                     <BookingWidget service={service} />
                 </div>

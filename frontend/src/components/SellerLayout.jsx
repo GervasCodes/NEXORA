@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
 import MobileBottomNav from "./MobileBottomNav";
@@ -153,6 +154,7 @@ export default function SellerLayout() {
     }, [isApproved, loading, profile, location.pathname, navigate]);
 
     const merchantType = profile?.merchant_type || "product";
+    const unreadMessages = useUnreadMessagesCount(true);
 
     // Seller's mobile bottom nav (Phase 6: Mobile Navigation
     // Unification) - the Orders/Bookings slot follows the seller's own
@@ -167,7 +169,11 @@ export default function SellerLayout() {
         merchantType === "service"
             ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
             : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
-        { to: "/messages", label: "Messages", icon: MessagesIcon },
+        { to: "/messages", label: "Messages", icon: MessagesIcon, badge: unreadMessages > 0 && (
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+        ) },
         { to: "/seller/wallet", label: "Wallet", icon: WalletIcon },
         { to: "/account", label: "Profile", icon: AccountIcon }
     ];
@@ -225,7 +231,7 @@ export default function SellerLayout() {
     );
 
     return (
-        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-8">
+        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-8 md:h-[calc(100vh-5rem)] md:overflow-hidden">
             {/* Mobile: a single toggle bar showing the current page, opening
                 a grouped drawer - replaces what used to be a cramped
                 horizontally-scrolling strip of all 18 tabs at equal weight
@@ -303,7 +309,7 @@ export default function SellerLayout() {
             {/* Desktop sidebar - unchanged look, now fed from the same
                 grouped `groups` data as the mobile drawer so the two can
                 never drift out of sync with each other. */}
-            <aside className="hidden md:block glass-strong rounded-lg p-4 md:sticky md:top-20 md:self-start">
+            <aside className="hidden md:block glass-strong rounded-lg p-4 md:h-full md:overflow-y-auto">
                 <div className="flex items-start justify-between gap-2 mb-1">
                     <p className="text-xs uppercase tracking-widest text-ash">Seller</p>
                     <Link
@@ -343,7 +349,7 @@ export default function SellerLayout() {
                 </nav>
             </aside>
 
-            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
+            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
                 <PageTransition granular>
                     <Outlet context={{ profile, refreshProfile: loadProfile }} />
                 </PageTransition>

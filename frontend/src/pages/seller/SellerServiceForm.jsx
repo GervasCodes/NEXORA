@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
+import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
 
 const PRICING_MODELS = [
     { value: "fixed", label: "Fixed price" },
@@ -153,6 +154,12 @@ export default function SellerServiceForm() {
                     <label className="block text-sm mb-1">Description</label>
                     <textarea rows={4} value={form.description} onChange={update("description")}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                    <NexoraCopyAssist
+                        mode="service"
+                        name={form.title}
+                        category={categories.find((c) => String(c.id) === String(form.category_id))?.name}
+                        onApply={(description) => setForm((f) => ({ ...f, description }))}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

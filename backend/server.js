@@ -10,6 +10,7 @@ const socket = require("./src/socket/socket");
 const { startJobs } = require("./src/jobs");
 const logger = require("./src/utils/logger");
 const paymentProviderRegistry = require("./src/modules/payment/providers/registry");
+const aiProviderRegistry = require("./src/modules/ai/providers/registry");
 const envCheck = require("./src/config/envCheck");
 
 // Without these, a single unhandled promise rejection or uncaught
@@ -62,6 +63,12 @@ if (process.env.RUN_JOBS_IN_PROCESS !== "false") {
 // - an unconfigured rail (no credentials set, normal in dev) is not an
 // error and must never block startup.
 paymentProviderRegistry.validateRegistry(logger);
+
+// Nexora AI (Phase B1) - warns at boot if AI_PROVIDER is set to
+// something misconfigured; unset entirely (the default) is silent, not
+// a warning, since running with no AI provider is a fully supported
+// configuration, not a mistake.
+aiProviderRegistry.validateRegistry(logger);
 
 // Phase 1 (Launch Blockers): catches typo'd/misconfigured env vars (e.g.
 // AADMIN_EMAIL instead of ADMIN_EMAIL) loudly at boot instead of as

@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import api from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import { useAuth } from "../../context/AuthContext";
 
 // Merchant-Type-Aware Dashboard (Phase 4) - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
@@ -15,6 +16,7 @@ import PageLoader from "../../components/PageLoader";
 // endpoints SellerProducts/SellerOrders/SellerBookings/SellerServices
 // already call - no new queries.
 export default function SellerOverview() {
+    const { user } = useAuth();
     const { profile } = useOutletContext();
     const merchantType = profile?.merchant_type || "product";
     const showProducts = merchantType === "product" || merchantType === "hybrid";
@@ -57,7 +59,7 @@ export default function SellerOverview() {
 
     return (
         <div>
-            <h1 className="font-display text-2xl mb-1">Welcome back</h1>
+            <h1 className="font-display text-2xl mb-1">{user?.first_name ? `Welcome back, ${user.first_name}` : "Welcome back"}</h1>
             <p className="text-ash text-sm mb-8">Here's how {profile.store_name} is doing.</p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">

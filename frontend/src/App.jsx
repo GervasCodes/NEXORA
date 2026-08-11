@@ -11,7 +11,10 @@ import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
+import NexoraAIButton from "./components/ai/NexoraAIButton";
+import NexoraAIDrawer from "./components/ai/NexoraAIDrawer";
 import { useAuth } from "./context/AuthContext";
+import { useToast } from "./context/ToastContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
 import RequireAuth from "./components/RequireAuth";
@@ -108,8 +111,22 @@ export default function App() {
     const [showSplash, setShowSplash] = useState(
         () => !sessionStorage.getItem("nexora_splash_shown")
     );
-    const { suspension, clearSuspension, user } = useAuth();
+    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired } = useAuth();
     const navigate = useNavigate();
+    const toast = useToast();
+
+    // Phase 2: Session expiry. Fires for either an idle-timeout (see
+    // AuthContext.jsx's isIdleExpired check on load) or a session that
+    // died server-side mid-use (401 caught in api/client.js). Either way
+    // the person gets an explicit reason instead of a silent bounce, then
+    // lands on /login instead of wherever the dead session left them.
+    useEffect(() => {
+        if (!sessionExpired) return;
+        toast.info("Your session expired - please sign in again.");
+        clearSessionExpired();
+        navigate("/login");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionExpired]);
 
     // Roles that get a fixed mobile bottom nav (Header.jsx for buyer,
     // SellerLayout.jsx for seller, DeliveryLayout.jsx for delivery_agent)
@@ -117,6 +134,12 @@ export default function App() {
     // at the bottom of the page - matched to MobileBottomNav's own
     // min-h-[52px] tab height plus a little breathing room.
     const hasMobileBottomNav = ["buyer", "seller", "delivery_agent"].includes(user?.role);
+
+    // Phase B1: Nexora AI is buyer-facing/advisory only - a guest
+    // (user is null, not yet logged in) or a signed-in buyer gets it;
+    // seller/delivery_agent/admin roles get their own AI entry points
+    // in later phases (B2/B3), not this one.
+    const showNexoraAI = !user || user.role === "buyer";
 
     // Phase 3: when a push notification is clicked and it focuses an
     // already-open tab (see sw.js#notificationclick), that only brings the
@@ -272,6 +295,13 @@ export default function App() {
             </main>
 
             <Footer />
+
+            {showNexoraAI && (
+                <>
+                    <NexoraAIButton />
+                    <NexoraAIDrawer />
+                </>
+            )}
         </div>
     );
 }

@@ -1,19 +1,72 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
-// Phase 5 (Resilience & Growth). Listens for the "nexora:sw-updated"
-// event dispatched from main.jsx (see the comment there for why this
-// isn't just an automatic reload). Rendered once, near the root of the
-// app, regardless of route - an update can become available on any page.
+// Phase 5 (Resilience & Growth), refined in Phase 3 (Session/UX
+// improvements): a pending update used to sit as a dismissible banner
+// until the person happened to notice it and click Reload - if they
+// missed it (or dismissed it), the tab kept running old JS against a
+// newer backend API, which is what produced confusing mid-session
+// errors that looked like a broken login. Now the update still never
+// interrupts someone mid-task, but applies itself automatically as soon
+// as it's safe to.
+//
+// "Safe" = the current route has no likely unsaved state (not a
+// checkout, an open chat thread, or a form). On an unsafe route, the
+// banner still shows, and: (a) it applies itself the moment the person
+// navigates to a safe route, or (b) if it's been sitting ignored for
+// longer than IGNORE_TIMEOUT_MS, it applies itself on the very next
+// navigation regardless of route - a stale build should never persist
+// indefinitely just because someone left a tab open on /messages.
+const IGNORE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+const UNSAFE_ROUTE_PATTERNS = [
+    /^\/checkout$/,
+    /^\/cart$/,
+    /^\/messages(\/|$)/,
+    /^\/account$/,
+    /\/new$/,
+    /\/edit$/
+];
+
+const isUnsafeRoute = (pathname) => UNSAFE_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
+
 export default function UpdateAvailableBanner() {
     const [visible, setVisible] = useState(false);
+    const [dismissed, setDismissed] = useState(false);
+    const pendingRef = useRef(false);
+    const availableSinceRef = useRef(0);
+    const location = useLocation();
 
     useEffect(() => {
-        const handleUpdate = () => setVisible(true);
+        const handleUpdate = () => {
+            pendingRef.current = true;
+            availableSinceRef.current = Date.now();
+            // Apply right away if the tab happens to already be sitting
+            // on a safe route when the update arrives - no need to make
+            // the person notice a banner just to click through it.
+            if (!isUnsafeRoute(window.location.pathname)) {
+                window.location.reload();
+                return;
+            }
+            setVisible(true);
+        };
         window.addEventListener("nexora:sw-updated", handleUpdate);
         return () => window.removeEventListener("nexora:sw-updated", handleUpdate);
     }, []);
 
-    if (!visible) return null;
+    // Re-checked on every navigation: apply automatically once the
+    // person lands somewhere safe, or once the update has been sitting
+    // long enough that we apply it regardless of route.
+    useEffect(() => {
+        if (!pendingRef.current) return;
+        const ignoredTooLong = Date.now() - availableSinceRef.current > IGNORE_TIMEOUT_MS;
+        if (!isUnsafeRoute(location.pathname) || ignoredTooLong) {
+            window.location.reload();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.pathname]);
+
+    if (!visible || dismissed) return null;
 
     return (
         <div
@@ -36,7 +89,7 @@ export default function UpdateAvailableBanner() {
                 Reload
             </button>
             <button
-                onClick={() => setVisible(false)}
+                onClick={() => setDismissed(true)}
                 aria-label="Dismiss"
                 className="text-ash hover:text-ink transition-colors shrink-0"
             >

@@ -6,6 +6,7 @@ import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 
 function DepartmentCardSkeleton() {
     return (
@@ -94,6 +95,7 @@ export default function Home() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const { user } = useAuth();
     const search = searchParams.get("search") || "";
     const [resultCount, setResultCount] = useState(null);
     const [filters, setFilters] = useState({});
@@ -118,6 +120,9 @@ export default function Home() {
                     />
                     <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
                         <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
+                        {user?.first_name && (
+                            <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
+                        )}
                         <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
                             Everything you need, from sellers you trust.
                         </h1>

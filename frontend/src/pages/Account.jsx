@@ -167,7 +167,7 @@ export default function Account() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-12">
             <div>
-                <h1 className="font-display text-2xl mb-1">{t("account.title")}</h1>
+                <h1 className="font-display text-2xl mb-1">{user?.first_name ? `Welcome back, ${user.first_name}` : t("account.title")}</h1>
                 <p className="text-ash text-sm">{t("account.signedInAs")} {user?.role?.replace("_", " ")}.</p>
             </div>
 

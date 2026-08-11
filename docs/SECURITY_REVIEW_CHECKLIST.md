@@ -21,7 +21,8 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | General API rate limiting | ✅ | `apiLimiter` — 600 req/15min/IP platform-wide |
 | Role-based authorization | ✅ | `authorize.middleware.js`, checked per-route (`admin`/`super_admin`/`seller`/`buyer`/`agent`) |
 | Password reset / OTP flow abuse resistance | ✅ | Same `authLimiter` covers OTP verify/resend |
-| Session revocation on password change | ⚠️ | Reviewer should confirm whether existing tokens are invalidated on password change, or only on explicit logout — flagging for verification, not confirmed either way in this pass |
+| Session revocation on password change | ✅ | Confirmed: `account.repository.js#updatePassword` bumps `token_version` in the same query as the password update; `auth.middleware.js` rejects any token whose `tv` claim doesn't match the current DB value |
+| Session revocation on admin permission change | ✅ | `authorize.middleware.js`/`requireSuperAdmin.middleware.js` trust `role`/`admin_level` straight off the JWT with no independent DB check (unlike the account-status check above) — a permission change only takes effect immediately if it also bumps `token_version`. Fixed: `admin.repository.js#updateAdminLevel`/`revokeAdmin` now bump `token_version` in the same query, same pattern as password change. Before this fix, a demoted/removed admin kept their old JWT's access (including super-admin powers) for up to its remaining 7-day life — see `tests/unit/admin/admin.repository.security.test.js` |
 | Socket.IO handshake re-checks account status, not just JWT signature | ✅ | Phase 2: `socket.js#io.use` now calls the same `authRepository.findAccountStatusById` fresh DB check as `auth.middleware.js` (`is_active`/suspension/`token_version`) before allowing the connection at all — closes the "signature-valid-but-suspended/stale-tv token still opens a socket" gap; see `PHASE2_SECURITY_CHANGELOG.md`. Room-level authorization itself (`assertParticipant`/`assertCanTrackOrder`/`admins` role gate) was already in place and unchanged |
 
 ## 2. Payments & webhooks
@@ -48,7 +49,7 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 | Uploaded file content validated server-side (not just MIME sniffing) | ✅ | Phase 2: magic-byte content classifier (`utils/fileContentValidator.js`) runs after multer buffers the file, independent of the client-reported `mimetype` — wired into all five upload middlewares via `utils/wrapUploadMiddleware.js`; see `PHASE2_SECURITY_CHANGELOG.md` |
 | Open redirect protection (general, beyond payment return URLs) | ⚠️ | Confirmed for payment flows (§2); reviewer should check any other user-supplied-URL redirect surfaces |
 
-## 4. Transport & platform hardening
+| Non-timing-safe secret comparison surface | ✅ | Spot-checked every `=== `/`!== ` secret comparison in `backend/src`: the only one was the unused `verifySharedSecretHeader` fallback in `webhookAuth.middleware.js` (not wired to any route). Fixed to use `crypto.timingSafeEqual` with a length check, matching the two live webhook verifiers next to it — see `tests/unit/webhookAuth.middleware.test.js` |
 
 | Item | Status | Notes |
 |---|---|---|
@@ -103,9 +104,13 @@ Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 Flagged so an external reviewer knows what wasn't examined here, rather
 than assuming silence means "checked and fine":
 
-- Frontend XSS surface (React's default escaping wasn't independently
-  re-audited for `dangerouslySetInnerHTML` usage or similar escape
-  hatches).
+- Frontend XSS surface: spot-checked for `dangerouslySetInnerHTML` and
+  similar React escape hatches — none found in `frontend/src` as of
+  this pass. Not a full re-audit of every render path, and the JWT is
+  stored in `localStorage` rather than an httpOnly cookie, so any XSS
+  bug introduced later (e.g. a future feature rendering raw HTML) would
+  be able to exfiltrate a session token — worth re-checking whenever a
+  new HTML-rendering feature is added.
 - Infrastructure/hosting-level review (network segmentation, database
   access controls, backup encryption) — outside this repo's scope.
 - Penetration testing / dynamic testing of any kind. This checklist is a

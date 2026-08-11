@@ -8,6 +8,7 @@ import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
 import TrackingWidget from "../components/TrackingWidget";
 import PageLoader from "../components/PageLoader";
+import { useAIAssistant } from "../context/AIAssistantContext";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -33,6 +34,7 @@ export default function OrderDetail() {
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
+    const assistant = useAIAssistant();
     const [order, setOrder] = useState(null);
     const [delivery, setDelivery] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -295,6 +297,18 @@ export default function OrderDetail() {
             {actionError && <p className="text-sm text-coral mb-4">{actionError}</p>}
 
             {!order.is_parent && <OrderTimeline status={order.status} />}
+
+            {/* Phase B1: order-status assistant - reads this same real
+                order via /ai/orders/:id/explain, AI only phrases it. */}
+            {!order.is_parent && assistant && (
+                <button
+                    type="button"
+                    onClick={() => assistant.open({ type: "order", orderId: order.id })}
+                    className="text-sm text-azure hover:underline mb-6 -mt-3 block"
+                >
+                    Ask Nexora AI about this order
+                </button>
+            )}
 
             <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
                 {!order.is_parent && (

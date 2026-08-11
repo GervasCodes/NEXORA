@@ -786,18 +786,30 @@ exports.createAdmin = async ({ first_name, last_name, email, phone, password, ad
     return result.insertId;
 };
 
+// token_version bump invalidates every session token issued before this
+// permission change - see auth.middleware.js and account.repository.js
+// #updatePassword for the same pattern. Without this, a JWT issued
+// before a demotion still carries the OLD admin_level claim (auth.
+// middleware.js never re-reads role/admin_level fresh from the DB, only
+// is_active/suspended_at/token_version), so a demoted super_admin would
+// otherwise keep super-admin access via their existing token for up to
+// its remaining 7-day life.
 exports.updateAdminLevel = async (userId, adminLevel) => {
     await db.query(
-        "UPDATE users SET admin_level = ? WHERE id = ? AND role = 'admin'",
+        "UPDATE users SET admin_level = ?, token_version = token_version + 1 WHERE id = ? AND role = 'admin'",
         [adminLevel, userId]
     );
 };
 
 // Revokes admin access rather than hard-deleting the account, so audit
-// trails (who approved what) stay intact.
+// trails (who approved what) stay intact. Also bumps token_version (see
+// updateAdminLevel's comment above) - without it, a removed admin's
+// existing JWT still carries `role: "admin"` and would keep passing
+// authorize("admin") on every admin-only route until the token's
+// natural 7-day expiry, even though the DB row is no longer an admin.
 exports.revokeAdmin = async (userId) => {
     await db.query(
-        "UPDATE users SET role = 'buyer', admin_level = NULL WHERE id = ? AND role = 'admin'",
+        "UPDATE users SET role = 'buyer', admin_level = NULL, token_version = token_version + 1 WHERE id = ? AND role = 'admin'",
         [userId]
     );
 };

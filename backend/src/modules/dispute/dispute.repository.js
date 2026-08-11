@@ -117,6 +117,25 @@ exports.resolve = async (id, { status, resolution, resolutionNote, refundAmount,
     );
 };
 
+// Historical precedent for one seller + dispute type - plain grouped
+// count of how past RESOLVED disputes of this exact type against this
+// seller were resolved. Used by Phase B3's dispute-resolution agentic
+// workflow (ai.service.js#suggestDisputeResolution) as the rule-based
+// fact an AI suggestion is grounded in - never a source an AI is asked
+// to invent from. Excludes the dispute currently being suggested on
+// (only ever resolved cases contribute), so it can't count itself.
+exports.getResolutionStatsForSellerAndType = async (sellerId, type, excludeDisputeId) => {
+    const [rows] = await db.query(
+        `SELECT resolution, COUNT(*) AS count
+        FROM disputes
+        WHERE seller_id = ? AND type = ? AND status = 'resolved' AND id != ?
+        GROUP BY resolution
+        ORDER BY count DESC`,
+        [sellerId, type, excludeDisputeId || 0]
+    );
+    return rows.map((r) => ({ resolution: r.resolution, count: Number(r.count) }));
+};
+
 // ---- Evidence -----------------------------------------------------------
 
 exports.addEvidence = async (disputeId, uploadedBy, fileUrl) => {

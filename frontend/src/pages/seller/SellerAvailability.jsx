@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import AvailabilityCalendar from "../../components/AvailabilityCalendar";
+import NexoraAvailabilitySuggestion from "../../components/ai/NexoraAvailabilitySuggestion";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -105,7 +106,10 @@ export default function SellerAvailability() {
                     </select>
 
                     {serviceId && (
-                        <AvailabilityCalendar serviceId={serviceId} refreshToken={refreshToken} />
+                        <>
+                            <NexoraAvailabilitySuggestion serviceId={serviceId} refreshToken={refreshToken} />
+                            <AvailabilityCalendar serviceId={serviceId} refreshToken={refreshToken} />
+                        </>
                     )}
                 </div>
 

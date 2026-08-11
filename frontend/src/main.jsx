@@ -11,6 +11,7 @@ import { CurrencyProvider } from "./context/CurrencyContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
+import { AIAssistantProvider } from "./context/AIAssistantContext.jsx";
 import "./index.css";
 
 // Same "degrade gracefully when unconfigured" pattern as the backend
@@ -67,9 +68,11 @@ createRoot(document.getElementById("root")).render(
                                 <CartProvider>
                                     <WishlistProvider>
                                         <ToastProvider>
-                                            <Sentry.ErrorBoundary fallback={<p>Something went wrong. Please refresh the page.</p>}>
-                                                <App />
-                                            </Sentry.ErrorBoundary>
+                                            <AIAssistantProvider>
+                                                <Sentry.ErrorBoundary fallback={<p>Something went wrong. Please refresh the page.</p>}>
+                                                    <App />
+                                                </Sentry.ErrorBoundary>
+                                            </AIAssistantProvider>
                                         </ToastProvider>
                                     </WishlistProvider>
                                 </CartProvider>

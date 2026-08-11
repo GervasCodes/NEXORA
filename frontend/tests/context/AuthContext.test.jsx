@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 vi.mock("../../src/api/client", () => ({
     default: { post: vi.fn() },
     extractErrorMessage: (error) => error?.response?.data?.message || "Something went wrong. Please try again",
-    registerSuspensionHandler: vi.fn()
+    registerSuspensionHandler: vi.fn(),
+    registerSessionExpiredHandler: vi.fn()
 }));
 
 import api from "../../src/api/client";

@@ -7,6 +7,7 @@ import BarChart from "../../components/BarChart";
 import LineChart from "../../components/LineChart";
 import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import PageLoader from "../../components/PageLoader";
+import NexoraAdminInsights from "../../components/ai/NexoraAdminInsights";
 
 export default function AdminDashboard() {
     const { socket } = useSocket();
@@ -124,6 +125,8 @@ export default function AdminDashboard() {
                     <span className="w-1.5 h-1.5 rounded-full bg-teal animate-pulse" /> Updating…
                 </span>}
             </div>
+
+            <NexoraAdminInsights />
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
                 <Stat label="Buyers" value={stats.users.buyers} />

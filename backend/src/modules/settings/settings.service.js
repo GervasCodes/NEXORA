@@ -58,7 +58,19 @@ const DEFAULTS = {
     monetization_subscriptions_enabled: "false",
     monetization_commission_enabled: "false",
     monetization_sponsorship_enabled: "false",
-    monetization_verification_fee_enabled: "false"
+    monetization_verification_fee_enabled: "false",
+
+    // Nexora AI (migration 081, Phase B1). ai_enabled is a master switch
+    // independent of whether a provider is actually configured via env
+    // (see modules/ai/providers/registry.js) - both must be true for any
+    // AI feature to call out to a provider; either one off falls back to
+    // the same non-AI behavior. Caps are enforced by
+    // modules/ai/ai.service.js#checkSpendGuard against ai_usage_log sums.
+    ai_enabled: "true",
+    ai_daily_token_cap_per_user: "20000",
+    ai_monthly_token_cap_per_user: "300000",
+    ai_daily_token_cap_global: "2000000",
+    ai_monthly_token_cap_global: "30000000"
 };
 
 const isEnabled = (value) => value === "true" || value === true;
@@ -185,6 +197,19 @@ exports.isSponsorshipMonetizationEnabled = async () => {
 exports.isVerificationFeeMonetizationEnabled = async () => {
     const map = await getCachedAll();
     return isEnabled(map.monetization_verification_fee_enabled);
+};
+
+// Nexora AI master switch + the four spend-guard caps in one call - see
+// modules/ai/ai.service.js#checkSpendGuard, the only current caller.
+exports.getAiSettings = async () => {
+    const map = await getCachedAll();
+    return {
+        enabled: isEnabled(map.ai_enabled),
+        dailyTokenCapPerUser: Number(map.ai_daily_token_cap_per_user),
+        monthlyTokenCapPerUser: Number(map.ai_monthly_token_cap_per_user),
+        dailyTokenCapGlobal: Number(map.ai_daily_token_cap_global),
+        monthlyTokenCapGlobal: Number(map.ai_monthly_token_cap_global)
+    };
 };
 
 // All four monetization flags at once, plus each one's last-changed

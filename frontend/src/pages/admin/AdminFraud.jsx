@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
+import NexoraFraudExplain from "../../components/ai/NexoraFraudExplain";
 
 const SEVERITY_STYLES = {
     high: "bg-coral/10 text-coral",
@@ -14,6 +15,9 @@ export default function AdminFraud() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [busyId, setBusyId] = useState(null);
+    // Bumped after a flag is resolved so NexoraFraudExplain re-fetches
+    // its queue-level summary against the current open-flag list.
+    const [aiRefresh, setAiRefresh] = useState(0);
 
     const load = () => {
         api.get("/admin/fraud-flags")
@@ -29,6 +33,7 @@ export default function AdminFraud() {
         try {
             await api.put(`/admin/fraud-flags/${id}/resolve`, { status });
             setFlags((prev) => prev.filter((f) => f.id !== id));
+            setAiRefresh((n) => n + 1);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -44,6 +49,8 @@ export default function AdminFraud() {
                 explainable heuristics (first-order size, order velocity, withdrawal outliers) so every flag
                 has a plain-English reason attached.
             </p>
+
+            {!loading && <NexoraFraudExplain refreshToken={aiRefresh} />}
 
             {loading && <p className="text-ash">Loading…</p>}
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}

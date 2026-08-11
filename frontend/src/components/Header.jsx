@@ -9,6 +9,7 @@ import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import ConfirmDialog from "./ConfirmDialog";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -103,7 +104,18 @@ export default function Header() {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [menuOpen]);
 
+    // Phase 4: sign-out now requires an explicit confirmation instead of
+    // firing on a single click - a stray tap (easy on the mobile drawer's
+    // compact rows) used to log someone out immediately with no way back
+    // except signing in again.
+    const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+
     const handleSignOut = () => {
+        setSignOutConfirmOpen(true);
+    };
+
+    const confirmSignOut = () => {
+        setSignOutConfirmOpen(false);
         setMenuOpen(false);
         logout();
         navigate("/");
@@ -147,6 +159,7 @@ export default function Header() {
                     className="flex items-center gap-2 shrink-0"
                     onClick={() => setMenuOpen(false)}
                 >
+                    <img src="/favicon-32.png" alt="" aria-hidden="true" className="w-7 h-7 shrink-0" />
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
                 </Link>
 
@@ -368,6 +381,17 @@ export default function Header() {
             )}
 
             {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
+
+            <ConfirmDialog
+                open={signOutConfirmOpen}
+                title={t("nav.signOut")}
+                description="You'll need to sign in again to access your account."
+                confirmLabel={t("nav.signOut")}
+                cancelLabel={t("common.cancel") || "Cancel"}
+                danger
+                onConfirm={confirmSignOut}
+                onCancel={() => setSignOutConfirmOpen(false)}
+            />
         </header>
     );
 }

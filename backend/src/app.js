@@ -48,6 +48,7 @@ const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const subscriptionRoutes = require("./modules/subscription/subscription.routes");
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
 const statusRoutes = require("./modules/status/status.routes");
+const aiRoutes = require("./modules/ai/ai.routes");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -336,6 +337,9 @@ app.use("/api/v1/disputes", disputeRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);
+// Nexora AI (Phase B1) - see modules/ai/ai.service.js's header comment
+// for the safety/grounding rules every route here shares.
+app.use("/api/v1/ai", aiRoutes);
 
 app.get("/api/v1/me", authMiddleware, (req, res) => {
     res.json({

@@ -169,7 +169,15 @@ const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
         return next();
     }
 
-    if (providedSecret !== configuredSecret) {
+    // Timing-safe, length-checked comparison - same pattern as
+    // verifyMalipopayWebhook/verifySelcomWebhook above, even though this
+    // fallback isn't currently wired to any route. A plain !== here
+    // would be a landmine for whoever wires this up later without
+    // noticing the difference.
+    const expected = Buffer.from(configuredSecret, "utf8");
+    const provided = Buffer.from(String(providedSecret || ""), "utf8");
+
+    if (!providedSecret || expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
         logger.warn({ provider, reqId: req.id, ip: req.ip }, "[webhook auth] rejected webhook with invalid/missing x-webhook-secret header");
         return res.status(200).json({ success: false });
     }

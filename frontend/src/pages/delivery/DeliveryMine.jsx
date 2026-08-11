@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
 
 const NEXT_STATUS = {
     assigned: [{ value: "picked_up", label: "Mark picked up" }, { value: "failed", label: "Report failed" }],
@@ -21,6 +22,7 @@ export default function DeliveryMine() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [error, setError] = useState("");
+    const [routeRefresh, setRouteRefresh] = useState(0);
 
     const load = () => {
         api.get("/delivery/my/list").then(({ data }) => setDeliveries(data.data)).finally(() => setLoading(false));
@@ -34,6 +36,7 @@ export default function DeliveryMine() {
         try {
             await api.put(`/delivery/${orderId}/status`, { status });
             load();
+            setRouteRefresh((t) => t + 1);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -50,6 +53,8 @@ export default function DeliveryMine() {
     return (
         <div>
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
+
+            <NexoraRouteAssist refreshToken={routeRefresh} />
 
             <ul className="space-y-4">
                 {deliveries.map((d) => (

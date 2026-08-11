@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
+import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -256,6 +257,14 @@ export default function DisputeDetail() {
             {isAdmin && canAct && (
                 <div className="border border-line rounded-lg p-4 mb-8 space-y-4">
                     <p className="text-xs uppercase tracking-widest text-ash">Resolve this dispute</p>
+
+                    <NexoraDisputeCopilot
+                        disputeId={id}
+                        onApply={(suggestedResolution, suggestedNote) => {
+                            setResolution(suggestedResolution);
+                            setResolutionNote(suggestedNote);
+                        }}
+                    />
 
                     {dispute.status === "open" && (
                         <button

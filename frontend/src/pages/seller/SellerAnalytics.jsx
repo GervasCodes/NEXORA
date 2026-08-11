@@ -6,6 +6,7 @@ import BarChart from "../../components/BarChart";
 import LineChart from "../../components/LineChart";
 import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import VerificationFeeGate from "../../components/VerificationFeeGate";
+import NexoraAnalyticsSummary from "../../components/ai/NexoraAnalyticsSummary";
 import Skeleton from "../../components/Skeleton";
 
 const STATUS_LABELS = {
@@ -192,6 +193,8 @@ export default function SellerAnalytics() {
         <div className="animate-fade-in">
             <h1 className="font-display text-2xl mb-1">Analytics</h1>
             <p className="text-ash text-sm mb-8">How {profile.store_name} is performing.</p>
+
+            <NexoraAnalyticsSummary />
 
             {showProducts && (
                 <>

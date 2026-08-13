@@ -7,6 +7,7 @@ import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
+import PageMeta from "../components/PageMeta";
 
 function DepartmentCardSkeleton() {
     return (
@@ -110,6 +111,7 @@ export default function Home() {
 
     return (
         <div>
+            <PageMeta titleOverride={search ? `${search} · NEXORA` : "NEXORA — Marketplace"} />
             {!search && (
                 <div className="bg-abyss text-frost relative overflow-hidden">
                     <div

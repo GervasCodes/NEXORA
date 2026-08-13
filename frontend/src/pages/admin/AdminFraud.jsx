@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import NexoraFraudExplain from "../../components/ai/NexoraFraudExplain";
+import PageMeta from "../../components/PageMeta";
 
 const SEVERITY_STYLES = {
     high: "bg-coral/10 text-coral",
@@ -43,6 +44,7 @@ export default function AdminFraud() {
 
     return (
         <div>
+            <PageMeta title="Fraud Review" noIndex />
             <h1 className="font-display text-2xl mb-1">Fraud review</h1>
             <p className="text-ash text-sm mb-8">
                 Rule-based flags on unusual orders and seller withdrawals - not machine learning, just

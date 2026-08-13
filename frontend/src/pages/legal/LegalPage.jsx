@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import MarkdownLite from "../../components/legal/MarkdownLite";
 import { LEGAL_DOCS, LEGAL_DOC_LIST } from "../../data/legalDocs";
+import PageMeta from "../../components/PageMeta";
 
 export default function LegalPage() {
     const { slug } = useParams();
@@ -38,6 +39,7 @@ export default function LegalPage() {
             </nav>
 
             <article>
+                <PageMeta title={doc.title} />
                 <h1 className="font-display text-2xl sm:text-3xl mb-1">{doc.title}</h1>
                 <MarkdownLite content={doc.content} />
             </article>

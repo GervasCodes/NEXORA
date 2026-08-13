@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import PageMeta from "../components/PageMeta";
 
 export default function Login() {
     const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
@@ -114,6 +115,7 @@ export default function Login() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
+            <PageMeta title="Sign In" />
             <h1 className="font-display text-2xl mb-1">Welcome back</h1>
             <p className="text-ash text-sm mb-8">Sign in to your NEXORA account.</p>
 

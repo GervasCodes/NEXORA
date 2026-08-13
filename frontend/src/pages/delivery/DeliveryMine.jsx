@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
+import PageMeta from "../../components/PageMeta";
 
 const NEXT_STATUS = {
     assigned: [{ value: "picked_up", label: "Mark picked up" }, { value: "failed", label: "Report failed" }],
@@ -53,6 +54,7 @@ export default function DeliveryMine() {
 
     return (
         <div>
+            <PageMeta title="My Deliveries" noIndex />
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <NexoraRouteAssist refreshToken={routeRefresh} />

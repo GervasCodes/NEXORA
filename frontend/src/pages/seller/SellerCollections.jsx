@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 
 export default function SellerCollections() {
@@ -125,6 +126,7 @@ export default function SellerCollections() {
 
     return (
         <div>
+            <PageMeta title="Collections" noIndex />
             <h1 className="font-display text-2xl mb-2">Collections</h1>
             <p className="text-sm text-ash mb-6">
                 Group your products into named shelves - like "New Arrivals" or

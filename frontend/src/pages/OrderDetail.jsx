@@ -9,6 +9,7 @@ import OrderTimeline from "../components/OrderTimeline";
 import TrackingWidget from "../components/TrackingWidget";
 import PageLoader from "../components/PageLoader";
 import Button from "../components/ui/Button";
+import PageMeta from "../components/PageMeta";
 import { useAIAssistant } from "../context/AIAssistantContext";
 
 const CANCELLABLE = ["pending", "processing"];
@@ -290,6 +291,7 @@ export default function OrderDetail() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta title={`Order ${order.order_number}`} noIndex />
             <p className="text-xs uppercase tracking-widest text-ash mb-1">Order</p>
             <h1 className="price font-display text-2xl mb-1">{order.order_number}</h1>
             <p className="text-sm text-ash mb-6">Placed {formatDate(order.created_at)}</p>

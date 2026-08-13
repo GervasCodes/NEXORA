@@ -4,6 +4,7 @@ import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import MaintenanceScreen from "../../components/MaintenanceScreen";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const WITHDRAWAL_STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -82,6 +83,7 @@ export default function SellerWallet() {
 
     return (
         <div>
+            <PageMeta title="Wallet" noIndex />
             <h1 className="font-display text-2xl mb-1">Wallet</h1>
             <p className="text-ash text-sm mb-8">Your earnings after platform commission, ready to withdraw.</p>
 

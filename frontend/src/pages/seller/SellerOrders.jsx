@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function SellerOrders() {
     const [orders, setOrders] = useState([]);
@@ -39,6 +40,7 @@ export default function SellerOrders() {
 
     return (
         <div>
+            <PageMeta title="Orders" noIndex />
             <h1 className="font-display text-2xl mb-6">Orders</h1>
 
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}

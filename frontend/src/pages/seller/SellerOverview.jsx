@@ -5,6 +5,7 @@ import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 // Merchant-Type-Aware Dashboard (Phase 4) - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
@@ -60,6 +61,7 @@ export default function SellerOverview() {
 
     return (
         <div>
+            <PageMeta title="Seller Dashboard" noIndex />
             <h1 className="font-display text-2xl mb-1">{user?.first_name ? `Welcome back, ${user.first_name}` : "Welcome back"}</h1>
             <p className="text-ash text-sm mb-8">Here's how {profile.store_name} is doing.</p>
 

@@ -8,6 +8,7 @@ import LocationPicker from "../components/LocationPicker";
 import PhoneInput from "../components/PhoneInput";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import PageMeta from "../components/PageMeta";
 
 const initialForm = {
     shipping_address: "",
@@ -232,6 +233,7 @@ export default function Checkout() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-5 gap-10 animate-fade-in">
+            <PageMeta title="Checkout" noIndex />
             <form onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 

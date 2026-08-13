@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageMeta from "../../components/PageMeta";
 
 const DOC_LABELS = {
     owner_photo: "Owner photo / selfie",
@@ -88,6 +89,7 @@ export default function AdminAccountVerifications() {
 
     return (
         <div>
+            <PageMeta title="Account Verifications" noIndex />
             <h1 className="font-display text-2xl mb-1">Account verifications</h1>
             <p className="text-ash text-sm mb-6">
                 Documents submitted by sellers and delivery agents at registration.

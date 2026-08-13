@@ -3,6 +3,7 @@ import api from "../../api/client";
 import { formatMoney, formatShortDate, formatDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 export default function DeliveryEarnings() {
     const [dashboard, setDashboard] = useState(null);
@@ -24,6 +25,7 @@ export default function DeliveryEarnings() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="Earnings" noIndex />
             <h1 className="font-display text-2xl mb-1">Earnings</h1>
             <p className="text-ash text-sm mb-8">What you've earned delivering for NEXORA.</p>
 

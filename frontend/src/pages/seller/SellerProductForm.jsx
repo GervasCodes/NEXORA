@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
@@ -140,6 +141,7 @@ export default function SellerProductForm() {
 
     return (
         <div className="max-w-lg">
+            <PageMeta title="Product Form" noIndex />
             <h1 className="font-display text-2xl mb-6">{isEdit ? "Edit product" : "List a new product"}</h1>
 
             <form onSubmit={handleSubmit} className="space-y-4">

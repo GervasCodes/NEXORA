@@ -2,6 +2,7 @@ import { useState } from "react";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import NexoraSmartSearch from "../components/ai/NexoraSmartSearch";
+import PageMeta from "../components/PageMeta";
 
 
 export default function BrowseProducts() {
@@ -14,6 +15,7 @@ export default function BrowseProducts() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+            <PageMeta title="All Products" description="Browse every product on NEXORA, across every department." />
             <div className="mb-8 animate-slide-up">
                 <h1 className="font-display text-3xl mb-1">All products</h1>
                 <p className="text-ash text-sm">Everything on NEXORA, across every department.</p>

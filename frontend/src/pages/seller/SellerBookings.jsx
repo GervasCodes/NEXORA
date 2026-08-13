@@ -6,6 +6,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import BookingStatusBadge from "../../components/BookingStatusBadge";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 // Phase 5: a still-pending request is now declined via reject (below),
 // not cancel - cancel stays for a confirmed booking either side needs
@@ -86,6 +87,7 @@ export default function SellerBookings() {
 
     return (
         <div>
+            <PageMeta title="Bookings" noIndex />
             <h1 className="font-display text-2xl mb-6">{t("booking.seller.title")}</h1>
 
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}

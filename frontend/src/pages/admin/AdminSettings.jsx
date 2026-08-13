@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function AdminSettings() {
     const [settings, setSettings] = useState(null);
@@ -91,6 +92,7 @@ export default function AdminSettings() {
 
     return (
         <div>
+            <PageMeta title="Platform Settings" noIndex />
             <h1 className="font-display text-2xl mb-1">Platform settings</h1>
             <p className="text-ash text-sm mb-8">
                 Changes only apply going forward - past orders and deliveries keep whatever rate was in effect at the time.

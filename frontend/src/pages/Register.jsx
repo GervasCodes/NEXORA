@@ -5,6 +5,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import PageMeta from "../components/PageMeta";
 
 const initialForm = {
     first_name: "",
@@ -262,6 +263,7 @@ export default function Register() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-16">
+            <PageMeta title="Create Account" />
             <h1 className="font-display text-2xl mb-1">{t("auth.registerTitle")}</h1>
             <p className="text-ash text-sm mb-8">{t("auth.registerSubtitle")}</p>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -44,6 +45,7 @@ export default function AdminWithdrawals() {
 
     return (
         <div>
+            <PageMeta title="Withdrawals" noIndex />
             <h1 className="font-display text-2xl mb-1">Withdrawal requests</h1>
             <p className="text-ash text-sm mb-8">Seller payout requests from their wallet balance.</p>
 

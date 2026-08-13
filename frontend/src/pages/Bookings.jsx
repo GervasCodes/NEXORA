@@ -9,6 +9,7 @@ import BookingStatusBadge from "../components/BookingStatusBadge";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
+import PageMeta from "../components/PageMeta";
 
 export default function Bookings() {
     const { format } = useCurrency();
@@ -70,6 +71,7 @@ export default function Bookings() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
+            <PageMeta title="My Bookings" noIndex />
             <h1 className="font-display text-3xl mb-8">{t("booking.title")}</h1>
 
             <ul className="divide-y divide-line border-y border-line">

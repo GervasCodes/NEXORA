@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -135,6 +136,7 @@ export default function SellerPricing() {
 
     return (
         <div>
+            <PageMeta title="Pricing Rules" noIndex />
             <h1 className="font-display text-2xl mb-1">Dynamic pricing</h1>
             <p className="text-ash text-sm mb-6 max-w-xl">
                 Automatically adjust a service's price for weekends or a date range, instead of setting every

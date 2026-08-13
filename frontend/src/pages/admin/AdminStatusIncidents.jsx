@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const COMPONENTS = ["platform", "payments", "orders", "bookings", "delivery", "notifications"];
 const SEVERITIES = ["minor", "major", "critical"];
@@ -69,6 +70,7 @@ export default function AdminStatusIncidents() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="Status Incidents" noIndex />
             <div className="flex items-center justify-between mb-1">
                 <h1 className="font-display text-2xl">Status incidents</h1>
                 <button onClick={() => setShowForm((v) => !v)} className="text-sm text-teal hover:underline">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -24,6 +25,7 @@ export default function AdminFeaturedStores() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="Featured Stores" noIndex />
             <h1 className="font-display text-2xl mb-1">Featured store campaigns</h1>
             <p className="text-ash text-sm mb-8">
                 Every seller-paid featured-store purchase, most recent first. A department's

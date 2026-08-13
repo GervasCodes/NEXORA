@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
@@ -110,6 +111,7 @@ export default function SellerServices() {
 
     return (
         <div>
+            <PageMeta title="My Services" noIndex />
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-display text-2xl">Your services</h1>
                 <Button as={Link} to="/seller/services/new" size="sm">

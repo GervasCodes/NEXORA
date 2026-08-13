@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/client";
 import ProductCard from "../components/ProductCard";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import PageMeta from "../components/PageMeta";
 
 export default function Saved() {
     const [items, setItems] = useState([]);
@@ -34,6 +35,7 @@ export default function Saved() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+            <PageMeta title="Saved" noIndex />
             <h1 className="font-display text-2xl mb-1">Saved for later</h1>
             <p className="text-ash text-sm mb-8">Products you've tapped the heart on.</p>
 

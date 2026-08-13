@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const FLAGS = [
     {
@@ -95,6 +96,7 @@ export default function AdminBillingControl() {
 
     return (
         <div>
+            <PageMeta title="Billing Control" noIndex />
             <h1 className="font-display text-2xl mb-1">Billing control center</h1>
             <p className="text-ash text-sm mb-8">
                 Turn each monetization stream on or off platform-wide. Everything defaults to free during launch - enabling

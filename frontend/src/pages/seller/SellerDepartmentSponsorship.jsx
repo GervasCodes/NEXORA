@@ -4,6 +4,7 @@ import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -86,6 +87,7 @@ export default function SellerDepartmentSponsorship() {
 
     return (
         <div>
+            <PageMeta title="Department Sponsorship" noIndex />
             <h1 className="font-display text-2xl mb-1">Department sponsorship</h1>
             <p className="text-ash text-sm mb-8">
                 Pay to bump a department to the front of the homepage "Shop by department" grid.

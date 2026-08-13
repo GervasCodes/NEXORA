@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -115,6 +116,7 @@ export default function SellerVerification() {
 
     return (
         <div>
+            <PageMeta title="Verification" noIndex />
             <h1 className="font-display text-2xl mb-1">Seller verification</h1>
             <p className="text-ash text-sm mb-6">
                 Verified sellers can add and sell products, and unlock the paid Verified Seller badge with advanced

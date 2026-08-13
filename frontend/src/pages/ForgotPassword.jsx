@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import PageMeta from "../components/PageMeta";
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
@@ -46,6 +47,7 @@ export default function ForgotPassword() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
+            <PageMeta title="Reset Password" />
             <h1 className="font-display text-2xl mb-1">Reset your password</h1>
             <p className="text-ash text-sm mb-8">
                 {step === "email"

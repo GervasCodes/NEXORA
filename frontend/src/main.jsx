@@ -2,7 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import * as Sentry from "@sentry/react";
+import { HelmetProvider } from "react-helmet-async";
 import App from "./App.jsx";
+import ErrorFallback from "./components/ErrorFallback.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { SocketProvider } from "./context/SocketContext.jsx";
@@ -59,28 +61,30 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
-        <ThemeProvider>
-            <LanguageProvider>
-                <CurrencyProvider>
-                    <BrowserRouter>
-                        <AuthProvider>
-                            <SocketProvider>
-                                <CartProvider>
-                                    <WishlistProvider>
-                                        <ToastProvider>
-                                            <AIAssistantProvider>
-                                                <Sentry.ErrorBoundary fallback={<p>Something went wrong. Please refresh the page.</p>}>
-                                                    <App />
-                                                </Sentry.ErrorBoundary>
-                                            </AIAssistantProvider>
-                                        </ToastProvider>
-                                    </WishlistProvider>
-                                </CartProvider>
-                            </SocketProvider>
-                        </AuthProvider>
-                    </BrowserRouter>
-                </CurrencyProvider>
-            </LanguageProvider>
-        </ThemeProvider>
+        <HelmetProvider>
+            <ThemeProvider>
+                <LanguageProvider>
+                    <CurrencyProvider>
+                        <BrowserRouter>
+                            <AuthProvider>
+                                <SocketProvider>
+                                    <CartProvider>
+                                        <WishlistProvider>
+                                            <ToastProvider>
+                                                <AIAssistantProvider>
+                                                    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+                                                        <App />
+                                                    </Sentry.ErrorBoundary>
+                                                </AIAssistantProvider>
+                                            </ToastProvider>
+                                        </WishlistProvider>
+                                    </CartProvider>
+                                </SocketProvider>
+                            </AuthProvider>
+                        </BrowserRouter>
+                    </CurrencyProvider>
+                </LanguageProvider>
+            </ThemeProvider>
+        </HelmetProvider>
     </StrictMode>
 );

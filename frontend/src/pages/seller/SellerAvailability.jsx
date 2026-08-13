@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import AvailabilityCalendar from "../../components/AvailabilityCalendar";
 import NexoraAvailabilitySuggestion from "../../components/ai/NexoraAvailabilitySuggestion";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -90,6 +91,7 @@ export default function SellerAvailability() {
 
     return (
         <div>
+            <PageMeta title="Availability" noIndex />
             <h1 className="font-display text-2xl mb-6">Availability</h1>
 
             <div className="grid md:grid-cols-[1fr_320px] gap-8">

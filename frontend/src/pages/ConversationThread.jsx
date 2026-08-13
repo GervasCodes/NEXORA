@@ -9,6 +9,7 @@ import ImageLightbox from "../components/chat/ImageLightbox";
 import MessageSearch from "../components/chat/MessageSearch";
 import PageLoader from "../components/PageLoader";
 import Button from "../components/ui/Button";
+import PageMeta from "../components/PageMeta";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -315,6 +316,7 @@ export default function ConversationThread() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)]">
+            <PageMeta title="Conversation" noIndex />
             <div className="flex items-center justify-between mb-2 gap-2">
                 <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0">
                     ← All messages

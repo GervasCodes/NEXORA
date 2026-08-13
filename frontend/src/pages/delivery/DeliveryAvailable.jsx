@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function DeliveryAvailable() {
     const [orders, setOrders] = useState([]);
@@ -37,6 +38,7 @@ export default function DeliveryAvailable() {
 
     return (
         <div>
+            <PageMeta title="Available Deliveries" noIndex />
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 

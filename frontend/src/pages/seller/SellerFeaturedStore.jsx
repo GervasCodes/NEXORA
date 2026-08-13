@@ -4,6 +4,7 @@ import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -86,6 +87,7 @@ export default function SellerFeaturedStore() {
 
     return (
         <div>
+            <PageMeta title="Featured Store" noIndex />
             <h1 className="font-display text-2xl mb-1">Featured stores</h1>
             <p className="text-ash text-sm mb-8">
                 Pay to rank first in a department's "Featured stores" row.

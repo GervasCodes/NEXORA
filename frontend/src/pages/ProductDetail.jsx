@@ -8,6 +8,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
 import Button from "../components/ui/Button";
 import RecommendedProducts from "../components/RecommendedProducts";
+import PageMeta from "../components/PageMeta";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -147,6 +148,12 @@ export default function ProductDetail() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta
+                title={product.name}
+                description={product.description ? product.description.slice(0, 160) : `${product.name} on NEXORA — ${format(hasDiscount ? product.discount_price : product.price)}`}
+                image={images[0]?.image_url}
+                type="product"
+            />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">

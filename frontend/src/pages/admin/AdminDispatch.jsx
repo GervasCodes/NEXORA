@@ -4,6 +4,7 @@ import { useSocket } from "../../context/SocketContext";
 import { formatMoney } from "../../utils/format";
 import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
+import PageMeta from "../../components/PageMeta";
 
 const statusStyles = {
     assigned: "bg-line text-ash",
@@ -118,6 +119,7 @@ export default function AdminDispatch() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="Dispatch" noIndex />
             <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
                 <h1 className="font-display text-2xl">Dispatch dashboard</h1>
                 <span className={`text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-colors ${connected ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 export default function DeliveryRatings() {
     const [summary, setSummary] = useState(null);
@@ -23,6 +24,7 @@ export default function DeliveryRatings() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="My Ratings" noIndex />
             <h1 className="font-display text-2xl mb-1">Ratings</h1>
             <p className="text-ash text-sm mb-8">What buyers have said about your deliveries.</p>
 

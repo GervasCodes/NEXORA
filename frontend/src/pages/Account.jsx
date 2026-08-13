@@ -6,7 +6,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage, LANGUAGES } from "../context/LanguageContext";
 import { useCurrency, CURRENCIES } from "../context/CurrencyContext";
 import PhoneInput from "../components/PhoneInput";
-import Input from "../components/ui/Input";
+import PageMeta from "../components/PageMeta";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -167,6 +167,7 @@ export default function Account() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-12">
+            <PageMeta title="Account" noIndex />
             <div>
                 <h1 className="font-display text-2xl mb-1">{user?.first_name ? `Welcome back, ${user.first_name}` : t("account.title")}</h1>
                 <p className="text-ash text-sm">{t("account.signedInAs")} {user?.role?.replace("_", " ")}.</p>
@@ -177,13 +178,25 @@ export default function Account() {
                 <h2 className="font-display text-lg mb-4">{t("account.profile")}</h2>
                 <form onSubmit={saveProfile} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Input label="First name" value={profileForm.first_name}
-                            onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })} />
-                        <Input label="Last name" value={profileForm.last_name}
-                            onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })} />
+                        <div>
+                            <label className="block text-sm mb-1">First name</label>
+                            <input value={profileForm.first_name}
+                                onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        </div>
+                        <div>
+                            <label className="block text-sm mb-1">Last name</label>
+                            <input value={profileForm.last_name}
+                                onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        </div>
                     </div>
-                    <Input label="Email" type="email" value={profileForm.email}
-                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} />
+                    <div>
+                        <label className="block text-sm mb-1">Email</label>
+                        <input type="email" value={profileForm.email}
+                            onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                    </div>
                     <div>
                         <label className="block text-sm mb-1">Phone</label>
                         <PhoneInput
@@ -263,11 +276,14 @@ export default function Account() {
 
                 {pwdStep === "otp" && (
                     <form onSubmit={verifyPasswordOtp} className="space-y-3 max-w-xs">
-                        <Input label="Verification code" type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6}
-                            value={pwdCode}
-                            onChange={(e) => setPwdCode(e.target.value.replace(/\D/g, ""))}
-                            className="text-center text-lg tracking-[0.5em] font-mono"
-                            placeholder="000000" />
+                        <div>
+                            <label className="block text-sm mb-1">Verification code</label>
+                            <input type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6}
+                                value={pwdCode}
+                                onChange={(e) => setPwdCode(e.target.value.replace(/\D/g, ""))}
+                                className="w-full border border-line rounded-md px-3 py-2 text-center text-lg tracking-[0.5em] font-mono focus-ring"
+                                placeholder="000000" />
+                        </div>
 
                         {status.password && (
                             <p className={`text-sm ${status.password.error ? "text-coral" : "text-teal"}`}>{status.password.message}</p>
@@ -288,8 +304,12 @@ export default function Account() {
 
                 {pwdStep === "form" && (
                     <form onSubmit={submitNewPassword} className="space-y-3 max-w-xs">
-                        <Input label="New password" type="password" required minLength={8} value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)} />
+                        <div>
+                            <label className="block text-sm mb-1">New password</label>
+                            <input type="password" required minLength={8} value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        </div>
 
                         {status.password && (
                             <p className={`text-sm ${status.password.error ? "text-coral" : "text-teal"}`}>{status.password.message}</p>
@@ -328,8 +348,12 @@ export default function Account() {
                     </button>
                 ) : (
                     <form onSubmit={deleteAccount} className="space-y-3">
-                        <Input label="Confirm your password" type="password" required value={deletePassword}
-                            onChange={(e) => setDeletePassword(e.target.value)} />
+                        <div>
+                            <label className="block text-sm mb-1">Confirm your password</label>
+                            <input type="password" required value={deletePassword}
+                                onChange={(e) => setDeletePassword(e.target.value)}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        </div>
 
                         {status.delete && <p role="alert" className="text-coral text-sm">{status.delete.message}</p>}
 

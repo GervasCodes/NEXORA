@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
@@ -51,6 +52,7 @@ export default function SellerDeliveryTeam() {
 
     return (
         <div className="max-w-lg">
+            <PageMeta title="Delivery Team" noIndex />
             <h1 className="font-display text-2xl mb-2">Delivery team</h1>
             <p className="text-sm text-ash mb-6">
                 Add your own hired delivery staff here. When you mark an order as shipped,

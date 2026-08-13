@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 // Nexora Services Phase 2 (Onboarding) - the three choices map straight
 // onto seller_profiles.merchant_type (migration 062: product/service/
@@ -81,6 +82,7 @@ export default function SellerSetup() {
 
     return (
         <div className="max-w-md mx-auto px-4 py-16">
+            <PageMeta title="Set Up Your Store" noIndex />
             <h1 className="font-display text-2xl mb-1">Set up your store</h1>
             <p className="text-ash text-sm mb-8">{selectedOption.subtitle}</p>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const emptyForm = { name: "", description: "", display_order: 0 };
 
@@ -93,6 +94,7 @@ export default function AdminServiceCategories() {
 
     return (
         <div>
+            <PageMeta title="Service Categories" noIndex />
             <h1 className="font-display text-2xl mb-6">Service categories</h1>
 
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 items-start mb-8 border border-line rounded-lg p-4">

@@ -8,6 +8,7 @@ import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import VerificationFeeGate from "../../components/VerificationFeeGate";
 import NexoraAnalyticsSummary from "../../components/ai/NexoraAnalyticsSummary";
 import Skeleton from "../../components/Skeleton";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_LABELS = {
     pending: "Pending",
@@ -191,6 +192,7 @@ export default function SellerAnalytics() {
 
     return (
         <div className="animate-fade-in">
+            <PageMeta title="Analytics" noIndex />
             <h1 className="font-display text-2xl mb-1">Analytics</h1>
             <p className="text-ash text-sm mb-8">How {profile.store_name} is performing.</p>
 

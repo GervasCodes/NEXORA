@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import PageMeta from "../components/PageMeta";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import PageLoader from "../components/PageLoader";
@@ -50,6 +51,7 @@ export default function Disputes() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <div className="flex items-baseline justify-between mb-1">
+                <PageMeta title="My Disputes" noIndex />
                 <h1 className="font-display text-2xl">My disputes</h1>
             </div>
             <p className="text-ash text-sm mb-8">

@@ -8,6 +8,7 @@ import DeliveryStatusTimeline from "../components/DeliveryStatusTimeline";
 import CourierDetailsCard from "../components/CourierDetailsCard";
 import useSmoothPosition from "../hooks/useSmoothPosition";
 import Skeleton from "../components/Skeleton";
+import PageMeta from "../components/PageMeta";
 
 export default function OrderTrackingPage() {
     const { id } = useParams();
@@ -138,6 +139,7 @@ export default function OrderTrackingPage() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+            <PageMeta title="Track Order" noIndex />
             <div className="flex items-center justify-between mb-4">
                 <button
                     type="button"

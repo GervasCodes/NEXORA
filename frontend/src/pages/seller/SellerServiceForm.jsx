@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const PRICING_MODELS = [
     { value: "fixed", label: "Fixed price" },
@@ -142,6 +143,7 @@ export default function SellerServiceForm() {
 
     return (
         <div className="max-w-lg">
+            <PageMeta title="Service Form" noIndex />
             <h1 className="font-display text-2xl mb-6">{isEdit ? "Edit service" : "List a new service"}</h1>
 
             <form onSubmit={handleSubmit} className="space-y-4">

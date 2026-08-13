@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
+import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
 import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
@@ -79,6 +80,7 @@ export default function Messages() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta title="Messages" noIndex />
             <h1 className="font-display text-3xl mb-6">Messages</h1>
 
             <div className="relative mb-6">

@@ -11,6 +11,7 @@ import BookingProgressTimeline from "../components/BookingProgressTimeline";
 import Button from "../components/ui/Button";
 import PhoneInput from "../components/PhoneInput";
 import Skeleton from "../components/Skeleton";
+import PageMeta from "../components/PageMeta";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
 // allows either side to cancel a pending or confirmed booking. A
@@ -333,6 +334,7 @@ export default function BookingDetail() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta title={`Booking ${booking.booking_reference}`} noIndex />
             {justBooked && booking.status === "pending" && (
                 <div className="flex items-start gap-3 bg-teal/10 text-ink rounded-lg px-4 py-3.5 mb-6 animate-slide-down">
                     <div className="w-8 h-8 rounded-full bg-teal text-frost flex items-center justify-center shrink-0">

@@ -5,6 +5,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
 import Button from "../components/ui/Button";
+import PageMeta from "../components/PageMeta";
 
 export default function Cart() {
     const { format } = useCurrency();
@@ -38,6 +39,7 @@ export default function Cart() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
+            <PageMeta title="Cart" noIndex />
             <h1 className="font-display text-3xl mb-8">{t("cart.title")}</h1>
 
             <ul className="divide-y divide-line border-y border-line mb-8">

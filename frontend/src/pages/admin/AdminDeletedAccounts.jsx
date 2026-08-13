@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 
 export default function AdminDeletedAccounts() {
@@ -56,6 +57,7 @@ export default function AdminDeletedAccounts() {
 
     return (
         <div>
+            <PageMeta title="Deleted Accounts" noIndex />
             <h1 className="font-display text-2xl mb-1">Deleted accounts</h1>
             <p className="text-ash text-sm mb-6">
                 Accounts that deleted themselves. They can no longer log in and can't be reactivated.

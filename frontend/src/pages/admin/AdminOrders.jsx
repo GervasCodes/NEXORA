@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -49,6 +50,7 @@ export default function AdminOrders() {
 
     return (
         <div>
+            <PageMeta title="Orders" noIndex />
             <h1 className="font-display text-2xl mb-6">All orders</h1>
 
             {orders.length === 0 && <p className="text-ash text-sm">No orders yet.</p>}

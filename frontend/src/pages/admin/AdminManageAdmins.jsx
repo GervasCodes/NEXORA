@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const emptyForm = { first_name: "", last_name: "", email: "", phone: "", password: "", admin_level: "admin" };
 
@@ -74,6 +75,7 @@ export default function AdminManageAdmins() {
 
     return (
         <div>
+            <PageMeta title="Manage Admins" noIndex />
             <h1 className="font-display text-2xl mb-6">Admins</h1>
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 

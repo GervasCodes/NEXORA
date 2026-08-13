@@ -8,6 +8,7 @@ import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { formatDate } from "../utils/format";
 import Button from "../components/ui/Button";
+import PageMeta from "../components/PageMeta";
 
 const PRICING_LABELS = {
     fixed: "",
@@ -279,6 +280,12 @@ export default function ServiceDetail() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta
+                title={service.title}
+                description={service.description ? service.description.slice(0, 160) : `${service.title} by ${service.store_name} on NEXORA.`}
+                image={current.media_type === "image" ? current.media_url : undefined}
+                type="product"
+            />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">

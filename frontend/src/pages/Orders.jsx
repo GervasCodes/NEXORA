@@ -7,6 +7,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
+import PageMeta from "../components/PageMeta";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -64,6 +65,7 @@ export default function Orders() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
+            <PageMeta title="My Orders" noIndex />
             <h1 className="font-display text-3xl mb-8">{t("orders.title")}</h1>
 
             <ul className="divide-y divide-line border-y border-line">

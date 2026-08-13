@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -70,6 +71,7 @@ export default function AdminVerifications() {
 
     return (
         <div>
+            <PageMeta title="Verifications" noIndex />
             <h1 className="font-display text-2xl mb-6">Seller verifications</h1>
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 

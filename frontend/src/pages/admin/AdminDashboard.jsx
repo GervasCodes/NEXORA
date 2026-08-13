@@ -8,6 +8,7 @@ import LineChart from "../../components/LineChart";
 import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import PageLoader from "../../components/PageLoader";
 import NexoraAdminInsights from "../../components/ai/NexoraAdminInsights";
+import PageMeta from "../../components/PageMeta";
 
 export default function AdminDashboard() {
     const { socket } = useSocket();
@@ -119,6 +120,7 @@ export default function AdminDashboard() {
 
     return (
         <div>
+            <PageMeta title="Admin Dashboard" noIndex />
             <div className="flex items-center gap-3 mb-8">
                 <h1 className="font-display text-2xl">Platform overview</h1>
                 {live && <span className="text-xs text-teal flex items-center gap-1">

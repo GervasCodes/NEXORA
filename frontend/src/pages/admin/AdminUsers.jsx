@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function AdminUsers() {
     const { user: currentUser } = useAuth();
@@ -89,6 +90,7 @@ export default function AdminUsers() {
 
     return (
         <div>
+            <PageMeta title="Users" noIndex />
             <h1 className="font-display text-2xl mb-6">Users</h1>
 
             <ul className="divide-y divide-line border-y border-line">

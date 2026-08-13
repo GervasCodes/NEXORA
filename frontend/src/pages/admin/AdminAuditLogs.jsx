@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
+import PageMeta from "../../components/PageMeta";
 
 // Mirrors backend/src/modules/audit/audit.constants.js's EVENT_TYPE_GROUPS -
 // the `value` here is exactly the `category` query param the backend
@@ -98,6 +99,7 @@ export default function AdminAuditLogs() {
 
     return (
         <div>
+            <PageMeta title="Audit Logs" noIndex />
             <h1 className="font-display text-2xl mb-1">Audit logs</h1>
             <p className="text-ash text-sm mb-6">
                 Suspensions, unsuspensions, deletions, permission changes, and admin logins/actions across the platform.
@@ -110,7 +112,7 @@ export default function AdminAuditLogs() {
                         placeholder="Search description, actor, or details…"
                         value={qInput}
                         onChange={(e) => setQInput(e.target.value)}
-                        className="flex-1 min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
+                        className="flex-1 min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
                     />
                     <select
                         value={category}
@@ -130,7 +132,7 @@ export default function AdminAuditLogs() {
                             type="date"
                             value={dateFrom}
                             onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                            className="border border-line rounded-md px-2 py-1 text-sm focus-ring"
+                            className="border border-line rounded-md px-2 py-1 text-sm"
                         />
                     </label>
                     <label className="text-xs text-ash flex items-center gap-1">
@@ -139,7 +141,7 @@ export default function AdminAuditLogs() {
                             type="date"
                             value={dateTo}
                             onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                            className="border border-line rounded-md px-2 py-1 text-sm focus-ring"
+                            className="border border-line rounded-md px-2 py-1 text-sm"
                         />
                     </label>
                     <label className="text-xs text-ash flex items-center gap-1.5">

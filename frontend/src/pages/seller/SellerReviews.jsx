@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
+import PageMeta from "../../components/PageMeta";
 
 
 export default function SellerReviews() {
@@ -53,6 +54,7 @@ export default function SellerReviews() {
 
     return (
         <div>
+            <PageMeta title="Reviews" noIndex />
             <h1 className="font-display text-2xl mb-1">Reviews</h1>
             <p className="text-ash text-sm mb-8">What buyers are saying about your products - reply to any of them below.</p>
 

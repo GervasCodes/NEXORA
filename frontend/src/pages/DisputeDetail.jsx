@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
+import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
-import Input from "../components/ui/Input";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -183,6 +183,7 @@ export default function DisputeDetail() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta title={`Dispute ${dispute.dispute_number}`} noIndex />
             <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-ash mb-1">Dispute</p>
@@ -291,7 +292,7 @@ export default function DisputeDetail() {
                         </select>
 
                         {resolution === "refund_partial" && (
-                            <Input
+                            <input
                                 type="number"
                                 required
                                 min="1"
@@ -299,16 +300,16 @@ export default function DisputeDetail() {
                                 placeholder="Refund amount"
                                 value={refundAmount}
                                 onChange={(e) => setRefundAmount(e.target.value)}
+                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                             />
                         )}
 
-                        <Input
-                            as="textarea"
+                        <textarea
                             rows={2}
                             placeholder="Optional note to buyer & seller"
                             value={resolutionNote}
                             onChange={(e) => setResolutionNote(e.target.value)}
-                            className="resize-none"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
                         />
 
                         <button
@@ -326,14 +327,13 @@ export default function DisputeDetail() {
                         </button>
                     ) : (
                         <form onSubmit={reject} className="space-y-2">
-                            <Input
-                                as="textarea"
+                            <textarea
                                 required
                                 rows={2}
                                 placeholder="Reason for rejecting"
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
-                                className="resize-none !border-coral/40"
+                                className="w-full border border-coral/40 rounded-md px-3 py-2 text-sm focus-ring resize-none"
                             />
                             <div className="flex gap-2">
                                 <button
@@ -391,13 +391,12 @@ export default function DisputeDetail() {
 
                 {canMessage ? (
                     <form onSubmit={sendMessage} className="space-y-2">
-                        <Input
-                            as="textarea"
+                        <textarea
                             rows={2}
                             placeholder={`Reply as ${senderRole}…`}
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            className="resize-none"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
                         />
                         <button
                             type="submit"

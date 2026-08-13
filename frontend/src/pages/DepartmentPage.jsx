@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api/client";
 import ProductGrid from "../components/ProductGrid";
+import PageMeta from "../components/PageMeta";
 import ProductRow from "../components/ProductRow";
 import FeaturedStoreCard from "../components/FeaturedStoreCard";
 import ProductFilters from "../components/ProductFilters";
@@ -124,6 +125,7 @@ export default function DepartmentPage() {
 
     return (
         <div>
+            <PageMeta title={department.name} description={department.description} image={department.cover_image_url} />
             <div
                 className="bg-abyss text-frost relative overflow-hidden bg-cover bg-center"
                 style={department.cover_image_url ? { backgroundImage: `url(${department.cover_image_url})` } : undefined}

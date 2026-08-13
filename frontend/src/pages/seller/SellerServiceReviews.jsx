@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
+import PageMeta from "../../components/PageMeta";
 
 // Phase 4 (Customer Experience) - provider-side counterpart of
 // SellerReviews.jsx, same paginated-list-with-reply shape, just hitting
@@ -59,6 +60,7 @@ export default function SellerServiceReviews() {
 
     return (
         <div>
+            <PageMeta title="Service Reviews" noIndex />
             <h1 className="font-display text-2xl mb-1">Service reviews</h1>
             <p className="text-ash text-sm mb-8">What customers are saying about your services - reply to any of them below.</p>
 

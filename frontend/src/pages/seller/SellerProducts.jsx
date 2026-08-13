@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const PAGE_SIZE = 20;
 
@@ -108,6 +109,7 @@ export default function SellerProducts() {
 
     return (
         <div>
+            <PageMeta title="My Products" noIndex />
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-display text-2xl">Your products</h1>
                 <Button as={Link} to="/seller/products/new" size="sm">

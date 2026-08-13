@@ -4,6 +4,7 @@ import api from "../api/client";
 import ServiceGrid from "../components/ServiceGrid";
 import ServiceFilters from "../components/ServiceFilters";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import PageMeta from "../components/PageMeta";
 
 // Flow: Homepage -> Services -> Service category (mirrors DepartmentPage.jsx's
 // Homepage -> Department -> Products flow). Once a category is picked, this
@@ -86,6 +87,7 @@ export default function ServiceCategoryPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
             <div className="mb-8 animate-slide-up">
                 <Link to="/services" className="text-ash hover:text-ink text-xs">← All services</Link>
+                <PageMeta title={category.name} description={category.description} />
                 <h1 className="font-display text-3xl mt-2 mb-1">{category.name}</h1>
                 {category.description && (
                     <p className="text-ash text-sm max-w-lg mb-1">{category.description}</p>

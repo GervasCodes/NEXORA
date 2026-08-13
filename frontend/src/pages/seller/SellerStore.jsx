@@ -5,6 +5,7 @@ import LocationPicker from "../../components/LocationPicker";
 import PhoneInput from "../../components/PhoneInput";
 import { STORE_THEMES } from "../../utils/storeThemes";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 // Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
@@ -178,6 +179,7 @@ export default function SellerStore() {
 
     return (
         <div className="max-w-lg">
+            <PageMeta title="Store Settings" noIndex />
             <h1 className="font-display text-2xl mb-6">Store settings</h1>
 
             <MerchantTypeSection

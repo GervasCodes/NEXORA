@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const emptyForm = { name: "" };
 
@@ -67,6 +68,7 @@ export default function AdminStoreTypes() {
 
     return (
         <div>
+            <PageMeta title="Store Types" noIndex />
             <h1 className="font-display text-2xl mb-2">Store types</h1>
             <p className="text-sm text-ash mb-6">
                 These classify a seller's whole store (e.g. "Phone Store", "Supermarket") -

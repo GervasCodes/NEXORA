@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 const PAGE_SIZE = 20;
 
@@ -102,6 +103,7 @@ export default function AdminServices() {
 
     return (
         <div>
+            <PageMeta title="Services" noIndex />
             <h1 className="font-display text-2xl mb-6">Services</h1>
 
             <div className="border border-line rounded-lg p-4 mb-6">

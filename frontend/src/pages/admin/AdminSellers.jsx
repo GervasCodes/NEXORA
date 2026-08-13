@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import PageMeta from "../../components/PageMeta";
 
 export default function AdminSellers() {
     const [sellers, setSellers] = useState([]);
@@ -32,6 +33,7 @@ export default function AdminSellers() {
 
     return (
         <div>
+            <PageMeta title="Sellers" noIndex />
             <h1 className="font-display text-2xl mb-6">Sellers</h1>
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -66,6 +67,7 @@ export default function AdminSubscriptions() {
 
     return (
         <div className="animate-fade-in space-y-10">
+            <PageMeta title="Subscriptions" noIndex />
             <div>
                 <h1 className="font-display text-2xl mb-1">Subscription plans</h1>
                 <p className="text-ash text-sm mb-6">

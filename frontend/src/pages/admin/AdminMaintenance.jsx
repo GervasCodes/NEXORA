@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import { formatDateTime } from "../../utils/format";
+import PageMeta from "../../components/PageMeta";
 
 // Unified "Maintenance Management" screen. Departments and services keep
 // their own dedicated admin pages (AdminCategories.jsx,
@@ -519,6 +520,7 @@ export default function AdminMaintenance() {
 
     return (
         <div>
+            <PageMeta title="Maintenance Mode" noIndex />
             <h1 className="font-display text-2xl mb-1">Maintenance Management</h1>
             <p className="text-sm text-ash mb-6">
                 Take a department, service, or platform module offline for maintenance. Anyone who tries to

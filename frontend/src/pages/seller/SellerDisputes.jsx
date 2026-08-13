@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import PageMeta from "../../components/PageMeta";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -33,6 +34,7 @@ export default function SellerDisputes() {
 
     return (
         <div>
+            <PageMeta title="Disputes" noIndex />
             <h1 className="font-display text-2xl mb-1">Disputes</h1>
             <p className="text-ash text-sm mb-8">Issues buyers have raised on your orders.</p>
 

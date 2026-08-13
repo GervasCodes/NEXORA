@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
+import PageMeta from "../components/PageMeta";
 
 const SEVERITY_STYLES = {
     minor: "bg-mango/10 text-mango-dark",
@@ -41,6 +42,7 @@ export default function StatusPage() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+            <PageMeta title="System Status" description="Current NEXORA platform health, active incidents, and service targets." />
             <h1 className="font-display text-3xl mb-1">NEXORA status</h1>
             <p className="text-ash text-sm mb-8">Current platform health, active incidents, and our service targets.</p>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import ServiceCategoryCard from "../components/ServiceCategoryCard";
+import PageMeta from "../components/PageMeta";
 
 function ServiceCategoryCardSkeleton() {
     return (
@@ -32,6 +33,7 @@ export default function ServicesBrowse() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+            <PageMeta title="Services" description="Accommodation, transportation, tours and more — booked directly through NEXORA." />
             <div className="mb-8 animate-slide-up">
                 <h1 className="font-display text-3xl mb-1">Services</h1>
                 <p className="text-ash text-sm">

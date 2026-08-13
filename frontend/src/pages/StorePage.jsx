@@ -8,6 +8,7 @@ import ProductRow from "../components/ProductRow";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
+import PageMeta from "../components/PageMeta";
 
 
 function SocialIcon({ name }) {
@@ -141,6 +142,16 @@ export default function StorePage() {
 
     return (
         <div>
+            <PageMeta
+                title={store.store_name}
+                description={
+                    store.store_description?.slice(0, 160) ||
+                    store.store_tagline ||
+                    `${store.store_name} on NEXORA — browse their products and services.`
+                }
+                image={store.store_banner || store.store_logo}
+                type="website"
+            />
             <div className="h-40 sm:h-56 bg-line/40 overflow-hidden">
                 {store.store_banner ? (
                     <img src={store.store_banner} alt="" className="w-full h-full object-cover" />

@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
@@ -111,9 +112,9 @@ export default function SellerServices() {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="font-display text-2xl">Your services</h1>
-                <Link to="/seller/services/new" className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                <Button as={Link} to="/seller/services/new" size="sm">
                     + New service
-                </Link>
+                </Button>
             </div>
 
             {switchError && <p role="alert" className="text-coral text-sm mb-4">{switchError}</p>}

@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
+import Button from "../../components/ui/Button";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -202,10 +203,9 @@ export default function SellerVerification() {
                             placeholder="e.g. 0712345678"
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring disabled:opacity-60" />
                     </div>
-                    <button type="submit" disabled={paying || awaitingConfirmation}
-                        className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
+                    <Button type="submit" disabled={paying || awaitingConfirmation}>
                         {paying ? "Sending prompt…" : awaitingConfirmation ? "Awaiting confirmation…" : `Pay ${formatMoney(verification.required_fee)}`}
-                    </button>
+                    </Button>
                 </form>
             )}
         </div>

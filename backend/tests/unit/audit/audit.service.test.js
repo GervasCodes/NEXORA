@@ -1,7 +1,17 @@
 jest.mock("../../../src/modules/audit/audit.repository");
+jest.mock("../../../src/config/sentry", () => ({
+    captureException: jest.fn(),
+    captureMessage: jest.fn()
+}));
+
+const mockLoggerError = jest.fn();
+jest.mock("../../../src/utils/logger", () => ({
+    child: jest.fn(() => ({ error: mockLoggerError, warn: jest.fn(), info: jest.fn(), debug: jest.fn() }))
+}));
 
 const auditRepository = require("../../../src/modules/audit/audit.repository");
 const auditService = require("../../../src/modules/audit/audit.service");
+const Sentry = require("../../../src/config/sentry");
 
 describe("audit.service.log", () => {
     it("forwards the event straight to the repository", () => {
@@ -26,7 +36,6 @@ describe("audit.service.log", () => {
 
     it("is fire-and-forget: it doesn't return a promise, and never throws even if the insert rejects", async () => {
         auditRepository.insertLog.mockRejectedValue(new Error("db exploded"));
-        const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
         const result = auditService.log({ eventType: "account_suspended" });
         expect(result).toBeUndefined();
@@ -34,11 +43,14 @@ describe("audit.service.log", () => {
         // Let the swallowed rejection's microtask run before asserting on it.
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-            expect.stringContaining("account_suspended"),
-            "db exploded"
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            expect.objectContaining({ eventType: "account_suspended", err: expect.any(Error) }),
+            "failed to record audit log"
         );
-        consoleSpy.mockRestore();
+        expect(Sentry.captureException).toHaveBeenCalledWith(
+            expect.any(Error),
+            expect.objectContaining({ tags: { area: "audit" }, extra: { eventType: "account_suspended" } })
+        );
     });
 });
 

@@ -5,6 +5,8 @@ import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -19,10 +21,18 @@ export default function Orders() {
     const { t } = useLanguage();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
 
-    useEffect(() => {
-        api.get("/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
-    }, []);
+    const load = () => {
+        setLoading(true);
+        setError(false);
+        api.get("/orders")
+            .then(({ data }) => setOrders(data.data))
+            .catch(() => setError(true))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(load, []);
 
     if (loading) {
         return (
@@ -33,11 +43,21 @@ export default function Orders() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+                <ErrorState title="Couldn't load your orders" hint="Check your connection and try again." onRetry={load} />
+            </div>
+        );
+    }
+
     if (orders.length === 0) {
         return (
-            <div className="max-w-3xl mx-auto px-6 py-24 text-center animate-slide-up">
-                <p className="font-display text-2xl mb-2">{t("orders.empty")}</p>
-                <Link to="/" className="text-teal hover:underline text-sm">{t("common.startShopping")}</Link>
+            <div className="max-w-3xl mx-auto px-6 py-10">
+                <EmptyState
+                    title={t("orders.empty")}
+                    action={<Link to="/" className="text-teal hover:underline text-sm">{t("common.startShopping")}</Link>}
+                />
             </div>
         );
     }

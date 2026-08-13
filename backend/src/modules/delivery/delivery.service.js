@@ -3,6 +3,8 @@ const deliveryPricingService = require("./deliveryPricing.service");
 const orderRepository = require("../order/order.repository");
 const sellerRepository = require("../seller/seller.repository");
 const notificationService = require("../notification/notification.service");
+const logger = require("../../utils/logger").child({ module: "delivery" });
+const Sentry = require("../../config/sentry");
 const pushService = require("../push/push.service");
 const settingsService = require("../settings/settings.service");
 const earningsService = require("../earnings/earnings.service");
@@ -211,9 +213,10 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
     if (newStatus === "delivered") {
         await orderRepository.updateOrderStatus(orderId, "delivered");
 
-        earningsService.creditForDelivery(delivery).catch((err) =>
-            console.error("Rider earnings credit error:", err)
-        );
+        earningsService.creditForDelivery(delivery).catch((err) => {
+            logger.error({ err, orderId }, "rider earnings credit error");
+            Sentry.captureException(err, { tags: { area: "delivery", stage: "earnings-credit" }, extra: { orderId } });
+        });
     }
 
     const order = await orderRepository.findOrderById(orderId);
@@ -506,12 +509,13 @@ const offerToNextCandidate = async (orderId, pickup) => {
             offerId,
             orderId
         })
-        .catch((err) => console.error("Push send error:", err));
+        .catch((err) => logger.warn({ err, offerId, orderId }, "push send error"));
 
     setTimeout(() => {
-        expireAndAdvance(offerId, orderId, pickup).catch((err) =>
-            console.error("Offer expiry error:", err)
-        );
+        expireAndAdvance(offerId, orderId, pickup).catch((err) => {
+            logger.error({ err, offerId, orderId }, "offer expiry error");
+            Sentry.captureException(err, { tags: { area: "delivery", stage: "offer-expiry" }, extra: { offerId, orderId } });
+        });
     }, OFFER_TIMEOUT_MS);
 };
 

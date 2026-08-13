@@ -24,6 +24,8 @@
 // re-reading a row just inserted/updated).
 const fs = require("fs");
 const mysql = require("mysql2/promise");
+const logger = require("../utils/logger").child({ module: "db-read-pool" });
+const Sentry = require("./sentry");
 
 const primaryPool = require("./db");
 
@@ -66,7 +68,8 @@ if (process.env.DB_READ_HOST) {
     });
 
     pool.on("error", (error) => {
-        console.error("[db read-replica pool error]", error.message);
+        logger.error({ err: error }, "db read-replica pool error");
+        Sentry.captureException(error, { tags: { area: "db-read-pool" } });
     });
 } else {
     // No replica configured - reuse the primary pool so every caller of

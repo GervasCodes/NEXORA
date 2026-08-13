@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import Button from "../../components/ui/Button";
 
 const emptyForm = { first_name: "", last_name: "", email: "", phone: "", password: "", admin_level: "admin" };
 
@@ -122,13 +123,14 @@ export default function AdminManageAdmins() {
                                 {a.admin_level === "super_admin" ? "Super Admin" : "Admin"}
                             </span>
 
-                            <button
+                            <Button
                                 onClick={() => changeLevel(a.id, a.admin_level === "super_admin" ? "admin" : "super_admin")}
                                 disabled={busyId === a.id}
-                                className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                variant="secondary"
+                                size="sm"
                             >
                                 {a.admin_level === "super_admin" ? "Demote to Admin" : "Promote to Super Admin"}
-                            </button>
+                            </Button>
 
                             <button
                                 onClick={() => remove(a.id)}

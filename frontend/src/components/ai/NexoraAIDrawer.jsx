@@ -115,7 +115,7 @@ export default function NexoraAIDrawer() {
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Ask Nexora AI..."
                         maxLength={1000}
-                        className="flex-1 rounded-full bg-white/70 border border-line/60 px-4 py-2 text-sm outline-none focus:border-azure"
+                        className="flex-1 rounded-full bg-paper/70 border border-line/60 px-4 py-2 text-sm outline-none focus:border-azure"
                     />
                     <button
                         type="submit"

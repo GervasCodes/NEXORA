@@ -1,6 +1,8 @@
 const fs = require("fs");
 const mysql = require("mysql2/promise");
 require("dotenv").config();
+const logger = require("../utils/logger").child({ module: "db-pool" });
+const Sentry = require("./sentry");
 
 
 const buildSslConfig = () => {
@@ -35,7 +37,50 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME,
     ssl: buildSslConfig(),
     waitForConnections: true,
-    connectionLimit: 10
+    // Phase RF4 (red-flag remediation): was a hardcoded 10 with no way to
+    // tune it without a code change. Default unchanged - this just makes
+    // it configurable once real concurrent-usage data says it needs to
+    // move. See docs/DEPLOYMENT.md for how to read the saturation
+    // warning below when deciding on a new value.
+    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 10
+});
+
+// Phase RF4: the pool had zero visibility into its own saturation before
+// this - a burst of traffic maxing out connectionLimit would just show up
+// as slow requests, with nothing pointing at "the DB pool is the
+// bottleneck" specifically. mysql2's Pool emits 'enqueue' exactly when a
+// query has to wait for a connection instead of getting one immediately -
+// the earliest possible saturation signal. Throttled to once per 30s
+// (not once per queued query) so a sustained burst produces one alert to
+// investigate, not a flood.
+//
+// pool._allConnections / _freeConnections are mysql2 private internals
+// (no public stats API exists as of this mysql2 version) - read
+// defensively so a future mysql2 upgrade that changes this shape doesn't
+// crash the app, just silently stops reporting the extra numbers.
+let lastSaturationWarningAt = 0;
+const SATURATION_WARNING_THROTTLE_MS = 30000;
+
+pool.pool.on("enqueue", () => {
+    const now = Date.now();
+    if (now - lastSaturationWarningAt < SATURATION_WARNING_THROTTLE_MS) {
+        return;
+    }
+    lastSaturationWarningAt = now;
+
+    const stats = {
+        connectionLimit: pool.pool.config?.connectionLimit,
+        totalConnections: pool.pool._allConnections?.length,
+        freeConnections: pool.pool._freeConnections?.length,
+        queuedRequests: pool.pool._connectionQueue?.length
+    };
+
+    logger.warn(stats, "db pool saturated - a query had to wait for a free connection");
+    Sentry.captureMessage("DB connection pool saturated", {
+        level: "warning",
+        tags: { area: "db-pool" },
+        extra: stats
+    });
 });
 
 // A dropped/reset connection at the pool level (not a query - those
@@ -46,7 +91,8 @@ const pool = mysql.createPool({
 // creates a new connection on the next query automatically either way -
 // this only affects whether that recovery is silent+crashy or logged+safe.
 pool.on("error", (error) => {
-    console.error("[db pool error]", error.message);
+    logger.error({ err: error }, "db pool error");
+    Sentry.captureException(error, { tags: { area: "db-pool" } });
 });
 
 module.exports = pool;

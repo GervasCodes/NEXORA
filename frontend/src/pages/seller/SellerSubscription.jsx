@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
+import Button from "../../components/ui/Button";
 import PhoneInput from "../../components/PhoneInput";
 
 export default function SellerSubscription() {
@@ -226,12 +227,12 @@ export default function SellerSubscription() {
                         ) : plan.price === 0 ? (
                             <span className="text-center text-sm text-ash py-2">Default plan</span>
                         ) : (
-                            <button
+                            <Button
                                 onClick={() => { setSelectedPlan(plan); setError(""); setMessage(""); }}
-                                className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors"
+                                fullWidth
                             >
                                 Choose {plan.name}
-                            </button>
+                            </Button>
                         )}
                     </div>
                 ))}
@@ -261,10 +262,9 @@ export default function SellerSubscription() {
                                 disabled={awaitingConfirmation}
                             />
                         </div>
-                        <button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation}
-                            className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
+                        <Button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation} fullWidth>
                             {busy === "mobile_money" ? "Sending prompt…" : awaitingConfirmation ? "Awaiting confirmation…" : `Pay ${formatMoney(selectedPlan.price)} via mobile money`}
-                        </button>
+                        </Button>
                     </form>
 
                     <div className="flex items-center gap-2 text-xs text-ash mb-4">

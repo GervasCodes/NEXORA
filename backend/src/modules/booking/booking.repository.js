@@ -10,6 +10,17 @@ const availabilityRepository = require("../availability/availability.repository"
 // dateItems: [{ date, quantity, unitPrice, subtotal }, ...] - one entry
 // per date in [startDate, endDate], already priced by
 // booking.service.js against service_availability.
+//
+// Phase RF3: this used to run 2 queries per date (a per-date
+// decrementUnits UPDATE + a per-date booking_items INSERT) - a 14-night
+// booking was 28+ sequential queries in one transaction. Now it's a
+// pre-check SELECT (to give the same per-date "no longer enough
+// availability on <date>" error the old loop gave), one batched UPDATE
+// covering every date, and one batched multi-row INSERT - 3 queries
+// total regardless of how many nights are booked. The UPDATE's
+// `available_units >= ?` guard still applies per row, so a date can
+// never be oversold just because it's batched with others; the
+// pre-check just makes the failure message specific instead of generic.
 exports.createBooking = async (data) => {
     const {
         bookingReference, serviceId, providerId, customerId,
@@ -30,25 +41,52 @@ exports.createBooking = async (data) => {
         );
 
         const bookingId = bookingResult.insertId;
+        const dates = dateItems.map((item) => item.date);
+
+        const availabilityRows = await availabilityRepository.findAvailabilityForDates(
+            connection, serviceId, dates
+        );
+        const availabilityByDate = new Map(availabilityRows.map((row) => [
+            row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date,
+            row
+        ]));
 
         for (const item of dateItems) {
-            const decremented = await availabilityRepository.decrementUnits(
-                connection, serviceId, item.date, quantity
-            );
+            const row = availabilityByDate.get(item.date);
 
-            if (!decremented) {
+            if (!row || row.status !== "open" || row.available_units < quantity) {
                 throw Object.assign(
                     new Error(`No longer enough availability on ${item.date}`),
                     { code: "AVAILABILITY_UNAVAILABLE" }
                 );
             }
+        }
 
-            await connection.query(
-                `INSERT INTO booking_items (booking_id, service_date, quantity, unit_price, subtotal)
-                VALUES (?, ?, ?, ?, ?)`,
-                [bookingId, item.date, quantity, item.unitPrice, item.subtotal]
+        const affectedRows = await availabilityRepository.decrementUnitsForDates(
+            connection, serviceId, dates, quantity
+        );
+
+        if (affectedRows < dateItems.length) {
+            // Extremely rare race: something else decremented one of these
+            // dates between our pre-check and this UPDATE. The guard
+            // clause already prevented overselling either way - this is
+            // just a safe, honest fallback message since we can no longer
+            // point at one specific date with confidence.
+            throw Object.assign(
+                new Error("No longer enough availability for the selected dates"),
+                { code: "AVAILABILITY_UNAVAILABLE" }
             );
         }
+
+        const insertValues = dateItems.map((item) => [
+            bookingId, item.date, quantity, item.unitPrice, item.subtotal
+        ]);
+
+        await connection.query(
+            `INSERT INTO booking_items (booking_id, service_date, quantity, unit_price, subtotal)
+            VALUES ?`,
+            [insertValues]
+        );
 
         await connection.commit();
 
@@ -175,9 +213,9 @@ exports.cancelBooking = async (bookingId, serviceId, dateItems, finalStatus = "c
             [finalStatus, bookingId]
         );
 
-        for (const item of dateItems) {
-            await availabilityRepository.restoreUnits(connection, serviceId, item.service_date, item.quantity);
-        }
+        // Phase RF3: was one restoreUnits UPDATE per date; now one
+        // batched UPDATE covers every date in the booking's range.
+        await availabilityRepository.restoreUnitsForDates(connection, serviceId, dateItems);
 
         await connection.commit();
 

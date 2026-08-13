@@ -182,6 +182,15 @@ exports.createMessage = async (conversationId, senderId, overrides = {}) => {
 // this suite's fixture volume per test is small enough that it's fast.
 exports.resetTables = async () => {
     const tables = [
+        // RF3 addition - children of services/users that the new booking
+        // db-integration test (Phase RF3, validating the createBooking /
+        // cancelBooking N+1 batching) writes to. No booking-related
+        // tables were in this list before - the booking module had no
+        // tests at all until this phase.
+        "booking_items",
+        "bookings",
+        "service_availability",
+        "services",
         // Phase 6 additions - children of users/conversations that the
         // admin account-management and messaging db-integration tests
         // write to. Deleted first since they're the deepest children.

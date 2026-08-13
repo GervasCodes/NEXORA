@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import Button from "./ui/Button";
 
 // Small reusable confirm dialog - same dialog conventions as
 // IncomingOfferModal.jsx (glass-strong card, role="dialog", Escape to
@@ -59,23 +60,16 @@ export default function ConfirmDialog({
                 )}
 
                 <div className={`flex gap-3 ${description ? "" : "mt-4"}`}>
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 border border-line py-2.5 rounded-md text-sm font-medium hover:border-ash transition-colors focus-ring"
-                    >
+                    <Button onClick={onCancel} variant="secondary" className="flex-1 hover:border-ash">
                         {cancelLabel}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                         ref={confirmRef}
                         onClick={onConfirm}
-                        className={`flex-1 py-2.5 rounded-md text-sm font-medium transition-colors focus-ring ${
-                            danger
-                                ? "bg-coral text-frost hover:bg-coral/90"
-                                : "bg-mango text-abyss hover:bg-mango-dark"
-                        }`}
+                        className={danger ? "flex-1 !bg-coral !text-frost hover:!bg-coral/90" : "flex-1"}
                     >
                         {confirmLabel}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

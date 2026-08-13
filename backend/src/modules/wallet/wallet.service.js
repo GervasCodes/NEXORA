@@ -1,6 +1,8 @@
 const db = require("../../config/db");
 const walletRepository = require("./wallet.repository");
 const orderRepository = require("../order/order.repository");
+const logger = require("../../utils/logger").child({ module: "wallet" });
+const Sentry = require("../../config/sentry");
 const disputeRepository = require("../dispute/dispute.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
@@ -52,9 +54,9 @@ exports.creditSellersForOrder = async (orderId) => {
         // subscription plan may have a lower commission_rate_override
         // (see subscription.service.js#getEffectiveCommissionRate, which
         // falls back to settingsService.getCommissionRate() for anyone on
-        // the Free plan). Looked up per item's seller_id below rather
-        // than once up front, since a multi-vendor order can mix sellers
-        // on different plans.
+        // the Free plan). Looked up once per distinct seller below (not
+        // once per item - see Phase RF3 note further down), since a
+        // multi-vendor order can mix sellers on different plans.
         const subscriptionService = require("../subscription/subscription.service");
 
         // Group this order's uncredited items by seller so a multi-vendor
@@ -62,10 +64,23 @@ exports.creditSellersForOrder = async (orderId) => {
         // rateBySeller is tracked alongside bySeller purely for the ledger
         // description text below - all of a given seller's items share the
         // same rate (it's the seller's own plan, not an item property).
+        //
+        // Phase RF3: look up each distinct seller's commission rate once,
+        // not once per item - a multi-item order from the same seller (the
+        // common case, since order_items groups items by seller already)
+        // previously repeated this lookup redundantly for every item.
+        const distinctSellerIds = [...new Set(items.map((item) => item.seller_id))];
+        const commissionRateEntries = await Promise.all(
+            distinctSellerIds.map(async (sellerId) => [
+                sellerId, await subscriptionService.getEffectiveCommissionRate(sellerId)
+            ])
+        );
+        const commissionRateBySeller = new Map(commissionRateEntries);
+
         const bySeller = new Map();
         const rateBySeller = new Map();
         for (const item of items) {
-            const commissionRate = await subscriptionService.getEffectiveCommissionRate(item.seller_id);
+            const commissionRate = commissionRateBySeller.get(item.seller_id);
             const sellerSubtotal = Number(item.subtotal);
             const commissionAmount = Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
             const netAmount = Number((sellerSubtotal - commissionAmount).toFixed(2));
@@ -122,7 +137,7 @@ exports.creditSellersForOrder = async (orderId) => {
                 messageParams: { orderId },
                 relatedOrderId: orderId,
                 withEmail: false
-            }).catch((err) => console.error("wallet credit notify error:", err));
+            }).catch((err) => logger.warn({ err, orderId }, "wallet credit notify error"));
         }
 
     } catch (error) {
@@ -202,7 +217,7 @@ exports.creditProvidersForBooking = async (bookingId) => {
             messageKey: "notifications.wallet.credited.message",
             messageParams: { orderId: bookingId },
             withEmail: false
-        }).catch((err) => console.error("provider wallet credit notify error:", err));
+        }).catch((err) => logger.warn({ err, bookingId }, "provider wallet credit notify error"));
 
     } catch (error) {
         await connection.rollback();
@@ -271,7 +286,7 @@ const releaseBookingItems = async (items) => {
             titleKey: "notifications.wallet.released.title",
             messageKey: "notifications.wallet.released.message",
             withEmail: false
-        }).catch((err) => console.error("provider wallet release notify error:", err));
+        }).catch((err) => logger.warn({ err, providerId }, "provider wallet release notify error"));
     }
 
     return summary;
@@ -475,7 +490,7 @@ const releaseItems = async (items) => {
             titleKey: "notifications.wallet.released.title",
             messageKey: "notifications.wallet.released.message",
             withEmail: false
-        }).catch((err) => console.error("wallet release notify error:", err));
+        }).catch((err) => logger.warn({ err, sellerId }, "wallet release notify error"));
     }
 
     return summary;
@@ -562,7 +577,10 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
         // Fire-and-forget, after commit - fraud flagging is advisory and
         // must never delay or block a legitimate withdrawal.
         fraudService.evaluateWithdrawal(sellerId, amount)
-            .catch((err) => console.error("[fraud] withdrawal evaluation failed:", err.message));
+            .catch((err) => {
+                logger.error({ err, sellerId }, "fraud withdrawal evaluation failed");
+                Sentry.captureException(err, { tags: { area: "wallet", stage: "fraud-evaluation" }, extra: { sellerId } });
+            });
 
         return { withdrawalId, balance: balanceAfter };
 
@@ -646,7 +664,7 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
                 note: adminNote ? { key: "notifications.withdrawal.note", params: { note: adminNote } } : ""
             },
             withEmail: true
-        }).catch((err) => console.error("withdrawal notify error:", err));
+        }).catch((err) => logger.warn({ err, withdrawalId: withdrawal.id }, "withdrawal notify error"));
 
         return { status: nextStatus };
 

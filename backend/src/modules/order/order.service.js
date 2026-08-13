@@ -7,6 +7,8 @@ const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
 const fraudService = require("../fraud/fraud.service");
 const auditService = require("../audit/audit.service");
+const logger = require("../../utils/logger").child({ module: "order" });
+const Sentry = require("../../config/sentry");
 const {
     CANCELLABLE_STATUSES,
     SELLER_STATUS_TRANSITIONS
@@ -34,8 +36,15 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const bySeller = new Map(); // seller_id -> { items: [], subtotal: 0 }
     let totalAmount = 0;
 
+    // Fetch every product this cart references in one query instead of
+    // one round trip per line item (Phase RF3 - was the highest-frequency
+    // N+1 in the codebase, since this runs on every checkout attempt).
+    const productIds = [...new Set(cart.map((item) => item.product_id))];
+    const products = await cartRepository.findProductsByIds(productIds);
+    const productsById = new Map(products.map((p) => [p.id, p]));
+
     for (const item of cart) {
-        const product = await cartRepository.findProductById(item.product_id);
+        const product = productsById.get(item.product_id);
 
         if (!product) {
             throw new Error(`"${item.name}" is no longer available`);
@@ -110,7 +119,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
     // Fire-and-forget: fraud flagging is advisory (surfaces in the admin
     // panel for review) and must never delay or fail a real checkout.
     fraudService.evaluateOrder({ id: orderId, buyer_id: buyerId, total_amount: totalAmount })
-        .catch((err) => console.error("[fraud] order evaluation failed:", err.message));
+        .catch((err) => {
+            logger.error({ err, orderId }, "fraud order evaluation failed");
+            Sentry.captureException(err, { tags: { area: "order", stage: "fraud-evaluation" }, extra: { orderId } });
+        });
 
     auditService.log({
         userId: buyerId,
@@ -346,9 +358,10 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
     // matching. Fire-and-forget — if it can't find/reach anyone, the order
     // just sits in the manual "available for pickup" pool as a fallback.
     if (newStatus === "shipped" && !agentId) {
-        deliveryService.startMatching(orderId).catch((err) =>
-            console.error("startMatching error:", err)
-        );
+        deliveryService.startMatching(orderId).catch((err) => {
+            logger.error({ err, orderId }, "startMatching error");
+            Sentry.captureException(err, { tags: { area: "order", stage: "delivery-matching" }, extra: { orderId } });
+        });
     }
 
     await notificationService.notify({

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function DeliveryAvailable() {
     const [orders, setOrders] = useState([]);
@@ -53,13 +54,12 @@ export default function DeliveryAvailable() {
                             </p>
                         </div>
                         <p className="price text-sm">{formatMoney(order.total_amount)}</p>
-                        <button
+                        <Button
                             onClick={() => claim(order.order_id)}
                             disabled={busyId === order.order_id}
-                            className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60"
                         >
                             {busyId === order.order_id ? "Claiming…" : "Claim"}
-                        </button>
+                        </Button>
                     </li>
                 ))}
             </ul>

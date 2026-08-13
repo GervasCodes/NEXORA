@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Button from "./ui/Button";
 import { useSocket } from "../context/SocketContext";
 
 export default function IncomingOfferModal() {
@@ -91,14 +92,12 @@ export default function IncomingOfferModal() {
                 </div>
 
                 <div className="flex gap-3">
-                    <button onClick={() => respond(false)}
-                        className="flex-1 border border-line py-2.5 rounded-md text-sm font-medium hover:border-coral hover:text-coral transition-colors focus-ring">
+                    <Button onClick={() => respond(false)} variant="secondary" className="flex-1 hover:border-coral hover:text-coral">
                         Decline
-                    </button>
-                    <button ref={acceptRef} onClick={() => respond(true)}
-                        className="flex-1 bg-mango text-abyss py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring">
+                    </Button>
+                    <Button ref={acceptRef} onClick={() => respond(true)} className="flex-1">
                         Accept ({Math.ceil(msLeft / 1000)}s)
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

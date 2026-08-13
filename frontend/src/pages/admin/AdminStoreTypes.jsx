@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 const emptyForm = { name: "" };
 
@@ -80,10 +81,9 @@ export default function AdminStoreTypes() {
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[200px]"
                 />
-                <button type="submit" disabled={submitting}
-                    className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
+                <Button type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : editingId ? "Save changes" : "Add store type"}
-                </button>
+                </Button>
                 {editingId && (
                     <button type="button" onClick={cancelEdit} className="text-sm text-ash hover:text-ink px-2 py-2">
                         Cancel
@@ -106,13 +106,14 @@ export default function AdminStoreTypes() {
                             Edit
                         </button>
 
-                        <button
+                        <Button
                             onClick={() => toggleActive(t)}
                             disabled={busyId === t.id}
-                            className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                            variant="secondary"
+                            size="sm"
                         >
                             {t.is_active ? "Hide" : "Show"}
-                        </button>
+                        </Button>
                     </li>
                 ))}
             </ul>

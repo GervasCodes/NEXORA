@@ -7,6 +7,7 @@ import { useLanguage } from "../context/LanguageContext";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { formatDate } from "../utils/format";
+import Button from "../components/ui/Button";
 
 const PRICING_LABELS = {
     fixed: "",
@@ -177,14 +178,13 @@ function BookingWidget({ service }) {
                         </p>
                         <p className="price text-lg font-medium">{format(estimatedTotal)}</p>
                     </div>
-                    <button
+                    <Button
                         type="button"
                         onClick={handleBook}
                         disabled={submitting}
-                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
                     >
                         {submitting ? t("booking.widget.booking") : t("booking.widget.bookNow")}
-                    </button>
+                    </Button>
                 </div>
             )}
 

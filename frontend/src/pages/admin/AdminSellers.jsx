@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function AdminSellers() {
     const [sellers, setSellers] = useState([]);
@@ -57,13 +58,14 @@ export default function AdminSellers() {
                             {s.is_active ? "Active account" : "Deactivated"}
                         </span>
 
-                        <button
+                        <Button
                             onClick={() => toggleVerified(s)}
                             disabled={busyId === s.user_id}
-                            className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                            variant="secondary"
+                            size="sm"
                         >
                             {s.is_verified ? "Remove verification" : "Verify"}
-                        </button>
+                        </Button>
                     </li>
                 ))}
             </ul>

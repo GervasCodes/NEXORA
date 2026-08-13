@@ -63,7 +63,7 @@ export default defineConfig({
         // remove this if you're running on a beefier CI box.
         poolOptions: {
             forks: {
-                maxForks: 4
+                maxForks: 2
             }
         },
         testTimeout: 15000,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
+import Button from "../../components/ui/Button";
 
 const PRICING_MODELS = [
     { value: "fixed", label: "Fixed price" },
@@ -225,10 +226,9 @@ export default function SellerServiceForm() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <button type="submit" disabled={submitting}
-                    className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                <Button type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : isEdit ? "Save changes" : "Create service"}
-                </button>
+                </Button>
             </form>
 
             {savedId && (

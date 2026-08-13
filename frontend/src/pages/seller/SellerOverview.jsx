@@ -4,6 +4,7 @@ import api from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import { useAuth } from "../../context/AuthContext";
+import Button from "../../components/ui/Button";
 
 // Merchant-Type-Aware Dashboard (Phase 4) - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
@@ -85,9 +86,9 @@ export default function SellerOverview() {
             <div className="flex flex-wrap gap-3">
                 {showProducts && (
                     <>
-                        <Link to="/seller/products/new" className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                        <Button as={Link} to="/seller/products/new" size="sm">
                             List a new product
-                        </Link>
+                        </Button>
                         <Link to="/seller/orders" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
                             View orders
                         </Link>
@@ -96,9 +97,9 @@ export default function SellerOverview() {
 
                 {showServices && (
                     <>
-                        <Link to="/seller/services/new" className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors">
+                        <Button as={Link} to="/seller/services/new" size="sm">
                             List a new service
-                        </Link>
+                        </Button>
                         <Link to="/seller/bookings" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
                             View bookings
                         </Link>

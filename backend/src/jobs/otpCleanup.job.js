@@ -5,6 +5,7 @@
 // ignores expired/consumed codes regardless of whether this job runs.
 
 const db = require("../config/db");
+const logger = require("../utils/logger").child({ module: "job:otpCleanup" });
 
 const RETENTION_DAYS = 7;
 
@@ -17,6 +18,6 @@ exports.run = async () => {
     );
 
     if (result.affectedRows) {
-        console.log(`[otpCleanup job] removed ${result.affectedRows} old OTP code(s)`);
+        logger.info({ removed: result.affectedRows }, "removed old OTP code(s)");
     }
 };

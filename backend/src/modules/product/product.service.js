@@ -3,6 +3,25 @@ const categoryRepository = require("../category/category.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = require("../../utils/productFilters");
 const { parseSort } = require("../../utils/productSort");
+const cache = require("../../utils/cache");
+
+// Phase RF5: namespace for cached browse/search reads below (listProducts
+// + the two filter-dropdown endpoints). Deliberately excludes
+// getProductBySlug (the product-detail page) - that's the page a shopper
+// is on right before adding to cart, and its stock figure is closer to
+// "live inventory" than a browse listing's is, so it stays on a direct DB
+// read per the Phase RF5 plan.
+const CACHE_NAMESPACE = "products";
+
+// A separate namespace this module bumps into, not owns - product
+// visibility changes (a new product going live, or an existing one being
+// activated/deactivated) change what category.service.js's cached
+// listDepartments/getDepartmentBySlug show (productCount, trending,
+// recent), so those need invalidating too. Calling cache.bumpVersion
+// directly here (instead of importing category.service.js) avoids a
+// circular require - product.service.js already depends on
+// category.repository.js directly for the same reason.
+const CATEGORY_CACHE_NAMESPACE = "categories";
 
 // Guards createProduct/updateProduct against a category_id for a disabled
 // department (e.g. Services - see migration 055). The dropdown that feeds
@@ -55,6 +74,13 @@ exports.createProduct = async (sellerId, data) => {
         product_condition: data.product_condition || "new"
     });
 
+    // New products change the browse/search result set and the owning
+    // department's productCount/trending/recent - bump both namespaces.
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
+
     return {
         productId,
         slug
@@ -66,7 +92,7 @@ exports.listProducts = async (query) => {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 12));
     const { min, max } = parsePriceRange(query.min_price, query.max_price);
 
-    const { rows, total } = await productRepository.findAll({
+    const filters = {
         categoryId: query.category_id || null,
         search: query.search || null,
         minPrice: min,
@@ -77,7 +103,13 @@ exports.listProducts = async (query) => {
         sort: parseSort(query.sort),
         page,
         limit
-    });
+    };
+
+    const { rows, total } = await cache.getOrSet(
+        CACHE_NAMESPACE,
+        { fn: "listProducts", ...filters },
+        () => productRepository.findAll(filters)
+    );
 
     return {
         products: rows,
@@ -93,17 +125,23 @@ exports.listProducts = async (query) => {
 // Filter-dropdown data (Phase 3A): every seller with at least one active
 // product, optionally narrowed to a single category/department.
 exports.listFilterSellers = async (query) => {
-    return productRepository.findFilterSellers({
-        categoryId: query.category_id || null
-    });
+    const categoryId = query.category_id || null;
+    return cache.getOrSet(
+        CACHE_NAMESPACE,
+        { fn: "listFilterSellers", categoryId },
+        () => productRepository.findFilterSellers({ categoryId })
+    );
 };
 
 // Filter-dropdown data (Phase 3B): every region with at least one active
 // product, optionally narrowed to a single category/department.
 exports.listFilterRegions = async (query) => {
-    return productRepository.findFilterRegions({
-        categoryId: query.category_id || null
-    });
+    const categoryId = query.category_id || null;
+    return cache.getOrSet(
+        CACHE_NAMESPACE,
+        { fn: "listFilterRegions", categoryId },
+        () => productRepository.findFilterRegions({ categoryId })
+    );
 };
 
 exports.getProductBySlug = async (slug) => {
@@ -233,6 +271,11 @@ exports.bulkSetProductActiveBySeller = async (sellerId, productIds, isActive) =>
 
     await productRepository.setActiveBulkBySeller(sellerId, ids, isActive);
 
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
+
     return { updated: ids.length };
 };
 
@@ -265,6 +308,18 @@ exports.updateProduct = async (sellerId, productId, data) => {
 
     await productRepository.update(productId, data);
 
+    const cacheBumps = [cache.bumpVersion(CACHE_NAMESPACE)];
+    // Only bump the categories namespace when the edit could actually
+    // change a department's cached counts/trending/recent lists - a
+    // category move changes two departments' membership; a name/price/
+    // description-only edit doesn't change any department's product
+    // count and is a small enough drift for the department cards' own
+    // 30-60s TTL to absorb.
+    if (data.category_id && data.category_id !== product.category_id) {
+        cacheBumps.push(cache.bumpVersion(CATEGORY_CACHE_NAMESPACE));
+    }
+    await Promise.all(cacheBumps);
+
     return productRepository.findById(productId);
 };
 
@@ -276,4 +331,11 @@ exports.setProductActiveBySeller = async (sellerId, productId, isActive) => {
     }
 
     await productRepository.setActive(productId, isActive);
+
+    // Activating/deactivating changes both the browse/search result set
+    // and the owning department's live productCount/trending/recent.
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
 };

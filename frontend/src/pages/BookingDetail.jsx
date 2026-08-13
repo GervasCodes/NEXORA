@@ -8,6 +8,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useSocket } from "../context/SocketContext";
 import BookingStatusBadge from "../components/BookingStatusBadge";
 import BookingProgressTimeline from "../components/BookingProgressTimeline";
+import Button from "../components/ui/Button";
 import PhoneInput from "../components/PhoneInput";
 import Skeleton from "../components/Skeleton";
 
@@ -407,10 +408,9 @@ export default function BookingDetail() {
                             onChange={setPhone}
                             placeholder={t("booking.payment.phonePlaceholder")}
                         />
-                        <button onClick={handlePayMobileMoney} disabled={busy}
-                            className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                        <Button onClick={handlePayMobileMoney} disabled={busy}>
                             {busy ? t("booking.payment.processing") : t("booking.payment.payMobileMoney")}
-                        </button>
+                        </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
@@ -516,13 +516,13 @@ export default function BookingDetail() {
                             />
                             {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
                             <div className="flex gap-3">
-                                <button
+                                <Button
                                     type="submit"
                                     disabled={submittingReview}
-                                    className="bg-mango text-abyss px-5 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-50"
+                                    size="sm"
                                 >
                                     {submittingReview ? t("booking.review.submitting") : t("booking.review.submit")}
-                                </button>
+                                </Button>
                                 <button
                                     type="button"
                                     onClick={() => setShowReviewForm(false)}

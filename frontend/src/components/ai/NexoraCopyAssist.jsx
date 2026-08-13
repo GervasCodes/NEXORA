@@ -98,7 +98,7 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
             </button>
             {error && <p className="text-xs text-coral">{error}</p>}
             {draft && (
-                <div className="border border-line/60 rounded-md p-2 bg-white/60">
+                <div className="border border-line/60 rounded-md p-2 bg-paper/60">
                     <p className="text-sm whitespace-pre-wrap">{draft}</p>
                     <div className="flex gap-3 mt-2">
                         <button

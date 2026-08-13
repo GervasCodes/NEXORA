@@ -54,7 +54,7 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search this conversation…"
-                    className="flex-1 text-sm bg-transparent outline-none"
+                    className="flex-1 text-sm bg-transparent focus-ring"
                 />
                 <button type="button" onClick={onClose} className="text-ash hover:text-ink text-sm px-1">
                     Close

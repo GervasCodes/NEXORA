@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function AdminUsers() {
     const { user: currentUser } = useAuth();
@@ -115,13 +116,14 @@ export default function AdminUsers() {
                             {u.is_active ? "Active" : "Suspended"}
                         </span>
 
-                        <button
+                        <Button
                             onClick={() => (u.is_active ? handleSuspend(u) : handleUnsuspend(u))}
                             disabled={busyId === u.id}
-                            className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                            variant="secondary"
+                            size="sm"
                         >
                             {u.is_active ? "Suspend" : "Unsuspend"}
-                        </button>
+                        </Button>
 
                         {isSuperAdmin && (
                             <button

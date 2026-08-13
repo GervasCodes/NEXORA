@@ -1,10 +1,21 @@
 jest.mock("../../../src/modules/adminNotification/adminNotification.repository");
 jest.mock("../../../src/modules/push/push.service");
 jest.mock("../../../src/socket/socket");
+jest.mock("../../../src/config/sentry", () => ({
+    captureException: jest.fn(),
+    captureMessage: jest.fn()
+}));
+
+const mockLoggerWarn = jest.fn();
+const mockLoggerError = jest.fn();
+jest.mock("../../../src/utils/logger", () => ({
+    child: jest.fn(() => ({ error: mockLoggerError, warn: mockLoggerWarn, info: jest.fn(), debug: jest.fn() }))
+}));
 
 const adminNotificationRepository = require("../../../src/modules/adminNotification/adminNotification.repository");
 const pushService = require("../../../src/modules/push/push.service");
 const socket = require("../../../src/socket/socket");
+const Sentry = require("../../../src/config/sentry");
 
 const adminNotificationService = require("../../../src/modules/adminNotification/adminNotification.service");
 
@@ -126,30 +137,33 @@ describe("adminNotification.service.notify", () => {
         expect(pushService.sendToAdmins).toHaveBeenCalled();
     });
 
-    it("logs to the console (rather than throwing) if the notification insert itself fails", async () => {
+    it("logs and reports to Sentry (rather than throwing) if the notification insert itself fails", async () => {
         adminNotificationRepository.create.mockRejectedValue(new Error("db exploded"));
-        const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
         adminNotificationService.notify({ type: "account_suspended", category: "account", title: "t", message: "m" });
         await flush();
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-            expect.stringContaining("account_suspended"),
-            "db exploded"
+        expect(mockLoggerError).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "account_suspended", err: expect.any(Error) }),
+            "failed to record admin notification"
         );
-        consoleSpy.mockRestore();
+        expect(Sentry.captureException).toHaveBeenCalledWith(
+            expect.any(Error),
+            expect.objectContaining({ tags: { area: "adminNotification" }, extra: { type: "account_suspended" } })
+        );
     });
 
-    it("logs to the console (rather than throwing) if the web push send fails after the row was created", async () => {
+    it("logs a warning (rather than throwing) if the web push send fails after the row was created", async () => {
         adminNotificationRepository.create.mockResolvedValue(59);
         pushService.sendToAdmins.mockRejectedValue(new Error("push provider down"));
-        const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
         adminNotificationService.notify({ type: "account_suspended", category: "account", title: "t", message: "m" });
         await flush();
 
-        expect(consoleSpy).toHaveBeenCalledWith("Push send error (adminNotify):", "push provider down");
-        consoleSpy.mockRestore();
+        expect(mockLoggerWarn).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "account_suspended", err: expect.any(Error) }),
+            "push send error (adminNotify)"
+        );
     });
 });
 

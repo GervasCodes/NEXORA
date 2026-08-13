@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import Input from "./ui/Input";
 
 const SORT_OPTIONS = [
     { value: "newest", label: "Newest" },
@@ -95,41 +96,33 @@ export default function ServiceFilters({ categoryId, onChange }) {
 
     return (
         <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-line">
-            <div className="flex flex-col gap-1">
-                <label htmlFor="service-filter-min-price" className="text-xs text-ash">
-                    Min price ({currency})
-                </label>
-                <input
-                    id="service-filter-min-price"
-                    type="number"
-                    min="0"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={minInput}
-                    onChange={(e) => setMinInput(e.target.value)}
-                    onBlur={handleApply}
-                    onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                    className="w-28 border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
-                />
-            </div>
+            <Input
+                id="service-filter-min-price"
+                label={`Min price (${currency})`}
+                type="number"
+                min="0"
+                inputMode="decimal"
+                placeholder="0"
+                value={minInput}
+                onChange={(e) => setMinInput(e.target.value)}
+                onBlur={handleApply}
+                onKeyDown={(e) => e.key === "Enter" && handleApply()}
+                className="w-28 !py-1.5"
+            />
 
-            <div className="flex flex-col gap-1">
-                <label htmlFor="service-filter-max-price" className="text-xs text-ash">
-                    Max price ({currency})
-                </label>
-                <input
-                    id="service-filter-max-price"
-                    type="number"
-                    min="0"
-                    inputMode="decimal"
-                    placeholder="No limit"
-                    value={maxInput}
-                    onChange={(e) => setMaxInput(e.target.value)}
-                    onBlur={handleApply}
-                    onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                    className="w-28 border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
-                />
-            </div>
+            <Input
+                id="service-filter-max-price"
+                label={`Max price (${currency})`}
+                type="number"
+                min="0"
+                inputMode="decimal"
+                placeholder="No limit"
+                value={maxInput}
+                onChange={(e) => setMaxInput(e.target.value)}
+                onBlur={handleApply}
+                onKeyDown={(e) => e.key === "Enter" && handleApply()}
+                className="w-28 !py-1.5"
+            />
 
             <div className="flex flex-col gap-1">
                 <label htmlFor="service-filter-region" className="text-xs text-ash">

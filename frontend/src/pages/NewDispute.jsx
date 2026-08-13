@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import PageLoader from "../components/PageLoader";
+import Input from "../components/ui/Input";
 
 const TYPES = [
     { value: "damaged_item", label: "Damaged item" },
@@ -118,30 +119,26 @@ export default function NewDispute() {
                     </select>
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">Subject</label>
-                    <input
-                        required
-                        maxLength={150}
-                        placeholder="e.g. Blender arrived with a cracked jug"
-                        value={form.subject}
-                        onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                </div>
+                <Input
+                    label="Subject"
+                    required
+                    maxLength={150}
+                    placeholder="e.g. Blender arrived with a cracked jug"
+                    value={form.subject}
+                    onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                />
 
-                <div>
-                    <label className="block text-sm mb-1">Details</label>
-                    <textarea
-                        required
-                        rows={5}
-                        maxLength={2000}
-                        placeholder="Describe what happened. You can attach photos after submitting."
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
-                    />
-                </div>
+                <Input
+                    as="textarea"
+                    label="Details"
+                    required
+                    rows={5}
+                    maxLength={2000}
+                    placeholder="Describe what happened. You can attach photos after submitting."
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="resize-none"
+                />
 
                 {error && <p className="text-sm text-coral">{error}</p>}
 

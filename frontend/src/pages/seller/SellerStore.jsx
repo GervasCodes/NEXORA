@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import LocationPicker from "../../components/LocationPicker";
 import PhoneInput from "../../components/PhoneInput";
 import { STORE_THEMES } from "../../utils/storeThemes";
+import Button from "../../components/ui/Button";
 
 // Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
@@ -345,10 +346,9 @@ export default function SellerStore() {
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">Store settings saved.</p>}
 
-                <button type="submit" disabled={submitting}
-                    className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                <Button type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
             </form>
         </div>
     );

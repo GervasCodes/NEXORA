@@ -79,3 +79,20 @@ exports.findProductById = async (productId) => {
     );
     return rows[0];
 };
+
+// Batched counterpart of findProductById - fetches every product a cart
+// references in one query instead of one round trip per line item.
+// Used by order.service.js#checkout, which previously called
+// findProductById once per cart item (a real N+1 on the highest-frequency
+// write path in the app - see Phase RF2 audit / RF3 remediation).
+exports.findProductsByIds = async (productIds) => {
+    if (!productIds.length) {
+        return [];
+    }
+
+    const [rows] = await db.query(
+        "SELECT id, price, discount_price, stock, is_active FROM products WHERE id IN (?)",
+        [productIds]
+    );
+    return rows;
+};

@@ -1,4 +1,5 @@
 const notificationRepository = require("./notification.repository");
+const logger = require("../../utils/logger").child({ module: "notification" });
 const sendEmail = require("../../utils/sendEmail");
 const pushService = require("../push/push.service");
 const { t, resolveLocale } = require("../../i18n");
@@ -99,7 +100,7 @@ exports.notify = async ({
             orderId: relatedOrderId || undefined,
             url: resolvedUrl
         })
-        .catch((error) => console.error("Push send error (notify):", error.message));
+        .catch((error) => logger.warn({ err: error }, "push send error (notify)"));
 
     if (withEmail && contact?.email) {
         const body = `${resolvedMessage}\n\n${t(locale, "email.footer")}`;

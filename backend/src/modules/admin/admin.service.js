@@ -3,6 +3,7 @@ const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
 const monetizationScheduleService = require("../monetizationSchedule/monetizationSchedule.service");
+const logger = require("../../utils/logger").child({ module: "admin" });
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
@@ -203,9 +204,9 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     });
 
     if (failedDeletes.length) {
-        console.error(
-            `[admin] permanentlyDeleteUser(${userId}): ${failedDeletes.length} Cloudinary asset(s) failed to delete`,
-            failedDeletes
+        logger.warn(
+            { userId, failedDeletes, count: failedDeletes.length },
+            "permanentlyDeleteUser: Cloudinary asset(s) failed to delete"
         );
     }
 

@@ -1,4 +1,5 @@
 const pushRepository = require("./push.repository");
+const logger = require("../../utils/logger").child({ module: "push" });
 const { webpush, isConfigured } = require("../../config/webPush");
 
 exports.getPublicKey = () => process.env.VAPID_PUBLIC_KEY || null;
@@ -37,7 +38,7 @@ const sendToSubscriptions = async (subscriptions, payload) => {
                 if (error.statusCode === 404 || error.statusCode === 410) {
                     await pushRepository.removeById(sub.id).catch(() => {});
                 } else {
-                    console.error("Push send failed:", error.message);
+                    logger.error({ err: error, subscriptionId: sub.id }, "push send failed");
                 }
             }
         })

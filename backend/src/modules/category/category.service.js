@@ -1,6 +1,14 @@
 const categoryRepository = require("./category.repository");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const socket = require("../../socket/socket");
+const cache = require("../../utils/cache");
+
+// Phase RF5: namespace for every cached category/department read below.
+// Bumped (not deleted key-by-key) on any write that changes what one of
+// these reads would return - see the CACHE_NAMESPACE.bumpVersion calls
+// throughout this file, and utils/cache.js for why versioning is used
+// instead of exact-key deletion.
+const CACHE_NAMESPACE = "categories";
 
 const toSlug = (name) =>
     name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
@@ -18,7 +26,7 @@ const SECTION_LIMIT = 6;
 const FEATURED_STORES_LIMIT = 4;
 
 exports.listPublic = async () => {
-    return categoryRepository.findAllActive();
+    return cache.getOrSet(CACHE_NAMESPACE, "listPublic", () => categoryRepository.findAllActive());
 };
 
 exports.listForAdmin = async () => {
@@ -40,26 +48,38 @@ exports.listForAdmin = async () => {
 // a separate query from the plain findAllActive the `GET /categories`
 // dropdown endpoint still uses.
 exports.listDepartments = async () => {
-    const categories = await categoryRepository.findAllActiveWithSponsorship();
+    return cache.getOrSet(CACHE_NAMESPACE, "listDepartments", async () => {
+        const categories = await categoryRepository.findAllActiveWithSponsorship();
 
-    return Promise.all(
-        categories.map(async (category) => {
-            const [productCount, trending, recent, newCount] = await Promise.all([
-                categoryRepository.countProductsByCategory(category.id),
-                categoryRepository.findTrendingByCategory(category.id, TRENDING_PREVIEW_LIMIT),
-                categoryRepository.findRecentByCategory(category.id, RECENT_PREVIEW_LIMIT),
-                categoryRepository.countRecentByCategory(category.id, NEW_WINDOW_DAYS)
-            ]);
+        return Promise.all(
+            categories.map(async (category) => {
+                const [productCount, trending, recent, newCount] = await Promise.all([
+                    categoryRepository.countProductsByCategory(category.id),
+                    categoryRepository.findTrendingByCategory(category.id, TRENDING_PREVIEW_LIMIT),
+                    categoryRepository.findRecentByCategory(category.id, RECENT_PREVIEW_LIMIT),
+                    categoryRepository.countRecentByCategory(category.id, NEW_WINDOW_DAYS)
+                ]);
 
-            return { ...category, productCount, trending, recent, newCount };
-        })
-    );
+                return { ...category, productCount, trending, recent, newCount };
+            })
+        );
+    });
 };
 
 // Single-department lookup for the department page - covers, count,
 // trending/recent (same as the homepage card) plus the Phase 2C sections
 // (promotions, sponsored, featured stores) that only make sense once
 // you're already looking at one department, not fanned out across all 7.
+// Maintenance status is live/authoritative-sensitive (shoppers need to see
+// a maintenance window end/change promptly, and the socket broadcast in
+// notifyMaintenanceChange already handles same-tab freshness) - so the
+// maintenance-check itself always runs straight against the DB, and only
+// the resulting department payload (once we know it's neither missing nor
+// in maintenance) goes through the cache below. A department flipping
+// into maintenance is caught by the cache-namespace bump in
+// setCategoryActive/scheduleMaintenance/applyDueMaintenanceSchedules
+// anyway, but this ordering means even an unbumped cache read can never
+// serve stale content for a department that's currently down.
 exports.getDepartmentBySlug = async (slug) => {
     const category = await categoryRepository.findBySlug(slug);
     if (!category) {
@@ -87,17 +107,19 @@ exports.getDepartmentBySlug = async (slug) => {
         throw error;
     }
 
-    const [productCount, trending, recent, newCount, promotions, sponsored, featuredStores] = await Promise.all([
-        categoryRepository.countProductsByCategory(category.id),
-        categoryRepository.findTrendingByCategory(category.id, TRENDING_PREVIEW_LIMIT),
-        categoryRepository.findRecentByCategory(category.id, RECENT_PREVIEW_LIMIT),
-        categoryRepository.countRecentByCategory(category.id, NEW_WINDOW_DAYS),
-        categoryRepository.findPromotionsByCategory(category.id, SECTION_LIMIT),
-        categoryRepository.findSponsoredByCategory(category.id, SECTION_LIMIT),
-        categoryRepository.findFeaturedStoresByCategory(category.id, FEATURED_STORES_LIMIT)
-    ]);
+    return cache.getOrSet(CACHE_NAMESPACE, { fn: "getDepartmentBySlug", slug }, async () => {
+        const [productCount, trending, recent, newCount, promotions, sponsored, featuredStores] = await Promise.all([
+            categoryRepository.countProductsByCategory(category.id),
+            categoryRepository.findTrendingByCategory(category.id, TRENDING_PREVIEW_LIMIT),
+            categoryRepository.findRecentByCategory(category.id, RECENT_PREVIEW_LIMIT),
+            categoryRepository.countRecentByCategory(category.id, NEW_WINDOW_DAYS),
+            categoryRepository.findPromotionsByCategory(category.id, SECTION_LIMIT),
+            categoryRepository.findSponsoredByCategory(category.id, SECTION_LIMIT),
+            categoryRepository.findFeaturedStoresByCategory(category.id, FEATURED_STORES_LIMIT)
+        ]);
 
-    return { ...category, productCount, trending, recent, newCount, promotions, sponsored, featuredStores };
+        return { ...category, productCount, trending, recent, newCount, promotions, sponsored, featuredStores };
+    });
 };
 
 exports.createCategory = async (name, description, displayOrder) => {
@@ -109,6 +131,7 @@ exports.createCategory = async (name, description, displayOrder) => {
     }
 
     const categoryId = await categoryRepository.create(name, slug, description, displayOrder);
+    await cache.bumpVersion(CACHE_NAMESPACE);
     return { categoryId, slug };
 };
 
@@ -127,6 +150,7 @@ exports.updateCategory = async (id, name, description, displayOrder) => {
 
     const nextDisplayOrder = displayOrder === undefined ? category.display_order : displayOrder;
     await categoryRepository.update(id, name, slug, description, nextDisplayOrder);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
 exports.uploadCoverImage = async (id, file) => {
@@ -137,6 +161,7 @@ exports.uploadCoverImage = async (id, file) => {
 
     const result = await uploadToCloudinary(file.buffer, "categories/covers");
     await categoryRepository.updateCoverImage(id, result.secure_url);
+    await cache.bumpVersion(CACHE_NAMESPACE);
     return result.secure_url;
 };
 
@@ -163,6 +188,7 @@ exports.setCategoryActive = async (id, isActive, maintenanceMessage) => {
     }
 
     await categoryRepository.setActive(id, isActive, maintenanceMessage);
+    await cache.bumpVersion(CACHE_NAMESPACE);
     notifyMaintenanceChange(category, isActive ? "exited" : "entered", isActive ? null : maintenanceMessage);
 };
 
@@ -180,6 +206,7 @@ exports.deactivateDepartment = async (id) => {
     }
 
     await categoryRepository.setDeactivated(id);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 
     socket.emitToAll("department:maintenance", {
         categoryId: category.id,
@@ -203,6 +230,14 @@ exports.scheduleMaintenance = async (id, startAt, endAt, message) => {
     }
 
     const startedNow = await categoryRepository.scheduleMaintenance(id, startAt, endAt, message);
+    // Bump regardless of startedNow: even a future-dated window changes
+    // category.maintenance_scheduled_start/end, which admin views read -
+    // and the RF5 scope only caches public reads (listPublic/
+    // listDepartments/getDepartmentBySlug), none of which expose a
+    // *scheduled* window differently until it actually takes effect, so
+    // this is a low-cost, correctness-first bump rather than a
+    // meaningfully wasteful one.
+    await cache.bumpVersion(CACHE_NAMESPACE);
     if (startedNow) {
         notifyMaintenanceChange(category, "entered", message);
     }
@@ -216,6 +251,7 @@ exports.cancelScheduledMaintenance = async (id) => {
     }
 
     await categoryRepository.cancelScheduledMaintenance(id);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
 // Called by the cron job - applies every due transition and broadcasts
@@ -234,6 +270,14 @@ exports.applyDueMaintenanceSchedules = async () => {
     for (const category of dueToExit) {
         await categoryRepository.applyScheduledExit(category.id);
         notifyMaintenanceChange(category, "exited", null);
+    }
+
+    // One bump for the whole batch, not one per transition - this cron
+    // tick either changed nothing (common case, skip the Redis round
+    // trip) or changed one-or-more departments, in which case a single
+    // version bump already orphans every affected cached read.
+    if (dueToEnter.length + dueToExit.length > 0) {
+        await cache.bumpVersion(CACHE_NAMESPACE);
     }
 
     return dueToEnter.length + dueToExit.length;

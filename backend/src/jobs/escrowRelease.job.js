@@ -14,25 +14,26 @@
 // exact same "release whatever's past its hold window" sweep just
 // against booking_items instead of order_items (see migration 064).
 const walletService = require("../modules/wallet/wallet.service");
+const logger = require("../utils/logger").child({ module: "job:escrowRelease" });
 
 exports.run = async () => {
     const summary = await walletService.releaseEligibleEarnings();
 
     if (summary.released || summary.closedByDispute || summary.frozen) {
-        console.log(
-            `[escrowRelease job] released ${summary.released} item(s) ` +
-            `(${summary.amountReleased}), closed ${summary.closedByDispute} ` +
-            `item(s) already reversed by dispute, froze ${summary.frozen} ` +
-            `item(s) with an open dispute`
-        );
+        logger.info({
+            released: summary.released,
+            amountReleased: summary.amountReleased,
+            closedByDispute: summary.closedByDispute,
+            frozen: summary.frozen
+        }, "escrow release sweep (orders)");
     }
 
     const bookingSummary = await walletService.releaseEligibleBookingEarnings();
 
     if (bookingSummary.released) {
-        console.log(
-            `[escrowRelease job] released ${bookingSummary.released} booking item(s) ` +
-            `(${bookingSummary.amountReleased})`
-        );
+        logger.info({
+            released: bookingSummary.released,
+            amountReleased: bookingSummary.amountReleased
+        }, "escrow release sweep (bookings)");
     }
 };

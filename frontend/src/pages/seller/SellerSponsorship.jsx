@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
+import Button from "../../components/ui/Button";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -102,13 +103,12 @@ export default function SellerSponsorship() {
                         {campaigns.filter((c) => c.status === "active").length}
                     </p>
                 </div>
-                <button
+                <Button
                     onClick={() => setShowForm((s) => !s)}
                     disabled={myProducts.length === 0}
-                    className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-50"
                 >
                     {showForm ? "Cancel" : "Start a campaign"}
-                </button>
+                </Button>
             </div>
 
             {myProducts.length === 0 && (
@@ -127,7 +127,7 @@ export default function SellerSponsorship() {
                             required
                             value={productId}
                             onChange={(e) => setProductId(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         >
                             <option value="" disabled>Choose a product…</option>
                             {myProducts.map((p) => (
@@ -148,7 +148,7 @@ export default function SellerSponsorship() {
                             required
                             value={days}
                             onChange={(e) => setDays(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         />
                     </div>
 

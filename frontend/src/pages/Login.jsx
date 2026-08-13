@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
 
 export default function Login() {
     const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
@@ -85,13 +87,13 @@ export default function Login() {
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
 
-                    <button
+                    <Button
                         type="submit"
                         disabled={submitting || code.length !== 6}
-                        className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                        fullWidth
                     >
                         {submitting ? "Verifying…" : "Verify & sign in"}
-                    </button>
+                    </Button>
                 </form>
 
                 <div className="flex items-center justify-between mt-6 text-sm">
@@ -116,40 +118,37 @@ export default function Login() {
             <p className="text-ash text-sm mb-8">Sign in to your NEXORA account.</p>
 
             <form onSubmit={handleCredentials} className="space-y-4">
+                <Input
+                    label="Email"
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
                 <div>
-                    <label className="block text-sm mb-1">Email</label>
-                    <input
-                        type="email"
-                        required
-                        value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                </div>
-                <div>
-                    <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm">Password</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-sm font-medium text-ink">Password</label>
                         <Link to="/forgot-password" className="text-xs text-teal hover:underline">Forgot password?</Link>
                     </div>
-                    <input
+                    <Input
                         type="password"
                         required
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                 </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <button
+                <Button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                    fullWidth
+                    className="gap-2"
                 >
                     {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? "Signing in…" : "Sign in"}
-                </button>
+                </Button>
             </form>
 
             <p className="text-sm text-ash mt-6">

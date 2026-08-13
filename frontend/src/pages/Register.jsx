@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
 
 const initialForm = {
     first_name: "",
@@ -236,21 +238,22 @@ export default function Register() {
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
                     <div className="flex gap-3 pt-2">
-                        <button
+                        <Button
                             type="button"
                             onClick={() => setStep(STEP_ACCOUNT)}
-                            className="flex-1 border border-line py-2.5 rounded-md font-medium hover:bg-line/50 transition-colors focus-ring"
+                            variant="secondary"
+                            className="flex-1 hover:bg-line/50"
                         >
                             Back
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="submit"
                             disabled={submitting}
-                            className="flex-1 bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                            className="flex-1 gap-2"
                         >
                             {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                             {submitting ? "Submitting…" : "Submit for review"}
-                        </button>
+                        </Button>
                     </div>
                 </form>
             </div>
@@ -264,26 +267,30 @@ export default function Register() {
 
             <form onSubmit={handleAccountStepSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">{t("auth.firstNameLabel")}</label>
-                        <input required value={form.first_name} onChange={update("first_name")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">{t("auth.lastNameLabel")}</label>
-                        <input required value={form.last_name} onChange={update("last_name")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                    </div>
+                    <Input
+                        label={t("auth.firstNameLabel")}
+                        required
+                        value={form.first_name}
+                        onChange={update("first_name")}
+                    />
+                    <Input
+                        label={t("auth.lastNameLabel")}
+                        required
+                        value={form.last_name}
+                        onChange={update("last_name")}
+                    />
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">{t("auth.emailLabel")}</label>
-                    <input type="email" required value={form.email} onChange={update("email")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                </div>
+                <Input
+                    label={t("auth.emailLabel")}
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={update("email")}
+                />
 
                 <div>
-                    <label className="block text-sm mb-1">{t("auth.phoneLabel")}</label>
+                    <label className="block text-sm font-medium text-ink mb-1.5">{t("auth.phoneLabel")}</label>
                     <div className="flex gap-2">
                         <select
                             value={countryDial}
@@ -297,14 +304,14 @@ export default function Register() {
                                 </option>
                             ))}
                         </select>
-                        <input
+                        <Input
                             type="tel"
                             required
                             inputMode="numeric"
                             placeholder="712 345 678"
                             value={form.phone}
                             onChange={update("phone")}
-                            className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                            className="flex-1"
                         />
                     </div>
                     <p className="text-xs text-ash mt-1">
@@ -312,12 +319,15 @@ export default function Register() {
                     </p>
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">{t("auth.passwordLabel")}</label>
-                    <input type="password" required minLength={8} value={form.password} onChange={update("password")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                    <p className="text-xs text-ash mt-1">{t("auth.passwordHint")}</p>
-                </div>
+                <Input
+                    label={t("auth.passwordLabel")}
+                    type="password"
+                    required
+                    minLength={8}
+                    value={form.password}
+                    onChange={update("password")}
+                    hint={t("auth.passwordHint")}
+                />
 
                 <div>
                     <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
@@ -356,11 +366,10 @@ export default function Register() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <button type="submit" disabled={submitting}
-                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                <Button type="submit" disabled={submitting} fullWidth className="gap-2">
                     {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
-                </button>
+                </Button>
             </form>
 
             <p className="text-sm text-ash mt-6">

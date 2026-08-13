@@ -5,11 +5,12 @@
 // already handled everything.
 
 const sponsorshipService = require("../modules/sponsorship/sponsorship.service");
+const logger = require("../utils/logger").child({ module: "job:sponsorshipExpiry" });
 
 exports.run = async () => {
     const expiredCount = await sponsorshipService.expireDueCampaigns();
 
     if (expiredCount) {
-        console.log(`[sponsorshipExpiry job] expired ${expiredCount} campaign(s)`);
+        logger.info({ expiredCount }, "expired campaign(s)");
     }
 };

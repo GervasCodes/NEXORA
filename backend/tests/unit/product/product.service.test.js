@@ -1,8 +1,20 @@
 jest.mock("../../../src/modules/product/product.repository");
+jest.mock("../../../src/modules/category/category.repository");
 jest.mock("../../../src/utils/cloudinaryUpload");
+jest.mock("../../../src/modules/subscription/subscription.service");
+// Phase RF5: getOrSet calls straight through to fetchFn so this file's
+// existing repository-level assertions keep working unchanged; bumpVersion
+// is asserted directly on every write path below.
+jest.mock("../../../src/utils/cache", () => ({
+    getOrSet: jest.fn((namespace, key, fetchFn) => fetchFn()),
+    bumpVersion: jest.fn().mockResolvedValue(undefined)
+}));
 
 const productRepository = require("../../../src/modules/product/product.repository");
+const categoryRepository = require("../../../src/modules/category/category.repository");
 const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
+const subscriptionService = require("../../../src/modules/subscription/subscription.service");
+const cache = require("../../../src/utils/cache");
 const productService = require("../../../src/modules/product/product.service");
 
 // Phase 6A - Product Videos. addProductVideo mirrors the pre-existing
@@ -160,10 +172,88 @@ describe("product.service.bulkSetProductActiveBySeller (Phase A4)", () => {
         await expect(productService.bulkSetProductActiveBySeller(9, ["nope"], true)).rejects.toThrow("No products selected");
     });
 
-    it("dedupes ids and delegates ownership enforcement to the repository's UPDATE", async () => {
+    it("dedupes ids and delegates ownership enforcement to the repository's UPDATE, bumping both cache namespaces", async () => {
         const result = await productService.bulkSetProductActiveBySeller(9, [3, 3, 4], false);
 
         expect(productRepository.setActiveBulkBySeller).toHaveBeenCalledWith(9, [3, 4], false);
         expect(result).toEqual({ updated: 2 });
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+        expect(cache.bumpVersion).toHaveBeenCalledWith("categories");
+    });
+});
+
+// Phase RF5 - Redis Caching Layer.
+describe("product.service Phase RF5 caching", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it("listProducts reads through the products cache namespace with the parsed filters as the key", async () => {
+        productRepository.findAll.mockResolvedValue({ rows: [{ id: 1 }], total: 1 });
+
+        const result = await productService.listProducts({ page: "2", category_id: "5", search: "mug" });
+
+        expect(cache.getOrSet).toHaveBeenCalledWith(
+            "products",
+            expect.objectContaining({ fn: "listProducts", categoryId: "5", search: "mug", page: 2 }),
+            expect.any(Function)
+        );
+        expect(result.products).toEqual([{ id: 1 }]);
+    });
+
+    it("listFilterSellers and listFilterRegions both read through the products cache namespace", async () => {
+        productRepository.findFilterSellers.mockResolvedValue([]);
+        productRepository.findFilterRegions.mockResolvedValue([]);
+
+        await productService.listFilterSellers({ category_id: "5" });
+        await productService.listFilterRegions({ category_id: "5" });
+
+        expect(cache.getOrSet).toHaveBeenCalledWith(
+            "products",
+            { fn: "listFilterSellers", categoryId: "5" },
+            expect.any(Function)
+        );
+        expect(cache.getOrSet).toHaveBeenCalledWith(
+            "products",
+            { fn: "listFilterRegions", categoryId: "5" },
+            expect.any(Function)
+        );
+    });
+
+    it("createProduct bumps both the products and categories cache namespaces", async () => {
+        categoryRepository.findById.mockResolvedValue({ id: 5, is_active: true });
+        subscriptionService.canCreateListing.mockResolvedValue({ allowed: true });
+        productRepository.create.mockResolvedValue(42);
+
+        await productService.createProduct(1, { category_id: 5, name: "Widget", price: 10 });
+
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+        expect(cache.bumpVersion).toHaveBeenCalledWith("categories");
+    });
+
+    it("updateProduct bumps only the products namespace when the category doesn't change", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1, category_id: 5 });
+
+        await productService.updateProduct(1, 5, { name: "New name" });
+
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+        expect(cache.bumpVersion).not.toHaveBeenCalledWith("categories");
+    });
+
+    it("updateProduct bumps both namespaces when the product moves to a different category", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1, category_id: 5 });
+        categoryRepository.findById.mockResolvedValue({ id: 8, is_active: true });
+
+        await productService.updateProduct(1, 5, { category_id: 8 });
+
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+        expect(cache.bumpVersion).toHaveBeenCalledWith("categories");
+    });
+
+    it("setProductActiveBySeller bumps both the products and categories cache namespaces", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
+
+        await productService.setProductActiveBySeller(1, 5, false);
+
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+        expect(cache.bumpVersion).toHaveBeenCalledWith("categories");
     });
 });

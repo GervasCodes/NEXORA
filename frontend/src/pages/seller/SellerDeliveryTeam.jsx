@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
@@ -66,13 +67,12 @@ export default function SellerDeliveryTeam() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
                 />
-                <button
+                <Button
                     type="submit"
                     disabled={submitting}
-                    className="bg-mango text-abyss px-5 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60"
                 >
                     {submitting ? "Adding…" : "Add"}
-                </button>
+                </Button>
             </form>
 
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}

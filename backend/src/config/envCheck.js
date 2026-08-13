@@ -37,7 +37,11 @@ const KNOWN_VARS = [
     "EMAIL_HOST", "EMAIL_PORT", "EMAIL_USER", "EMAIL_PASSWORD", "EMAIL_FROM",
     "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT",
     "OSRM_BASE_URL", "OSRM_PROFILE", "OSRM_TIMEOUT_MS", "ROUTING_PROVIDER", "ROUTING_FALLBACK_ENABLED",
-    "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_RELEASE", "SENTRY_TRACES_SAMPLE_RATE"
+    "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_RELEASE", "SENTRY_TRACES_SAMPLE_RATE",
+    // Phase RF5 (red-flag remediation): Redis caching layer. All optional -
+    // omitting REDIS_URL just means the app runs uncached (see
+    // config/redis.js), never a hard failure.
+    "REDIS_URL", "REDIS_DISABLED", "REDIS_TLS_REJECT_UNAUTHORIZED", "CACHE_TTL_SECONDS"
 ];
 
 // Vars whose complete absence should be called out explicitly, not just

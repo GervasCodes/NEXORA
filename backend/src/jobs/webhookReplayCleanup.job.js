@@ -5,6 +5,7 @@
 // same reasoning as otpCleanup.job.js for otp_codes.
 
 const db = require("../config/db");
+const logger = require("../utils/logger").child({ module: "job:webhookReplayCleanup" });
 
 const RETENTION_DAYS = 2;
 
@@ -16,6 +17,6 @@ exports.run = async () => {
     );
 
     if (result.affectedRows) {
-        console.log(`[webhookReplayCleanup job] removed ${result.affectedRows} old webhook replay-guard record(s)`);
+        logger.info({ removed: result.affectedRows }, "removed old webhook replay-guard record(s)");
     }
 };

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import ProductCard from "./ProductCard";
+import EmptyState from "./ui/EmptyState";
+import ErrorState from "./ui/ErrorState";
 
 const PAGE_SIZE = 24;
 const VIEW_STORAGE_KEY = "nexora_product_view";
@@ -53,6 +55,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
     const [layout, setLayout] = useState(readStoredView);
+    const [retryCount, setRetryCount] = useState(0);
     const sentinelRef = useRef(null);
 
     const changeLayout = (next) => {
@@ -80,7 +83,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
             .catch(() => setError("Couldn't load products right now."))
             .finally(() => setLoading(false));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [paramsKey]);
+    }, [paramsKey, retryCount]);
 
     const loadMore = useCallback(() => {
         if (loading || loadingMore || page >= totalPages) return;
@@ -141,7 +144,15 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         </div>
     );
 
-    if (error) return <p className="text-coral">{error}</p>;
+    if (error) {
+        return (
+            <ErrorState
+                title="Couldn't load products"
+                hint={error}
+                onRetry={() => setRetryCount((n) => n + 1)}
+            />
+        );
+    }
 
     if (loading) {
         return (
@@ -156,16 +167,11 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
 
     if (products.length === 0) {
         return (
-            <div className="text-center py-24">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-line/40 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7 text-ash">
-                        <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-                    </svg>
-                </div>
-                <p className="font-display text-xl mb-1">{emptyTitle || "Nothing here yet"}</p>
-                <p className="text-ash text-sm">{emptyHint || "Try a different search or check back soon."}</p>
-                {emptyAction}
-            </div>
+            <EmptyState
+                title={emptyTitle || "Nothing here yet"}
+                hint={emptyHint || "Try a different search or check back soon."}
+                action={emptyAction}
+            />
         );
     }
 

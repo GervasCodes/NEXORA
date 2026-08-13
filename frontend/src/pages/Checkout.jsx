@@ -6,6 +6,8 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import LocationPicker from "../components/LocationPicker";
 import PhoneInput from "../components/PhoneInput";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
 
 const initialForm = {
     shipping_address: "",
@@ -233,23 +235,26 @@ export default function Checkout() {
             <form onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
-                <div>
-                    <label className="block text-sm mb-1">Street address</label>
-                    <input required value={form.shipping_address} onChange={update("shipping_address")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring transition-colors focus:border-teal" />
-                </div>
+                <Input
+                    label="Street address"
+                    required
+                    value={form.shipping_address}
+                    onChange={update("shipping_address")}
+                />
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">City</label>
-                        <input required value={form.shipping_city} onChange={update("shipping_city")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring transition-colors focus:border-teal" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Region</label>
-                        <input required value={form.shipping_region} onChange={update("shipping_region")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring transition-colors focus:border-teal" />
-                    </div>
+                    <Input
+                        label="City"
+                        required
+                        value={form.shipping_city}
+                        onChange={update("shipping_city")}
+                    />
+                    <Input
+                        label="Region"
+                        required
+                        value={form.shipping_region}
+                        onChange={update("shipping_region")}
+                    />
                 </div>
 
                 <div>
@@ -293,11 +298,10 @@ export default function Checkout() {
                     </p>
                 )}
 
-                <button type="submit" disabled={busy}
-                    className="w-full bg-mango text-abyss py-3 rounded-md font-medium hover:bg-mango-dark active:scale-[0.99] transition-all focus-ring disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                <Button type="submit" disabled={busy} fullWidth className="gap-2 active:scale-[0.99]">
                     {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(total)}`}
-                </button>
+                </Button>
             </form>
 
             <div className="md:col-span-2 animate-slide-up" style={{ animationDelay: "80ms" }}>

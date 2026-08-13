@@ -148,7 +148,7 @@ export default function DeliveryTrackingMap({ agentPos, pickup, destination, hei
                 <div
                     className={
                         isFullscreen
-                            ? "relative bg-white overflow-hidden w-full h-full sm:h-[90vh] sm:max-w-5xl sm:rounded-md border border-line"
+                            ? "relative bg-paper overflow-hidden w-full h-full sm:h-[90vh] sm:max-w-5xl sm:rounded-md border border-line"
                             : "relative w-full h-full"
                     }
                 >
@@ -159,7 +159,7 @@ export default function DeliveryTrackingMap({ agentPos, pickup, destination, hei
                         onClick={toggleFullscreen}
                         aria-label={t(isFullscreen ? "delivery.tracking.exitFullscreen" : "delivery.tracking.viewFullscreen")}
                         title={t(isFullscreen ? "delivery.tracking.exitFullscreen" : "delivery.tracking.viewFullscreen")}
-                        className="absolute top-2 right-2 z-[1000] bg-white/95 hover:bg-white text-ink rounded-md p-1.5 shadow-md border border-line transition-colors focus-ring"
+                        className="absolute top-2 right-2 z-[1000] bg-paper/95 hover:bg-paper text-ink rounded-md p-1.5 shadow-md border border-line transition-colors focus-ring"
                     >
                         {isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
                     </button>

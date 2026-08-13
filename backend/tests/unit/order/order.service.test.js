@@ -59,23 +59,41 @@ describe("order.service.checkout", () => {
 
     it("rejects when a cart item's product no longer exists", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ name: "Ghost Item" })]);
-        cartRepository.findProductById.mockResolvedValue(undefined);
+        cartRepository.findProductsByIds.mockResolvedValue([]);
 
         await expect(orderService.checkout(1, {})).rejects.toThrow('"Ghost Item" is no longer available');
     });
 
     it("rejects when the product has been deactivated", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ name: "Discontinued" })]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ is_active: 0 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ is_active: 0 })]);
 
         await expect(orderService.checkout(1, {})).rejects.toThrow('"Discontinued" is no longer available');
     });
 
     it("rejects when the requested quantity exceeds stock", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ name: "Widget", quantity: 10 })]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ stock: 3 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ stock: 3 })]);
 
         await expect(orderService.checkout(1, {})).rejects.toThrow('Only 3 of "Widget" left in stock');
+    });
+
+    it("looks up every cart product in a single batched query instead of one per item", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 }),
+            cartRow({ product_id: 2, seller_id: 10, quantity: 1, price: 500 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([
+            productRow({ id: 1, price: 1000, stock: 5 }),
+            productRow({ id: 2, price: 500, stock: 5 })
+        ]);
+        orderRepository.createOrder.mockResolvedValue(99);
+
+        await orderService.checkout(1, {});
+
+        expect(cartRepository.findProductsByIds).toHaveBeenCalledTimes(1);
+        expect(cartRepository.findProductsByIds).toHaveBeenCalledWith([1, 2]);
+        expect(cartRepository.findProductById).not.toHaveBeenCalled();
     });
 
     it("creates a single standalone order when all items share one vendor", async () => {
@@ -83,9 +101,10 @@ describe("order.service.checkout", () => {
             cartRow({ product_id: 1, seller_id: 10, quantity: 2, price: 1000 }),
             cartRow({ product_id: 2, seller_id: 10, quantity: 1, price: 500 })
         ]);
-        cartRepository.findProductById
-            .mockResolvedValueOnce(productRow({ id: 1, price: 1000, stock: 5 }))
-            .mockResolvedValueOnce(productRow({ id: 2, price: 500, stock: 5 }));
+        cartRepository.findProductsByIds.mockResolvedValue([
+            productRow({ id: 1, price: 1000, stock: 5 }),
+            productRow({ id: 2, price: 500, stock: 5 })
+        ]);
         orderRepository.createOrder.mockResolvedValue(99);
 
         const result = await orderService.checkout(1, { city: "Dar es Salaam" });
@@ -113,10 +132,11 @@ describe("order.service.checkout", () => {
             cartRow({ product_id: 2, seller_id: 20, quantity: 2, price: 300 }),
             cartRow({ product_id: 3, seller_id: 10, quantity: 1, price: 200 })
         ]);
-        cartRepository.findProductById
-            .mockResolvedValueOnce(productRow({ id: 1, price: 1000, stock: 5 }))
-            .mockResolvedValueOnce(productRow({ id: 2, price: 300, stock: 5 }))
-            .mockResolvedValueOnce(productRow({ id: 3, price: 200, stock: 5 }));
+        cartRepository.findProductsByIds.mockResolvedValue([
+            productRow({ id: 1, price: 1000, stock: 5 }),
+            productRow({ id: 2, price: 300, stock: 5 }),
+            productRow({ id: 3, price: 200, stock: 5 })
+        ]);
         orderRepository.createSplitOrder.mockResolvedValue({ parentOrderId: 500, childOrders: [] });
 
         const result = await orderService.checkout(1, {});
@@ -150,7 +170,7 @@ describe("order.service.checkout", () => {
         cartRepository.getCartByUser.mockResolvedValue([
             cartRow({ product_id: 1, seller_id: 10, quantity: 2, price: 1000, discount_price: 750 })
         ]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ id: 1, price: 1000, discount_price: 750, stock: 5 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1, price: 1000, discount_price: 750, stock: 5 })]);
         orderRepository.createOrder.mockResolvedValue(1);
 
         const result = await orderService.checkout(1, {});
@@ -165,9 +185,7 @@ describe("order.service.checkout", () => {
             cartRow({ product_id: 1, seller_id: 10 }),
             cartRow({ product_id: 2, seller_id: 20 })
         ]);
-        cartRepository.findProductById
-            .mockResolvedValueOnce(productRow({ id: 1 }))
-            .mockResolvedValueOnce(productRow({ id: 2 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 }), productRow({ id: 2 })]);
         orderRepository.createSplitOrder.mockResolvedValue({ parentOrderId: 7, childOrders: [] });
 
         await orderService.checkout(1, {});
@@ -183,7 +201,7 @@ describe("order.service.checkout", () => {
 
     it("sends the single-vendor notification message key for standalone orders", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10 })]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ id: 1 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
         orderRepository.createOrder.mockResolvedValue(42);
 
         await orderService.checkout(1, {});
@@ -199,7 +217,7 @@ describe("order.service.checkout", () => {
 
     it("does not let a fraud-evaluation failure fail or block checkout", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10 })]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ id: 1 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
         orderRepository.createOrder.mockResolvedValue(1);
         fraudService.evaluateOrder.mockRejectedValue(new Error("fraud service down"));
 
@@ -210,7 +228,7 @@ describe("order.service.checkout", () => {
 
     it("notifies admins via socket after a successful checkout", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10 })]);
-        cartRepository.findProductById.mockResolvedValue(productRow({ id: 1 }));
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
         orderRepository.createOrder.mockResolvedValue(1);
 
         await orderService.checkout(1, {});

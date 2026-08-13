@@ -6,6 +6,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
+import Input from "../components/ui/Input";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -290,7 +291,7 @@ export default function DisputeDetail() {
                         </select>
 
                         {resolution === "refund_partial" && (
-                            <input
+                            <Input
                                 type="number"
                                 required
                                 min="1"
@@ -298,16 +299,16 @@ export default function DisputeDetail() {
                                 placeholder="Refund amount"
                                 value={refundAmount}
                                 onChange={(e) => setRefundAmount(e.target.value)}
-                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                             />
                         )}
 
-                        <textarea
+                        <Input
+                            as="textarea"
                             rows={2}
                             placeholder="Optional note to buyer & seller"
                             value={resolutionNote}
                             onChange={(e) => setResolutionNote(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
+                            className="resize-none"
                         />
 
                         <button
@@ -325,13 +326,14 @@ export default function DisputeDetail() {
                         </button>
                     ) : (
                         <form onSubmit={reject} className="space-y-2">
-                            <textarea
+                            <Input
+                                as="textarea"
                                 required
                                 rows={2}
                                 placeholder="Reason for rejecting"
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
-                                className="w-full border border-coral/40 rounded-md px-3 py-2 text-sm focus-ring resize-none"
+                                className="resize-none !border-coral/40"
                             />
                             <div className="flex gap-2">
                                 <button
@@ -389,12 +391,13 @@ export default function DisputeDetail() {
 
                 {canMessage ? (
                     <form onSubmit={sendMessage} className="space-y-2">
-                        <textarea
+                        <Input
+                            as="textarea"
                             rows={2}
                             placeholder={`Reply as ${senderRole}…`}
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
+                            className="resize-none"
                         />
                         <button
                             type="submit"

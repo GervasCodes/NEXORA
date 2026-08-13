@@ -1,5 +1,6 @@
 const db = require("../../config/db");
 const featuredStoreRepository = require("./featuredStore.repository");
+const logger = require("../../utils/logger").child({ module: "featuredStore" });
 const productRepository = require("../product/product.repository");
 const categoryRepository = require("../category/category.repository");
 const walletRepository = require("../wallet/wallet.repository");
@@ -119,7 +120,7 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
             messageKey: "notifications.featuredStore.started.message",
             messageParams: { categoryName: category.name, days: parsedDays, amount: totalCost },
             withEmail: false
-        }).catch((err) => console.error("featured store start notify error:", err));
+        }).catch((err) => logger.warn({ err }, "featured store start notify error"));
 
         return { campaignId, totalCost, balance: balanceAfter, endsAt };
 
@@ -198,7 +199,7 @@ exports.expireDueCampaigns = async () => {
                 messageKey: "notifications.featuredStore.expired.message",
                 messageParams: { categoryName: campaign.category_name },
                 withEmail: false
-            }).catch((err) => console.error("featured store expiry notify error:", err));
+            }).catch((err) => logger.warn({ err }, "featured store expiry notify error"));
         }
 
         return due.length;

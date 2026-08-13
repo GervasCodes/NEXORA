@@ -46,7 +46,7 @@ export default function NexoraSmartSearch({ onApply }) {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="Try “running shoes under 50,000 TZS” — ask Nexora AI"
-                    className="flex-1 bg-transparent outline-none text-sm placeholder:text-ash"
+                    className="flex-1 bg-transparent focus-ring text-sm placeholder:text-ash"
                 />
                 <button
                     type="submit"

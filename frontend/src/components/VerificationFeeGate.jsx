@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Button from "./ui/Button";
 import { useLocation, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { formatMoney } from "../utils/format";
@@ -172,10 +173,9 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
                         disabled={awaitingConfirmation}
                     />
                 </div>
-                <button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation}
-                    className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-60">
+                <Button type="submit" disabled={busy === "mobile_money" || awaitingConfirmation} fullWidth>
                     {busy === "mobile_money" ? "Sending prompt…" : awaitingConfirmation ? "Awaiting confirmation…" : `Pay ${formatMoney(requiredFee)} via mobile money`}
-                </button>
+                </Button>
             </form>
 
             <div className="flex items-center gap-2 text-xs text-ash mb-4">

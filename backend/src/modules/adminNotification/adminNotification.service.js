@@ -1,5 +1,7 @@
 const adminNotificationRepository = require("./adminNotification.repository");
 const pushService = require("../push/push.service");
+const logger = require("../../utils/logger").child({ module: "adminNotification" });
+const Sentry = require("../../config/sentry");
 
 // Fire-and-forget by design, same pattern as audit.service.js#log and
 // fraud.service.js's evaluateOrder/evaluateWithdrawal: raising an admin
@@ -43,10 +45,11 @@ exports.notify = ({ type, category, severity, title, message, metadata, relatedU
 
             pushService
                 .sendToAdmins({ title, body: message, type, category, severity: severity || "info" })
-                .catch((err) => console.error("Push send error (adminNotify):", err.message));
+                .catch((err) => logger.warn({ err, type }, "push send error (adminNotify)"));
         })
         .catch((err) => {
-            console.error(`[adminNotification] failed to record "${type}":`, err.message);
+            logger.error({ err, type }, "failed to record admin notification");
+            Sentry.captureException(err, { tags: { area: "adminNotification" }, extra: { type } });
         });
 };
 

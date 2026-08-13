@@ -1,4 +1,5 @@
 const cloudinary = require("../config/cloudinary");
+const logger = require("./logger").child({ module: "cloudinary-delete" });
 
 // Nothing in the schema stores a Cloudinary public_id or resource_type
 // separately - every table that references an uploaded asset
@@ -46,7 +47,7 @@ exports.deleteFromCloudinary = async (url) => {
         return true;
 
     } catch (error) {
-        console.error(`[cloudinary] failed to delete "${parsed.publicId}":`, error.message);
+        logger.warn({ err: error, publicId: parsed.publicId }, "failed to delete cloudinary asset");
         return false;
     }
 };

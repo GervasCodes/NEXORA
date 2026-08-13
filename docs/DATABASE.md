@@ -19,11 +19,11 @@ see `backend/.env.example`.
 
 ## Schema overview
 
-60 migrations as of Phase 7 (Documentation) of the admin/notification/
-messaging trust upgrade, grouped by domain. This is a map of what
-each migration added, not a full column reference — for exact columns,
-types, and constraints, read the migration file itself
-(`database/migrations/NNN_*.sql`), which is the single source of truth.
+82 migrations as of Phase RF6 (API & Architecture Docs), grouped by
+domain. This is a map of what each migration added, not a full column
+reference — for exact columns, types, and constraints, read the
+migration file itself (`database/migrations/NNN_*.sql`), which is the
+single source of truth.
 
 **Core catalog & accounts** (`001`–`004`)
 `users`, `categories`, `seller_profiles`, `products`.
@@ -177,6 +177,83 @@ No other schema change - the new `GET /settings/monetization-status`
 endpoint (seller-facing counterpart to the admin-only
 `GET /admin/monetization`) reads the same `platform_settings` rows
 `079` already added.
+
+**Nexora AI foundation — Phase B1** (`081`)
+`ai_usage_log` (new table) — one row per AI provider call, not a running
+counter, the same append-only reasoning as `wallet_transactions`/
+`audit_log`. Lets the spend guard (`ai.service.js#checkSpendGuard`) sum
+tokens over any window (today, this month) with a plain `SUM` query, and
+gives admins a real trail if usage needs investigating later. `user_id` is
+nullable because several B1 endpoints (FAQ chat, smart search) are public
+and only personalize if a buyer happens to be signed in (same "optional
+buyer" shape as `recommendation.controller.js`) — anonymous usage still
+counts toward the *global* cap, just not any per-user one. `feature` is a
+short tag (`chat` / `search` / `recommend` / `order_status`) for future
+per-feature usage/cost reporting, not enforced anywhere yet. Two supporting
+indexes: `(user_id, created_at)` and `(created_at)`, backing the spend
+guard's two query shapes ("this user, since `<date>`" and "everyone, since
+`<date>`").
+
+No new settings table — the AI master switch and the four spend caps live
+as five new rows in the existing `platform_settings` EAV table (`017`):
+`ai_enabled`, `ai_daily_token_cap_per_user`, `ai_monthly_token_cap_per_user`,
+`ai_daily_token_cap_global`, `ai_monthly_token_cap_global`. See
+`settings.service.js` `DEFAULTS` for the fallback values on an environment
+that hasn't run this migration yet.
+
+**Red-flag remediation — DB indexing (`RF4`)** (`082`)
+One new composite index, no new tables: `orders (buyer_id, created_at)`,
+backing `order.repository.js#findOrdersByBuyer`'s
+`WHERE buyer_id = ? AND parent_order_id IS NULL ORDER BY created_at DESC`.
+Before this migration, `orders.buyer_id` only had the single-column index
+InnoDB creates implicitly for its FK constraint — enough to find a buyer's
+rows, but MySQL still had to sort them by `created_at` afterwards (a
+filesort) once a buyer's order history grew. Verified against a real MySQL
+instance seeded with ~32,000 orders: `EXPLAIN` moved from
+`type: index_merge` + `Using filesort` to `type: ref` + no filesort. See
+`README-phase-RF4.md` for the full before/after `EXPLAIN` output.
+
+Deliberately **no equivalent seller-side index** in this migration —
+`findOrdersBySeller` filters via a JOIN on `order_items.seller_id` (already
+indexed via its own FK constraint) and only reaches `orders.created_at`
+*after* that join, with a `DISTINCT` on top: a different enough query shape
+that a composite index on `orders` itself wouldn't be used the same way.
+That one needs its own `EXPLAIN` investigation against real data volume
+before proposing an index, not a guess.
+
+## Connection pool (RF4)
+
+`backend/src/config/db.js`'s mysql2 pool size is configurable via
+`DB_POOL_CONNECTION_LIMIT` (falls back to `10` if unset — default
+behavior is unchanged from before RF4). The pool emits mysql2's
+`enqueue` event exactly when a query has to wait for a free connection
+instead of getting one immediately; this is wired to `logger.warn` +
+`Sentry.captureMessage` (tagged `area: db-pool`), throttled to once per
+30 seconds so a sustained burst produces one alert, not a flood. Treat
+that warning, not a guess, as the signal for when
+`DB_POOL_CONNECTION_LIMIT` needs raising — and note that your DB
+provider's own total-connection ceiling applies across your whole
+account, so raising this on a multi-instance deployment multiplies per
+instance rather than adding once. See `docs/DEPLOYMENT.md`'s
+Observability section for the full detail.
+
+## Caching (Redis, RF5)
+
+Category/department listings and product browse/search results
+(`category.service.js#listPublic/listDepartments/getDepartmentBySlug`,
+`product.service.js#listProducts` and its filter-metadata endpoints) are
+read through `backend/src/utils/cache.js`, backed by
+`backend/src/config/redis.js` (`ioredis`, only active when `REDIS_URL`
+is set — no Redis in local dev/CI, no code path changes without it).
+TTL is 30–60s (default `45`, via `CACHE_TTL_SECONDS`). This is a caching
+layer in front of the schema below, not a schema change — RF5 added
+**no migration**. Keys are versioned (`<namespace>:v<version>:<...>`);
+a write bumps the namespace's version counter rather than deleting
+individual keys, orphaning every previously-cached entry for that
+namespace at once. Product detail, cart, checkout, payments, wallet,
+and all admin/seller-only listings are deliberately **not** cached —
+see `README-phase-RF5.md` for the full scope table and the reasoning
+behind each exclusion.
 
 ## Testing against the database
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Button from "./ui/Button";
 import api, { extractErrorMessage } from "../api/client";
 
 const STARS = [1, 2, 3, 4, 5];
@@ -82,13 +83,12 @@ export default function DeliveryAgentRating({ orderId, existingRating, onRated }
 
             {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
 
-            <button
+            <Button
                 type="submit"
                 disabled={submitting}
-                className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
             >
                 {submitting ? "Submitting…" : "Submit rating"}
-            </button>
+            </Button>
         </form>
     );
 }

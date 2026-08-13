@@ -1,5 +1,7 @@
 const cron = require("node-cron");
 const { withLock } = require("../utils/dbLock");
+const logger = require("../utils/logger").child({ module: "jobs" });
+const Sentry = require("../config/sentry");
 
 const staleOrdersJob = require("./staleOrders.job");
 const otpCleanupJob = require("./otpCleanup.job");
@@ -27,10 +29,11 @@ const safeRun = (name, job) => async () => {
     try {
         const { acquired } = await withLock(`nexora:job:${name}`, () => job.run());
         if (!acquired) {
-            console.log(`[jobs] ${name} skipped this tick - lock held by another instance`);
+            logger.debug({ job: name }, "skipped this tick - lock held by another instance");
         }
     } catch (error) {
-        console.error(`[jobs] ${name} failed:`, error.message);
+        logger.error({ err: error, job: name }, "job failed");
+        Sentry.captureException(error, { tags: { area: "jobs", job: name } });
     }
 };
 
@@ -95,5 +98,7 @@ exports.startJobs = () => {
     // than the replay window matters for - see webhookReplayCleanup.job.js.
     cron.schedule("10 3 * * *", safeRun("webhookReplayCleanup", webhookReplayCleanupJob));
 
-    console.log("[jobs] background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute)");
+    logger.info(
+        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute)"
+    );
 };

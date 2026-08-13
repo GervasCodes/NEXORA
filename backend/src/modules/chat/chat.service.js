@@ -1,4 +1,5 @@
 const chatRepository = require("./chat.repository");
+const logger = require("../../utils/logger").child({ module: "chat" });
 const notificationService = require("../notification/notification.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
@@ -176,7 +177,7 @@ exports.sendMessage = async (conversationId, senderId, message, attachment) => {
                 messageParams: { preview },
                 url: `/messages/${conversationId}`
             })
-            .catch((error) => console.error("Message notification error:", error.message));
+            .catch((error) => logger.warn({ err: error, conversationId }, "message notification error"));
     });
 
     return saved;

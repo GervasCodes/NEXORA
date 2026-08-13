@@ -6,6 +6,7 @@ import { useCart } from "../context/CartContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
+import Button from "../components/ui/Button";
 import RecommendedProducts from "../components/RecommendedProducts";
 
 export default function ProductDetail() {
@@ -238,12 +239,11 @@ export default function ProductDetail() {
                                 onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
                                 className="w-20 border border-line rounded-md px-3 py-2 text-sm focus-ring"
                             />
-                            <button
+                            <Button
                                 onClick={handleAddToCart}
-                                className="bg-mango text-abyss px-6 py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring"
                             >
                                 Add to cart
-                            </button>
+                            </Button>
                         </div>
                     ) : (
                         <p className="text-coral font-medium mb-3">Out of stock</p>
@@ -309,13 +309,13 @@ export default function ProductDetail() {
                         />
                         {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
                         <div className="flex gap-3">
-                            <button
+                            <Button
                                 type="submit"
                                 disabled={submittingReview}
-                                className="bg-mango text-abyss px-5 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-50"
+                                size="sm"
                             >
                                 {submittingReview ? "Submitting…" : "Submit review"}
-                            </button>
+                            </Button>
                             <button
                                 type="button"
                                 onClick={() => setShowReviewForm(false)}

@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import MaintenanceScreen from "../../components/MaintenanceScreen";
+import Button from "../../components/ui/Button";
 
 const WITHDRAWAL_STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -102,12 +103,11 @@ export default function SellerWallet() {
                         </div>
                     )}
                 </div>
-                <button
+                <Button
                     onClick={() => setShowForm((s) => !s)}
-                    className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors"
                 >
                     {showForm ? "Cancel" : "Withdraw funds"}
-                </button>
+                </Button>
             </div>
 
             {showForm && (
@@ -123,7 +123,7 @@ export default function SellerWallet() {
                             required
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         />
                     </div>
 
@@ -132,7 +132,7 @@ export default function SellerWallet() {
                         <select
                             value={payoutMethod}
                             onChange={(e) => setPayoutMethod(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         >
                             <option value="mobile_money">Mobile money</option>
                             <option value="bank_transfer">Bank transfer</option>
@@ -144,7 +144,7 @@ export default function SellerWallet() {
                         <select
                             value={payoutCurrency}
                             onChange={(e) => setPayoutCurrency(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         >
                             <option value="TZS">TZS</option>
                             <option value="USD">USD (converted at today's platform rate)</option>
@@ -160,7 +160,7 @@ export default function SellerWallet() {
                             required
                             value={payoutDetails}
                             onChange={(e) => setPayoutDetails(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                             placeholder={payoutMethod === "mobile_money" ? "e.g. 0712 345 678" : "Bank, account name & number"}
                         />
                     </div>

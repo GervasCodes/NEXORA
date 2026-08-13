@@ -1,4 +1,6 @@
 const auditRepository = require("./audit.repository");
+const logger = require("../../utils/logger").child({ module: "audit" });
+const Sentry = require("../../config/sentry");
 
 // Fire-and-forget by design, same pattern as fraudService.evaluateOrder()
 // in order.service.js: audit logging must never delay or fail the
@@ -7,7 +9,8 @@ const auditRepository = require("./audit.repository");
 // than surface it to the user or roll back the real action.
 exports.log = (event) => {
     auditRepository.insertLog(event).catch((err) => {
-        console.error(`[audit] failed to record "${event.eventType}":`, err.message);
+        logger.error({ err, eventType: event.eventType }, "failed to record audit log");
+        Sentry.captureException(err, { tags: { area: "audit" }, extra: { eventType: event.eventType } });
     });
 };
 

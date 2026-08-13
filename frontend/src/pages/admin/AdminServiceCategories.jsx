@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 const emptyForm = { name: "", description: "", display_order: 0 };
 
@@ -117,10 +118,9 @@ export default function AdminServiceCategories() {
                     onChange={(e) => setForm({ ...form, display_order: Number(e.target.value) })}
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring w-20"
                 />
-                <button type="submit" disabled={submitting}
-                    className="bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60">
+                <Button type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : editingId ? "Save changes" : "Add category"}
-                </button>
+                </Button>
                 {editingId && (
                     <button type="button" onClick={cancelEdit} className="text-sm text-ash hover:text-ink px-2 py-2">
                         Cancel
@@ -163,13 +163,14 @@ export default function AdminServiceCategories() {
                             Edit
                         </button>
 
-                        <button
+                        <Button
                             onClick={() => toggleActive(c)}
                             disabled={busyId === c.id}
-                            className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                            variant="secondary"
+                            size="sm"
                         >
                             {c.is_active ? "Hide" : "Show"}
-                        </button>
+                        </Button>
                     </li>
                 ))}
             </ul>

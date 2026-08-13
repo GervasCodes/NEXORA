@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
+import Input from "./ui/Input";
 
 
 const RATING_OPTIONS = [4, 3, 2, 1];
@@ -128,41 +129,33 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
 
     return (
         <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-line">
-            <div className="flex flex-col gap-1">
-                <label htmlFor="filter-min-price" className="text-xs text-ash">
-                    {t("filters.minPrice")} ({currency})
-                </label>
-                <input
-                    id="filter-min-price"
-                    type="number"
-                    min="0"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={minInput}
-                    onChange={(e) => setMinInput(e.target.value)}
-                    onBlur={handleApply}
-                    onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                    className="w-28 border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
-                />
-            </div>
+            <Input
+                id="filter-min-price"
+                label={`${t("filters.minPrice")} (${currency})`}
+                type="number"
+                min="0"
+                inputMode="decimal"
+                placeholder="0"
+                value={minInput}
+                onChange={(e) => setMinInput(e.target.value)}
+                onBlur={handleApply}
+                onKeyDown={(e) => e.key === "Enter" && handleApply()}
+                className="w-28 !py-1.5"
+            />
 
-            <div className="flex flex-col gap-1">
-                <label htmlFor="filter-max-price" className="text-xs text-ash">
-                    {t("filters.maxPrice")} ({currency})
-                </label>
-                <input
-                    id="filter-max-price"
-                    type="number"
-                    min="0"
-                    inputMode="decimal"
-                    placeholder={t("filters.noLimit")}
-                    value={maxInput}
-                    onChange={(e) => setMaxInput(e.target.value)}
-                    onBlur={handleApply}
-                    onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                    className="w-28 border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
-                />
-            </div>
+            <Input
+                id="filter-max-price"
+                label={`${t("filters.maxPrice")} (${currency})`}
+                type="number"
+                min="0"
+                inputMode="decimal"
+                placeholder={t("filters.noLimit")}
+                value={maxInput}
+                onChange={(e) => setMaxInput(e.target.value)}
+                onBlur={handleApply}
+                onKeyDown={(e) => e.key === "Enter" && handleApply()}
+                className="w-28 !py-1.5"
+            />
 
             {!singleStore && (
                 <div className="flex flex-col gap-1">

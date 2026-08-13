@@ -8,6 +8,7 @@ import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
 import TrackingWidget from "../components/TrackingWidget";
 import PageLoader from "../components/PageLoader";
+import Button from "../components/ui/Button";
 import { useAIAssistant } from "../context/AIAssistantContext";
 
 const CANCELLABLE = ["pending", "processing"];
@@ -418,28 +419,24 @@ export default function OrderDetail() {
 
             <div className="flex flex-wrap gap-3">
                 {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
-                    <button onClick={handleRetryPayment} disabled={busy}
-                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    <Button onClick={handleRetryPayment} disabled={busy}>
                         {busy ? "Processing…" : "Pay with Mobile Money"}
-                    </button>
+                    </Button>
                 )}
                 {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "snippe" && order.payment_status === "unpaid" && (
-                    <button onClick={handleRetrySnippe} disabled={busy}
-                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    <Button onClick={handleRetrySnippe} disabled={busy}>
                         {busy ? "Redirecting…" : "Pay with Card (Snippe)"}
-                    </button>
+                    </Button>
                 )}
                 {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "malipopay_card" && order.payment_status === "unpaid" && (
-                    <button onClick={handleRetryMalipopayCard} disabled={busy}
-                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    <Button onClick={handleRetryMalipopayCard} disabled={busy}>
                         {busy ? "Redirecting…" : "Pay with Card (MalipoPay)"}
-                    </button>
+                    </Button>
                 )}
                 {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "paypal" && order.payment_status === "unpaid" && (
-                    <button onClick={handleRetryPaypal} disabled={busy}
-                        className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                    <Button onClick={handleRetryPaypal} disabled={busy}>
                         {busy ? "Redirecting…" : "Pay with PayPal"}
-                    </button>
+                    </Button>
                 )}
                 {!order.parent_order_id && CANCELLABLE.includes(order.status) && (
                     <button onClick={handleCancel} disabled={busy}

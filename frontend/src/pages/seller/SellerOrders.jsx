@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function SellerOrders() {
     const [orders, setOrders] = useState([]);
@@ -61,20 +62,22 @@ export default function SellerOrders() {
                         <div className="flex items-center gap-2 flex-wrap">
                             {order.status === "pending" && (
                                 <>
-                                    <button
+                                    <Button
                                         onClick={() => updateStatus(order.id, "processing")}
                                         disabled={busyId === order.id}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         Accept
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                         onClick={() => updateStatus(order.id, "cancelled")}
                                         disabled={busyId === order.id}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         Reject
-                                    </button>
+                                    </Button>
                                 </>
                             )}
 
@@ -101,31 +104,34 @@ export default function SellerOrders() {
                                             Add a delivery agent to your roster to ship Cash on Delivery orders
                                         </span>
                                     )}
-                                    <button
+                                    <Button
                                         onClick={() => updateStatus(order.id, "shipped", shipChoice[order.id])}
                                         disabled={busyId === order.id || (order.payment_method === "cash_on_delivery" && !shipChoice[order.id])}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         Mark shipped
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                         onClick={() => updateStatus(order.id, "cancelled")}
                                         disabled={busyId === order.id}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         Cancel
-                                    </button>
+                                    </Button>
                                 </>
                             )}
 
                             {order.status === "shipped" && (
-                                <button
+                                <Button
                                     onClick={() => updateStatus(order.id, "delivered")}
                                     disabled={busyId === order.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    variant="secondary"
+                                    size="sm"
                                 >
                                     Mark delivered
-                                </button>
+                                </Button>
                             )}
 
                             {order.status === "delivered" && order.payment_status === "unpaid" && (

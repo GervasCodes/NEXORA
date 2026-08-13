@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 const PAGE_SIZE = 20;
 
@@ -160,20 +161,24 @@ export default function AdminProducts() {
             {selectedIds.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 border border-line bg-line/20 rounded-lg px-4 py-2.5 mb-4">
                     <p className="text-xs font-medium">{selectedIds.length} selected</p>
-                    <button
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => bulkSetActive(true)}
                         disabled={bulkBusy}
-                        className="text-xs border border-line px-3 py-1.5 rounded-md bg-white hover:border-ink transition-colors disabled:opacity-50"
+                        className="bg-paper"
                     >
                         Restore selected
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => bulkSetActive(false)}
                         disabled={bulkBusy}
-                        className="text-xs border border-line px-3 py-1.5 rounded-md bg-white hover:border-ink transition-colors disabled:opacity-50"
+                        className="bg-paper"
                     >
                         Remove selected
-                    </button>
+                    </Button>
                     <button
                         onClick={() => setSelectedIds([])}
                         disabled={bulkBusy}
@@ -233,21 +238,23 @@ export default function AdminProducts() {
                                     </span>
                                 ) : null}
 
-                                <button
+                                <Button
                                     onClick={() => toggleSponsored(p)}
                                     disabled={busyId === p.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    variant="secondary"
+                                    size="sm"
                                 >
                                     {p.is_sponsored ? "Unsponsor" : "Sponsor"}
-                                </button>
+                                </Button>
 
-                                <button
+                                <Button
                                     onClick={() => toggleActive(p)}
                                     disabled={busyId === p.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    variant="secondary"
+                                    size="sm"
                                 >
                                     {p.is_active ? "Remove" : "Restore"}
-                                </button>
+                                </Button>
                             </div>
                         ))}
                     </div>

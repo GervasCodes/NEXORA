@@ -2,6 +2,8 @@ const routingConfig = require("../../config/routing");
 const osrmProvider = require("./providers/osrm.provider");
 const fallbackProvider = require("./providers/fallback.provider");
 const { RoutingProviderError } = require("./routingError");
+const logger = require("../../utils/logger").child({ module: "routing" });
+const Sentry = require("../../config/sentry");
 
 const PROVIDERS = {
     osrm: osrmProvider,
@@ -69,9 +71,14 @@ exports.getRoute = async ({ originLat, originLng, destLat, destLng, vehicleType 
             throw error;
         }
 
-        console.error(
-            `[routing] ${primaryName} provider failed (${error.reason}): ${error.message} - falling back to straight-line estimate`
+        logger.warn(
+            { err: error, provider: primaryName, reason: error.reason },
+            "provider failed - falling back to straight-line estimate"
         );
+        Sentry.captureMessage("Routing provider failed, using fallback", {
+            level: "warning",
+            tags: { area: "routing", provider: primaryName, reason: error.reason }
+        });
 
         const result = await fallbackProvider.getRoute(params);
         return { ...result, degraded: true };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
+import Button from "../../components/ui/Button";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -305,13 +306,13 @@ export default function SellerPricing() {
                         />
                     </div>
 
-                    <button
+                    <Button
                         type="submit"
                         disabled={saving}
-                        className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-50"
+                        fullWidth
                     >
                         {saving ? "Saving…" : "Add rule"}
-                    </button>
+                    </Button>
                 </form>
             </div>
         </div>

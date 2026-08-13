@@ -7,15 +7,16 @@
 // safe to run on every tick.
 
 const monetizationScheduleService = require("../modules/monetizationSchedule/monetizationSchedule.service");
+const logger = require("../utils/logger").child({ module: "job:monetizationSchedule" });
 
 exports.run = async () => {
     const appliedCount = await monetizationScheduleService.applyDueSchedules();
     const reminderCount = await monetizationScheduleService.sendDueReminders();
 
     if (appliedCount) {
-        console.log(`[monetizationSchedule job] applied ${appliedCount} scheduled change(s)`);
+        logger.info({ appliedCount }, "applied scheduled change(s)");
     }
     if (reminderCount) {
-        console.log(`[monetizationSchedule job] sent ${reminderCount} billing reminder(s)`);
+        logger.info({ reminderCount }, "sent billing reminder(s)");
     }
 };

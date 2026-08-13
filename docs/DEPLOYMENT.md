@@ -223,6 +223,19 @@ is safe to use as-is.
   log viewer; pipe them to a log aggregator if you want search/alerting
   beyond what Sentry covers.
 - **Uptime:** see `docs/UPTIME_MONITORING.md`.
+- **DB connection pool:** `DB_POOL_CONNECTION_LIMIT` (defaults to `10`,
+  same as before this setting existed) sets how many concurrent MySQL
+  connections the backend's pool holds — see
+  `backend/src/config/db.js`. If you start seeing `"db pool saturated -
+  a query had to wait for a free connection"` warnings in your logs (or
+  a matching Sentry event, tagged `area: db-pool`), that means real
+  concurrent traffic is exceeding this limit and requests are queueing
+  behind it. Before just raising the number: check your MySQL provider's
+  own max-connections limit first (Aiven's free/starter plans cap total
+  connections platform-wide, not just what one app can request), and
+  raise `DB_POOL_CONNECTION_LIMIT` with headroom under that ceiling —
+  every backend process/instance gets its own pool of this size, so with
+  N backend instances the real total is `N × DB_POOL_CONNECTION_LIMIT`.
 
 ## 7. Running everything together (local dev)
 

@@ -1,5 +1,7 @@
 const accountVerificationRepository = require("./accountVerification.repository");
 const notificationService = require("../notification/notification.service");
+const logger = require("../../utils/logger").child({ module: "accountVerification" });
+const Sentry = require("../../config/sentry");
 
 exports.list = async (filter) => accountVerificationRepository.findByFilter(filter);
 
@@ -34,9 +36,10 @@ exports.approve = async (userId, adminId) => {
     // before this approval came through (see seller.service's syncBadge).
     if (user.role === "seller") {
         const sellerService = require("../seller/seller.service");
-        await sellerService.syncBadgeForSeller(userId).catch((err) =>
-            console.error("badge sync error after account verification approval:", err)
-        );
+        await sellerService.syncBadgeForSeller(userId).catch((err) => {
+            logger.error({ err, userId }, "badge sync error after account verification approval");
+            Sentry.captureException(err, { tags: { area: "accountVerification", stage: "badge-sync" }, extra: { userId } });
+        });
     }
 
     const roleLabel = user.role === "delivery_agent" ? "delivery" : "seller";
@@ -47,7 +50,7 @@ exports.approve = async (userId, adminId) => {
         messageKey: "notifications.verification.approved.message",
         messageParams: { role: roleLabel },
         withEmail: true
-    }).catch((err) => console.error("verification approve notify error:", err));
+    }).catch((err) => logger.warn({ err, userId }, "verification approve notify error"));
 
     return exports.getDetail(userId);
 };
@@ -75,7 +78,7 @@ exports.reject = async (userId, reason, adminId) => {
         messageKey: "notifications.verification.rejected.message",
         messageParams: { role: roleLabel, reason },
         withEmail: true
-    }).catch((err) => console.error("verification reject notify error:", err));
+    }).catch((err) => logger.warn({ err, userId }, "verification reject notify error"));
 
     return exports.getDetail(userId);
 };

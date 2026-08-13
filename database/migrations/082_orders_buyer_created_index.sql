@@ -1,0 +1,25 @@
+-- Migration 082: buyer order-list composite index (Phase RF4 - red-flag
+-- remediation, DB indexing).
+--
+-- order.repository.js#findOrdersByBuyer runs
+--   WHERE o.buyer_id = ? AND o.parent_order_id IS NULL
+--   ORDER BY o.created_at DESC
+-- against `orders`. Before this migration, orders.buyer_id only had the
+-- single-column index InnoDB creates implicitly for its FK constraint -
+-- enough to find a buyer's rows, but MySQL still had to sort them by
+-- created_at afterwards (a filesort) once that buyer's order history
+-- grows past whatever fits in the sort buffer. This composite index lets
+-- MySQL satisfy the filter AND the sort from the index directly, the
+-- same (is_active, created_at) pairing migration 022 already uses for
+-- the product listing page's default sort.
+--
+-- Deliberately NOT adding an equivalent seller-side index in this
+-- migration. order.repository.js#findOrdersBySeller filters via a JOIN
+-- on order_items.seller_id (already indexed, per its own FK constraint)
+-- and only reaches orders.created_at after that join, with a DISTINCT
+-- on top - a substantially different query shape than the buyer case,
+-- where a composite index on orders itself wouldn't be usable the same
+-- way. That query needs real EXPLAIN output against representative data
+-- volume before proposing an index for it, not a guess - see
+-- README-phase-RF4.md.
+CREATE INDEX idx_orders_buyer_created ON orders (buyer_id, created_at);

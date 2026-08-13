@@ -10,6 +10,7 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
+import Button from "./components/ui/Button";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
 import NexoraAIButton from "./components/ai/NexoraAIButton";
 import NexoraAIDrawer from "./components/ai/NexoraAIDrawer";
@@ -281,12 +282,9 @@ export default function App() {
                             <div className="max-w-lg mx-auto py-24 px-6 text-center">
                                 <p className="font-display text-2xl mb-2">Page not found</p>
                                 <p className="text-ash text-sm mb-6">The page you're looking for doesn't exist or may have moved.</p>
-                                <Link
-                                    to="/"
-                                    className="inline-block bg-mango text-abyss px-5 py-2.5 rounded-md font-semibold hover:bg-mango-dark transition-colors duration-150"
-                                >
+                                <Button as={Link} to="/">
                                     Go to Home
-                                </Link>
+                                </Button>
                             </div>
                         } />
                         </Routes>

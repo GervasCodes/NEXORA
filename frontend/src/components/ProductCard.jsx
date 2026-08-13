@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
+import Button from "./ui/Button";
 
 
 function ProductCard({ product, layout = "grid" }) {
@@ -140,16 +141,15 @@ function ProductCard({ product, layout = "grid" }) {
    
     
     const addToCartButton = user?.role === "buyer" && (isList ? stock > 0 : true) && (
-        <button
+        <Button
             type="button"
             onClick={handleAddToCart}
             disabled={adding || stock === 0}
-            className={`bg-mango text-abyss font-medium rounded-md hover:bg-mango-dark transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
-                isList ? "text-xs px-3 py-1.5 shrink-0 self-center" : "text-xs px-3 py-1.5 w-full mt-2"
-            }`}
+            size="sm"
+            className={isList ? "shrink-0 self-center" : "w-full mt-2"}
         >
             {adding ? "Adding…" : "Add to cart"}
-        </button>
+        </Button>
     );
 
     if (isList) {

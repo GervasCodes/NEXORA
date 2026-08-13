@@ -19,6 +19,15 @@ const fixtures = require("./helpers/dbFixtures");
 beforeEach(async () => {
     await fixtures.resetTables();
     settingsService.getCommissionRate.mockResolvedValue(10); // 10%
+    // Pre-existing gap: this suite mocked settingsService wholesale but
+    // never stubbed isCommissionMonetizationEnabled, so it resolved to
+    // undefined -> the monetization master switch read that as "off" and
+    // every credit came out at 0% commission (see
+    // subscription.service.js#getEffectiveCommissionRate). Found while
+    // validating Phase RF3's wallet-crediting batching against real SQL -
+    // unrelated to that change itself, just a missing mock this file
+    // needed all along to test what its assertions already claimed to.
+    settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
     notificationService.notify.mockResolvedValue(undefined);
 });
 

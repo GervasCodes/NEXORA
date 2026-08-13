@@ -6,11 +6,12 @@
 // sponsorshipExpiry.job.js (Phase 8A).
 
 const featuredStoreService = require("../modules/featuredStore/featuredStore.service");
+const logger = require("../utils/logger").child({ module: "job:featuredStoreExpiry" });
 
 exports.run = async () => {
     const expiredCount = await featuredStoreService.expireDueCampaigns();
 
     if (expiredCount) {
-        console.log(`[featuredStoreExpiry job] expired ${expiredCount} campaign(s)`);
+        logger.info({ expiredCount }, "expired campaign(s)");
     }
 };

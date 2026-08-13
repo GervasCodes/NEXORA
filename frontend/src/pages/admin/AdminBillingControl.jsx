@@ -151,7 +151,7 @@ export default function AdminBillingControl() {
                     <select
                         value={scheduleForm.setting_key}
                         onChange={(e) => setScheduleForm({ ...scheduleForm, setting_key: e.target.value })}
-                        className="border border-line rounded-md px-3 py-2 text-sm"
+                        className="border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     >
                         {FLAGS.map((flag) => (
                             <option key={flag.key} value={flag.key}>{flag.label}</option>
@@ -160,7 +160,7 @@ export default function AdminBillingControl() {
                     <select
                         value={scheduleForm.enabled ? "enable" : "disable"}
                         onChange={(e) => setScheduleForm({ ...scheduleForm, enabled: e.target.value === "enable" })}
-                        className="border border-line rounded-md px-3 py-2 text-sm"
+                        className="border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     >
                         <option value="enable">Enable</option>
                         <option value="disable">Disable</option>
@@ -170,7 +170,7 @@ export default function AdminBillingControl() {
                         required
                         value={scheduleForm.scheduled_at}
                         onChange={(e) => setScheduleForm({ ...scheduleForm, scheduled_at: e.target.value })}
-                        className="border border-line rounded-md px-3 py-2 text-sm"
+                        className="border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <button
                         type="submit"

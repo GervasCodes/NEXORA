@@ -8,6 +8,7 @@ import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
+import Button from "./ui/Button";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -240,12 +241,14 @@ export default function Header() {
                                 icon={SignInIcon}
                                 active={isActive("/login")}
                             />
-                            <Link
+                            <Button
+                                as={Link}
                                 to="/register"
-                                className="bg-mango text-abyss px-3 py-1.5 rounded-md font-semibold hover:bg-mango-dark hover:scale-[1.03] active:scale-[0.98] transition-all duration-150 ease-out ml-1"
+                                size="sm"
+                                className="hover:scale-[1.03] active:scale-[0.98] duration-150 ease-out ml-1"
                             >
                                 {t("nav.join")}
-                            </Link>
+                            </Button>
                         </>
                     )}
                 </nav>
@@ -367,13 +370,15 @@ export default function Header() {
                                 >
                                     {t("nav.signIn")}
                                 </Link>
-                                <Link
+                                <Button
+                                    as={Link}
                                     to="/register"
                                     onClick={() => setMenuOpen(false)}
-                                    className="flex-1 text-center bg-mango text-abyss px-3 py-2 rounded-md text-sm font-semibold hover:bg-mango-dark transition-colors duration-150"
+                                    size="sm"
+                                    className="flex-1"
                                 >
                                     {t("nav.join")}
-                                </Link>
+                                </Button>
                             </div>
                         )}
                     </nav>

@@ -2,6 +2,7 @@ const sellerRepository = require("./seller.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 const authRepository = require("../auth/auth.repository");
+const logger = require("../../utils/logger").child({ module: "seller" });
 const productRepository = require("../product/product.repository");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
@@ -316,7 +317,7 @@ const syncBadge = async (userId) => {
                 titleKey: "notifications.seller.badge.title",
                 messageKey: "notifications.seller.badge.message",
                 withEmail: true
-            }).catch((err) => console.error("badge notify error:", err));
+            }).catch((err) => logger.warn({ err, userId }, "badge notify error"));
         }
     }
 

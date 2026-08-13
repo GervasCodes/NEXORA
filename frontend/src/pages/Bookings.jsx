@@ -7,6 +7,8 @@ import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
 import BookingStatusBadge from "../components/BookingStatusBadge";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
 
 export default function Bookings() {
     const { format } = useCurrency();
@@ -14,15 +16,19 @@ export default function Bookings() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [maintenance, setMaintenance] = useState(null);
+    const [error, setError] = useState(false);
 
     const load = () => {
         setLoading(true);
         setMaintenance(null);
+        setError(false);
         api.get("/bookings/mine")
             .then(({ data }) => setBookings(data.data))
             .catch((err) => {
                 if (err.response?.data?.code === "MODULE_MAINTENANCE") {
                     setMaintenance(err.response.data.message);
+                } else {
+                    setError(true);
                 }
             })
             .finally(() => setLoading(false));
@@ -43,11 +49,21 @@ export default function Bookings() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+                <ErrorState title="Couldn't load your bookings" hint="Check your connection and try again." onRetry={load} />
+            </div>
+        );
+    }
+
     if (bookings.length === 0) {
         return (
-            <div className="max-w-3xl mx-auto px-6 py-24 text-center animate-slide-up">
-                <p className="font-display text-2xl mb-2">{t("booking.empty")}</p>
-                <Link to="/services" className="text-teal hover:underline text-sm">{t("booking.browseServices")}</Link>
+            <div className="max-w-3xl mx-auto px-6 py-10">
+                <EmptyState
+                    title={t("booking.empty")}
+                    action={<Link to="/services" className="text-teal hover:underline text-sm">{t("booking.browseServices")}</Link>}
+                />
             </div>
         );
     }

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
@@ -53,26 +55,23 @@ export default function ForgotPassword() {
 
             {step === "email" ? (
                 <form onSubmit={handleRequest} className="space-y-4">
-                    <div>
-                        <label className="block text-sm mb-1">Email</label>
-                        <input
-                            type="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                        />
-                    </div>
+                    <Input
+                        label="Email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
 
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                    <button
+                    <Button
                         type="submit"
                         disabled={submitting}
-                        className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                        fullWidth
                     >
                         {submitting ? "Sending…" : "Send reset code"}
-                    </button>
+                    </Button>
                 </form>
             ) : (
                 <form onSubmit={handleReset} className="space-y-4">
@@ -90,28 +89,25 @@ export default function ForgotPassword() {
                             placeholder="000000"
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm mb-1">New password</label>
-                        <input
-                            type="password"
-                            required
-                            minLength={8}
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                        />
-                    </div>
+                    <Input
+                        label="New password"
+                        type="password"
+                        required
+                        minLength={8}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                    />
 
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                    <button
+                    <Button
                         type="submit"
                         disabled={submitting || code.length !== 6}
-                        className="w-full bg-mango text-abyss py-2.5 rounded-md font-medium hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60"
+                        fullWidth
                     >
                         {submitting ? "Resetting…" : "Reset password"}
-                    </button>
+                    </Button>
 
                     <button
                         type="button"

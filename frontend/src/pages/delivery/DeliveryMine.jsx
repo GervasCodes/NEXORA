@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
 
 const NEXT_STATUS = {
@@ -73,14 +74,15 @@ export default function DeliveryMine() {
 
                         <div className="flex gap-2">
                             {(NEXT_STATUS[d.status] || []).map((next) => (
-                                <button
+                                <Button
                                     key={next.value}
                                     onClick={() => updateStatus(d.order_id, next.value)}
                                     disabled={busyId === d.order_id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    variant="secondary"
+                                    size="sm"
                                 >
                                     {next.label}
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     </li>

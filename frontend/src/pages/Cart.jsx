@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
+import Button from "../components/ui/Button";
 
 export default function Cart() {
     const { format } = useCurrency();
@@ -84,15 +85,15 @@ export default function Cart() {
                 <span className="price text-2xl font-medium">{format(total)}</span>
             </div>
 
-            <button
+            <Button
                 onClick={handleCheckout}
                 disabled={placing}
-                className="w-full sm:w-auto bg-mango text-abyss px-8 py-3 rounded-md font-medium hover:bg-mango-dark active:scale-[0.98] transition-all focus-ring disabled:opacity-60 animate-slide-up inline-flex items-center justify-center gap-2"
+                className="w-full sm:w-auto gap-2 active:scale-[0.98] animate-slide-up !px-8 !py-3"
                 style={{ animationDelay: "200ms" }}
             >
                 {placing && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                 {t("cart.checkoutButton")}
-            </button>
+            </Button>
         </div>
     );
 }

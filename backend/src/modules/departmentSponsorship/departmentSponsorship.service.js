@@ -1,5 +1,6 @@
 const db = require("../../config/db");
 const departmentSponsorshipRepository = require("./departmentSponsorship.repository");
+const logger = require("../../utils/logger").child({ module: "departmentSponsorship" });
 const productRepository = require("../product/product.repository");
 const categoryRepository = require("../category/category.repository");
 const walletRepository = require("../wallet/wallet.repository");
@@ -124,7 +125,7 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
             messageKey: "notifications.departmentSponsorship.started.message",
             messageParams: { categoryName: category.name, days: parsedDays, amount: totalCost },
             withEmail: false
-        }).catch((err) => console.error("department sponsorship start notify error:", err));
+        }).catch((err) => logger.warn({ err }, "department sponsorship start notify error"));
 
         return { campaignId, totalCost, balance: balanceAfter, endsAt };
 
@@ -204,7 +205,7 @@ exports.expireDueCampaigns = async () => {
                 messageKey: "notifications.departmentSponsorship.expired.message",
                 messageParams: { categoryName: campaign.category_name },
                 withEmail: false
-            }).catch((err) => console.error("department sponsorship expiry notify error:", err));
+            }).catch((err) => logger.warn({ err }, "department sponsorship expiry notify error"));
         }
 
         return due.length;

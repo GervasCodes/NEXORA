@@ -1,4 +1,5 @@
 const { sendTransactionalEmail } = require("../config/brevo");
+const logger = require("./logger").child({ module: "sendEmail" });
 
 // Best-effort email send for general notifications (order updates, etc).
 // Deliberately swallows errors so that a missing/misconfigured Brevo
@@ -10,7 +11,7 @@ const sendEmail = async (to, subject, text) => {
     try {
         await sendTransactionalEmail({ to, subject, text, html: `<p>${text}</p>` });
     } catch (error) {
-        console.error(`Failed to send email to ${to}:`, error.message);
+        logger.warn({ err: error, to }, "failed to send email");
     }
 };
 

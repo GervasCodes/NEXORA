@@ -1,6 +1,8 @@
 const db = require("../../config/db");
 const disputeRepository = require("./dispute.repository");
 const orderRepository = require("../order/order.repository");
+const logger = require("../../utils/logger").child({ module: "dispute" });
+const Sentry = require("../../config/sentry");
 const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
@@ -119,7 +121,7 @@ exports.createDispute = async (buyerId, { order_id, order_item_id, type, subject
             },
             relatedOrderId: order_id,
             withEmail: true
-        }).catch((err) => console.error("dispute create seller notify error:", err));
+        }).catch((err) => logger.warn({ err, orderId: order_id }, "dispute create seller notify error"));
     }
 
     // Disputes are currently the only reporting/ticketing mechanism
@@ -190,7 +192,7 @@ exports.addMessage = async (disputeId, userId, role, message) => {
             messageParams: { disputeNumber: dispute.dispute_number },
             relatedOrderId: dispute.order_id,
             withEmail: false
-        }).catch((err) => console.error("dispute message notify error:", err));
+        }).catch((err) => logger.warn({ err, disputeId: dispute.id }, "dispute message notify error"));
     }
 
     return getFullDispute(disputeId);
@@ -297,9 +299,10 @@ exports.resolveDispute = async (disputeId, adminId, { resolution, resolution_not
     // nothing to reverse here - the refund itself is still recorded on
     // the dispute for the admin's own manual payout process.
     if (needsRefundAmount && dispute.seller_id) {
-        await reverseSellerEarnings(dispute.seller_id, refundAmount, disputeId).catch((err) =>
-            console.error("dispute wallet reversal error:", err)
-        );
+        await reverseSellerEarnings(dispute.seller_id, refundAmount, disputeId).catch((err) => {
+            logger.error({ err, disputeId, sellerId: dispute.seller_id }, "dispute wallet reversal error");
+            Sentry.captureException(err, { tags: { area: "dispute", stage: "wallet-reversal" }, extra: { disputeId } });
+        });
     }
 
     // Push the buyer's money back automatically (Phase 2 - Refund
@@ -311,9 +314,10 @@ exports.resolveDispute = async (disputeId, adminId, { resolution, resolution_not
     // 'failed'/'manual_required' for an admin to retry from the refunds
     // dashboard, it never breaks the dispute resolution itself.
     if (needsRefundAmount) {
-        refundService.autoRefundForDispute({ dispute, amount: refundAmount, requestedBy: adminId }).catch((err) =>
-            console.error("dispute auto-refund error:", err)
-        );
+        refundService.autoRefundForDispute({ dispute, amount: refundAmount, requestedBy: adminId }).catch((err) => {
+            logger.error({ err, disputeId }, "dispute auto-refund error");
+            Sentry.captureException(err, { tags: { area: "dispute", stage: "auto-refund" }, extra: { disputeId } });
+        });
     }
 
     await notifyResolution(dispute, resolution, resolution_note, refundAmount);
@@ -348,7 +352,7 @@ exports.rejectDispute = async (disputeId, adminId, { resolution_note }) => {
         messageParams: { disputeNumber: dispute.dispute_number, reason: resolution_note },
         relatedOrderId: dispute.order_id,
         withEmail: true
-    }).catch((err) => console.error("dispute reject notify error:", err));
+    }).catch((err) => logger.warn({ err, disputeId: dispute.id }, "dispute reject notify error"));
 
     return getFullDispute(disputeId);
 };
@@ -436,7 +440,7 @@ async function notifyResolution(dispute, resolution, resolutionNote, refundAmoun
         },
         relatedOrderId: dispute.order_id,
         withEmail: true
-    }).catch((err) => console.error("dispute resolve buyer notify error:", err));
+    }).catch((err) => logger.warn({ err, disputeId: dispute.id }, "dispute resolve buyer notify error"));
 
     if (dispute.seller_id) {
         const refundNote = refundAmount ? { key: "notifications.dispute.resolved.refundNote", params: { amount: refundAmount } } : "";
@@ -453,6 +457,6 @@ async function notifyResolution(dispute, resolution, resolutionNote, refundAmoun
             },
             relatedOrderId: dispute.order_id,
             withEmail: true
-        }).catch((err) => console.error("dispute resolve seller notify error:", err));
+        }).catch((err) => logger.warn({ err, disputeId: dispute.id }, "dispute resolve seller notify error"));
     }
 }

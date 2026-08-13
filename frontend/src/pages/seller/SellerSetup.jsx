@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
+import Button from "../../components/ui/Button";
 
 // Nexora Services Phase 2 (Onboarding) - the three choices map straight
 // onto seller_profiles.merchant_type (migration 062: product/service/
@@ -136,10 +137,9 @@ export default function SellerSetup() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <button type="submit" disabled={submitting}
-                    className="w-full bg-mango text-abyss py-2.5 rounded-md font-semibold hover:bg-mango-dark transition-colors focus-ring disabled:opacity-60">
+                <Button type="submit" disabled={submitting} fullWidth>
                     {submitting ? "Creating store…" : "Create store"}
-                </button>
+                </Button>
             </form>
         </div>
     );

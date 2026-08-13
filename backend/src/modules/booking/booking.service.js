@@ -3,6 +3,8 @@ const availabilityRepository = require("../availability/availability.repository"
 const serviceRepository = require("../service/service.repository");
 const notificationService = require("../notification/notification.service");
 const walletService = require("../wallet/wallet.service");
+const logger = require("../../utils/logger").child({ module: "booking" });
+const Sentry = require("../../config/sentry");
 const paymentService = require("../payment/payment.service");
 const reviewRepository = require("../review/review.repository");
 const { computeDynamicPrice } = require("../../utils/dynamicPricing");
@@ -259,15 +261,26 @@ exports.rejectBooking = async (bookingId, providerId) => {
     if (wasPaid) {
         walletService.reverseProviderEarningsForBooking(
             booking.provider_id, Number(booking.amount), bookingId
-        ).catch((err) => console.error("booking wallet reversal error:", err));
+        ).catch((err) => {
+            logger.error({ err, bookingId }, "booking wallet reversal error");
+            Sentry.captureException(err, { tags: { area: "booking", stage: "wallet-reversal" }, extra: { bookingId } });
+        });
 
         paymentService.refundBookingPayment(bookingId, Number(booking.amount))
             .then((result) => {
                 if (!result.success) {
-                    console.error(`booking #${bookingId} refund needs manual handling:`, result.error);
+                    logger.error({ bookingId, err: result.error }, "booking refund needs manual handling");
+                    Sentry.captureMessage("Booking refund needs manual handling", {
+                        level: "error",
+                        tags: { area: "booking", stage: "refund" },
+                        extra: { bookingId, error: result.error }
+                    });
                 }
             })
-            .catch((err) => console.error("booking refund error:", err));
+            .catch((err) => {
+                logger.error({ err, bookingId }, "booking refund error");
+                Sentry.captureException(err, { tags: { area: "booking", stage: "refund" }, extra: { bookingId } });
+            });
     }
 
     await notificationService.notify({
@@ -323,15 +336,26 @@ exports.cancelBooking = async (bookingId, userId) => {
         // attempt to actually push the money back to the buyer.
         walletService.reverseProviderEarningsForBooking(
             booking.provider_id, Number(booking.amount), bookingId
-        ).catch((err) => console.error("booking wallet reversal error:", err));
+        ).catch((err) => {
+            logger.error({ err, bookingId }, "booking wallet reversal error");
+            Sentry.captureException(err, { tags: { area: "booking", stage: "wallet-reversal" }, extra: { bookingId } });
+        });
 
         paymentService.refundBookingPayment(bookingId, Number(booking.amount))
             .then((result) => {
                 if (!result.success) {
-                    console.error(`booking #${bookingId} refund needs manual handling:`, result.error);
+                    logger.error({ bookingId, err: result.error }, "booking refund needs manual handling");
+                    Sentry.captureMessage("Booking refund needs manual handling", {
+                        level: "error",
+                        tags: { area: "booking", stage: "refund" },
+                        extra: { bookingId, error: result.error }
+                    });
                 }
             })
-            .catch((err) => console.error("booking refund error:", err));
+            .catch((err) => {
+                logger.error({ err, bookingId }, "booking refund error");
+                Sentry.captureException(err, { tags: { area: "booking", stage: "refund" }, extra: { bookingId } });
+            });
     }
 
     const notifyUserId = userId === booking.customer_id ? booking.provider_id : booking.customer_id;

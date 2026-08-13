@@ -10,12 +10,14 @@
 // actually finished, not a day (or an hour) later.
 const bookingRepository = require("../modules/booking/booking.repository");
 const notificationService = require("../modules/notification/notification.service");
+const logger = require("../utils/logger").child({ module: "job:bookingLifecycle" });
+const Sentry = require("../config/sentry");
 
 exports.run = async () => {
     const activated = await bookingRepository.activateStartedBookings();
 
     if (activated) {
-        console.log(`[bookingLifecycle job] activated ${activated} booking(s)`);
+        logger.info({ activated }, "activated booking(s)");
     }
 
     // Fetched before the bulk UPDATE below so the notification loop knows
@@ -24,7 +26,7 @@ exports.run = async () => {
     const completed = await bookingRepository.completeFinishedBookings();
 
     if (completed) {
-        console.log(`[bookingLifecycle job] completed ${completed} booking(s)`);
+        logger.info({ completed }, "completed booking(s)");
     }
 
     for (const booking of completing) {
@@ -37,7 +39,10 @@ exports.run = async () => {
             title: "Booking completed",
             message: `Your booking ${booking.booking_reference} is now complete. Leave a review to help other customers.`,
             url: `/bookings/${booking.id}`
-        }).catch((err) => console.error("booking completed notify error:", err));
+        }).catch((err) => {
+            logger.warn({ err, bookingId: booking.id, userId: booking.customer_id }, "booking completed notify error");
+            Sentry.captureException(err, { tags: { area: "job:bookingLifecycle" }, extra: { bookingId: booking.id } });
+        });
 
         notificationService.notify({
             userId: booking.provider_id,
@@ -45,6 +50,9 @@ exports.run = async () => {
             title: "Booking completed",
             message: `Booking ${booking.booking_reference} is now complete. Its held earnings will release after the escrow hold period.`,
             url: `/seller/bookings/${booking.id}`
-        }).catch((err) => console.error("booking completed notify error:", err));
+        }).catch((err) => {
+            logger.warn({ err, bookingId: booking.id, userId: booking.provider_id }, "booking completed notify error");
+            Sentry.captureException(err, { tags: { area: "job:bookingLifecycle" }, extra: { bookingId: booking.id } });
+        });
     }
 };

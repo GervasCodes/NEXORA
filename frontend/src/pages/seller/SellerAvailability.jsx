@@ -3,6 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import AvailabilityCalendar from "../../components/AvailabilityCalendar";
 import NexoraAvailabilitySuggestion from "../../components/ai/NexoraAvailabilitySuggestion";
+import Button from "../../components/ui/Button";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -184,13 +185,13 @@ export default function SellerAvailability() {
                         </select>
                     </div>
 
-                    <button
+                    <Button
                         type="submit"
                         disabled={saving}
-                        className="w-full bg-mango text-abyss px-4 py-2 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-60"
+                        fullWidth
                     >
                         {saving ? "Saving…" : "Update availability"}
-                    </button>
+                    </Button>
                 </form>
             </div>
         </div>

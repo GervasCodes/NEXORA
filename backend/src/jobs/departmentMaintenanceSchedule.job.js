@@ -8,11 +8,12 @@
 // it to take effect close to the minute they picked.
 
 const categoryService = require("../modules/category/category.service");
+const logger = require("../utils/logger").child({ module: "job:departmentMaintenanceSchedule" });
 
 exports.run = async () => {
     const appliedCount = await categoryService.applyDueMaintenanceSchedules();
 
     if (appliedCount) {
-        console.log(`[departmentMaintenanceSchedule job] applied ${appliedCount} transition(s)`);
+        logger.info({ appliedCount }, "applied transition(s)");
     }
 };

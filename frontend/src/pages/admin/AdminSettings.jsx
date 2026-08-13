@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 export default function AdminSettings() {
     const [settings, setSettings] = useState(null);
@@ -109,7 +110,7 @@ export default function AdminSettings() {
                         required
                         value={commissionRate}
                         onChange={(e) => setCommissionRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">Cut of each sale's subtotal that NEXORA keeps before crediting a seller's wallet.</p>
                 </div>
@@ -123,7 +124,7 @@ export default function AdminSettings() {
                         required
                         value={riderFee}
                         onChange={(e) => setRiderFee(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">
                         Used when distance-based pricing below can't be calculated - the seller has no pickup pin set,
@@ -185,7 +186,7 @@ export default function AdminSettings() {
                             required
                             value={perKmBeyond}
                             onChange={(e) => setPerKmBeyond(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         />
                     </div>
 
@@ -204,7 +205,7 @@ export default function AdminSettings() {
                         required
                         value={verificationFee}
                         onChange={(e) => setVerificationFee(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">One-time fee a seller pays to unlock the Verified Seller badge.</p>
                 </div>
@@ -218,7 +219,7 @@ export default function AdminSettings() {
                         required
                         value={usdRate}
                         onChange={(e) => setUsdRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
@@ -235,7 +236,7 @@ export default function AdminSettings() {
                         required
                         value={sponsorshipRate}
                         onChange={(e) => setSponsorshipRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">
                         What a seller pays per day to sponsor one product (Sponsorship page). A running
@@ -252,7 +253,7 @@ export default function AdminSettings() {
                         required
                         value={featuredStoreRate}
                         onChange={(e) => setFeaturedStoreRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">
                         What a seller pays per day to rank first in a department's Featured stores row
@@ -270,7 +271,7 @@ export default function AdminSettings() {
                         required
                         value={departmentSponsorshipRate}
                         onChange={(e) => setDepartmentSponsorshipRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm"
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                     />
                     <p className="text-xs text-ash mt-1">
                         What a seller pays per day to bump a department to the front of the homepage
@@ -279,13 +280,12 @@ export default function AdminSettings() {
                     </p>
                 </div>
 
-                <button
+                <Button
                     type="submit"
                     disabled={saving}
-                    className="bg-mango text-abyss px-5 py-2.5 rounded-md text-sm font-medium hover:bg-mango-dark transition-colors disabled:opacity-50"
                 >
                     {saving ? "Saving…" : "Save settings"}
-                </button>
+                </Button>
             </form>
         </div>
     );

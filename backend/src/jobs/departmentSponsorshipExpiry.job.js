@@ -7,11 +7,12 @@
 // (Phase 8B).
 
 const departmentSponsorshipService = require("../modules/departmentSponsorship/departmentSponsorship.service");
+const logger = require("../utils/logger").child({ module: "job:departmentSponsorshipExpiry" });
 
 exports.run = async () => {
     const expiredCount = await departmentSponsorshipService.expireDueCampaigns();
 
     if (expiredCount) {
-        console.log(`[departmentSponsorshipExpiry job] expired ${expiredCount} campaign(s)`);
+        logger.info({ expiredCount }, "expired campaign(s)");
     }
 };

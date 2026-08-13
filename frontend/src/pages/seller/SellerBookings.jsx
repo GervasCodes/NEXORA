@@ -5,6 +5,7 @@ import { formatMoney, formatDate } from "../../utils/format";
 import { useLanguage } from "../../context/LanguageContext";
 import BookingStatusBadge from "../../components/BookingStatusBadge";
 import PageLoader from "../../components/PageLoader";
+import Button from "../../components/ui/Button";
 
 // Phase 5: a still-pending request is now declined via reject (below),
 // not cancel - cancel stays for a confirmed booking either side needs
@@ -111,30 +112,34 @@ export default function SellerBookings() {
                         <div className="flex items-center gap-2 flex-wrap">
                             {booking.status === "pending" && (
                                 <>
-                                    <button
+                                    <Button
                                         onClick={() => handleConfirm(booking)}
                                         disabled={busyId === booking.id}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
                                     >
                                         {t("booking.seller.confirm")}
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                         onClick={() => handleReject(booking)}
                                         disabled={busyId === booking.id}
-                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
+                                        variant="secondary"
+                                        size="sm"
+                                        className="hover:border-coral hover:text-coral"
                                     >
                                         {t("booking.seller.reject")}
-                                    </button>
+                                    </Button>
                                 </>
                             )}
                             {CANCELLABLE.includes(booking.status) && (
-                                <button
+                                <Button
                                     onClick={() => handleCancel(booking)}
                                     disabled={busyId === booking.id}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors disabled:opacity-50"
+                                    variant="secondary"
+                                    size="sm"
                                 >
                                     {t("booking.seller.cancel")}
-                                </button>
+                                </Button>
                             )}
                             <Link to={`/bookings/${booking.id}`} className="text-xs text-teal hover:underline">
                                 {t("booking.seller.details")}

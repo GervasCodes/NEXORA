@@ -30,29 +30,58 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
 
 // Insert this order's line items + decrement stock. Throws (and lets the
 // caller roll back) if any item no longer has enough stock.
+//
+// Batched (Phase RF3): previously this ran 2 queries per line item (an
+// INSERT then an UPDATE) - a 10-item cart was 20 sequential round trips
+// inside one checkout transaction. Product IDs within a single cart are
+// always distinct (cart_items has a UNIQUE(user_id, product_id)
+// constraint), so a single multi-row INSERT plus a single CASE-based
+// UPDATE covers every line item safely in 2 queries total. The extra
+// SELECT below only runs on the (rare) insufficient-stock path, to work
+// out which item's error message to raise - same message the old
+// per-item loop gave.
 const insertOrderItems = async (connection, orderId, cartItems) => {
-    for (const item of cartItems) {
-        await connection.query(
-            `INSERT INTO order_items
-            (order_id, product_id, seller_id, quantity, unit_price, subtotal)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-                orderId,
-                item.product_id,
-                item.seller_id,
-                item.quantity,
-                item.unit_price,
-                item.subtotal
-            ]
-        );
+    if (!cartItems.length) {
+        return;
+    }
 
-        const [stockResult] = await connection.query(
-            "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
-            [item.quantity, item.product_id, item.quantity]
-        );
+    const insertValues = cartItems.map((item) => [
+        orderId, item.product_id, item.seller_id, item.quantity, item.unit_price, item.subtotal
+    ]);
 
-        if (stockResult.affectedRows === 0) {
-            throw new Error(`"${item.name}" no longer has enough stock`);
+    await connection.query(
+        `INSERT INTO order_items
+        (order_id, product_id, seller_id, quantity, unit_price, subtotal)
+        VALUES ?`,
+        [insertValues]
+    );
+
+    const productIds = cartItems.map((item) => item.product_id);
+    const caseClauses = cartItems.map(() => "WHEN ? THEN stock - ?").join(" ");
+    const caseParams = cartItems.flatMap((item) => [item.product_id, item.quantity]);
+    const guardClauses = cartItems.map(() => "(id = ? AND stock >= ?)").join(" OR ");
+    const guardParams = cartItems.flatMap((item) => [item.product_id, item.quantity]);
+
+    const [stockResult] = await connection.query(
+        `UPDATE products
+        SET stock = CASE id ${caseClauses} END
+        WHERE id IN (?) AND (${guardClauses})`,
+        [...caseParams, productIds, ...guardParams]
+    );
+
+    if (stockResult.affectedRows < cartItems.length) {
+        const [rows] = await connection.query(
+            "SELECT id, stock FROM products WHERE id IN (?)",
+            [productIds]
+        );
+        const stockById = new Map(rows.map((row) => [row.id, row.stock]));
+
+        for (const item of cartItems) {
+            const currentStock = stockById.get(item.product_id) ?? 0;
+
+            if (currentStock < item.quantity) {
+                throw new Error(`"${item.name}" no longer has enough stock`);
+            }
         }
     }
 };

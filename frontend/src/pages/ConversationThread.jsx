@@ -8,6 +8,7 @@ import TypingIndicator from "../components/chat/TypingIndicator";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import MessageSearch from "../components/chat/MessageSearch";
 import PageLoader from "../components/PageLoader";
+import Button from "../components/ui/Button";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -462,13 +463,14 @@ export default function ConversationThread() {
                     placeholder="Write a message…"
                     className="flex-1 min-w-0 border border-line rounded-full px-4 py-2 text-sm focus-ring"
                 />
-                <button
+                <Button
                     type="submit"
                     disabled={sending || (!draft.trim() && !attachmentFile)}
-                    className="shrink-0 bg-mango text-abyss px-5 py-2 rounded-full text-sm font-semibold hover:bg-mango-dark transition-colors disabled:opacity-50"
+                    size="sm"
+                    className="shrink-0 !rounded-full !px-5"
                 >
                     {sending ? "Sending…" : "Send"}
-                </button>
+                </Button>
             </form>
 
             <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />

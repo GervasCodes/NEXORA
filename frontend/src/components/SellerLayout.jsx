@@ -107,7 +107,7 @@ function visibleGroups(merchantType) {
 }
 
 export default function SellerLayout() {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -154,7 +154,7 @@ export default function SellerLayout() {
     }, [isApproved, loading, profile, location.pathname, navigate]);
 
     const merchantType = profile?.merchant_type || "product";
-    const unreadMessages = useUnreadMessagesCount(true);
+    const unreadMessages = useUnreadMessagesCount(sessionReady);
 
     // Seller's mobile bottom nav (Phase 6: Mobile Navigation
     // Unification) - the Orders/Bookings slot follows the seller's own

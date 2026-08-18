@@ -27,7 +27,7 @@ const SEVERITY_DOT = {
 // AdminLayout.jsx, AdminUsers.jsx, etc. - all plain English), so this
 // component's copy is hardcoded English too, matching its surroundings.
 export default function AdminNotificationBell() {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const { socket } = useSocket();
     const toast = useToast();
     const navigate = useNavigate();
@@ -65,11 +65,11 @@ export default function AdminNotificationBell() {
     }, [toast]);
 
     useEffect(() => {
-        if (user?.role !== "admin") return;
+        if (user?.role !== "admin" || !sessionReady) return;
         fetchUnread();
         const interval = setInterval(fetchUnread, POLL_INTERVAL_MS);
         return () => clearInterval(interval);
-    }, [user, fetchUnread]);
+    }, [user, sessionReady, fetchUnread]);
 
     // Real-time: same reasoning as NotificationBell.jsx - the poll above
     // is a fallback, this is what makes the shared admin inbox update the

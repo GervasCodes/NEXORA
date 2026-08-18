@@ -73,7 +73,7 @@ function IconNavLink({ to, label, icon: Icon, active, badge, onClick }) {
 }
 
 export default function Header() {
-    const { user, logout } = useAuth();
+    const { user, sessionReady, logout } = useAuth();
     const { itemCount } = useCart();
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -82,8 +82,11 @@ export default function Header() {
     const links = useNavLinks();
 
     // Only buyers/sellers ever see a "/messages" link (see useNavLinks
-    // above), so there's no point polling for anyone else.
-    const unreadMessages = useUnreadMessagesCount(user?.role === "buyer" || user?.role === "seller");
+    // above), so there's no point polling for anyone else. sessionReady
+    // additionally holds off until the optimistic cached `user` has been
+    // confirmed against the server - otherwise a stale session polls a
+    // dead cookie and gets a 401 (see AuthContext.jsx).
+    const unreadMessages = useUnreadMessagesCount(sessionReady && (user?.role === "buyer" || user?.role === "seller"));
 
     const isActive = (to) => location.pathname === to || location.pathname.startsWith(`${to}/`);
 

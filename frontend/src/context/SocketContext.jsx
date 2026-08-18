@@ -12,7 +12,7 @@ const getSocketUrl = () => {
 
 
 export function SocketProvider({ children }) {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const socketRef = useRef(null);
     const [connected, setConnected] = useState(false);
     const [connectionState, setConnectionState] = useState("disconnected");
@@ -26,7 +26,15 @@ export function SocketProvider({ children }) {
         // withCredentials is true and the server's CORS config allows
         // credentials for this origin (both already true - see
         // socket.js).
-        if (!user) {
+        //
+        // `sessionReady` additionally guards against connecting on the
+        // optimistic, not-yet-confirmed `user` value from localStorage
+        // (see AuthContext.jsx) - without it, a stale cached session
+        // opens a handshake with a cookie the server has already
+        // invalidated, which fails immediately and shows up as a
+        // "WebSocket is closed before the connection is established"
+        // console error right alongside the notification bells' 401s.
+        if (!user || !sessionReady) {
             socketRef.current?.disconnect();
             socketRef.current = null;
             setConnected(false);
@@ -69,7 +77,7 @@ export function SocketProvider({ children }) {
         return () => {
             socket.disconnect();
         };
-    }, [user]);
+    }, [user, sessionReady]);
 
     const value = useMemo(
         () => ({ socket: socketRef.current, connected, connectionState }),

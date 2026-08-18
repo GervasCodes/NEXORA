@@ -107,6 +107,25 @@ self.addEventListener("fetch", (event) => {
     // Response - never to `undefined` and never to a rejected promise -
     // because an unresolved respondWith() is what produces the browser's
     // hard "network error" for the whole navigation.
+    //
+    // The true last resort (network failed, no cached copy of this exact
+    // page, AND the pre-cached OFFLINE_URL is itself missing - e.g. the
+    // install-time pre-cache in the listener above failed on a flaky
+    // connection) used to fall through to Response.error(). That's not a
+    // rejected promise, so it didn't trip the "never reject" rule above -
+    // but Response.error() IS a network-error-typed Response by spec, so
+    // resolving a navigation with it produces the browser's own "resulted
+    // in a network error response" console error anyway. Synthesizing a
+    // minimal real HTML response instead means every branch here truly
+    // ends in something the browser can render, not just something that
+    // technically isn't a rejected promise.
+    const FALLBACK_OFFLINE_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>NEXORA - Offline</title></head><body style="font-family:sans-serif;text-align:center;padding:3rem 1rem;"><h1>You're offline</h1><p>Check your connection and try again.</p></body></html>`;
+    const offlineResponse = () =>
+        new Response(FALLBACK_OFFLINE_HTML, {
+            status: 200,
+            headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
+
     if (request.mode === "navigate") {
         event.respondWith(
             fetch(request)
@@ -122,8 +141,8 @@ self.addEventListener("fetch", (event) => {
                     caches
                         .match(request)
                         .then((cached) => cached || caches.match(OFFLINE_URL))
-                        .then((fallback) => fallback || Response.error())
-                        .catch(() => Response.error())
+                        .then((fallback) => fallback || offlineResponse())
+                        .catch(() => offlineResponse())
                 )
         );
         return;

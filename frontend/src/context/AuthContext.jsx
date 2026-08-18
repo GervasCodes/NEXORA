@@ -32,6 +32,18 @@ const loadStoredUser = () => {
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(loadStoredUser());
+    // True once the initial session state is settled - either there was no
+    // cached user to confirm (nothing pending), or the /auth/me check below
+    // has resolved one way or the other. `user` alone is NOT enough of a
+    // signal for consumers that hit protected endpoints (notification
+    // polling, the socket connection): loadStoredUser()'s value is
+    // optimistic-only (see its comment above) and can be stale - a session
+    // that already died server-side. Firing protected requests against
+    // that stale value is exactly what produced a burst of 401s (both
+    // notification bells + the socket handshake) racing the /auth/me
+    // confirmation on app load. Consumers should gate on `user &&
+    // sessionReady`, not `user` alone.
+    const [sessionReady, setSessionReady] = useState(() => !loadStoredUser());
     // Set whenever this account is suspended - either at login (before any
     // token exists) or mid-session, via the api/client.js response
     // interceptor. While set, App.jsx shows the full-screen suspended page
@@ -78,7 +90,10 @@ export function AuthProvider({ children }) {
     // user to begin with; a fresh visitor with no cookie and no cached
     // user getting a 401 here is expected, not an error to react to.
     useEffect(() => {
-        if (!localStorage.getItem("nexora_user")) return;
+        if (!localStorage.getItem("nexora_user")) {
+            setSessionReady(true);
+            return;
+        }
         api.get("/auth/me")
             .then(({ data }) => {
                 setUser(data.data.user);
@@ -91,7 +106,8 @@ export function AuthProvider({ children }) {
                 // failure beyond making sure the in-memory user doesn't
                 // keep showing as logged in while that resolves.
                 setUser(null);
-            });
+            })
+            .finally(() => setSessionReady(true));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -126,6 +142,7 @@ export function AuthProvider({ children }) {
             // instant display on the next page load.
             localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
             setUser(data.data.user);
+            setSessionReady(true);
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
@@ -181,10 +198,10 @@ export function AuthProvider({ children }) {
     const value = useMemo(
         () => ({
             user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
-            suspension, clearSuspension, sessionExpired, clearSessionExpired
+            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady
         }),
         [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
-            suspension, clearSuspension, sessionExpired, clearSessionExpired]
+            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady]
     );
 
     return (

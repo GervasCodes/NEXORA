@@ -227,6 +227,42 @@ fix for this symptom; `testTimeout`/`hookTimeout` also raised from
 sandbox (no vite/vitest install here); syntax-checked only. Scope
 limited to `vite.config.js`.
 
+**Follow-up — stale-session 401 burst + WebSocket failure + SW navigate
+error:** browser console showed `/notifications/unread-count` and
+`/admin/notifications/unread-count` both returning 401, a WebSocket
+handshake failing right alongside them, and a service-worker
+`FetchEvent` for `/login` resolving as a raw network-error response.
+Root cause: `NotificationBell.jsx`/`AdminNotificationBell.jsx`'s
+polling and `SocketContext.jsx`'s socket connection all gated on
+`AuthContext.jsx`'s `user` value alone - but that value is
+optimistic-only on first paint (read straight from `localStorage`,
+unconfirmed - see the existing comment on `loadStoredUser`), so a
+stale cached session fires protected requests (and opens a socket
+handshake) against a cookie the server has already invalidated,
+before the async `/auth/me` confirmation has a chance to catch it.
+Added a new `sessionReady` flag to `AuthContext.jsx` that only
+flips true once that confirmation settles (or immediately, if there
+was no cached user to confirm) and gated all three consumers on
+`user && sessionReady` instead of `user` alone - `SocketContext.jsx`,
+`NotificationBell.jsx`, `AdminNotificationBell.jsx`, and the two
+`useUnreadMessagesCount` call sites (`Header.jsx`, `SellerLayout.jsx`).
+Separately, `public/sw.js`'s navigation fallback chain's true last
+resort (network failed, no cached copy, pre-cached offline page
+itself missing) used to resolve with `Response.error()` - not a
+rejected promise, but still a network-error-typed Response by spec,
+which is exactly what produces the browser's own "resulted in a
+network error response" console error for a navigation. Replaced it
+with a synthesized minimal real HTML response so every branch of
+that chain now ends in something the browser can actually render.
+Not independently re-run in this sandbox (no npm install here);
+each touched `.jsx` file was esbuild-syntax-checked, `sw.js`
+node-syntax-checked. Note: the same optimistic-`user` pattern also
+exists in the route guards (`RequireAuth.jsx`, `RequireAdmin.jsx`,
+etc.), which can briefly render protected content before `/auth/me`
+corrects it - left untouched here since it's a separate, larger
+concern than the reported console errors; flagged as a possible
+follow-up.
+
 ## Part C — Red Flag Remediation
 
 Separate numbered roadmap (its own `README-phase-RFn.md` per phase),

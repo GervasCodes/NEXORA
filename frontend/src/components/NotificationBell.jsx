@@ -11,7 +11,7 @@ const POLL_INTERVAL_MS = 30000;
 
 
 export default function NotificationBell() {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const { socket } = useSocket();
     const { t, language } = useLanguage();
     const toast = useToast();
@@ -50,14 +50,14 @@ export default function NotificationBell() {
     }, [toast, t]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || !sessionReady) return;
         fetchUnread();
         const interval = setInterval(fetchUnread, POLL_INTERVAL_MS);
         return () => clearInterval(interval);
         // Re-poll immediately (and re-fetch under the new language) whenever
         // the account's chosen language changes, since notification text is
         // rendered server-side in that language.
-    }, [user, language, fetchUnread]);
+    }, [user, sessionReady, language, fetchUnread]);
 
     // Real-time: the poll above is just a safety net for missed events (a
     // dropped connection, a tab that was asleep) - this is what makes the

@@ -263,6 +263,38 @@ corrects it - left untouched here since it's a separate, larger
 concern than the reported console errors; flagged as a possible
 follow-up.
 
+**Follow-up — root cause of the 401s/WS failure/instant "session
+expired": `SameSite=Strict` session cookie.** The `sessionReady`
+gating fix above was a real improvement (stops firing requests
+before the session is confirmed) but didn't fully explain reports of
+being logged out immediately after a successful login/OTP-verify -
+that's not a timing race, it's every cross-site call being unable to
+carry the cookie at all. Frontend (`nexoramarketplace.online`) and
+backend (an onrender.com subdomain) are different registrable
+domains, so every fetch/XHR/socket.io call between them is a
+cross-site request from the browser's perspective - and
+`backend/src/utils/sessionCookie.js` had both `nexora_session` and
+`nexora_csrf` set with `sameSite: "strict"`. Strict cookies are never
+attached to cross-site requests, so the browser silently sent none of
+these calls with the session cookie: the very first authenticated
+call after login (a notification poll, or the socket handshake)
+looked exactly like a logged-out request to the server, got a 401,
+and (since `nexora_user` had just been cached) the frontend correctly
+but confusingly reported "session expired" - not a bug in that
+logout logic, a real absence of the cookie. Changed `sameSite` to
+`"none"` in production (paired with the `secure: true` it already
+had there - required together) and left it `"lax"` for local dev
+(frontend/backend both on `http://localhost`, same-site, doesn't
+need `None`/HTTPS). Confirmed this is the only place either cookie's
+`sameSite` is set (`grep -rn "sameSite" backend/src`) and that
+CORS (`app.js`) and the socket.io server (`socket/socket.js`) both
+already had `credentials: true` with an explicit origin list, so
+no other backend change was needed for the cookie to start working
+cross-site. Syntax-checked only (`node --check`); not deployed or
+re-tested against the live Render backend from this sandbox - worth
+confirming login stays working end-to-end after deploy. Scope
+limited to `backend/src/utils/sessionCookie.js`.
+
 ## Part C — Red Flag Remediation
 
 Separate numbered roadmap (its own `README-phase-RFn.md` per phase),

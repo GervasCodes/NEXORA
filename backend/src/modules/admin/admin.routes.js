@@ -55,8 +55,13 @@ router.get("/analytics/advanced/export", adminController.exportAdvancedAnalytics
 const subscriptionController = require("../subscription/subscription.controller");
 const { createPlanValidation, updatePlanValidation } = require("../subscription/subscription.validator");
 router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
-router.post("/subscription-plans", createPlanValidation, validationMiddleware, subscriptionController.createPlan);
-router.put("/subscription-plans/:id", updatePlanValidation, validationMiddleware, subscriptionController.updatePlan);
+// Only super_admin may create or modify subscription plans - regular admins
+// can read them (for the subscriptions view) but must not change pricing,
+// commission overrides, or plan status. Enforced in the backend here, not
+// only in the UI, consistent with the requireSuperAdmin pattern used for
+// admin management and permanent user deletion.
+router.post("/subscription-plans", requireSuperAdmin, createPlanValidation, validationMiddleware, subscriptionController.createPlan);
+router.put("/subscription-plans/:id", requireSuperAdmin, updatePlanValidation, validationMiddleware, subscriptionController.updatePlan);
 router.get("/subscriptions", subscriptionController.listAllSubscriptions);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);

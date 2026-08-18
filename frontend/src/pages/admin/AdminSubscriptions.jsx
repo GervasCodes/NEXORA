@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
@@ -17,6 +18,8 @@ export default function AdminSubscriptions() {
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const { user } = useAuth();
+    const isSuperAdmin = user?.admin_level === "super_admin";
     const [editingId, setEditingId] = useState(null);
     const [draft, setDraft] = useState({});
     const [saving, setSaving] = useState(false);
@@ -129,7 +132,9 @@ export default function AdminSubscriptions() {
                                             <td className="px-4 py-2">{plan.maxActiveListings ?? "unlimited"}</td>
                                             <td className="px-4 py-2">{plan.isActive ? "Yes" : "No"}</td>
                                             <td className="px-4 py-2">
-                                                <button onClick={() => startEdit(plan)} className="text-azure text-xs font-semibold hover:underline">Edit</button>
+                                                {isSuperAdmin && (
+                                                    <button onClick={() => startEdit(plan)} className="text-azure text-xs font-semibold hover:underline">Edit</button>
+                                                )}
                                             </td>
                                         </>
                                     )}

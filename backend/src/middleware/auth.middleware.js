@@ -6,14 +6,25 @@ module.exports = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        // Phase 4 (Testing & Session Hardening): the frontend now sends
+        // the session via an httpOnly cookie rather than a
+        // JS-readable Bearer token (see sessionCookie.js / auth.controller.js).
+        // Bearer support is kept alongside it deliberately, not just for
+        // backward compat during the migration - it's also what lets a
+        // non-browser API consumer (or this very backend's own test
+        // suite, which authenticates via supertest with an explicit
+        // header) authenticate without needing a cookie jar at all.
+        // Bearer is checked first so an explicit header always wins over
+        // an incidentally-present cookie.
+        const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+        const token = bearerToken || req.cookies?.nexora_session;
+
+        if (!token) {
             return res.status(401).json({
                 success: false,
                 message: t(req.locale, "common.unauthorized")
             });
         }
-
-        const token = authHeader.split(" ")[1];
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 

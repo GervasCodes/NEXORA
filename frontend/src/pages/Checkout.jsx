@@ -238,7 +238,7 @@ export default function Checkout() {
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
                 <Input
-                    label="Street address"
+                    label={t("checkout.streetAddress")}
                     required
                     value={form.shipping_address}
                     onChange={update("shipping_address")}
@@ -246,13 +246,13 @@ export default function Checkout() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="City"
+                        label={t("checkout.city")}
                         required
                         value={form.shipping_city}
                         onChange={update("shipping_city")}
                     />
                     <Input
-                        label="Region"
+                        label={t("checkout.region")}
                         required
                         value={form.shipping_region}
                         onChange={update("shipping_region")}
@@ -260,8 +260,9 @@ export default function Checkout() {
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Contact phone</label>
+                    <label htmlFor="checkout-phone" className="block text-sm mb-1">{t("checkout.contactPhone")}</label>
                     <PhoneInput
+                        id="checkout-phone"
                         required
                         value={form.shipping_phone}
                         onChange={(shipping_phone) => setForm({ ...form, shipping_phone })}
@@ -270,8 +271,8 @@ export default function Checkout() {
 
                 <LocationPicker value={pin} onChange={setPin} />
 
-                <div>
-                    <label className="block text-sm mb-2">Payment method</label>
+                <fieldset className="border-0 p-0 m-0 min-w-0">
+                    <legend className="block text-sm mb-2">{t("checkout.paymentMethod")}</legend>
                     <div className="space-y-2">
                         {visiblePaymentMethods.map((method) => {
                             const selected = form.payment_method === method.value;
@@ -292,7 +293,7 @@ export default function Checkout() {
                             );
                         })}
                     </div>
-                </div>
+                </fieldset>
 
                 {error && (
                     <p key={errorTick} role="alert" className="text-coral text-sm animate-slide-down">
@@ -307,7 +308,7 @@ export default function Checkout() {
             </form>
 
             <div className="md:col-span-2 animate-slide-up" style={{ animationDelay: "80ms" }}>
-                <h2 className="font-display text-lg mb-3">Order summary</h2>
+                <h2 className="font-display text-lg mb-3">{t("checkout.orderSummary")}</h2>
                 <ul className="space-y-3 mb-4">
                     {items.map((item) => (
                         <li key={item.cart_item_id} className="flex justify-between text-sm">

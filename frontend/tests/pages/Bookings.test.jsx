@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { axe } from "jest-axe";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../src/api/client", () => ({
@@ -57,5 +58,19 @@ describe("Bookings page", () => {
         expect(screen.getByText("BKG-ABC123-4567")).toBeInTheDocument();
         expect(screen.getByText("confirmed")).toBeInTheDocument();
         expect(screen.getByText("TZS 450000.00")).toBeInTheDocument();
+    });
+
+    // Phase 3 (Accessibility & Internationalization): booking is one of
+    // the three flows named for the manual screen-reader audit - see the
+    // matching note in Checkout.test.jsx on what this automated check
+    // does and doesn't cover.
+    it("has no detectable accessibility violations on the bookings list", async () => {
+        api.get.mockResolvedValueOnce({ data: { data: [booking] } });
+        const { container } = renderPage();
+
+        await waitFor(() => expect(screen.getByText("Serengeti Safari Lodge")).toBeInTheDocument());
+
+        const results = await axe(container);
+        expect(results).toHaveNoViolations();
     });
 });

@@ -4,11 +4,12 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
 import PageMeta from "../../components/PageMeta";
+import { useLanguage } from "../../context/LanguageContext";
 
 const NEXT_STATUS = {
-    assigned: [{ value: "picked_up", label: "Mark picked up" }, { value: "failed", label: "Report failed" }],
-    picked_up: [{ value: "in_transit", label: "Mark in transit" }, { value: "failed", label: "Report failed" }],
-    in_transit: [{ value: "delivered", label: "Mark delivered" }, { value: "failed", label: "Report failed" }]
+    assigned: [{ value: "picked_up", labelKey: "delivery.agent.mine.markPickedUp" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }],
+    picked_up: [{ value: "in_transit", labelKey: "delivery.agent.mine.markInTransit" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }],
+    in_transit: [{ value: "delivered", labelKey: "delivery.agent.mine.markDelivered" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }]
 };
 
 const statusStyles = {
@@ -20,6 +21,7 @@ const statusStyles = {
 };
 
 export default function DeliveryMine() {
+    const { t } = useLanguage();
     const [deliveries, setDeliveries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
@@ -49,7 +51,7 @@ export default function DeliveryMine() {
     if (loading) return <PageLoader />;
 
     if (deliveries.length === 0) {
-        return <p className="text-ash text-sm">You haven't claimed any deliveries yet.</p>;
+        return <p className="text-ash text-sm">{t("delivery.agent.mine.empty")}</p>;
     }
 
     return (
@@ -72,7 +74,7 @@ export default function DeliveryMine() {
                         <p className="text-sm text-ink/80 mb-1">
                             {d.shipping_address}, {d.shipping_city}, {d.shipping_region}
                         </p>
-                        <p className="text-xs text-ash mb-3">Contact: {d.shipping_phone}</p>
+                        <p className="text-xs text-ash mb-3">{t("delivery.agent.mine.contact")}: {d.shipping_phone}</p>
 
                         <div className="flex gap-2">
                             {(NEXT_STATUS[d.status] || []).map((next) => (
@@ -83,7 +85,7 @@ export default function DeliveryMine() {
                                     variant="secondary"
                                     size="sm"
                                 >
-                                    {next.label}
+                                    {t(next.labelKey)}
                                 </Button>
                             ))}
                         </div>

@@ -1,4 +1,13 @@
 const db = require("../../config/db");
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): read-heavy,
+// lag-tolerant browsing queries only - see the comment above each swapped
+// function below for why that specific one is safe. Everything else in
+// this file (writes, and any read used in a read-after-write or
+// pre-write-validation context - e.g. findById, reused by updateProduct's
+// trailing re-fetch) deliberately stays on the primary `db` pool. Per
+// docs/SCALABILITY_REPORT.md §3: if DB_READ_HOST isn't set, dbRead IS the
+// primary pool, so this is a no-op until a replica actually exists.
+const dbRead = require("../../config/dbRead");
 const { buildProductSearchPlan } = require("../../utils/productSearch");
 const { buildPriceSellerConditions, buildLocationRatingConditions } = require("../../utils/productFilters");
 const { buildOrderByClause } = require("../../utils/productSort");
@@ -77,6 +86,11 @@ exports.findById = async (productId) => {
 // applies whatever it's given. `sp.region` is also now part of the
 // SELECT (Phase 4B) so the card can show a seller's location alongside
 // rating/badge, not just filter by it.
+//
+// Phase 5: public product browsing/search (GET /products) - the
+// canonical "read-heavy, lag-tolerant, no read-after-write" case from
+// docs/SCALABILITY_REPORT.md §3. Nothing in this request path writes
+// then re-reads through this function.
 exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, region, minRating, sort, page, limit }) => {
     const offset = (page - 1) * limit;
     const conditions = ["p.is_active = 1"];
@@ -124,7 +138,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
     // SELECT, once in WHERE) - only present when the FULLTEXT branch ran.
     const relevanceParam = selectExtra.length ? [searchPlan.booleanQuery] : [];
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
             sp.store_name, sp.is_verified, sp.region,
@@ -145,7 +159,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
         [...relevanceParam, ...params, limit, offset]
     );
 
-    const [[{ total }]] = await db.query(
+    const [[{ total }]] = await dbRead.query(
         `SELECT COUNT(*) AS total
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
@@ -161,6 +175,10 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
 // filter dropdown (Phase 3A). Optionally scoped to a category, so a
 // department page only offers sellers who actually sell in it instead of
 // the entire platform's seller list.
+//
+// Phase 5: filter-dropdown population for the browse UI - same
+// read-heavy, lag-tolerant, cache-wrapped-at-the-service-layer shape as
+// findAll above.
 exports.findFilterSellers = async ({ categoryId }) => {
     const conditions = ["p.is_active = 1"];
     const params = [];
@@ -170,7 +188,7 @@ exports.findFilterSellers = async ({ categoryId }) => {
         params.push(categoryId);
     }
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT DISTINCT sp.user_id AS id, sp.store_name
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
@@ -188,6 +206,8 @@ exports.findFilterSellers = async ({ categoryId }) => {
 // free-text (set by the seller in Store settings) and NULL for any
 // seller who hasn't set one - those are excluded here since "" isn't a
 // meaningful option in a location dropdown.
+//
+// Phase 5: same reasoning as findFilterSellers just above.
 exports.findFilterRegions = async ({ categoryId }) => {
     const conditions = ["p.is_active = 1", "sp.region IS NOT NULL", "sp.region != ''"];
     const params = [];
@@ -197,7 +217,7 @@ exports.findFilterRegions = async ({ categoryId }) => {
         params.push(categoryId);
     }
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT DISTINCT sp.region
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
@@ -210,8 +230,12 @@ exports.findFilterRegions = async ({ categoryId }) => {
 };
 
 // Public product detail by slug: full info + all images + store + ratings
+//
+// Phase 5: single call site (product.service.js#getProductBySlug, the
+// public ProductDetail page) - confirmed via grep before moving this,
+// not assumed. No read-after-write use anywhere in this file.
 exports.findBySlug = async (slug) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             p.*,
             sp.store_name, sp.store_slug, sp.is_verified,

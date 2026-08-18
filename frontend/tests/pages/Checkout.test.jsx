@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { axe } from "jest-axe";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
@@ -102,6 +103,23 @@ describe("Checkout page", () => {
 
         expect(screen.getByText(/Crochet Bag × 2/)).toBeInTheDocument();
         expect(screen.getAllByText("TZS 10000").length).toBeGreaterThan(0);
+    });
+
+    // Phase 3 (Accessibility & Internationalization): checkout is one of
+    // the three flows named for the manual screen-reader audit. Automated
+    // axe-core scanning catches the class of issue a screen-reader pass
+    // would surface first - unlabeled fields, missing form structure,
+    // contrast/ARIA violations - as a fast, repeatable check; it's a
+    // complement to a manual pass, not a replacement for one (axe can't
+    // judge whether the reading order or announced flow actually makes
+    // sense to a real screen-reader user).
+    it("has no detectable accessibility violations on the filled checkout form", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+
+        const { container } = renderCheckout();
+
+        const results = await axe(container);
+        expect(results).toHaveNoViolations();
     });
 
     it("places a mobile money order: creates the order, initiates payment, refreshes the cart, and navigates to the order page", async () => {

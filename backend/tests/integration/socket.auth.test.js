@@ -49,6 +49,23 @@ describe("Socket.IO handshake - fresh account-status check", () => {
         client.on("connect_error", (error) => resolve({ ok: false, error, client }));
     });
 
+    // Phase 4 (Testing & Session Hardening): the frontend no longer has
+    // JS access to the token to pass via `auth: { token }` (it's an
+    // httpOnly cookie now) - the handshake has to authenticate off the
+    // cookie the browser sends automatically instead. Connects the same
+    // way a real browser would: no `auth.token` at all, just the cookie
+    // header on the initial handshake request.
+    const connectWithCookie = (token) => new Promise((resolve) => {
+        const client = ioClient(`http://localhost:${port}`, {
+            extraHeaders: { Cookie: `nexora_session=${token}` },
+            reconnection: false,
+            transports: ["polling"] // websocket upgrade requests don't carry custom headers in Node's client; polling's initial HTTP request does
+        });
+
+        client.on("connect", () => resolve({ ok: true, client }));
+        client.on("connect_error", (error) => resolve({ ok: false, error, client }));
+    });
+
     it("accepts a valid token for an active account with a matching token_version", async () => {
         db.query.mockResolvedValueOnce([[{ is_active: 1, suspended_at: null, token_version: 0 }]]);
 
@@ -86,5 +103,13 @@ describe("Socket.IO handshake - fresh account-status check", () => {
         expect(ok).toBe(false);
         expect(error.message).toMatch(/no token/i);
         expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it("accepts a token sent via the httpOnly session cookie instead of the auth.token handshake field", async () => {
+        db.query.mockResolvedValueOnce([[{ is_active: 1, suspended_at: null, token_version: 0 }]]);
+
+        const { ok, client } = await connectWithCookie(signToken({ id: 1, tv: 0 }));
+        expect(ok).toBe(true);
+        client.close();
     });
 });

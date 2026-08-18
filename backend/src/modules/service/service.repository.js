@@ -1,4 +1,10 @@
 const db = require("../../config/db");
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): same reasoning as
+// product.repository.js - only genuinely public-browsing, single-call-site
+// reads get moved to dbRead; anything shared with a pre-write validation
+// check or a post-write re-fetch stays on the primary. See the comment
+// above each swapped function below.
+const dbRead = require("../../config/dbRead");
 const { buildOrderByClause } = require("../../utils/serviceSort");
 const { buildProductSearchPlan } = require("../../utils/productSearch");
 const { buildServiceLocationRatingConditions } = require("../../utils/serviceFilters");
@@ -62,6 +68,9 @@ exports.findById = async (serviceId) => {
 // utils/serviceFilters.js, and sort (Phase 4) by utils/serviceSort.js -
 // this function just applies whatever it's given, same contract
 // product.repository.js#findAll documents.
+//
+// Phase 5: public service browsing/search - same reasoning as
+// product.repository.js#findAll.
 exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region, minRating, sort, page, limit }) => {
     const offset = (page - 1) * limit;
     const conditions = ["s.is_active = 1", "s.status = 'published'"];
@@ -115,7 +124,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
     const whereClause = conditions.join(" AND ");
     const relevanceParam = selectExtra.length ? [searchPlan.booleanQuery] : [];
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             s.id, s.title, s.slug, s.pricing_model, s.base_price, s.discount_price,
             s.city, s.region, s.created_at,
@@ -146,7 +155,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
         [...relevanceParam, ...params, limit, offset]
     );
 
-    const [[{ total }]] = await db.query(
+    const [[{ total }]] = await dbRead.query(
         `SELECT COUNT(*) AS total
         FROM services s
         JOIN seller_profiles sp ON sp.user_id = s.provider_id
@@ -164,6 +173,8 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
 // service's own location) rather than sp.region (a seller's store
 // location), since a provider can list services in different regions
 // from where their store profile is registered.
+// Phase 5: filter-dropdown population - same reasoning as
+// product.repository.js#findFilterRegions.
 exports.findFilterRegions = async ({ categoryId }) => {
     const conditions = ["s.is_active = 1", "s.status = 'published'", "s.region IS NOT NULL", "s.region != ''"];
     const params = [];
@@ -173,7 +184,7 @@ exports.findFilterRegions = async ({ categoryId }) => {
         params.push(categoryId);
     }
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT DISTINCT s.region
         FROM services s
         WHERE ${conditions.join(" AND ")}
@@ -185,8 +196,11 @@ exports.findFilterRegions = async ({ categoryId }) => {
 };
 
 // Public service detail by slug: full info + provider + category.
+//
+// Phase 5: single call site (service.service.js#getServiceBySlug, the
+// public ServiceDetail page) - confirmed via grep before moving this.
 exports.findBySlug = async (slug) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             s.*,
             sp.store_name, sp.store_slug, sp.is_verified,

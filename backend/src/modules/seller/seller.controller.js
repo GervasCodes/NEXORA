@@ -309,9 +309,26 @@ exports.getAnalytics = async (req, res) => {
 };
 
 // Phase A5 (Advanced Analytics) - period comparison + top customers.
+// Phase P8 (Analytics Visualization) - optional ?start=&end= custom
+// range, same validation shape as admin.controller.js's equivalent
+// endpoint (see that file for the full reasoning).
 exports.getAdvancedAnalytics = async (req, res) => {
     try {
-        const data = await sellerService.getAdvancedAnalytics(req.user.id);
+        const { start, end } = req.query;
+        let customRange = null;
+        if (start || end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            if (!start || !end || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                return res.status(400).json({ success: false, message: "start and end must both be valid dates" });
+            }
+            if (endDate <= startDate) {
+                return res.status(400).json({ success: false, message: "end must be after start" });
+            }
+            customRange = { start: startDate, end: endDate };
+        }
+
+        const data = await sellerService.getAdvancedAnalytics(req.user.id, customRange);
 
         return res.json({ success: true, data });
 

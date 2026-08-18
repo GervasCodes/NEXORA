@@ -198,9 +198,12 @@ exports.cancelOrder = async (orderId, buyerId) => {
             );
         }
 
-        for (const child of children) {
-            await orderRepository.updateOrderStatus(child.id, "cancelled");
-        }
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): was N
+        // sequential UPDATEs (one per child order) in a loop - now one
+        // query covers every child order at once. `children` above is
+        // still needed for the cancellability check right before this,
+        // so that fetch stays; only the per-row update collapses.
+        await orderRepository.updateOrderStatusForChildren(orderId, "cancelled");
     } else if (!CANCELLABLE_STATUSES.includes(order.status)) {
         throw new Error(`Order can no longer be cancelled (status: ${order.status})`);
     }
@@ -224,10 +227,15 @@ exports.cancelOrder = async (orderId, buyerId) => {
 // candidates (findStalePendingMobileMoneyOrders) is what scopes this.
 exports.autoCancelStaleOrder = async (order) => {
     if (order.is_parent) {
-        const children = await orderRepository.findChildOrders(order.id);
-        for (const child of children) {
-            await orderRepository.updateOrderStatus(child.id, "cancelled");
-        }
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): this used
+        // to fetch every child order just to loop over them with one
+        // UPDATE each - N+1 twice over (a SELECT to list children, then
+        // N UPDATEs). Unlike cancelOrder above, there's no per-child
+        // validation needed here (no buyer-facing cancellability check -
+        // see the comment above this function), so the fetch itself was
+        // pure overhead; one batched UPDATE replaces both the SELECT and
+        // the loop.
+        await orderRepository.updateOrderStatusForChildren(order.id, "cancelled");
     }
 
     await orderRepository.updateOrderStatus(order.id, "cancelled");

@@ -358,19 +358,43 @@ async function getSellerWindowTotal(sellerId, start, end) {
     return { gmv: Number(row.gmv) || 0, transactionCount: Number(row.transaction_count) || 0 };
 }
 
-exports.getPeriodComparison = async (sellerId) => {
+// Phase P8 (Analytics Visualization) - optional customRange
+// ({start, end}) adds a "current vs. immediately-preceding window of
+// the same duration" comparison, same shape as admin.repository.js's
+// equivalent addition - see that file's getPeriodComparison for the
+// full reasoning.
+exports.getPeriodComparison = async (sellerId, customRange) => {
     const now = new Date();
     const dayMs = 24 * 60 * 60 * 1000;
     const daysAgo = (n) => new Date(now.getTime() - n * dayMs);
 
-    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all([
+    const fixedWindows = [
         getSellerWindowTotal(sellerId, daysAgo(7), now),
         getSellerWindowTotal(sellerId, daysAgo(14), daysAgo(7)),
         getSellerWindowTotal(sellerId, daysAgo(30), now),
         getSellerWindowTotal(sellerId, daysAgo(60), daysAgo(30))
-    ]);
+    ];
 
-    return { thisWeek, lastWeek, thisMonth, lastMonth };
+    let customWindows = null;
+    if (customRange && customRange.start && customRange.end) {
+        const { start, end } = customRange;
+        const durationMs = end.getTime() - start.getTime();
+        const previousStart = new Date(start.getTime() - durationMs);
+        customWindows = Promise.all([
+            getSellerWindowTotal(sellerId, start, end),
+            getSellerWindowTotal(sellerId, previousStart, start)
+        ]);
+    }
+
+    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all(fixedWindows);
+    const result = { thisWeek, lastWeek, thisMonth, lastMonth };
+
+    if (customWindows) {
+        const [current, previous] = await customWindows;
+        result.custom = { current, previous };
+    }
+
+    return result;
 };
 
 // Top customers of this seller's products by total spend.

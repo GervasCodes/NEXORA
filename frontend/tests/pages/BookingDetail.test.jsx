@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { axe } from "jest-axe";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -81,6 +82,22 @@ describe("BookingDetail page", () => {
 
         await waitFor(() => expect(screen.getByText("Booking not found")).toBeInTheDocument());
         expect(screen.getByText("No such booking exists")).toBeInTheDocument();
+    });
+
+    // Phase 3 (Accessibility & Internationalization): booking is one of
+    // the three flows named for the manual screen-reader audit - see the
+    // matching note in Checkout.test.jsx on what this automated check
+    // does and doesn't cover.
+    it("has no detectable accessibility violations on a loaded booking", async () => {
+        api.get.mockResolvedValue({ data: { data: baseBooking } });
+        mockUser.mockReturnValue({ id: 42, role: "buyer" });
+
+        const { container } = renderPage();
+
+        await waitFor(() => expect(screen.getByText("BKG-ABC123-4567")).toBeInTheDocument());
+
+        const results = await axe(container);
+        expect(results).toHaveNoViolations();
     });
 
     it("lets the provider confirm a pending booking", async () => {

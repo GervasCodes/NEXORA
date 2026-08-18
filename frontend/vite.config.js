@@ -51,23 +51,41 @@ export default defineConfig({
         globals: true,
         setupFiles: ["./tests/setupTests.js"],
         css: false,
+        // Phase 4 (Testing & Session Hardening): the new Playwright suite
+        // lives in e2e/*.spec.js and uses Playwright's own test/expect
+        // (not vitest's) - without this exclude, vitest's default
+        // include glob (**/*.{test,spec}.?(c|m)[jt]s?(x)) picks those
+        // files up too and fails them immediately, since `import { test,
+        // expect } from "@playwright/test"` isn't vitest's test runner.
+        // Every actual vitest spec lives under tests/, by convention but
+        // not by prior enforcement - this makes that boundary explicit.
+        exclude: ["**/node_modules/**", "**/e2e/**"],
         // Vitest's default pool spawns a worker per available CPU core.
         // On a resource-constrained machine (low RAM/CPU headroom, AV
         // scanning every worker process, etc.) that can produce
         // "Timeout waiting for worker to respond" / "Failed to start
-        // forks worker" errors partway through a run, especially once
-        // ~35+ jsdom environments have been created back to back - not
-        // a bug in the tests themselves (every file here passes fine
-        // when run with fewer concurrent workers). Capping concurrency
-        // trades a bit of wall-clock time for reliability; raise or
-        // remove this if you're running on a beefier CI box.
+        // forks worker" errors partway through a run - not a bug in the
+        // tests themselves (every file here passes fine in isolation or
+        // with fewer concurrent workers). This showed up in practice on
+        // Windows: 3 files (Checkout.test.jsx, Login.test.jsx,
+        // MessageSearch.test.jsx) failed to even start their worker
+        // while the other 39 files' 232 tests all passed - a spawn/
+        // response timeout, not a test failure. `pool: "threads"` uses
+        // worker_threads instead of child_process forks, which is
+        // meaningfully cheaper to spin up per-worker on Windows (no new
+        // process/AV-scan per worker) and is the standard fix for this
+        // exact symptom; maxThreads is capped lower than the old
+        // maxForks and both timeouts raised for extra headroom. Raise
+        // maxThreads or revert to the forks pool if running on a
+        // beefier CI box.
+        pool: "threads",
         poolOptions: {
-            forks: {
-                maxForks: 2
+            threads: {
+                maxThreads: 2
             }
         },
-        testTimeout: 15000,
-        hookTimeout: 15000,
+        testTimeout: 20000,
+        hookTimeout: 20000,
         coverage: {
             provider: "v8",
             reporter: ["text", "html"],

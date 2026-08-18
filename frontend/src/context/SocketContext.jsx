@@ -18,9 +18,15 @@ export function SocketProvider({ children }) {
     const [connectionState, setConnectionState] = useState("disconnected");
 
     useEffect(() => {
-        const token = localStorage.getItem("nexora_token");
-
-        if (!user || !token) {
+        // Phase 4 (Testing & Session Hardening): no more reading a token
+        // out of localStorage - the session lives in an httpOnly cookie
+        // now (see AuthContext.jsx / api/client.js). `user` alone gates
+        // whether to connect; the cookie itself authenticates the
+        // handshake, sent automatically by the browser when
+        // withCredentials is true and the server's CORS config allows
+        // credentials for this origin (both already true - see
+        // socket.js).
+        if (!user) {
             socketRef.current?.disconnect();
             socketRef.current = null;
             setConnected(false);
@@ -29,7 +35,7 @@ export function SocketProvider({ children }) {
         }
 
         const socket = io(getSocketUrl(), {
-            auth: { token },
+            withCredentials: true,
             transports: ["websocket", "polling"],
            
             reconnection: true,

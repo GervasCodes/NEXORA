@@ -8,7 +8,8 @@
     "migrate:status": "node migrate.js --status",
     "seed": "node seed.js",
     "backup": "node backup.js",
-    "restore": "node restore.js"
+    "restore": "node restore.js",
+    "check:docs-drift": "node checkMigrationDocsDrift.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -57,24 +57,26 @@ export default function AdminOrders() {
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((o) => (
-                    <li key={o.id} className="py-3 flex flex-wrap items-center gap-3">
+                    <li key={o.id} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
                             <p className="price text-sm font-medium">{o.order_number}</p>
                             <p className="text-xs text-ash truncate">{o.first_name} {o.last_name} · {o.email}</p>
                         </div>
 
-                        <p className="text-xs text-ash">{formatDate(o.created_at)}</p>
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:shrink-0">
+                            <p className="text-xs text-ash">{formatDate(o.created_at)}</p>
 
-                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[o.status] || "bg-line text-ash"}`}>
-                            {o.status}
-                        </span>
+                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyles[o.status] || "bg-line text-ash"}`}>
+                                {o.status}
+                            </span>
 
-                        <span className="text-xs text-ash capitalize">{o.payment_status}</span>
+                            <span className="text-xs text-ash capitalize">{o.payment_status}</span>
 
-                        <p className="price text-sm font-medium">{formatMoney(o.total_amount)}</p>
+                            <p className="price text-sm font-medium">{formatMoney(o.total_amount)}</p>
+                        </div>
 
                         {o.status === "delivered" && (
-                            <div className="w-full sm:w-auto text-right">
+                            <div className="w-full sm:w-auto sm:text-right">
                                 <button
                                     onClick={() => releaseEscrow(o.id)}
                                     disabled={releasing === o.id}

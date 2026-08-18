@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 
 // Shared phone input - country selector + national number field,
@@ -15,9 +16,22 @@ import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 //              e.g. from a loaded profile. Optional.
 //   onChange - called with the assembled "+<dial><digits>" string
 //              every time the country or number field changes.
+//   id       - passed to the number <input> so a caller's own visible
+//              <label htmlFor={id}> associates correctly (jsx-a11y's
+//              label-has-associated-control rule - added in Phase 3 -
+//              flags a sibling <label> with no for/wrapping relationship,
+//              which every caller had before this prop existed). When
+//              set, the built-in aria-label is omitted so the connected
+//              <label>'s own text becomes the accessible name instead -
+//              an aria-label would otherwise silently override it.
+//   ariaLabel - overrides the default "Phone" aria-label on the number
+//              field, for callers that want more specific wording
+//              ("Contact phone", "Delivery phone", etc.) without also
+//              rendering a visible label.
 //   required, placeholder, className - passed through to the number
 //              <input>.
-export default function PhoneInput({ value, onChange, required = false, disabled = false, placeholder = "712 345 678", className = "" }) {
+export default function PhoneInput({ value, onChange, required = false, disabled = false, placeholder = "712 345 678", className = "", id, ariaLabel }) {
+    const { t } = useLanguage();
     const [dial, setDial] = useState(() => splitIncoming(value).dial);
     const [national, setNational] = useState(() => splitIncoming(value).national);
 
@@ -61,6 +75,7 @@ export default function PhoneInput({ value, onChange, required = false, disabled
             <select
                 value={dial}
                 disabled={disabled}
+                aria-label={t("auth.countryCodeLabel")}
                 onChange={(e) => {
                     setDial(e.target.value);
                     emit(e.target.value, national);
@@ -74,9 +89,11 @@ export default function PhoneInput({ value, onChange, required = false, disabled
             <input
                 type="tel"
                 inputMode="numeric"
+                id={id}
                 required={required}
                 disabled={disabled}
                 placeholder={placeholder}
+                aria-label={id ? undefined : (ariaLabel || t("auth.phoneLabel"))}
                 value={national}
                 onChange={(e) => {
                     setNational(e.target.value);

@@ -53,11 +53,20 @@ describe("wallet.service.creditSellersForOrder", () => {
 
         await walletService.creditSellersForOrder(42);
 
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): items are
+        // credited in one batched call now, not one markItemCredited
+        // call per item - see wallet.repository.js#markItemsCredited.
         // seller 10: subtotal 1500, 10% commission = 150, net = 1350
-        expect(walletRepository.markItemCredited).toHaveBeenCalledWith(1, 10, 100, 900, false, connection);
-        expect(walletRepository.markItemCredited).toHaveBeenCalledWith(2, 10, 50, 450, false, connection);
         // seller 20: subtotal 2000, 10% commission = 200, net = 1800
-        expect(walletRepository.markItemCredited).toHaveBeenCalledWith(3, 10, 200, 1800, false, connection);
+        expect(walletRepository.markItemsCredited).toHaveBeenCalledWith(
+            [
+                { id: 1, commissionRate: 10, commissionAmount: 100, netAmount: 900 },
+                { id: 2, commissionRate: 10, commissionAmount: 50, netAmount: 450 },
+                { id: 3, commissionRate: 10, commissionAmount: 200, netAmount: 1800 }
+            ],
+            false,
+            connection
+        );
 
         // Escrowed method: money goes into held_balance, not the withdrawable balance.
         expect(walletRepository.incrementHeldBalance).toHaveBeenCalledWith(10, 1350, connection);
@@ -82,7 +91,11 @@ describe("wallet.service.creditSellersForOrder", () => {
 
         await walletService.creditSellersForOrder(43);
 
-        expect(walletRepository.markItemCredited).toHaveBeenCalledWith(1, 10, 100, 900, true, connection);
+        expect(walletRepository.markItemsCredited).toHaveBeenCalledWith(
+            [{ id: 1, commissionRate: 10, commissionAmount: 100, netAmount: 900 }],
+            true,
+            connection
+        );
         expect(walletRepository.incrementBalance).toHaveBeenCalledWith(10, 900, connection);
         expect(walletRepository.incrementHeldBalance).not.toHaveBeenCalled();
         expect(walletRepository.insertTransaction).toHaveBeenCalledWith(
@@ -95,7 +108,7 @@ describe("wallet.service.creditSellersForOrder", () => {
         walletRepository.findUncreditedItemsByOrder.mockResolvedValue([{ id: 1, seller_id: 10, subtotal: "1000.00" }]);
         orderRepository.findOrderById.mockResolvedValue({ id: 42, payment_method: "mobile_money" });
         settingsService.getCommissionRate.mockResolvedValue(10);
-        walletRepository.markItemCredited.mockRejectedValue(new Error("db write failed"));
+        walletRepository.markItemsCredited.mockRejectedValue(new Error("db write failed"));
 
         await expect(walletService.creditSellersForOrder(42)).rejects.toThrow("db write failed");
         expect(connection.rollback).toHaveBeenCalled();

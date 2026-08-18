@@ -79,20 +79,28 @@ exports.creditSellersForOrder = async (orderId) => {
 
         const bySeller = new Map();
         const rateBySeller = new Map();
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): this loop
+        // now only computes each item's commission figures in memory -
+        // the DB write that used to happen once per item right here
+        // (markItemCredited) has moved to a single batched call
+        // (markItemsCredited) after the loop, covering every item in one
+        // UPDATE instead of N. See wallet.repository.js#markItemsCredited
+        // for why this needs a CASE WHEN rather than a plain WHERE id IN.
+        const itemsToCredit = [];
         for (const item of items) {
             const commissionRate = commissionRateBySeller.get(item.seller_id);
             const sellerSubtotal = Number(item.subtotal);
             const commissionAmount = Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
             const netAmount = Number((sellerSubtotal - commissionAmount).toFixed(2));
 
-            await walletRepository.markItemCredited(
-                item.id, commissionRate, commissionAmount, netAmount, !isEscrowed, connection
-            );
+            itemsToCredit.push({ id: item.id, commissionRate, commissionAmount, netAmount });
 
             const existing = bySeller.get(item.seller_id) || 0;
             bySeller.set(item.seller_id, existing + netAmount);
             rateBySeller.set(item.seller_id, commissionRate);
         }
+
+        await walletRepository.markItemsCredited(itemsToCredit, !isEscrowed, connection);
 
         for (const [sellerId, netAmount] of bySeller.entries()) {
             await walletRepository.ensureWallet(sellerId, connection);

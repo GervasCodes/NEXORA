@@ -319,10 +319,13 @@ describe("order.service.cancelOrder", () => {
 
         await orderService.cancelOrder(1, 5);
 
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(2, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(3, "cancelled");
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): children
+        // are cancelled in a single batched query now, not one
+        // updateOrderStatus call per child - see
+        // updateOrderStatusForChildren in order.repository.js.
+        expect(orderRepository.updateOrderStatusForChildren).toHaveBeenCalledWith(1, "cancelled");
         expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledTimes(3);
+        expect(orderRepository.updateOrderStatus).toHaveBeenCalledTimes(1);
     });
 
     it("refuses to cancel a parent order when any child is past the cancellable window", async () => {
@@ -380,12 +383,16 @@ describe("order.service.autoCancelStaleOrder", () => {
     });
 
     it("cancels all children then the parent, without checking cancellable status (system-initiated)", async () => {
-        orderRepository.findChildOrders.mockResolvedValue([{ id: 2 }, { id: 3 }]);
-
         await orderService.autoCancelStaleOrder({ id: 1, is_parent: true, buyer_id: 5, order_number: "ORD-1" });
 
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(2, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(3, "cancelled");
+        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): no
+        // per-child cancellability check needed here (unlike cancelOrder
+        // above), so findChildOrders isn't called at all anymore - the
+        // batched update replaces both the SELECT and the per-child
+        // UPDATE loop. See updateOrderStatusForChildren in
+        // order.repository.js.
+        expect(orderRepository.findChildOrders).not.toHaveBeenCalled();
+        expect(orderRepository.updateOrderStatusForChildren).toHaveBeenCalledWith(1, "cancelled");
         expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
     });
 

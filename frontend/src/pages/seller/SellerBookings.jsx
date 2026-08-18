@@ -96,7 +96,7 @@ export default function SellerBookings() {
 
             <ul className="divide-y divide-line border-y border-line">
                 {bookings.map((booking) => (
-                    <li key={booking.id} className="py-4 flex flex-wrap items-center gap-3">
+                    <li key={booking.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{booking.service_title}</p>
                             <p className="price text-xs text-ash">{booking.booking_reference}</p>
@@ -107,11 +107,12 @@ export default function SellerBookings() {
                             </p>
                         </div>
 
-                        <BookingStatusBadge status={booking.status} size="sm" />
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                            <BookingStatusBadge status={booking.status} size="sm" />
+                            <p className="price text-sm">{formatMoney(booking.amount)}</p>
+                        </div>
 
-                        <p className="price text-sm">{formatMoney(booking.amount)}</p>
-
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                             {booking.status === "pending" && (
                                 <>
                                     <Button

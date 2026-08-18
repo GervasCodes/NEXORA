@@ -319,9 +319,30 @@ exports.exportGmvCsv = async (req, res) => {
 
 // Phase A5 (Advanced Analytics) - period comparison, platform-wide top
 // customers, and the admin-only seller performance leaderboard.
+// Phase P8 (Analytics Visualization) - optional ?start=&end= (ISO date
+// strings) add a custom-range comparison alongside the fixed week/month
+// ones. Both must be present and parse to valid dates with end after
+// start, or the request is rejected outright rather than silently
+// falling back to "no custom range" - a typo'd date shouldn't
+// silently produce a dashboard that looks fine but is quietly ignoring
+// what the admin asked for.
 exports.getAdvancedAnalytics = async (req, res) => {
     try {
-        const data = await adminService.getAdvancedAnalytics();
+        const { start, end } = req.query;
+        let customRange = null;
+        if (start || end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            if (!start || !end || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                return res.status(400).json({ success: false, message: "start and end must both be valid dates" });
+            }
+            if (endDate <= startDate) {
+                return res.status(400).json({ success: false, message: "end must be after start" });
+            }
+            customRange = { start: startDate, end: endDate };
+        }
+
+        const data = await adminService.getAdvancedAnalytics(customRange);
 
         return res.json({ success: true, data });
 

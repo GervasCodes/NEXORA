@@ -4,6 +4,7 @@ import api from "../api/client";
 import PageMeta from "../components/PageMeta";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
 import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 
@@ -15,17 +16,9 @@ const STATUS_STYLES = {
     withdrawn: "bg-line text-ash"
 };
 
-const TYPE_LABELS = {
-    damaged_item: "Damaged item",
-    delayed_delivery: "Delayed delivery",
-    defective_product: "Defective product",
-    wrong_item: "Wrong item",
-    missing_delivery: "Missing delivery",
-    other: "Other issue"
-};
-
 export default function Disputes() {
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const [disputes, setDisputes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [maintenance, setMaintenance] = useState(null);
@@ -46,22 +39,22 @@ export default function Disputes() {
     useEffect(load, []);
 
     if (loading) return <PageLoader />;
-    if (maintenance) return <MaintenanceScreen title="Disputes is under maintenance" message={maintenance} onRetry={load} />;
+    if (maintenance) return <MaintenanceScreen title={t("dispute.list.maintenanceTitle")} message={maintenance} onRetry={load} />;
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <div className="flex items-baseline justify-between mb-1">
                 <PageMeta title="My Disputes" noIndex />
-                <h1 className="font-display text-2xl">My disputes</h1>
+                <h1 className="font-display text-2xl">{t("dispute.list.title")}</h1>
             </div>
             <p className="text-ash text-sm mb-8">
-                Report a problem with any order from its order page, and track the outcome here.
+                {t("dispute.list.intro")}
             </p>
 
             {disputes.length === 0 ? (
                 <div className="border border-line rounded-lg p-8 text-center">
-                    <p className="text-ash text-sm mb-3">You haven't filed any disputes.</p>
-                    <Link to="/orders" className="text-teal hover:underline text-sm">Go to your orders</Link>
+                    <p className="text-ash text-sm mb-3">{t("dispute.list.empty")}</p>
+                    <Link to="/orders" className="text-teal hover:underline text-sm">{t("dispute.list.goToOrders")}</Link>
                 </div>
             ) : (
                 <ul className="space-y-3">
@@ -74,18 +67,18 @@ export default function Disputes() {
                                 <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                                     <div>
                                         <p className="price text-sm font-medium">{d.dispute_number}</p>
-                                        <p className="text-xs text-ash">Order {d.order_number}</p>
+                                        <p className="text-xs text-ash">{t("dispute.list.orderPrefix")} {d.order_number}</p>
                                     </div>
                                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[d.status] || "bg-line text-ash"}`}>
-                                        {d.status.replace("_", " ")}
+                                        {t(`dispute.status.${d.status}`)}
                                     </span>
                                 </div>
                                 <p className="text-sm font-medium mb-1">{d.subject}</p>
-                                <p className="text-xs text-ash mb-1">{TYPE_LABELS[d.type] || d.type}</p>
+                                <p className="text-xs text-ash mb-1">{t(`dispute.type.${d.type}`)}</p>
                                 {d.refund_amount && (
-                                    <p className="text-xs text-teal">Refund approved: {format(d.refund_amount)}</p>
+                                    <p className="text-xs text-teal">{t("dispute.list.refundApproved")}: {format(d.refund_amount)}</p>
                                 )}
-                                <p className="text-xs text-ash mt-1">Filed {formatDate(d.created_at)}</p>
+                                <p className="text-xs text-ash mt-1">{t("dispute.list.filed")} {formatDate(d.created_at)}</p>
                             </Link>
                         </li>
                     ))}

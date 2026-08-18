@@ -2,9 +2,12 @@ const { validationResult } = require("express-validator");
 const authService = require("./auth.service");
 const { t } = require("../../i18n");
 const loginService = require("./login.service");
+const authRepository = require("./auth.repository");
 const passwordResetService = require("./passwordReset.service");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
+const { sessionCookieOptions, csrfCookieOptions } = require("../../utils/sessionCookie");
+const { generateCsrfToken } = require("../../middleware/csrf.middleware");
 
 exports.register = async (req, res) => {
     try {
@@ -94,10 +97,21 @@ exports.verifyLoginOtp = async (req, res) => {
             metadata: { role: result.user?.role }
         });
 
+        // Phase 4 (Testing & Session Hardening): the session token now
+        // travels as an httpOnly cookie rather than in the response body
+        // - keeping it out of reach of any JS running on the page (a
+        // successful XSS can no longer just read it out of localStorage
+        // and exfiltrate it). A second, deliberately readable cookie
+        // carries a CSRF token the frontend must echo back on mutating
+        // requests - see csrf.middleware.js.
+        res.cookie("nexora_session", result.token, sessionCookieOptions());
+        const csrfToken = generateCsrfToken();
+        res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
+
         res.json({
             success: true,
             message: "Login successful",
-            data: result
+            data: { user: result.user }
         });
 
     } catch (error) {
@@ -159,4 +173,36 @@ exports.resetPassword = async (req, res) => {
             message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
     }
+};
+
+// Phase 4 (Testing & Session Hardening): logout is now a real endpoint
+// rather than a purely client-side "forget the token" - the session
+// cookie is httpOnly, so no amount of frontend JS can clear it; only a
+// Set-Cookie response from the server (via res.clearCookie, which
+// re-sends the cookie with an already-expired maxAge) actually removes
+// it from the browser. res.clearCookie requires the exact same
+// path/sameSite/secure options used when the cookie was set, or the
+// browser treats it as a different cookie and leaves the real one alone
+// - reusing sessionCookieOptions()/csrfCookieOptions() from login.
+exports.logout = (req, res) => {
+    res.clearCookie("nexora_session", sessionCookieOptions());
+    res.clearCookie("nexora_csrf", csrfCookieOptions());
+    res.json({ success: true, message: "Signed out." });
+};
+
+// Phase 4 (Testing & Session Hardening): with the session token no
+// longer readable by frontend JS, the frontend can't just check "is
+// there a token in localStorage" to know if someone's still signed in -
+// it has to ask the server. AuthContext calls this on app load; a 401
+// here (handled by auth.middleware, mounted on this route) means the
+// cookie is missing, expired, or was invalidated (password change,
+// suspension, etc.) exactly as it would for any other authenticated
+// request.
+exports.me = async (req, res) => {
+    const user = await authRepository.findById(req.user.id);
+    if (!user) {
+        return res.status(401).json({ success: false, message: t(req.locale, "common.unauthorized") });
+    }
+    delete user.password;
+    res.json({ success: true, data: { user } });
 };

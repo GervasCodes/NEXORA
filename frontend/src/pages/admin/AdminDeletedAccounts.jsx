@@ -69,35 +69,37 @@ export default function AdminDeletedAccounts() {
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {users.map((u) => (
-                        <li key={u.id} className="py-3 flex flex-wrap items-center gap-3">
+                        <li key={u.id} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium truncate">{u.first_name} {u.last_name}</p>
                                 <p className="text-xs text-ash truncate">{u.email} · {u.phone}</p>
                             </div>
 
-                            <span className="text-xs px-2 py-1 rounded-full bg-line text-ash capitalize">
-                                {u.role.replace("_", " ")}
-                            </span>
-
-                            <p className="text-xs text-ash">Joined {formatDate(u.created_at)}</p>
-
-                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">
-                                Deleted {formatDate(u.deleted_at)}
-                            </span>
-
-                            {u.permanently_deleted_at ? (
-                                <span className="text-xs font-medium px-2 py-1 rounded-full bg-line text-ash">
-                                    Permanently removed {formatDate(u.permanently_deleted_at)}
+                            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                                <span className="text-xs px-2 py-1 rounded-full bg-line text-ash capitalize">
+                                    {u.role.replace("_", " ")}
                                 </span>
-                            ) : isSuperAdmin ? (
-                                <button
-                                    onClick={() => handlePermanentDelete(u)}
-                                    disabled={busyId === u.id}
-                                    className="text-xs font-medium px-3 py-1.5 rounded-full border border-coral text-coral hover:bg-coral hover:text-white transition disabled:opacity-50"
-                                >
-                                    {busyId === u.id ? "Deleting…" : "Permanently delete"}
-                                </button>
-                            ) : null}
+
+                                <p className="text-xs text-ash">Joined {formatDate(u.created_at)}</p>
+
+                                <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">
+                                    Deleted {formatDate(u.deleted_at)}
+                                </span>
+
+                                {u.permanently_deleted_at ? (
+                                    <span className="text-xs font-medium px-2 py-1 rounded-full bg-line text-ash">
+                                        Permanently removed {formatDate(u.permanently_deleted_at)}
+                                    </span>
+                                ) : isSuperAdmin ? (
+                                    <button
+                                        onClick={() => handlePermanentDelete(u)}
+                                        disabled={busyId === u.id}
+                                        className="w-full sm:w-auto text-xs font-medium px-3 py-1.5 rounded-full border border-coral text-coral hover:bg-coral hover:text-white transition disabled:opacity-50"
+                                    >
+                                        {busyId === u.id ? "Deleting…" : "Permanently delete"}
+                                    </button>
+                                ) : null}
+                            </div>
                         </li>
                     ))}
                 </ul>

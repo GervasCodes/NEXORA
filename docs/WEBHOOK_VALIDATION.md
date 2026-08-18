@@ -9,39 +9,92 @@ All webhook endpoints are mounted under `/api/v1/payments/webhooks/*`
 (see `backend/src/modules/payment/payment.routes.js` and the one
 route registered directly in `backend/src/app.js` for Snippe — see §2).
 
-## 1. MalipoPay & Selcom — shared-secret header
+## 1. MalipoPay & Selcom — provider-specific verification (updated Phase 7)
 
 **Endpoints:** `POST /payments/webhooks/malipopay`,
 `POST /payments/webhooks/selcom`
 **Middleware:** `backend/src/middleware/webhookAuth.middleware.js`
-**Mechanism:** a static shared secret, configured on the provider's
-dashboard as a custom webhook header, compared against
-`MALIPOPAY_WEBHOOK_SECRET` / `SELCOM_WEBHOOK_SECRET`.
+(`verifyMalipopayWebhook` / `verifySelcomWebhook`)
+
+> **This section previously described a generic `X-Webhook-Secret`
+> header check as the current mechanism for both providers. That's now
+> out of date** — as of this repo's Phase 2 (Security Hardening) work,
+> each provider is verified with its own real documented mechanism
+> instead (confirmed against developers.malipopay.co.tz and
+> developers.selcommobile.com on 2026-08-02, re-checked as part of
+> Phase 7). The old generic check still exists as
+> `exports.verifySharedSecretHeader` in
+> `webhookAuth.middleware.js` — kept as a portable fallback, not wired
+> to any route by default — see that file's own header comment for when
+> to use it instead.
+
+### MalipoPay — per-request payload signature
+
+Per developers.malipopay.co.tz/integration/webhooks, every callback body
+includes a `payloadSignature` field:
 
 ```
-Request header expected:  X-Webhook-Secret: <configured secret>
+payloadSignature = SHA256(reference + timestamp + amount + phoneNumber + secret)
 ```
 
-**Validation logic** (`verifyWebhookSecret`, applied per-provider):
+where `secret` is the same `MOBILE_MONEY_API_KEY` used as the `apiToken`
+header on outbound requests (MalipoPay uses one project key, not a
+separate secret/key pair — see `malipopay.provider.js`'s header comment).
 
-1. If the env var (`MALIPOPAY_WEBHOOK_SECRET` / `SELCOM_WEBHOOK_SECRET`)
-   is **not set**:
-   - In `NODE_ENV=production` → **reject**, fail closed
-     (`200 { success: false }` — see §4 for why 200 and not 401/403).
-   - Outside production → allow through, so local development doesn't
-     require a secret to test with a hand-crafted payload.
-2. If the header is missing or doesn't match the configured secret →
-   **reject**, logged at `warn` (not `error` — see §5).
-3. Otherwise → pass through to `payment.controller.js`'s handler.
+**Validation logic** (`verifyMalipopayWebhook`):
 
-**Why a shared secret and not HMAC-over-body here:** this is documented
-in-code as a deliberate, portable baseline — most providers support a
-custom webhook header even before you have their full API docs/sandbox
-access. If MalipoPay/Selcom's real integration instead signs the body
-with HMAC (many mobile-money gateways do), that's a strictly stronger
-mechanism and should replace this once their actual webhook
-documentation is confirmed. **This is flagged as a known gap, not
-presented as final** — see §6.
+1. If `MOBILE_MONEY_API_KEY` is **not set**: reject in production (fail
+   closed), allow through outside production (same reasoning as the old
+   shared-secret check — local/dev testing with a hand-crafted payload
+   shouldn't require a secret).
+2. Reject if `payloadSignature` or `customer.phoneNumber` is missing.
+3. Recompute the SHA256 above and compare with `crypto.timingSafeEqual`
+   (constant-time — see §5's reasoning, same pattern as Snippe's HMAC
+   check).
+4. Reject if the payload's `timestamp` isn't fresh (see the replay-guard
+   paragraph under §6 — unchanged from before).
+5. Reject if this exact delivery has already been recorded (dedup).
+
+### Selcom — static Bearer token
+
+Per developers.selcommobile.com's C2B/Collection Services section, the
+Payment Notification callback (the `transid`/`resultcode`/`result` shape
+`selcomWebhook` reads) authenticates with a static bearer token Selcom's
+team shares directly, not a per-request signature:
+
+```
+Authorization: Bearer <SELCOM_WEBHOOK_SECRET>
+```
+
+**Validation logic** (`verifySelcomWebhook`): same fail-closed-in-
+production / constant-time-compare / replay-dedup shape as MalipoPay
+above, just comparing the bearer token instead of recomputing a
+signature. Selcom's documented payload carries no timestamp/nonce of its
+own, so the replay-hash dedup is this provider's only guard against a
+captured, validly-authenticated request being replayed later (see §6).
+
+### Payload shape checked, not just authenticated (Phase 7 addition)
+
+Signature/token verification above proves a request came from the
+provider; it doesn't prove `payload.reference` (MalipoPay) or
+`payload.transid` (Selcom) is the well-formed string
+`handleProviderWebhook`'s `ORDER-`/`VERIFY-`/`BOOKING-`/`SUB-` regex
+match expects. `payment.controller.js`'s `malipopayWebhook` /
+`selcomWebhook` handlers now reject (`200 { success: false }`, logged at
+`warn`) before calling into `payment.service.js` if that field is
+missing or isn't a string, instead of letting a malformed-but-
+authenticated payload surface as an unhandled-exception `error` log.
+Sample payloads matching the shape validated above (and used by
+`backend/tests/integration/payment.webhooks.test.js`) are collected in
+`backend/tests/fixtures/webhookPayloads.js`.
+
+**Why provider-specific mechanisms and not a generic shared secret:**
+strictly stronger — a per-request signature (MalipoPay) or non-guessable
+bearer token (Selcom) authenticates the specific provider's actual
+integration rather than a header either provider may or may not
+actually support. The previous generic `X-Webhook-Secret` check is kept
+only as a fallback for a provider whose real sandbox behavior turns out
+to differ from its public docs.
 
 ## 2. Snippe — HMAC-SHA256 signature over the raw body
 
@@ -152,16 +205,27 @@ work (`PHASE2_CHANGELOG.md`).
 
 Flagging rather than silently presenting as resolved:
 
-- **MalipoPay/Selcom payload shapes are not confirmed against real
-  provider documentation.** The field names read in
-  `payment.controller.js` (`payload.reference`, `payload.status`,
-  `payload.transid`, `payload.resultcode`, etc.) follow each provider's
-  commonly documented pattern but haven't been verified against live
-  sandbox access. Confirm before relying on this in production.
-- **Shared-secret vs. HMAC.** If either provider's real dashboard
-  supports HMAC-signed payloads (common for mobile money gateways),
-  that should replace the static shared-secret check in §1 — strictly
-  stronger, same "fail closed when unconfigured" posture should be kept.
+- **MalipoPay/Selcom payload shapes still aren't confirmed against live
+  sandbox access** (Phase 7 re-checked this — full webhook-payload docs
+  for both providers sit behind a business/merchant login neither
+  developers.malipopay.co.tz nor developers.selcommobile.com expose
+  publicly). The field names read in `payment.controller.js`
+  (`payload.reference`, `payload.status`, `payload.payloadSignature`,
+  `payload.transid`, `payload.resultcode`, `payload.result`) and the
+  signature/token mechanisms in §1 follow each provider's publicly
+  documented pattern and are exercised by real tests
+  (`backend/tests/integration/payment.webhooks.test.js`,
+  `backend/tests/unit/webhookAuth.middleware.test.js`), but that's still
+  not the same as a confirmed live-sandbox round trip. **Do one manual
+  sandbox test per provider before go-live** — this is the single
+  highest-value verification step left, and the one this repo cannot do
+  without provider account access.
+- **Shared-secret vs. per-provider mechanism — resolved for MalipoPay
+  and Selcom in §1**, superseding the "if either provider supports
+  HMAC..." note this section used to carry. The generic
+  `verifySharedSecretHeader` fallback (§1) remains available if a
+  provider's real sandbox behavior ever turns out to differ from its
+  public docs.
 - **Replay-window / nonce check — implemented in Phase 2.** A captured,
   valid webhook payload replayed later used to still pass the
   shared-secret/HMAC check (the secret alone doesn't bind the payload to

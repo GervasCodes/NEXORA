@@ -20,13 +20,15 @@
     "extends": [
         "eslint:recommended",
         "plugin:react/recommended",
-        "plugin:react-hooks/recommended"
+        "plugin:react-hooks/recommended",
+        "plugin:jsx-a11y/recommended"
     ],
-    "plugins": ["react", "react-hooks"],
+    "plugins": ["react", "react-hooks", "jsx-a11y"],
     "rules": {
         "react/prop-types": "off",
         "react/react-in-jsx-scope": "off",
         "react/no-unescaped-entities": "off",
-        "no-unused-vars": ["warn", { "args": "none" }]
+        "no-unused-vars": ["warn", { "args": "none" }],
+        "react/no-danger": "error"
     }
 }

@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
+import { useLanguage } from "../context/LanguageContext";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
 
 const STATUS_STYLES = {
@@ -14,15 +15,6 @@ const STATUS_STYLES = {
     resolved: "bg-teal text-white",
     rejected: "bg-coral/10 text-coral",
     withdrawn: "bg-line text-ash"
-};
-
-const TYPE_LABELS = {
-    damaged_item: "Damaged item",
-    delayed_delivery: "Delayed delivery",
-    defective_product: "Defective product",
-    wrong_item: "Wrong item",
-    missing_delivery: "Missing delivery",
-    other: "Other issue"
 };
 
 const RESOLUTIONS = [
@@ -37,6 +29,7 @@ export default function DisputeDetail() {
     const { id } = useParams();
     const { user } = useAuth();
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const fileInputRef = useRef(null);
 
     const [dispute, setDispute] = useState(null);
@@ -107,7 +100,7 @@ export default function DisputeDetail() {
     };
 
     const withdraw = async () => {
-        if (!window.confirm("Withdraw this dispute? This can't be undone.")) return;
+        if (!window.confirm(t("dispute.detail.withdrawConfirm"))) return;
         setBusy("withdraw");
         setError("");
         try {
@@ -175,7 +168,7 @@ export default function DisputeDetail() {
     if (loadError || !dispute) {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-                <p className="font-display text-2xl mb-2">Dispute not found</p>
+                <p className="font-display text-2xl mb-2">{t("dispute.detail.notFound")}</p>
                 <p className="text-ash text-sm">{loadError}</p>
             </div>
         );
@@ -186,21 +179,21 @@ export default function DisputeDetail() {
             <PageMeta title={`Dispute ${dispute.dispute_number}`} noIndex />
             <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-ash mb-1">Dispute</p>
+                    <p className="text-xs uppercase tracking-widest text-ash mb-1">{t("dispute.detail.eyebrow")}</p>
                     <h1 className="price font-display text-2xl">{dispute.dispute_number}</h1>
                 </div>
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${STATUS_STYLES[dispute.status] || "bg-line text-ash"}`}>
-                    {dispute.status.replace("_", " ")}
+                    {t(`dispute.status.${dispute.status}`)}
                 </span>
             </div>
             <p className="text-sm text-ash mb-6">
-                On order <Link to={`/orders/${dispute.order_id}`} className="text-teal hover:underline">#{dispute.order_id}</Link> · filed {formatDate(dispute.created_at)}
+                {t("dispute.detail.onOrder")} <Link to={`/orders/${dispute.order_id}`} className="text-teal hover:underline">#{dispute.order_id}</Link> · {t("dispute.detail.filed")} {formatDate(dispute.created_at)}
             </p>
 
             {error && <p className="text-sm text-coral mb-4">{error}</p>}
 
             <div className="border border-line rounded-lg p-4 mb-6">
-                <p className="text-xs text-ash mb-1">{TYPE_LABELS[dispute.type] || dispute.type}</p>
+                <p className="text-xs text-ash mb-1">{t(`dispute.type.${dispute.type}`)}</p>
                 <p className="font-medium mb-2">{dispute.subject}</p>
                 <p className="text-sm text-ink/80 whitespace-pre-wrap">{dispute.description}</p>
             </div>
@@ -208,10 +201,10 @@ export default function DisputeDetail() {
             {dispute.status === "resolved" && (
                 <div className="border border-teal/30 bg-teal/5 rounded-lg p-4 mb-6">
                     <p className="text-sm font-medium text-teal mb-1">
-                        Resolved: {RESOLUTIONS.find((r) => r.value === dispute.resolution)?.label || dispute.resolution}
+                        {t("dispute.detail.resolvedPrefix")}: {RESOLUTIONS.find((r) => r.value === dispute.resolution)?.label || dispute.resolution}
                     </p>
                     {dispute.refund_amount && (
-                        <p className="text-sm text-teal mb-1">Refund amount: {format(dispute.refund_amount)}</p>
+                        <p className="text-sm text-teal mb-1">{t("dispute.detail.refundAmount")}: {format(dispute.refund_amount)}</p>
                     )}
                     {dispute.resolution_note && <p className="text-sm text-ink/80">{dispute.resolution_note}</p>}
                 </div>
@@ -219,7 +212,7 @@ export default function DisputeDetail() {
 
             {dispute.status === "rejected" && (
                 <div className="border border-coral/30 bg-coral/5 rounded-lg p-4 mb-6">
-                    <p className="text-sm font-medium text-coral mb-1">Dispute rejected</p>
+                    <p className="text-sm font-medium text-coral mb-1">{t("dispute.detail.rejected")}</p>
                     {dispute.resolution_note && <p className="text-sm text-ink/80">{dispute.resolution_note}</p>}
                 </div>
             )}
@@ -227,10 +220,10 @@ export default function DisputeDetail() {
             {/* Evidence */}
             <div className="mb-8">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs uppercase tracking-widest text-ash">Evidence</p>
+                    <p className="text-xs uppercase tracking-widest text-ash">{t("dispute.detail.evidence")}</p>
                     {(isBuyer || isSeller) && canAct && (
                         <label className="text-xs text-teal hover:underline cursor-pointer">
-                            {busy === "evidence" ? "Uploading…" : "+ Add photo"}
+                            {busy === "evidence" ? t("dispute.detail.uploading") : t("dispute.detail.addPhoto")}
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -243,7 +236,7 @@ export default function DisputeDetail() {
                     )}
                 </div>
                 {dispute.evidence?.length === 0 ? (
-                    <p className="text-sm text-ash">No photos attached yet.</p>
+                    <p className="text-sm text-ash">{t("dispute.detail.noPhotos")}</p>
                 ) : (
                     <div className="grid grid-cols-3 gap-2">
                         {dispute.evidence.map((ev) => (
@@ -364,17 +357,17 @@ export default function DisputeDetail() {
                         disabled={busy === "withdraw"}
                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
                     >
-                        {busy === "withdraw" ? "Withdrawing…" : "Withdraw dispute"}
+                        {busy === "withdraw" ? t("dispute.detail.withdrawing") : t("dispute.detail.withdraw")}
                     </button>
                 </div>
             )}
 
             {/* Messages thread */}
             <div>
-                <p className="text-xs uppercase tracking-widest text-ash mb-3">Discussion</p>
+                <p className="text-xs uppercase tracking-widest text-ash mb-3">{t("dispute.detail.discussion")}</p>
                 <ul className="space-y-3 mb-4">
                     {dispute.messages?.length === 0 && (
-                        <li className="text-sm text-ash">No messages yet.</li>
+                        <li className="text-sm text-ash">{t("dispute.detail.noMessages")}</li>
                     )}
                     {dispute.messages?.map((m) => (
                         <li key={m.id} className="border border-line rounded-lg p-3">
@@ -393,7 +386,7 @@ export default function DisputeDetail() {
                     <form onSubmit={sendMessage} className="space-y-2">
                         <textarea
                             rows={2}
-                            placeholder={`Reply as ${senderRole}…`}
+                            placeholder={`${t("dispute.detail.replyAs")} ${senderRole}…`}
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
@@ -403,11 +396,11 @@ export default function DisputeDetail() {
                             disabled={!message.trim() || busy === "message"}
                             className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                         >
-                            {busy === "message" ? "Sending…" : "Send"}
+                            {busy === "message" ? t("dispute.detail.sending") : t("dispute.detail.send")}
                         </button>
                     </form>
                 ) : (
-                    <p className="text-xs text-ash">This dispute is closed for new messages.</p>
+                    <p className="text-xs text-ash">{t("dispute.detail.closedForMessages")}</p>
                 )}
             </div>
         </div>

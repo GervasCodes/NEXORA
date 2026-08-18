@@ -41,7 +41,7 @@ export default function AdminSellers() {
 
             <ul className="divide-y divide-line border-y border-line">
                 {sellers.map((s) => (
-                    <li key={s.profile_id} className="py-3 flex flex-wrap items-center gap-3">
+                    <li key={s.profile_id} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{s.store_name}</p>
                             <p className="text-xs text-ash truncate">
@@ -52,22 +52,25 @@ export default function AdminSellers() {
                             )}
                         </div>
 
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_verified ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
-                            {s.is_verified ? "✓ Verified" : "Pending"}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_verified ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
+                                {s.is_verified ? "✓ Verified" : "Pending"}
+                            </span>
 
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
-                            {s.is_active ? "Active account" : "Deactivated"}
-                        </span>
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
+                                {s.is_active ? "Active account" : "Deactivated"}
+                            </span>
 
-                        <Button
-                            onClick={() => toggleVerified(s)}
-                            disabled={busyId === s.user_id}
-                            variant="secondary"
-                            size="sm"
-                        >
-                            {s.is_verified ? "Remove verification" : "Verify"}
-                        </Button>
+                            <Button
+                                onClick={() => toggleVerified(s)}
+                                disabled={busyId === s.user_id}
+                                variant="secondary"
+                                size="sm"
+                                className="w-full sm:w-auto"
+                            >
+                                {s.is_verified ? "Remove verification" : "Verify"}
+                            </Button>
+                        </div>
                     </li>
                 ))}
             </ul>

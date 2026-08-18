@@ -113,34 +113,37 @@ export default function AdminManageAdmins() {
             {loading ? <p className="text-ash">Loading admins…</p> : (
                 <ul className="divide-y divide-line border-y border-line">
                     {admins.map((a) => (
-                        <li key={a.id} className="py-3 flex flex-wrap items-center gap-3">
+                        <li key={a.id} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium truncate">{a.first_name} {a.last_name}</p>
                                 <p className="text-xs text-ash truncate">{a.email} · {a.phone}</p>
                             </div>
 
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full self-start sm:self-auto sm:shrink-0 ${
                                 a.admin_level === "super_admin" ? "bg-mango/10 text-mango-dark" : "bg-line text-ash"
                             }`}>
                                 {a.admin_level === "super_admin" ? "Super Admin" : "Admin"}
                             </span>
 
-                            <Button
-                                onClick={() => changeLevel(a.id, a.admin_level === "super_admin" ? "admin" : "super_admin")}
-                                disabled={busyId === a.id}
-                                variant="secondary"
-                                size="sm"
-                            >
-                                {a.admin_level === "super_admin" ? "Demote to Admin" : "Promote to Super Admin"}
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                                <Button
+                                    onClick={() => changeLevel(a.id, a.admin_level === "super_admin" ? "admin" : "super_admin")}
+                                    disabled={busyId === a.id}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="flex-1 sm:flex-initial"
+                                >
+                                    {a.admin_level === "super_admin" ? "Demote to Admin" : "Promote to Super Admin"}
+                                </Button>
 
-                            <button
-                                onClick={() => remove(a.id)}
-                                disabled={busyId === a.id || a.id === user.id}
-                                className="text-xs border border-coral text-coral px-3 py-1.5 rounded-md hover:bg-coral/10 transition-colors disabled:opacity-50"
-                            >
-                                Remove
-                            </button>
+                                <button
+                                    onClick={() => remove(a.id)}
+                                    disabled={busyId === a.id || a.id === user.id}
+                                    className="flex-1 sm:flex-initial text-xs border border-coral text-coral px-3 py-1.5 rounded-md hover:bg-coral/10 transition-colors disabled:opacity-50"
+                                >
+                                    Remove
+                                </button>
+                            </div>
                         </li>
                     ))}
                 </ul>

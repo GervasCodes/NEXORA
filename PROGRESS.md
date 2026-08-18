@@ -13,14 +13,13 @@ for approval.
 | Phase | Description | Status | Details |
 |-------|-------------|--------|---------|
 | P1 | Design System Extraction | ✅ Done | [README-phase-P1.md](./README-phase-P1.md) |
-| P1b | Input Retrofit | 🟡 In progress | [README-phase-P1b.md](./README-phase-P1b.md) |
-| P2 | Metadata & Error Polish | Not started | |
-| P3 | Accessibility & Internationalization | Not started | |
-| P4 | Testing & Session Hardening | Not started | |
-| P5 | Backend N+1 Fixes & Read Replica Adoption | Not started | |
+| P2 | Metadata & Error Polish | ✅ Done | [README-phase-P2.md](./README-phase-P2.md) |
+| P3 | Accessibility & Internationalization | ✅ Done | [README-phase-P3.md](./README-phase-P3.md) |
+| P4 | Testing & Session Hardening | ✅ Done | [README-phase-P4.md](./README-phase-P4.md) |
+| P5 | Backend N+1 Fixes & Read Replica Adoption | ✅ Done | [README-phase-P5.md](./README-phase-P5.md) |
 | P6 | Database/DevOps CI Enforcement | Not started | |
-| P7 | Security Verification | Not started | |
-| P8 | Analytics Visualization & Docs Correction | Not started | |
+| P7 | Security Verification | ✅ Done | [README-phase-P7.md](./README-phase-P7.md) |
+| P8 | Analytics Visualization & Docs Correction | ✅ Done | [README-phase-P8.md](./README-phase-P8.md) |
 
 P1 status detail: shared Button/Input/EmptyState/ErrorState components
 built (Button is polymorphic via `as={Link}` for nav CTAs); all 8
@@ -30,24 +29,203 @@ buttons/links retrofitted (6 decorative badge dots and 1 structurally-
 attached search-submit button intentionally left as-is — see README);
 EmptyState/ErrorState wired into ProductGrid (Home + BrowseProducts) /
 Orders / Bookings, including fixing two pages that previously swallowed
-fetch errors into a misleading empty state. Input component built.
-245/245 frontend tests passing, lint clean on all touched files.
+fetch errors into a misleading empty state. Input: all 23 fields missing
+`focus-ring` fixed (exact count match, 7 files); Login/Register/
+ForgotPassword/Checkout's clean text/email/tel/password fields converted
+to the shared Input component; the bulk of the ~150 duplicated Input
+classNames across seller/admin forms not yet componentized — flagged as
+next up (P1c). 245/245 frontend tests passing, lint clean on all touched
+files.
 
-P1b status detail: Input retrofit started — 19 of ~50 files converted so
-far (components/DeliveryAgentRating, ProductFilters, ServiceFilters,
-ai/NexoraCopyAssist; pages/Account, BookingDetail, Checkout, DisputeDetail,
-ForgotPassword, Login, NewDispute, ProductDetail, Register,
-admin/AdminSettings, admin/AdminAuditLogs, admin/AdminBillingControl, plus
-focus-ring-only fixes on ai/NexoraAIDrawer, ai/NexoraSmartSearch,
-chat/MessageSearch). Found more missing-focus-ring instances than P1's
-23-field estimate, concentrated in AdminSettings.jsx (8 fields had no focus
-styling at all) and several fields using `outline-none` instead of a bare
-omission. Remaining: all seller product/service/store forms (untouched),
-several more admin pages, Cart/ConversationThread/Messages/ServiceDetail
-(likely structural exceptions like SearchBox, need per-field confirmation).
-Tests not re-run this pass (deferred per instruction — do manually before
-merging). See README-phase-P1b.md for the full breakdown and where to pick
-up next.
+P2 status detail: `main.jsx`'s bare error-boundary fallback replaced with
+a styled `ErrorFallback.jsx` reusing the 404 page's visual language
+(reload + go-home CTAs). `react-helmet-async` installed and wired via
+`HelmetProvider`; a new `PageMeta.jsx` component sets title + Open
+Graph + Twitter Card tags. All 80 live page components now render
+`PageMeta` (verified — zero gaps against the full `pages/` file list);
+67 of those also set `noIndex` for dashboard/account/auth pages that
+shouldn't be search-indexed. ProductDetail/StorePage/ServiceDetail (the
+pages named as priority) get fully dynamic OG image/description from
+real product/store/service data — OG prioritized over Twitter Card since
+WhatsApp (the named sharing channel) reads OG tags. No dedicated OG
+banner image exists in the repo yet; falls back to the square
+`icon-512.png` rather than fabricating one — flagged as a follow-up.
+245/245 tests passing (added a global `react-helmet-async` mock to
+`setupTests.js` after the test suite caught `<Helmet>` throwing without
+a `HelmetProvider` ancestor — documented inline), clean production build,
+lint clean. Caught and fixed two real mistakes during this phase before
+delivery: a batch-conversion script initially placed `PageMeta` inside a
+subcomponent instead of the page itself on 3 files with a specific
+trailing-helper-function shape (`SellerOverview.jsx`, `AdminDashboard.jsx`,
+`AdminDispatch.jsx`), and two manual edits (`Login.jsx`,
+`BookingDetail.jsx`) initially dropped a sibling JSX line — both classes
+of mistake caught via cross-checking / re-viewing before running tests,
+not left for the test suite to find.
+
+P3 status detail: flagged a scope fork before writing code — spec said
+"adopt react-i18next" but the repo already has a working 581-line
+English/Kiswahili `DICTIONARY`/`t()` system (`LanguageContext.jsx`) used
+across dozens of already-shipped files. User confirmed: extend the
+existing system rather than introduce a redundant library. `jest-axe` +
+`eslint-plugin-jsx-a11y` installed; axe assertions added to Checkout/
+Bookings/BookingDetail plus a new `NewDispute.test.jsx` — these found and
+fixed real bugs (unlabeled country-code `<select>` in shared `PhoneInput`,
+4 disconnected `<label>`s in the dispute form, a "Payment method" heading
+using `<label>` instead of `<fieldset>/<legend>`). Installing
+`eslint-plugin-jsx-a11y` also fixed a real pre-existing gap (a disable-
+comment in `NexoraAIDrawer.jsx` referenced a plugin that was never
+installed) and surfaced 94 previously-invisible violations across 30
+files — fixed everything within the 4 named i18n flows (Checkout,
+Bookings/BookingDetail, dispute filing, registration) plus `PhoneInput`;
+the rest documented with file-by-file counts, not silently left broken.
+Notably the remaining-violation file list overlaps heavily with P1's
+deferred Input-componentization list. `react/no-danger` added and smoke-
+tested. i18n extended (English+Kiswahili together) to all 4 named flows:
+registration's identity-verification step, checkout, all 4 delivery-agent
+pages, and dispute filing/list/detail (buyer-facing portions — admin-only
+resolution panel deliberately left English, documented as a scoping
+decision). 252/252 tests passing (245 + 7 new axe tests), clean build,
+lint clean on all touched files. The "add a CI accessibility check" item
+could not be done — same missing `.github/workflows` blocker as before
+P1, now blocking two phases' worth of CI-dependent items.
+
+P4 status detail: session-token migration from localStorage to an
+httpOnly, SameSite=strict cookie + CSRF (double-submit cookie pattern)
+completed and genuinely verified — real supertest cookie-jar requests
+against the actual Express app, not mocked-away logic. Backward-
+compatible design: Bearer header still works server-side (auth.middleware,
+socket.js), so the 6 existing Bearer-based backend tests needed zero
+changes. New `POST /auth/logout` and `GET /auth/me` endpoints. 813 backend
+unit + 79 integration tests passing (7 new cookie/CSRF tests + 1 extended
+socket test). Frontend's AuthContext.test.jsx fully rewritten (old mock
+would have crashed under the new GET /auth/me on-mount check) — 256
+frontend tests passing. Playwright installed and configured for Home/
+Checkout/ProductDetail at mobile+desktop (6 test combinations), fully
+route-mocked against hand-written fixtures (deterministic, no live
+backend or external network needed) — but **cannot be executed or have
+baseline snapshots generated in this sandbox**: cdn.playwright.dev isn't
+in the network allowlist, confirmed directly (`npx playwright install`
+fails). Config/specs verified parseable via `npx playwright test --list`
+(6/6 tests found) but never run. No fabricated snapshot images included.
+README gives exact commands to generate real baselines in an environment
+with network access. Self-caught bugs during this phase: an early fixture
+draft used external picsum.photos URLs, contradicting the "deterministic"
+design goal stated in the same file - caught and fixed before delivery;
+vitest's default glob picked up the new e2e/*.spec.js files and tried to
+run them as vitest tests - fixed with an explicit exclude in
+vite.config.js, verified by re-running the full suite. Honest limitation
+flagged in README: supertest verification is real HTTP-layer testing but
+not the same as confirming actual browser cookie/SameSite behavior;
+recommended one manual browser pass before production.
+
+P5 status detail: N+1 batching - order.service.js's cancelOrder/
+autoCancelStaleOrder now use a single batched
+`updateOrderStatusForChildren` (mirrors the existing
+updatePaymentStatusForChildren pattern) instead of a per-child UPDATE
+loop; autoCancelStaleOrder additionally dropped an unnecessary
+findChildOrders SELECT it only used to loop over. payment.service.js's
+wallet-crediting webhook loop turned out to be two different things:
+the outer per-child-order loop is genuinely N separate transactional
+units of work (correctly left alone), while the inner per-item
+markItemCredited loop (different commission/net amounts per item) got
+batched into one CASE-WHEN UPDATE via new markItemsCredited - given a
+dedicated direct SQL-correctness test (not just an indirect
+call-was-made assertion) since hand-built CASE WHEN SQL is exactly where
+placeholder misalignment bugs hide. Read-replica adoption: checked every
+candidate function's actual call sites for read-after-write/pre-write-
+validation risk before moving anything (grepped, not assumed) - moved
+product/service browsing+detail, store public pages, and review
+listings/rating-summaries to dbRead (confirmed via source read to be a
+complete no-op today with no DB_READ_HOST set - same pool object,
+verified via the full integration suite still passing unchanged).
+817 unit + 79 integration tests passing, lint clean (lint itself caught
+one real thing: store.repository.js's db import went dead once both its
+functions moved to dbRead - fixed before delivery). Two existing test
+files updated to match the new batched behavior, not weakened.
+
+P7 status detail: found and fixed a real open redirect -
+`subscription.controller.js`'s subscribeSnippe/subscribeMalipopayCard/
+subscribePaypal were forwarding client-supplied successUrl/cancelUrl/
+returnUrl straight to the payment provider with no validation at all,
+unlike every one of payment.controller.js's 8 equivalent endpoints
+(which already used a private `assertAllowedRedirect`). Extracted that
+check into `utils/redirectValidator.js`, applied it to all three
+previously-unchecked endpoints, and added a `javascript:`/`data:`
+protocol rejection as defense-in-depth. Audited the rest of the app for
+redirect surfaces (zero `res.redirect()` calls anywhere - API-only
+backend; every frontend `navigate()`/`window.location.href` traced to a
+hardcoded path, same-origin URL, or same-origin service-worker message)
+- no further issues found. Re-verified MalipoPay/Selcom webhook
+verification against their public docs: the mechanisms themselves
+(MalipoPay per-request payloadSignature, Selcom static bearer token,
+both Phase 2) are correct and strong, but `docs/WEBHOOK_VALIDATION.md`
+and a `payment.controller.js` header comment were stale, still
+describing/referencing a generic shared-secret check that Phase 2 had
+already superseded - both corrected. Added a payload-shape check
+(reference/transid must be a non-empty string) in `malipopayWebhook`/
+`selcomWebhook` so an authenticated-but-malformed payload fails cleanly
+instead of surfacing as an unhandled-exception error log. New
+`backend/tests/fixtures/webhookPayloads.js` gives both providers'
+documented sandbox shapes one canonical, working (signature-computing)
+home instead of re-deriving them from test setup code. Honestly flagged
+in the README/doc rather than silently closed: full webhook-payload
+docs for both providers sit behind a merchant login this environment
+doesn't have access to, so a live-sandbox round trip is still an open
+item before go-live. Tests not run/modified per the brief; changes
+syntax-checked and the new fixtures file smoke-run standalone.
+
+P8 status detail: most of P8's backend (custom `?start=&end=` date-range
+comparison on top of A5's fixed week/month windows, and seller-facing
+`getSellerLeaderboardStanding`) already existed going into this phase,
+and `AdminDashboard.jsx` was already fully wired to it (date pickers,
+a `BarChart` visualizing the comparison, platform-wide leaderboard).
+`SellerAnalytics.jsx` was not — it had the custom-range state and API
+call wired but no date-picker UI, no chart, and the already-fetched
+`leaderboardStanding` was never rendered; this phase closed that gap
+(picker, chart, top-5 + own-rank leaderboard card), no backend changes
+needed. Also fixed: `AdminUsers.jsx`'s mobile layout (identity, badges,
+and actions were one unpredictable wrapping row; now grouped into
+separate rows that stack cleanly on phone width). `MobileBottomNav.jsx`
+was reviewed and left as-is - already correct (proper touch targets,
+safe-area padding, no overlap with the floating AI button or page
+content). Checked the rest of the app for the same raw-`<table>` /
+cramped-list-row mobile issues: the one other table
+(`AdminSubscriptions.jsx`) already has `overflow-x-auto`; the same
+wrapping-row list pattern exists on ~20 other admin/seller pages with
+fewer elements per row than `AdminUsers.jsx` had, so none of those were
+touched this phase - flagged in the README as a possible follow-up
+rather than done speculatively. Tests not run per the brief. See
+[README-phase-P8.md](./README-phase-P8.md) for the full write-up,
+including the A5-row/`README-phase-A5.md` correction this phase's
+docs-correction scope covered (found already fixed going into P8,
+detailed there for the record).
+
+**Follow-up (post-P8) — `AdminUsers.jsx` touch targets & wrap:** Suspend/
+Unsuspend and Permanently delete buttons were ~30px tall on mobile
+(too small to reliably tap); both now enforce a 44px minimum tap
+height. The suspension-reason line (`Suspended ... — "reason"`) was
+truncating with an ellipsis and unreadable on narrow screens; it now
+wraps instead. Also gave the row a lightly nicer desktop/wide-screen
+treatment while in the file: slightly larger row padding/gap, a
+subtle hover highlight per row, and matching shadow/hover styling
+between the two action buttons. Scope limited to `AdminUsers.jsx`
+only. Tests not run per the brief.
+
+**Follow-up — vitest worker-spawn timeouts on Windows:** a local
+Windows run showed 232/232 tests passing across all 39 files, but
+Vitest logged 3 "Failed to start forks worker" / "Timeout waiting
+for worker to respond" errors for `Checkout.test.jsx`, `Login.test.jsx`,
+and `MessageSearch.test.jsx` — a worker-process spawn/response
+timeout, not a real test failure (confirmed: nothing unusual about
+those 3 files vs. the other 36 that started fine). `vite.config.js`'s
+`test.pool` switched from the default `forks` (child-process fork per
+worker, capped at `maxForks: 4`) to `threads` (`worker_threads`,
+capped at `maxThreads: 2`) — threads are far cheaper to spin up on
+Windows (no new process + AV scan per worker), which is the standard
+fix for this symptom; `testTimeout`/`hookTimeout` also raised from
+15s to 20s for extra headroom. Not independently re-run in this
+sandbox (no vite/vitest install here); syntax-checked only. Scope
+limited to `vite.config.js`.
 
 ## Part C — Red Flag Remediation
 
@@ -77,7 +255,7 @@ All six phases (RF1–RF6) are done.
 | A2 | Layout & Scroll Behavior (admin + seller panels) | ✅ Done | [README-phase-A2.md](./README-phase-A2.md) |
 | A3 | Messaging UX | ✅ Done | [README-phase-A3.md](./README-phase-A3.md) |
 | A4 | Products & Services List UI/UX (admin + seller) | ✅ Done | [README-phase-A4.md](./README-phase-A4.md) |
-| A5 | Advanced Analytics (admin + seller dashboards) | Not started | |
+| A5 | Advanced Analytics (admin + seller dashboards) | ✅ Done | [README-phase-A5.md](./README-phase-A5.md) |
 
 ## Part B — Nexora AI
 

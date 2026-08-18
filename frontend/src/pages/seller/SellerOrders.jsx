@@ -49,19 +49,21 @@ export default function SellerOrders() {
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((order) => (
-                    <li key={order.id} className="py-4 flex flex-wrap items-center gap-3">
+                    <li key={order.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
                             <p className="price text-sm font-medium">{order.order_number}</p>
                             <p className="text-xs text-ash">{formatDate(order.created_at)}</p>
                         </div>
 
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-line text-ash capitalize">
-                            {order.status}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-line text-ash capitalize">
+                                {order.status}
+                            </span>
 
-                        <p className="price text-sm">{formatMoney(order.total_amount)}</p>
+                            <p className="price text-sm">{formatMoney(order.total_amount)}</p>
+                        </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                             {order.status === "pending" && (
                                 <>
                                     <Button

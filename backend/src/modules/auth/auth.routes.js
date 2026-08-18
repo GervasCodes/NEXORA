@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 
-const { register, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword } = require("./auth.controller");
+const { register, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword, logout, me } = require("./auth.controller");
 const { registerValidation } = require("./auth.validator");
 const { authLimiter } = require("../../middleware/rateLimit.middleware");
+const authMiddleware = require("../../middleware/auth.middleware");
 const uploadDocument = require("../../middleware/uploadDocument.middleware");
 
 // uploadDocument.fields(...) only parses the request when its
@@ -31,5 +32,9 @@ router.post("/login/resend-otp", authLimiter, resendLoginOtp);
 
 router.post("/forgot-password", authLimiter, forgotPassword);
 router.post("/reset-password", authLimiter, resetPassword);
+
+// Phase 4 (Testing & Session Hardening)
+router.post("/logout", logout);
+router.get("/me", authMiddleware, me);
 
 module.exports = router;

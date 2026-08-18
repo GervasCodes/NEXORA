@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const cookie = require("cookie");
 
 const chatService = require("../modules/chat/chat.service");
 const authRepository = require("../modules/auth/auth.repository");
@@ -134,7 +135,22 @@ exports.init = (httpServer) => {
     // be on any REST request.
     io.use(async (socket, next) => {
         try {
-            const token = socket.handshake.auth?.token;
+            // Phase 4 (Testing & Session Hardening): the frontend no
+            // longer has JS-readable access to the session token (it's
+            // an httpOnly cookie now - see sessionCookie.js), so it can't
+            // keep passing it via `auth: { token }` the way it used to.
+            // The cookie is still sent automatically on the socket
+            // handshake's initial HTTP request (same mechanism as any
+            // other same-origin XHR/fetch) as long as the client connects
+            // with `withCredentials: true` and CORS allows credentials
+            // for this origin - both already true here (see app.js).
+            // `auth.token` is kept as a fallback for any non-browser
+            // socket client that still authenticates the old way.
+            let token = socket.handshake.auth?.token;
+            if (!token && socket.handshake.headers.cookie) {
+                const cookies = cookie.parse(socket.handshake.headers.cookie);
+                token = cookies.nexora_session;
+            }
 
             if (!token) {
                 return next(new Error("No token provided"));

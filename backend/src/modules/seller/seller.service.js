@@ -237,30 +237,83 @@ function growthPercent(current, previous) {
     return Number((((current - previous) / previous) * 100).toFixed(1));
 }
 
-exports.getAdvancedAnalytics = async (sellerId) => {
-    const [periods, topCustomers] = await Promise.all([
-        sellerRepository.getPeriodComparison(sellerId),
-        sellerRepository.getTopCustomers(sellerId, 5)
+// Phase P8 (Analytics Visualization) - customRange (optional
+// {start, end}) adds a custom-range comparison alongside week/month.
+// See seller.controller.js for where the query params are parsed.
+exports.getAdvancedAnalytics = async (sellerId, customRange) => {
+    const [periods, topCustomers, leaderboardStanding] = await Promise.all([
+        sellerRepository.getPeriodComparison(sellerId, customRange),
+        sellerRepository.getTopCustomers(sellerId, 5),
+        exports.getSellerLeaderboardStanding(sellerId)
     ]);
 
-    return {
-        periodComparison: {
-            week: {
-                current: periods.thisWeek,
-                previous: periods.lastWeek,
-                growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
-            },
-            month: {
-                current: periods.thisMonth,
-                previous: periods.lastMonth,
-                growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
-            }
+    const periodComparison = {
+        week: {
+            current: periods.thisWeek,
+            previous: periods.lastWeek,
+            growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
         },
+        month: {
+            current: periods.thisMonth,
+            previous: periods.lastMonth,
+            growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
+        }
+    };
+
+    if (periods.custom) {
+        periodComparison.custom = {
+            current: periods.custom.current,
+            previous: periods.custom.previous,
+            growthPercent: growthPercent(periods.custom.current.gmv, periods.custom.previous.gmv)
+        };
+    }
+
+    return {
+        periodComparison,
         topCustomers: topCustomers.map((c) => ({
             ...c,
             total_spend: Number(c.total_spend) || 0,
             transaction_count: Number(c.transaction_count) || 0
-        }))
+        })),
+        leaderboardStanding
+    };
+};
+
+// Phase P8 (Analytics Visualization) - "Add seller leaderboard" for the
+// seller-facing dashboard. The full platform-wide leaderboard
+// (admin.repository.js's getSellerLeaderboard, blending product +
+// service revenue per seller) is admin-only data, but a seller should
+// still be able to see where THEY rank without exposing every other
+// seller's exact numbers - reused rather than reimplemented (same SQL,
+// same blended-revenue definition as the admin leaderboard) so the two
+// views can never quietly disagree on how rank is computed. Returns the
+// top 5 (store names are already public storefront info, same as what
+// admins see) plus this seller's own row/rank even when it falls
+// outside the top 5 - a seller ranked #340 gets more value from seeing
+// "#340 of N" than from a top-5 list they don't appear in.
+exports.getSellerLeaderboardStanding = async (sellerId) => {
+    // adminRepository is reused directly rather than duplicating this
+    // seller-perf query - see admin.repository.js's getSellerLeaderboard
+    // header comment for the underlying SQL. Cross-module repository
+    // reuse already has precedent in this file (productRepository above).
+    const adminRepository = require("../admin/admin.repository");
+    const fullLeaderboard = await adminRepository.getSellerLeaderboard(500);
+
+    const ranked = fullLeaderboard.map((s, i) => ({
+        ...s,
+        rank: i + 1,
+        product_revenue: Number(s.product_revenue) || 0,
+        service_revenue: Number(s.service_revenue) || 0,
+        total_revenue: Number(s.total_revenue) || 0,
+        total_transactions: Number(s.total_transactions) || 0
+    }));
+
+    const ownRow = ranked.find((s) => s.user_id === sellerId) || null;
+
+    return {
+        totalRankedSellers: ranked.length,
+        top: ranked.slice(0, 5),
+        own: ownRow
     };
 };
 

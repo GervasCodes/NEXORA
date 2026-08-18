@@ -207,7 +207,7 @@ export default function SellerProducts() {
                         </div>
 
                         {products.map((p) => (
-                            <div key={p.id} className="py-4 flex items-center gap-4">
+                            <div key={p.id} className="py-4 flex flex-wrap items-center gap-3">
                                 <input
                                     type="checkbox"
                                     checked={selectedIds.includes(p.id)}
@@ -228,21 +228,24 @@ export default function SellerProducts() {
                                     {p.is_active ? "Active" : "Inactive"}
                                 </span>
 
-                                <Link
-                                    to={`/seller/products/${p.id}/edit`}
-                                    className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors"
-                                >
-                                    Edit
-                                </Link>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <Link
+                                        to={`/seller/products/${p.id}/edit`}
+                                        className="flex-1 sm:flex-initial text-center text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors"
+                                    >
+                                        Edit
+                                    </Link>
 
-                                <Button
-                                    onClick={() => toggleActive(p)}
-                                    disabled={busyId === p.id}
-                                    variant="secondary"
-                                    size="sm"
-                                >
-                                    {p.is_active ? "Deactivate" : "Activate"}
-                                </Button>
+                                    <Button
+                                        onClick={() => toggleActive(p)}
+                                        disabled={busyId === p.id}
+                                        variant="secondary"
+                                        size="sm"
+                                        className="flex-1 sm:flex-initial"
+                                    >
+                                        {p.is_active ? "Deactivate" : "Activate"}
+                                    </Button>
+                                </div>
                             </div>
                         ))}
                     </div>

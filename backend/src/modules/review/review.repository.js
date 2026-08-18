@@ -1,4 +1,12 @@
 const db = require("../../config/db");
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): only the public
+// listing/rating-summary functions below move to dbRead - see each
+// function's own comment. hasDeliveredPurchase/hasCompletedBooking/
+// findByBuyerAndProduct/findByBuyerAndBooking/findById are all used in
+// duplicate-review-check or ownership-check contexts immediately before
+// a write (create/update/remove/setSellerReply) and stay on the primary,
+// same reasoning as findById in product.repository.js.
+const dbRead = require("../../config/dbRead");
 
 // Whether this buyer has a delivered order containing this product
 // (i.e. are they actually allowed to review it)
@@ -100,8 +108,16 @@ const REVIEW_SORT_CLAUSES = {
 
 const resolveSortClause = (sortBy) => REVIEW_SORT_CLAUSES[sortBy] || REVIEW_SORT_CLAUSES.newest;
 
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): every function
+// from here down through getSellerRatingBreakdown (and
+// findPhotosByReviewIds further below) reads dbRead - these are all
+// public review-listing/rating-summary reads (ProductDetail,
+// ServiceDetail, provider and seller review sections), confirmed via
+// grep to have no read-after-write or duplicate-check use anywhere in
+// the codebase. See the note above the dbRead import at the top of this
+// file for which functions deliberately stayed on the primary and why.
 exports.findByProduct = async (productId, sortBy) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
                 u.first_name, u.last_name
         FROM reviews r
@@ -114,7 +130,7 @@ exports.findByProduct = async (productId, sortBy) => {
 };
 
 exports.getProductRatingSummary = async (productId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT COUNT(*) AS review_count, AVG(rating) AS average_rating
         FROM reviews
         WHERE product_id = ?`,
@@ -127,7 +143,7 @@ exports.getProductRatingSummary = async (productId) => {
 // GROUP BY rather than five separate COUNT(...) queries so this stays a
 // single round trip regardless of how many distinct ratings exist.
 exports.getProductRatingBreakdown = async (productId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT rating, COUNT(*) AS count
         FROM reviews
         WHERE product_id = ?
@@ -143,7 +159,7 @@ exports.getProductRatingBreakdown = async (productId) => {
 // denormalized service_id to reviews, keeping the "exactly one target"
 // shape migration 065 established.
 exports.findByService = async (serviceId, sortBy) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
                 u.first_name, u.last_name
         FROM reviews r
@@ -157,7 +173,7 @@ exports.findByService = async (serviceId, sortBy) => {
 };
 
 exports.getServiceRatingSummary = async (serviceId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT COUNT(*) AS review_count, AVG(r.rating) AS average_rating
         FROM reviews r
         JOIN bookings b ON b.id = r.booking_id
@@ -168,7 +184,7 @@ exports.getServiceRatingSummary = async (serviceId) => {
 };
 
 exports.getServiceRatingBreakdown = async (serviceId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.rating, COUNT(*) AS count
         FROM reviews r
         JOIN bookings b ON b.id = r.booking_id
@@ -184,7 +200,7 @@ exports.getServiceRatingBreakdown = async (serviceId) => {
 // just below. Paginated for the same reason findBySeller is: a provider's
 // review count across every service they offer is unbounded.
 exports.findByProvider = async (providerId, limit, offset, sortBy) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
                 u.first_name, u.last_name,
                 s.id AS service_id, s.title AS service_title, s.slug AS service_slug
@@ -201,7 +217,7 @@ exports.findByProvider = async (providerId, limit, offset, sortBy) => {
 };
 
 exports.getProviderRatingSummary = async (providerId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT COUNT(*) AS review_count, AVG(r.rating) AS average_rating
         FROM reviews r
         JOIN bookings b ON b.id = r.booking_id
@@ -212,7 +228,7 @@ exports.getProviderRatingSummary = async (providerId) => {
 };
 
 exports.getProviderRatingBreakdown = async (providerId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.rating, COUNT(*) AS count
         FROM reviews r
         JOIN bookings b ON b.id = r.booking_id
@@ -231,7 +247,7 @@ exports.getProviderRatingBreakdown = async (providerId) => {
 // store page can link "on <product>" under each review, the one thing a
 // single-product listing doesn't need but a multi-product store one does.
 exports.findBySeller = async (sellerId, limit, offset, sortBy) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
                 u.first_name, u.last_name,
                 p.id AS product_id, p.name AS product_name, p.slug AS product_slug
@@ -252,7 +268,7 @@ exports.findBySeller = async (sellerId, limit, offset, sortBy) => {
 // independently for pagination's total count and belongs to the review
 // module's own tables/joins, not the store module's.
 exports.getSellerRatingSummary = async (sellerId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT COUNT(*) AS review_count, AVG(r.rating) AS average_rating
         FROM reviews r
         JOIN products p ON p.id = r.product_id
@@ -266,7 +282,7 @@ exports.getSellerRatingSummary = async (sellerId) => {
 // join-through-products reasoning as findBySeller/getSellerRatingSummary
 // above.
 exports.getSellerRatingBreakdown = async (sellerId) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT r.rating, COUNT(*) AS count
         FROM reviews r
         JOIN products p ON p.id = r.product_id
@@ -305,7 +321,7 @@ exports.addPhoto = async (reviewId, photoUrl, displayOrder) => {
 exports.findPhotosByReviewIds = async (reviewIds) => {
     if (!reviewIds.length) return [];
 
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT id, review_id, photo_url
         FROM review_photos
         WHERE review_id IN (?)

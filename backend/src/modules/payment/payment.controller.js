@@ -1,32 +1,11 @@
 const paymentService = require("./payment.service");
 const logger = require("../../utils/logger").child({ module: "payment-webhook" });
 const Sentry = require("../../config/sentry");
-
-// Buyers/sellers pass their own return URLs (e.g. the exact order or
-// verification page they were on) so Snippe/PayPal send them back to the
-// right place - but an unchecked client-supplied redirect URL is an
-// open-redirect risk, so only allow one whose origin matches a configured
-// CORS_ORIGIN.
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-const assertAllowedRedirect = (url, label) => {
-    if (!url) {
-        throw new Error(`${label} is required`);
-    }
-    let parsed;
-    try {
-        parsed = new URL(url);
-    } catch {
-        throw new Error(`${label} is not a valid URL`);
-    }
-    if (allowedOrigins.length && !allowedOrigins.includes(parsed.origin)) {
-        throw new Error(`${label} is not an allowed redirect destination`);
-    }
-    return url;
-};
+// Phase 7 (Security) - this used to be a private copy of the same check
+// duplicated in subscription.controller.js (which wasn't applying it at
+// all - see that file). Now shared from one place - see
+// utils/redirectValidator.js's header comment for why.
+const { assertAllowedRedirect } = require("../../utils/redirectValidator");
 
 exports.initiateMobileMoneyPayment = async (req, res) => {
     try {
@@ -93,14 +72,28 @@ exports.getPayment = async (req, res) => {
 // this exact path in their dashboard's "Callback URL" setting:
 //   https://<your-domain>/api/v1/payments/webhooks/malipopay
 //
-// NOTE: confirm MalipoPay's real payload field names + any signature
-// header against their dashboard docs once you're onboarded - the shape
-// below follows their commonly documented pattern, but verify before
-// relying on it in production. If they give you a signing secret, verify
-// it here before trusting the payload.
+// Signature verification happens BEFORE this handler runs - see
+// verifyMalipopayWebhook in webhookAuth.middleware.js (SHA256 of
+// reference+timestamp+amount+phoneNumber+secret, per
+// developers.malipopay.co.tz/integration/webhooks) wired in as this
+// route's middleware in payment.routes.js. This handler only needs to
+// shape-check the fields it reads, on top of that - see
+// docs/WEBHOOK_VALIDATION.md §1/§6 for the full verification writeup
+// and what's still unconfirmed against a live sandbox.
 exports.malipopayWebhook = async (req, res) => {
     try {
-        const payload = req.body;
+        const payload = req.body || {};
+
+        // Phase 7 (Security) - the signature check upstream proves this
+        // request came from MalipoPay at some point; it doesn't prove
+        // `reference` is the well-formed string handleProviderWebhook's
+        // ORDER-/VERIFY-/BOOKING-/SUB- regex match expects. A malformed
+        // or missing reference here should be a clean "ignored", not an
+        // unhandled exception logged as an application error.
+        if (typeof payload.reference !== "string" || !payload.reference) {
+            logger.warn({ provider: "malipopay", reqId: req.id }, "[webhook] malipopay payload missing/invalid reference field");
+            return res.status(200).json({ success: false });
+        }
 
         await paymentService.handleProviderWebhook({
             providerReference: payload.reference,
@@ -120,10 +113,19 @@ exports.malipopayWebhook = async (req, res) => {
 
 // Selcom's equivalent - give them:
 //   https://<your-domain>/api/v1/payments/webhooks/selcom
-// Confirm their real callback payload shape with Selcom directly.
+// Signature verification (Bearer token auth, per
+// developers.selcommobile.com's C2B Payment Notification API) happens
+// upstream in verifySelcomWebhook - see docs/WEBHOOK_VALIDATION.md §1/§6.
 exports.selcomWebhook = async (req, res) => {
     try {
-        const payload = req.body;
+        const payload = req.body || {};
+
+        // Same reasoning as malipopayWebhook above - upstream auth
+        // proves provenance, not shape.
+        if (typeof payload.transid !== "string" || !payload.transid) {
+            logger.warn({ provider: "selcom", reqId: req.id }, "[webhook] selcom payload missing/invalid transid field");
+            return res.status(200).json({ success: false });
+        }
 
         await paymentService.handleProviderWebhook({
             providerReference: payload.transid,

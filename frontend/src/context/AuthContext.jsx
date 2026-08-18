@@ -19,6 +19,13 @@ const loadStoredUser = () => {
     // Checked here (not just in the effect below) so a stale user never
     // even briefly renders as logged-in on first paint.
     if (isIdleExpired()) return null;
+    // Phase 4 (Testing & Session Hardening): this is now an *optimistic*
+    // value only, for instant first paint - not authoritative. The real
+    // session lives in an httpOnly cookie this code can't read, so it
+    // can't actually confirm anyone is still logged in; it can only
+    // avoid a flash-of-logged-out for someone who probably still is,
+    // while the checkSession() effect below confirms (or corrects) it
+    // against the server moments later.
     const raw = localStorage.getItem("nexora_user");
     return raw ? JSON.parse(raw) : null;
 };
@@ -57,11 +64,34 @@ export function AuthProvider({ children }) {
     // entries and surface the same "session expired" notice.
     useEffect(() => {
         if (isIdleExpired()) {
-            localStorage.removeItem("nexora_token");
             localStorage.removeItem("nexora_user");
             localStorage.removeItem("nexora_last_activity");
             setSessionExpired(true);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Phase 4 (Testing & Session Hardening): loadStoredUser's initial
+    // value is optimistic only - it can't actually see whether the
+    // httpOnly session cookie is still valid. This confirms it against
+    // the server on every app load. Only acts when there WAS a cached
+    // user to begin with; a fresh visitor with no cookie and no cached
+    // user getting a 401 here is expected, not an error to react to.
+    useEffect(() => {
+        if (!localStorage.getItem("nexora_user")) return;
+        api.get("/auth/me")
+            .then(({ data }) => {
+                setUser(data.data.user);
+                localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
+            })
+            .catch(() => {
+                // A 401 here already goes through api/client.js's response
+                // interceptor (clears localStorage, may fire
+                // sessionExpiredHandler) - nothing further needed on a
+                // failure beyond making sure the in-memory user doesn't
+                // keep showing as logged in while that resolves.
+                setUser(null);
+            });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -89,7 +119,11 @@ export function AuthProvider({ children }) {
     const verifyLoginOtp = useCallback(async (preAuthToken, code) => {
         try {
             const { data } = await api.post("/auth/login/verify-otp", { pre_auth_token: preAuthToken, code });
-            localStorage.setItem("nexora_token", data.data.token);
+            // Phase 4 (Testing & Session Hardening): no more token in the
+            // response body to store - the backend sets it as an
+            // httpOnly cookie directly (see auth.controller.js). Only
+            // the (non-sensitive) user profile is cached here, for
+            // instant display on the next page load.
             localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
             setUser(data.data.user);
             return { success: true };
@@ -120,7 +154,16 @@ export function AuthProvider({ children }) {
     }, []);
 
     const logout = useCallback(() => {
-        localStorage.removeItem("nexora_token");
+        // Phase 4 (Testing & Session Hardening): the session cookie is
+        // httpOnly - no amount of localStorage.removeItem clears it,
+        // only a Set-Cookie response from the server can (see
+        // auth.controller.js#logout). Fire-and-forget: the local state
+        // clears immediately below regardless of whether this network
+        // call succeeds, so a flaky connection never leaves someone
+        // stuck on a "logging out..." state - worst case, the cookie
+        // outlives the local session by a request or two rather than
+        // blocking the UI on it.
+        api.post("/auth/logout").catch(() => {});
         localStorage.removeItem("nexora_user");
         localStorage.removeItem("nexora_last_activity");
         setUser(null);

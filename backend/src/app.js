@@ -152,6 +152,12 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// Phase 4 (Testing & Session Hardening): must come after cookieParser
+// (needs req.cookies) and before route handlers, but there's no need to
+// place it after auth.middleware - it only inspects the raw cookie/header
+// pair, it doesn't need req.user. See csrf.middleware.js for what this
+// does and doesn't protect against.
+app.use(require("./middleware/csrf.middleware"));
 // Determines req.locale ("en" | "sw") for every request - from ?lang=,
 // then Accept-Language, then default - so error messages, notifications,
 // and emails render in the right language. auth.middleware refines this

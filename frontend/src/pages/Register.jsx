@@ -22,13 +22,13 @@ const initialForm = {
 
 const REQUIRED_DOCS = {
     seller: [
-        { field: "owner_photo", label: "Owner photo / selfie", hint: "A clear photo of your face." },
-        { field: "id_document", label: "National ID or Voter ID", hint: "A photo or scan of either document." }
+        { field: "owner_photo", labelKey: "auth.verify.ownerPhotoSeller", hintKey: "auth.verify.selfieHint" },
+        { field: "id_document", labelKey: "auth.verify.idDocument", hintKey: "auth.verify.idDocumentHint" }
     ],
     delivery_agent: [
-        { field: "owner_photo", label: "Personal photo / selfie", hint: "A clear photo of your face." },
-        { field: "id_document", label: "National ID or Voter ID", hint: "A photo or scan of either document." },
-        { field: "drivers_license", label: "Driver's license", hint: "A photo or scan of your license." }
+        { field: "owner_photo", labelKey: "auth.verify.ownerPhotoDelivery", hintKey: "auth.verify.selfieHint" },
+        { field: "id_document", labelKey: "auth.verify.idDocument", hintKey: "auth.verify.idDocumentHint" },
+        { field: "drivers_license", labelKey: "auth.verify.driversLicense", hintKey: "auth.verify.driversLicenseHint" }
     ]
 };
 
@@ -86,17 +86,17 @@ export default function Register() {
         for (const doc of requiredDocs) {
             if (doc.field === "id_document") continue; // checked separately below
             if (!files[doc.field]) {
-                setError(`Please upload your ${doc.label.toLowerCase()}.`);
+                setError(t("auth.verify.uploadRequired", { label: t(doc.labelKey).toLowerCase() }));
                 return;
             }
         }
         if (!files.id_document) {
-            setError("Please upload your National ID or Voter ID.");
+            setError(t("auth.verify.idDocumentRequired"));
             return;
         }
 
         if (form.role === "delivery_agent" && !form.vehicle_plate_number.trim()) {
-            setError("Please enter your vehicle's plate number.");
+            setError(t("auth.verify.plateNumberRequired"));
             return;
         }
 
@@ -139,14 +139,13 @@ export default function Register() {
     if (step === STEP_DONE) {
         return (
             <div className="max-w-sm mx-auto px-4 py-24 text-center">
-                <p className="font-display text-2xl mb-2">Account created</p>
+                <p className="font-display text-2xl mb-2">{t("auth.verify.accountCreated")}</p>
                 {needsDocuments ? (
                     <p className="text-ash text-sm">
-                        Your documents were submitted for review. You can sign in now — your
-                        dashboard will show "Pending Review" until an admin approves your account.
+                        {t("auth.verify.pendingReviewNotice")}
                     </p>
                 ) : (
-                    <p className="text-ash text-sm">Taking you to sign in…</p>
+                    <p className="text-ash text-sm">{t("auth.verify.takingToSignIn")}</p>
                 )}
             </div>
         );
@@ -155,16 +154,16 @@ export default function Register() {
     if (step === STEP_DOCUMENTS) {
         return (
             <div className="max-w-sm mx-auto px-4 py-16">
-                <h1 className="font-display text-2xl mb-1">Verify your identity</h1>
+                <h1 className="font-display text-2xl mb-1">{t("auth.verify.title")}</h1>
                 <p className="text-ash text-sm mb-8">
                     {form.role === "seller"
-                        ? "Sellers must submit these documents before their account is created. Your account will show as \"Pending Review\" until an admin approves it."
-                        : "Delivery agents must submit these documents before their account is created. Your account will show as \"Pending Review\" until an admin approves it."}
+                        ? t("auth.verify.introSeller")
+                        : t("auth.verify.introDeliveryAgent")}
                 </p>
 
                 <form onSubmit={handleDocumentsStepSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm mb-1">Owner photo / selfie</label>
+                        <label className="block text-sm mb-1">{t("auth.verify.ownerPhotoSeller")}</label>
                         <input
                             type="file"
                             accept="image/*"
@@ -175,14 +174,14 @@ export default function Register() {
                     </div>
 
                     <div>
-                        <label className="block text-sm mb-1">ID document type</label>
+                        <label className="block text-sm mb-1">{t("auth.verify.idDocTypeLabel")}</label>
                         <select
                             value={idDocType}
                             onChange={(e) => setIdDocType(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper mb-2"
                         >
-                            <option value="national_id">National ID</option>
-                            <option value="voter_id">Voter ID</option>
+                            <option value="national_id">{t("auth.verify.nationalId")}</option>
+                            <option value="voter_id">{t("auth.verify.voterId")}</option>
                         </select>
                         <input
                             type="file"
@@ -195,7 +194,7 @@ export default function Register() {
 
                     {form.role === "delivery_agent" && (
                         <div>
-                            <label className="block text-sm mb-1">Driver's license</label>
+                            <label className="block text-sm mb-1">{t("auth.verify.driversLicense")}</label>
                             <input
                                 type="file"
                                 accept="image/*,application/pdf"
@@ -209,22 +208,22 @@ export default function Register() {
                     {form.role === "delivery_agent" && (
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm mb-1">Vehicle type</label>
+                                <label className="block text-sm mb-1">{t("auth.verify.vehicleTypeLabel")}</label>
                                 <select
                                     value={form.vehicle_type}
                                     onChange={update("vehicle_type")}
                                     className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                                 >
-                                    <option value="bicycle">Bicycle</option>
-                                    <option value="motorcycle">Motorcycle</option>
-                                    <option value="tuktuk">Tuk-tuk (Bajaji)</option>
-                                    <option value="car">Car</option>
-                                    <option value="van">Van</option>
-                                    <option value="truck">Truck</option>
+                                    <option value="bicycle">{t("auth.verify.bicycle")}</option>
+                                    <option value="motorcycle">{t("auth.verify.motorcycle")}</option>
+                                    <option value="tuktuk">{t("auth.verify.tuktuk")}</option>
+                                    <option value="car">{t("auth.verify.car")}</option>
+                                    <option value="van">{t("auth.verify.van")}</option>
+                                    <option value="truck">{t("auth.verify.truck")}</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm mb-1">Plate number</label>
+                                <label className="block text-sm mb-1">{t("auth.verify.plateNumberLabel")}</label>
                                 <input
                                     required
                                     placeholder="e.g. T123 ABC"
@@ -245,7 +244,7 @@ export default function Register() {
                             variant="secondary"
                             className="flex-1 hover:bg-line/50"
                         >
-                            Back
+                            {t("auth.verify.back")}
                         </Button>
                         <Button
                             type="submit"
@@ -253,7 +252,7 @@ export default function Register() {
                             className="flex-1 gap-2"
                         >
                             {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
-                            {submitting ? "Submitting…" : "Submit for review"}
+                            {submitting ? t("auth.verify.submitting") : t("auth.verify.submitForReview")}
                         </Button>
                     </div>
                 </form>

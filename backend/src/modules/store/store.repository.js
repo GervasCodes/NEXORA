@@ -1,4 +1,10 @@
-const db = require("../../config/db");
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): both functions in
+// this file are public-only, single-call-site reads (see the comment
+// above each) - no writes and no read-after-write concerns in this file
+// at all, unlike product/service.repository.js. That means there's no
+// primary-pool write function left in this file to justify also
+// importing ../../config/db - dbRead alone covers everything here.
+const dbRead = require("../../config/dbRead");
 
 // Public store profile - Phase 5A (basics) + Phase 5B (trust info).
 //
@@ -61,8 +67,11 @@ const db = require("../../config/db");
 // on a public page (mirrors `has_pickup_pin` above - a derived boolean
 // exposes exactly what a buyer needs without exposing the underlying
 // private detail it's derived from).
+//
+// Phase 5: single call site (store.service.js, the public StorePage) -
+// confirmed via grep before moving this.
 exports.findPublicBySlug = async (slug) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             sp.user_id, sp.store_name, sp.store_slug, sp.store_description,
             sp.store_tagline,
@@ -108,8 +117,11 @@ exports.findPublicBySlug = async (slug) => {
 // - since a collection with zero surviving active products then has no
 // rows at all - it naturally drops empty collections from the result
 // without a separate "does this collection have anything to show" check.
+//
+// Phase 5: single call site, same public StorePage as findPublicBySlug
+// above.
 exports.findCollectionsBySlug = async (slug) => {
-    const [rows] = await db.query(
+    const [rows] = await dbRead.query(
         `SELECT
             sc.id AS collection_id, sc.name AS collection_name,
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,

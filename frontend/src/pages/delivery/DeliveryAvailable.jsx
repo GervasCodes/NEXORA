@@ -4,8 +4,10 @@ import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function DeliveryAvailable() {
+    const { t } = useLanguage();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
@@ -25,7 +27,7 @@ export default function DeliveryAvailable() {
         setMessage("");
         try {
             await api.post(`/delivery/${orderId}/claim`);
-            setMessage("Order claimed — find it under My deliveries.");
+            setMessage(t("delivery.agent.available.claimed"));
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -43,7 +45,7 @@ export default function DeliveryAvailable() {
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {orders.length === 0 && (
-                <p className="text-ash text-sm">No orders ready for pickup right now. Check back soon.</p>
+                <p className="text-ash text-sm">{t("delivery.agent.available.empty")}</p>
             )}
 
             <ul className="divide-y divide-line border-y border-line">
@@ -60,7 +62,7 @@ export default function DeliveryAvailable() {
                             onClick={() => claim(order.order_id)}
                             disabled={busyId === order.order_id}
                         >
-                            {busyId === order.order_id ? "Claiming…" : "Claim"}
+                            {busyId === order.order_id ? t("delivery.agent.available.claiming") : t("delivery.agent.available.claim")}
                         </Button>
                     </li>
                 ))}

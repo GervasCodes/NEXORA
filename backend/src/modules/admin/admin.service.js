@@ -870,26 +870,41 @@ function growthPercent(current, previous) {
     return Number((((current - previous) / previous) * 100).toFixed(1));
 }
 
-exports.getAdvancedAnalytics = async () => {
+// Phase P8 (Analytics Visualization) - customRange (optional
+// {start: Date, end: Date}) adds a third "custom" entry to
+// periodComparison alongside the fixed week/month ones. See
+// admin.controller.js for where start/end query params are parsed and
+// validated before reaching here.
+exports.getAdvancedAnalytics = async (customRange) => {
     const [periods, topCustomers, sellerLeaderboard] = await Promise.all([
-        adminRepository.getPeriodComparison(),
+        adminRepository.getPeriodComparison(customRange),
         adminRepository.getTopCustomers(10),
         adminRepository.getSellerLeaderboard(10)
     ]);
 
-    return {
-        periodComparison: {
-            week: {
-                current: periods.thisWeek,
-                previous: periods.lastWeek,
-                growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
-            },
-            month: {
-                current: periods.thisMonth,
-                previous: periods.lastMonth,
-                growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
-            }
+    const periodComparison = {
+        week: {
+            current: periods.thisWeek,
+            previous: periods.lastWeek,
+            growthPercent: growthPercent(periods.thisWeek.gmv, periods.lastWeek.gmv)
         },
+        month: {
+            current: periods.thisMonth,
+            previous: periods.lastMonth,
+            growthPercent: growthPercent(periods.thisMonth.gmv, periods.lastMonth.gmv)
+        }
+    };
+
+    if (periods.custom) {
+        periodComparison.custom = {
+            current: periods.custom.current,
+            previous: periods.custom.previous,
+            growthPercent: growthPercent(periods.custom.current.gmv, periods.custom.previous.gmv)
+        };
+    }
+
+    return {
+        periodComparison,
         topCustomers: topCustomers.map((c) => ({
             ...c,
             total_spend: Number(c.total_spend) || 0,

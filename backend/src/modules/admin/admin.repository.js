@@ -1103,19 +1103,43 @@ async function getBlendedTotalsForWindow(start, end) {
     };
 }
 
-exports.getPeriodComparison = async () => {
+// Phase P8 (Analytics Visualization) - optional third window, a
+// user-picked [start, end) custom range, compared against the
+// immediately-preceding window of the same duration (same "current vs.
+// prior period of equal length" shape as the week/month windows above -
+// just with a caller-supplied duration instead of a fixed 7/30 days).
+exports.getPeriodComparison = async (customRange) => {
     const now = new Date();
     const dayMs = 24 * 60 * 60 * 1000;
     const daysAgo = (n) => new Date(now.getTime() - n * dayMs);
 
-    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all([
+    const fixedWindows = [
         getBlendedTotalsForWindow(daysAgo(7), now),
         getBlendedTotalsForWindow(daysAgo(14), daysAgo(7)),
         getBlendedTotalsForWindow(daysAgo(30), now),
         getBlendedTotalsForWindow(daysAgo(60), daysAgo(30))
-    ]);
+    ];
 
-    return { thisWeek, lastWeek, thisMonth, lastMonth };
+    let customWindows = null;
+    if (customRange && customRange.start && customRange.end) {
+        const { start, end } = customRange;
+        const durationMs = end.getTime() - start.getTime();
+        const previousStart = new Date(start.getTime() - durationMs);
+        customWindows = Promise.all([
+            getBlendedTotalsForWindow(start, end),
+            getBlendedTotalsForWindow(previousStart, start)
+        ]);
+    }
+
+    const [thisWeek, lastWeek, thisMonth, lastMonth] = await Promise.all(fixedWindows);
+    const result = { thisWeek, lastWeek, thisMonth, lastMonth };
+
+    if (customWindows) {
+        const [current, previous] = await customWindows;
+        result.custom = { current, previous };
+    }
+
+    return result;
 };
 
 // Platform-wide top customers by total spend, blended across paid

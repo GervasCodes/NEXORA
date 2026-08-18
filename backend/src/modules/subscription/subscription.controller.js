@@ -2,6 +2,14 @@ const subscriptionService = require("./subscription.service");
 const subscriptionRepository = require("./subscription.repository");
 const paymentService = require("../payment/payment.service");
 const settingsService = require("../settings/settings.service");
+// Phase 7 (Security) - subscribeSnippe/subscribeMalipopayCard/subscribePaypal
+// below were forwarding req.body.successUrl/cancelUrl/returnUrl straight to
+// the payment provider with no validation at all, unlike every other
+// redirect-accepting endpoint in payment.controller.js. That's an open
+// redirect: an attacker-controlled successUrl would send a buyer's browser
+// to an external site immediately after a real subscription payment
+// completes. See utils/redirectValidator.js for the fix, applied below.
+const { assertAllowedRedirect } = require("../../utils/redirectValidator");
 
 // Shared by every subscribeX action below. Monetization Master Switch:
 // when monetization_subscriptions_enabled is off, NO plan requires
@@ -62,7 +70,9 @@ exports.subscribeMobileMoney = async (req, res) => {
 
 exports.subscribeSnippe = async (req, res) => {
     try {
-        const { planCode, successUrl, cancelUrl } = req.body;
+        const { planCode } = req.body;
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
         const plan = await subscriptionRepository.findPlanByCode(planCode);
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
@@ -81,7 +91,9 @@ exports.subscribeSnippe = async (req, res) => {
 
 exports.subscribeMalipopayCard = async (req, res) => {
     try {
-        const { planCode, successUrl, cancelUrl } = req.body;
+        const { planCode } = req.body;
+        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
         const plan = await subscriptionRepository.findPlanByCode(planCode);
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });
@@ -100,7 +112,9 @@ exports.subscribeMalipopayCard = async (req, res) => {
 
 exports.subscribePaypal = async (req, res) => {
     try {
-        const { planCode, returnUrl, cancelUrl } = req.body;
+        const { planCode } = req.body;
+        const returnUrl = assertAllowedRedirect(req.body.returnUrl, "returnUrl");
+        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
         const plan = await subscriptionRepository.findPlanByCode(planCode);
         if (!plan || !plan.is_active) {
             return res.status(404).json({ success: false, message: "Plan not found" });

@@ -106,6 +106,52 @@ exports.markItemCredited = async (itemId, commissionRate, commissionAmount, netA
     );
 };
 
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): batched version of
+// markItemCredited above, for wallet.service.js#creditSellersForOrder's
+// per-item loop - one UPDATE covering every item in the order instead of
+// one UPDATE per item (a webhook processing a multi-item order previously
+// did N round trips here). Unlike order.repository.js's
+// updateOrderStatusForChildren (same value for every matched row), each
+// item genuinely gets a *different* commission_rate/commission_amount/
+// seller_net_amount - a plain `SET col = ? WHERE id IN (?)` can't express
+// that, so this uses one CASE WHEN expression per varying column.
+// `released` (wallet_released) IS the same for every item in one call
+// (it's a property of the order's payment method, not the item - see
+// creditSellersForOrder), so that column stays a plain `= ?` rather than
+// needing its own CASE.
+//
+// `items` is [{ id, commissionRate, commissionAmount, netAmount }, ...].
+// Callers are expected to have already deduplicated/validated ids -
+// this trusts its input the same way markItemCredited above does.
+exports.markItemsCredited = async (items, released, executor = db) => {
+    if (items.length === 0) return;
+
+    // A single-item order is still correctly handled by the general
+    // case below (a CASE WHEN with exactly one WHEN clause), so there's
+    // no need for a separate non-batched code path here.
+    const rateCase = items.map(() => "WHEN ? THEN ?").join(" ");
+    const amountCase = items.map(() => "WHEN ? THEN ?").join(" ");
+    const netCase = items.map(() => "WHEN ? THEN ?").join(" ");
+    const placeholders = items.map(() => "?").join(", ");
+
+    const rateParams = items.flatMap((item) => [item.id, item.commissionRate]);
+    const amountParams = items.flatMap((item) => [item.id, item.commissionAmount]);
+    const netParams = items.flatMap((item) => [item.id, item.netAmount]);
+    const idParams = items.map((item) => item.id);
+
+    await executor.query(
+        `UPDATE order_items
+        SET
+            commission_rate = CASE id ${rateCase} END,
+            commission_amount = CASE id ${amountCase} END,
+            seller_net_amount = CASE id ${netCase} END,
+            wallet_credited = TRUE,
+            wallet_released = ?
+        WHERE id IN (${placeholders})`,
+        [...rateParams, ...amountParams, ...netParams, released, ...idParams]
+    );
+};
+
 // ---- Escrow release (Phase 9D) ---------------------------------------------
 
 // The set Phase 9D's background job scans: items whose earnings were

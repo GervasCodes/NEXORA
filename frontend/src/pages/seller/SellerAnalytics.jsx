@@ -82,6 +82,12 @@ export default function SellerAnalytics() {
     // Trend view toggle - Bar/Line render the exact same dailySales data,
     // this just swaps which of the two chart components draws it.
     const [chartView, setChartView] = useState("bar");
+    // Phase P8 (Analytics Visualization) - custom date-range selection,
+    // same shape as AdminDashboard.jsx's equivalent state.
+    const [customStart, setCustomStart] = useState("");
+    const [customEnd, setCustomEnd] = useState("");
+    const [customRangeError, setCustomRangeError] = useState("");
+    const [loadingCustomRange, setLoadingCustomRange] = useState(false);
 
     const load = () => {
         setLoading(true);
@@ -110,6 +116,25 @@ export default function SellerAnalytics() {
     };
 
     useEffect(load, [showServices, showProducts]);
+
+    // Re-fetches just the advanced-analytics section with the chosen
+    // custom range, same pattern as AdminDashboard.jsx's applyCustomRange.
+    const applyCustomRange = () => {
+        setCustomRangeError("");
+        if (!customStart || !customEnd) {
+            setCustomRangeError("Pick both a start and end date.");
+            return;
+        }
+        if (new Date(customEnd) <= new Date(customStart)) {
+            setCustomRangeError("End date must be after start date.");
+            return;
+        }
+        setLoadingCustomRange(true);
+        api.get("/seller/analytics/advanced", { params: { start: customStart, end: customEnd } })
+            .then(({ data }) => setAdvancedAnalytics(data.data))
+            .catch((err) => setCustomRangeError(err.response?.data?.message || "Couldn't load that range."))
+            .finally(() => setLoadingCustomRange(false));
+    };
 
     // Same blob-download pattern the admin dashboard uses for its CSV
     // exports - Bearer auth means a plain <a href> can't be used.
@@ -275,7 +300,52 @@ export default function SellerAnalytics() {
                         <div className="mb-10">
                             <p className="text-sm font-medium mb-4">Advanced analytics</p>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            {/* Phase P8 (Analytics Visualization) - custom date-range
+                                selection, same shape/behavior as AdminDashboard.jsx's
+                                equivalent section. */}
+                            <div className="border border-line rounded-lg p-4 mb-6">
+                                <p className="text-xs uppercase tracking-widest text-ash mb-3">Custom date range</p>
+                                <div className="flex flex-wrap items-end gap-3">
+                                    <label className="text-xs text-ash flex flex-col gap-1">
+                                        Start
+                                        <input
+                                            type="date"
+                                            value={customStart}
+                                            onChange={(e) => setCustomStart(e.target.value)}
+                                            className="border border-line rounded-md px-2 py-1.5 text-sm"
+                                        />
+                                    </label>
+                                    <label className="text-xs text-ash flex flex-col gap-1">
+                                        End
+                                        <input
+                                            type="date"
+                                            value={customEnd}
+                                            onChange={(e) => setCustomEnd(e.target.value)}
+                                            className="border border-line rounded-md px-2 py-1.5 text-sm"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={applyCustomRange}
+                                        disabled={loadingCustomRange}
+                                        className="text-sm bg-azure text-paper px-3 py-1.5 rounded-md hover:bg-azure-deep transition-colors disabled:opacity-50"
+                                    >
+                                        {loadingCustomRange ? "Loading…" : "Apply"}
+                                    </button>
+                                    {advancedAnalytics.periodComparison.custom && !loadingCustomRange && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setCustomStart(""); setCustomEnd(""); setCustomRangeError(""); load(); }}
+                                            className="text-xs text-ash hover:underline"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                                {customRangeError && <p className="text-coral text-xs mt-2">{customRangeError}</p>}
+                            </div>
+
+                            <div className={`grid grid-cols-1 gap-4 mb-6 ${advancedAnalytics.periodComparison.custom ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                                 <PeriodComparisonCard
                                     label="This week vs last week"
                                     current={advancedAnalytics.periodComparison.week.current}
@@ -292,43 +362,125 @@ export default function SellerAnalytics() {
                                     formatValue={formatMoney}
                                     transactionLabel="orders"
                                 />
+                                {advancedAnalytics.periodComparison.custom && (
+                                    <PeriodComparisonCard
+                                        label={`${customStart} → ${customEnd}`}
+                                        current={advancedAnalytics.periodComparison.custom.current}
+                                        previous={advancedAnalytics.periodComparison.custom.previous}
+                                        growthPercent={advancedAnalytics.periodComparison.custom.growthPercent}
+                                        formatValue={formatMoney}
+                                        transactionLabel="orders"
+                                    />
+                                )}
                             </div>
 
-                            <div className="border border-line rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-4">
-                                    <p className="text-sm font-medium">Top customers</p>
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleExportCsv("customers")}
-                                            disabled={exportingType === "customers"}
-                                            className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {exportingType === "customers" ? "Preparing…" : "Export customers ↓"}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleExportCsv("products")}
-                                            disabled={exportingType === "products"}
-                                            className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {exportingType === "products" ? "Preparing…" : "Export products ↓"}
-                                        </button>
+                            {/* Phase P8 (Analytics Visualization) - GMV bar chart alongside
+                                the text cards, same pairing AdminDashboard.jsx uses. */}
+                            <div className="border border-line rounded-lg p-4 mb-6">
+                                <p className="text-sm font-medium mb-4">Period comparison, visualized</p>
+                                <BarChart
+                                    data={[
+                                        { label: "Last week", revenue: advancedAnalytics.periodComparison.week.previous.gmv },
+                                        { label: "This week", revenue: advancedAnalytics.periodComparison.week.current.gmv },
+                                        { label: "Prior 30d", revenue: advancedAnalytics.periodComparison.month.previous.gmv },
+                                        { label: "Last 30d", revenue: advancedAnalytics.periodComparison.month.current.gmv },
+                                        ...(advancedAnalytics.periodComparison.custom
+                                            ? [
+                                                { label: "Custom (prior)", revenue: advancedAnalytics.periodComparison.custom.previous.gmv },
+                                                { label: "Custom (selected)", revenue: advancedAnalytics.periodComparison.custom.current.gmv }
+                                            ]
+                                            : [])
+                                    ]}
+                                    labelKey="label"
+                                    valueKey="revenue"
+                                    formatValue={formatMoney}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="border border-line rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <p className="text-sm font-medium">Top customers</p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleExportCsv("customers")}
+                                                disabled={exportingType === "customers"}
+                                                className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {exportingType === "customers" ? "Preparing…" : "Export customers ↓"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleExportCsv("products")}
+                                                disabled={exportingType === "products"}
+                                                className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {exportingType === "products" ? "Preparing…" : "Export products ↓"}
+                                            </button>
+                                        </div>
                                     </div>
+                                    {advancedAnalytics.topCustomers.length === 0 ? (
+                                        <p className="text-ash text-sm">No sales yet.</p>
+                                    ) : (
+                                        <ul className="space-y-3">
+                                            {advancedAnalytics.topCustomers.map((c) => (
+                                                <li key={c.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
+                                                    <span className="truncate pr-3">{c.name}</span>
+                                                    <span className="text-ash whitespace-nowrap">
+                                                        {c.transaction_count} orders · <span className="price">{formatMoney(c.total_spend)}</span>
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
-                                {advancedAnalytics.topCustomers.length === 0 ? (
-                                    <p className="text-ash text-sm">No sales yet.</p>
-                                ) : (
-                                    <ul className="space-y-3">
-                                        {advancedAnalytics.topCustomers.map((c) => (
-                                            <li key={c.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
-                                                <span className="truncate pr-3">{c.name}</span>
-                                                <span className="text-ash whitespace-nowrap">
-                                                    {c.transaction_count} orders · <span className="price">{formatMoney(c.total_spend)}</span>
+
+                                {/* Phase P8 (Analytics Visualization) - "Add seller
+                                    leaderboard": platform-wide top 5 (public storefront
+                                    info, same as admin sees) plus this seller's own
+                                    rank/row highlighted even when it falls outside the
+                                    top 5 - see seller.service.js's
+                                    getSellerLeaderboardStanding. */}
+                                {advancedAnalytics.leaderboardStanding && (
+                                    <div className="border border-line rounded-lg p-4">
+                                        <p className="text-sm font-medium mb-1">Seller leaderboard</p>
+                                        <p className="text-xs text-ash mb-4">
+                                            Ranked by blended product + service revenue, platform-wide.
+                                        </p>
+                                        {advancedAnalytics.leaderboardStanding.top.length === 0 ? (
+                                            <p className="text-ash text-sm">No paid orders or bookings yet.</p>
+                                        ) : (
+                                            <ul className="space-y-2.5">
+                                                {advancedAnalytics.leaderboardStanding.top.map((s) => (
+                                                    <li
+                                                        key={s.user_id}
+                                                        className={`flex items-center gap-2 text-sm px-2 -mx-2 py-1 rounded-md ${
+                                                            s.user_id === advancedAnalytics.leaderboardStanding.own?.user_id ? "bg-teal/10" : ""
+                                                        }`}
+                                                    >
+                                                        <span className="text-ash text-xs w-5 shrink-0">{s.rank}</span>
+                                                        <span className="flex-1 min-w-0 truncate">{s.store_name}</span>
+                                                        <span className="price text-xs font-medium shrink-0">{formatMoney(s.total_revenue)}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {advancedAnalytics.leaderboardStanding.own && advancedAnalytics.leaderboardStanding.own.rank > 5 && (
+                                            <div className="mt-3 pt-3 border-t border-line flex items-center gap-2 text-sm bg-teal/10 -mx-2 px-2 py-1.5 rounded-md">
+                                                <span className="text-ash text-xs w-5 shrink-0">{advancedAnalytics.leaderboardStanding.own.rank}</span>
+                                                <span className="flex-1 min-w-0 truncate">
+                                                    You · of {advancedAnalytics.leaderboardStanding.totalRankedSellers} ranked sellers
                                                 </span>
-                                            </li>
-                                        ))}
-                                    </ul>
+                                                <span className="price text-xs font-medium shrink-0">
+                                                    {formatMoney(advancedAnalytics.leaderboardStanding.own.total_revenue)}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {!advancedAnalytics.leaderboardStanding.own && (
+                                            <p className="text-xs text-ash mt-3">No paid revenue yet, so you're not ranked.</p>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>

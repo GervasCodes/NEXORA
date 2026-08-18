@@ -288,6 +288,23 @@ exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus) =>
     );
 };
 
+// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): replaces what
+// order.service.js#cancelOrder and #autoCancelStaleOrder used to do with
+// one `UPDATE ... WHERE parent_order_id = ?` per child order in a loop -
+// N round trips for an N-vendor cart. Every child order in a cancellation
+// always moves to the same target status together, so this is exactly
+// the same "N identical per-row UPDATEs -> one batched UPDATE" shape as
+// updatePaymentStatusForChildren above; mirrors it rather than using a
+// WHERE id IN (?) + collected id array, since parent_order_id already
+// scopes exactly the right rows without the caller needing to fetch
+// child ids first at all.
+exports.updateOrderStatusForChildren = async (parentOrderId, status) => {
+    await db.query(
+        "UPDATE orders SET status = ? WHERE parent_order_id = ?",
+        [status, parentOrderId]
+    );
+};
+
 // Orders that contain at least one item belonging to this seller.
 // Payment Security: a seller must not see (or be able to accept/process)
 // an order that requires upfront online payment until that payment is

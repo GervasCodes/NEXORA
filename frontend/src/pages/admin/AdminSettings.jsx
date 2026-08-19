@@ -98,7 +98,7 @@ export default function AdminSettings() {
                 Changes only apply going forward - past orders and deliveries keep whatever rate was in effect at the time.
             </p>
 
-            <form onSubmit={save} className="border border-line rounded-lg p-6 max-w-md space-y-4">
+            <form onSubmit={save} className="border border-line rounded-lg p-4 sm:p-6 max-w-lg space-y-5">
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">Settings saved.</p>}
 
@@ -136,9 +136,9 @@ export default function AdminSettings() {
 
                 <div>
                     <label className="text-xs text-ash block mb-2">Distance-based delivery pricing (Tanzania)</label>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {bands.map((band, i) => (
-                            <div key={i} className="flex items-center gap-2">
+                            <div key={i} className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-ash whitespace-nowrap">Up to</span>
                                 <input
                                     type="number"
@@ -157,14 +157,14 @@ export default function AdminSettings() {
                                     required
                                     value={band.fee}
                                     onChange={(e) => updateBand(i, "fee", e.target.value)}
-                                    className="flex-1 border border-line rounded-md px-2 py-1.5 text-sm"
+                                    className="w-28 sm:flex-1 border border-line rounded-md px-2 py-1.5 text-sm"
                                 />
                                 <span className="text-xs text-ash whitespace-nowrap">TZS</span>
                                 <button
                                     type="button"
                                     onClick={() => removeBand(i)}
                                     disabled={bands.length <= 1}
-                                    className="text-xs text-coral hover:underline disabled:opacity-40 disabled:no-underline px-1"
+                                    className="text-xs text-coral hover:underline disabled:opacity-40 disabled:no-underline px-1 ml-auto sm:ml-0"
                                 >
                                     Remove
                                 </button>

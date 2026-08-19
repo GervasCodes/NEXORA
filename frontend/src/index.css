@@ -218,3 +218,12 @@ body {
 .leaflet-marker-icon {
     transition: transform 0.6s linear;
 }
+
+/* NexoraAIDrawer suggested prompts row — hide scrollbar visually while
+   keeping the strip horizontally scrollable on small viewports. */
+.scrollbar-none {
+    scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}

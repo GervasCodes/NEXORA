@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { suggestAvailability } from "../../api/ai";
+import { SparkleIcon } from "./NexoraFraudExplain";
 
-// Phase B2 feature #9. Ranking of which dates matter (closed dates,
-// busiest weekday) is computed rule-based on the backend
-// (ai.service.js#suggestAvailability) from real availability/booking
-// data - this only shows the resulting phrasing. Purely advisory: it
-// never calls the availability-setting endpoint itself, the provider
-// still uses the form next to this panel to actually open a date.
+// Phase B2 — seller availability AI suggestion. Rule-based on the backend;
+// purely advisory, never sets availability itself.
 export default function NexoraAvailabilitySuggestion({ serviceId, refreshToken }) {
     const [suggestion, setSuggestion] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -27,9 +24,16 @@ export default function NexoraAvailabilitySuggestion({ serviceId, refreshToken }
     if (!suggestion) return null;
 
     return (
-        <div className="flex items-start gap-2 rounded-lg glass-strong p-3 mb-6">
-            <span className="h-4 w-4 mt-0.5 rounded-full bg-gradient-to-br from-azure-light to-azure-deep shrink-0" aria-hidden="true" />
-            <p className="text-sm text-abyss">{suggestion.suggestion}</p>
+        <div className="flex items-start gap-3 rounded-xl border border-azure/20 bg-gradient-to-r from-azure/6 to-transparent px-4 py-3.5 mb-6">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <SparkleIcon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-azure mb-1">
+                    Nexora AI · Availability tip
+                </p>
+                <p className="text-sm text-ink leading-relaxed">{suggestion.suggestion}</p>
+            </div>
         </div>
     );
 }

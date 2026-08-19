@@ -1,11 +1,8 @@
 import { useAIAssistant } from "../../context/AIAssistantContext";
 
-// Placement rules (roadmap Part B, "Design / placement"): bottom-right,
-// glass-strong surface, azure gradient icon, sits above
-// MobileBottomNav (fixed bottom-0 h-[52px]-ish + safe-area) on mobile so
-// it never overlaps it, labeled "Nexora AI" (not a generic bubble icon).
-// Only mounted for buyer/guest layouts in App.jsx - seller/admin/
-// delivery get their own B2/B3 entry points later, not this one.
+// Fixed launcher button — bottom-right, sits above MobileBottomNav on
+// mobile. Buyer/guest only; admin/seller/delivery have their own entry
+// points. Shows a pulsing ring to draw attention on first visit.
 export default function NexoraAIButton() {
     const assistant = useAIAssistant();
     if (!assistant) return null;
@@ -15,17 +12,33 @@ export default function NexoraAIButton() {
             type="button"
             onClick={() => assistant.open()}
             aria-label="Open Nexora AI"
-            className="fixed right-4 z-50 flex items-center gap-2 rounded-full glass-strong px-4 py-3
-                       bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6
-                       shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-transform"
+            className="
+                fixed right-4 z-50
+                bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6
+                group flex items-center gap-2.5
+                rounded-full shadow-lg shadow-azure/25
+                bg-gradient-to-br from-azure-light to-azure-deep
+                px-4 py-2.5
+                hover:shadow-azure/40 hover:scale-[1.04]
+                active:scale-[0.97]
+                transition-all duration-200
+            "
         >
-            <span className="h-6 w-6 rounded-full bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+            {/* Animated halo */}
+            <span className="absolute inset-0 rounded-full bg-azure/30 animate-ping opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden="true" />
+
+            {/* Icon */}
+            <span className="relative w-5 h-5 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8"
+                    strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                     <path d="M12 3v3M12 18v3M4.2 12H3M21 12h-1.2M6 6l1.5 1.5M18 18l-1.5-1.5M18 6l-1.5 1.5M6 18l1.5-1.5" />
                     <circle cx="12" cy="12" r="4" />
                 </svg>
             </span>
-            <span className="text-sm font-medium text-abyss hidden sm:inline">Nexora AI</span>
+
+            <span className="relative text-sm font-semibold text-white hidden sm:inline tracking-wide">
+                Nexora AI
+            </span>
         </button>
     );
 }

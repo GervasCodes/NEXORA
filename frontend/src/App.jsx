@@ -112,7 +112,7 @@ export default function App() {
     const [showSplash, setShowSplash] = useState(
         () => !sessionStorage.getItem("nexora_splash_shown")
     );
-    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired } = useAuth();
+    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
 
@@ -160,6 +160,35 @@ export default function App() {
 
     if (showSplash) {
         return <SplashScreen onDone={() => setShowSplash(false)} />;
+    }
+
+    // CSRF cookie expired while the session cookie was still alive. The
+    // only recovery is a page reload which causes the browser to re-issue
+    // a fresh CSRF cookie alongside the still-valid session cookie. We
+    // show a non-dismissible full-screen prompt rather than a toast,
+    // because without the reload no further mutating requests will work.
+    if (csrfExpired) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-paper p-6">
+                <div className="max-w-sm w-full text-center glass-strong rounded-xl p-8 space-y-4">
+                    <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-7 h-7 text-amber-600 dark:text-amber-400">
+                            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        </svg>
+                    </div>
+                    <h2 className="font-display text-xl">Session refresh needed</h2>
+                    <p className="text-ash text-sm leading-relaxed">
+                        Your security token has expired. Refresh the page to continue — your session is still active.
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full bg-ink text-paper rounded-lg px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+                    >
+                        Refresh page
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     // Takes over the entire app, regardless of route - a suspension can be

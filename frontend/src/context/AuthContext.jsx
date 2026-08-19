@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
-import api, { extractErrorMessage, registerSuspensionHandler, registerSessionExpiredHandler } from "../api/client";
+import api, { extractErrorMessage, registerSuspensionHandler, registerSessionExpiredHandler, registerCsrfExpiredHandler } from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -55,6 +55,12 @@ export function AuthProvider({ children }) {
     // person back to /login, instead of the old silent-clear-and-hope
     // behavior.
     const [sessionExpired, setSessionExpired] = useState(false);
+    // Set when the server rejects a mutating request with CSRF_TOKEN_INVALID
+    // (403). nexora_csrf cookie expired while nexora_session survived -
+    // only a page reload can re-issue a fresh CSRF cookie, so we show a
+    // non-dismissible reload prompt (see App.jsx).
+    const [csrfExpired, setCsrfExpired] = useState(false);
+    const clearCsrfExpired = useCallback(() => setCsrfExpired(false), []);
 
     useEffect(() => {
         registerSuspensionHandler((reason) => {
@@ -65,9 +71,13 @@ export function AuthProvider({ children }) {
             setUser(null);
             setSessionExpired(true);
         });
+        registerCsrfExpiredHandler(() => {
+            setCsrfExpired(true);
+        });
         return () => {
             registerSuspensionHandler(null);
             registerSessionExpiredHandler(null);
+            registerCsrfExpiredHandler(null);
         };
     }, []);
 
@@ -198,10 +208,12 @@ export function AuthProvider({ children }) {
     const value = useMemo(
         () => ({
             user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
-            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady
+            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
+            csrfExpired, clearCsrfExpired
         }),
         [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
-            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady]
+            suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
+            csrfExpired, clearCsrfExpired]
     );
 
     return (

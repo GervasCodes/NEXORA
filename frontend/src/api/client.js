@@ -46,6 +46,17 @@ export const registerSessionExpiredHandler = (handler) => {
     sessionExpiredHandler = handler;
 };
 
+// Fired when the server rejects a mutating request with CSRF_TOKEN_INVALID
+// (403). This happens when the nexora_csrf cookie has expired or been
+// cleared (e.g. browser ITP, Safari aggressive cookie pruning, or a long
+// idle session) while nexora_session is still valid. The only reliable
+// recovery is a page refresh which re-reads a fresh CSRF cookie from the
+// server - the handler in AuthContext shows a non-dismissible reload prompt.
+let csrfExpiredHandler = null;
+export const registerCsrfExpiredHandler = (handler) => {
+    csrfExpiredHandler = handler;
+};
+
 api.interceptors.request.use((config) => {
     // Phase 4 (Testing & Session Hardening): no more reading a token out
     // of localStorage to build an Authorization header - the httpOnly
@@ -92,6 +103,19 @@ api.interceptors.response.use(
             localStorage.removeItem("nexora_user");
             localStorage.removeItem("nexora_last_activity");
             suspensionHandler?.(error.response.data?.data?.reason || null);
+            return Promise.reject(error);
+        }
+
+        // CSRF token missing or expired (nexora_csrf cookie gone while the
+        // session cookie survived). The interceptor fires this once so the
+        // UI can show a non-dismissible "please refresh" prompt - no silent
+        // retry because the CSRF cookie itself must be re-issued server-side
+        // (at login) and can only be refreshed by reloading the page.
+        if (
+            error.response?.status === 403 &&
+            error.response?.data?.code === "CSRF_TOKEN_INVALID"
+        ) {
+            csrfExpiredHandler?.();
             return Promise.reject(error);
         }
 

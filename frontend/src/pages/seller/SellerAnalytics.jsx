@@ -7,6 +7,7 @@ import LineChart from "../../components/LineChart";
 import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import VerificationFeeGate from "../../components/VerificationFeeGate";
 import NexoraAnalyticsSummary from "../../components/ai/NexoraAnalyticsSummary";
+import NexoraDemandForecast from "../../components/ai/NexoraDemandForecast";
 import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
 
@@ -222,6 +223,7 @@ export default function SellerAnalytics() {
             <p className="text-ash text-sm mb-8">How {profile.store_name} is performing.</p>
 
             <NexoraAnalyticsSummary />
+            <NexoraDemandForecast />
 
             {showProducts && (
                 <>

@@ -40,7 +40,9 @@ const groups = [
         tabs: [
             { to: "/seller", label: "Overview", end: true },
             { to: "/seller/analytics", label: "Analytics" },
-            { to: "/seller/wallet", label: "Wallet" }
+            { to: "/seller/wallet", label: "Wallet" },
+            { to: "/seller/loans", label: "Working capital" },
+            { to: "/seller/tax-info", label: "Tax & receipts" }
         ]
     },
     {
@@ -59,7 +61,10 @@ const groups = [
             { to: "/seller/bookings", label: "Bookings", category: "service", selfGated: true },
             { to: "/seller/orders", label: "Orders", category: "product" },
             { to: "/seller/delivery-team", label: "Delivery team", category: "product" },
-            { to: "/seller/disputes", label: "Disputes", category: "product" }
+            { to: "/seller/disputes", label: "Disputes", category: "product" },
+            { to: "/seller/returns", label: "Returns", category: "product" },
+            { to: "/seller/group-buys", label: "Group buys", category: "product" },
+            { to: "/seller/live-selling", label: "Live selling", category: "product" }
         ]
     },
     {

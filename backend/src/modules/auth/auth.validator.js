@@ -21,6 +21,11 @@ exports.registerValidation = [
         .isIn(["buyer", "seller", "delivery_agent"])
         .withMessage("Invalid role"),
 
+    body("referral_code")
+        .optional({ nullable: true, checkFalsy: true })
+        .isLength({ max: 12 })
+        .withMessage("Invalid referral code"),
+
     // Vehicle type/plate are only required for delivery_agent registrations
     // - a plain multipart form field, so this arrives as a string on every
     // submission (never undefined the way a missing file would be).

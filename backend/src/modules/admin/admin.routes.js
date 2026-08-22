@@ -65,6 +65,11 @@ router.put("/subscription-plans/:id", requireSuperAdmin, updatePlanValidation, v
 router.get("/subscriptions", subscriptionController.listAllSubscriptions);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
+
+// Phase Q9 (Admin Tools) - anomaly-detection dashboard over the same
+// fraud_flags data, visualized trend/breakdown + spike detection rather
+// than the flat open-queue list above.
+router.get("/fraud-dashboard", adminController.getFraudDashboard);
 router.get("/audit-logs", adminController.listAuditLogs);
 
 router.get("/refunds", adminController.listRefunds);

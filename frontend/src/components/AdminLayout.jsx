@@ -49,7 +49,13 @@ const groups = [
             { to: "/admin/sellers", label: "Sellers" },
             { to: "/admin/account-verifications", label: "Verifications" },
             { to: "/admin/disputes", label: "Disputes" },
-            { to: "/admin/fraud", label: "Fraud review" }
+            { to: "/admin/returns", label: "Returns" },
+            { to: "/admin/support", label: "Support" },
+            { to: "/admin/efd", label: "EFD Tax" },
+            { to: "/admin/pickup-points", label: "Pickup points" },
+            { to: "/admin/content", label: "Guides" },
+            { to: "/admin/fraud", label: "Fraud review" },
+            { to: "/admin/fraud-dashboard", label: "Fraud dashboard" }
         ]
     },
     {

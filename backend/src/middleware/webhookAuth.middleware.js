@@ -186,3 +186,46 @@ const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
 };
 
 exports.verifySharedSecretHeader = verifyWebhookSecret;
+
+// --- WhatsApp Cloud API ---------------------------------------------------
+// Per developers.facebook.com/docs/graph-api/webhooks/getting-started:
+// every webhook delivery includes an X-Hub-Signature-256 header, computed
+// as HMAC-SHA256(rawBody, appSecret) - same "hash the raw bytes" shape as
+// Snippe/MalipoPay Card below, so this route needs the same express.raw()
+// wiring in app.js those two already use (see the comment there).
+exports.verifyWhatsAppWebhook = async (req, res, next) => {
+    const appSecret = process.env.WHATSAPP_APP_SECRET;
+    const signatureHeader = req.headers["x-hub-signature-256"];
+
+    if (!appSecret) {
+        if (process.env.NODE_ENV === "production") {
+            logger.error({ provider: "whatsapp", reqId: req.id }, "[webhook auth] WHATSAPP_APP_SECRET not configured - rejecting webhook in production (fail closed)");
+            return res.status(200).send("EVENT_RECEIVED");
+        }
+        return next();
+    }
+
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+    const computed = "sha256=" + crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex");
+
+    const expected = Buffer.from(computed, "utf8");
+    const provided = Buffer.from(String(signatureHeader || ""), "utf8");
+
+    if (!signatureHeader || expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
+        logger.warn({ provider: "whatsapp", reqId: req.id, ip: req.ip }, "[webhook auth] rejected whatsapp webhook with invalid/missing X-Hub-Signature-256");
+        // 200, not 401: Meta retry-storms on non-2xx, same reasoning as
+        // the mobile money webhooks above.
+        return res.status(200).send("EVENT_RECEIVED");
+    }
+
+    // The raw Buffer body needs to be JSON again for whatsapp.controller.js
+    // to read message fields off it - express.raw() (wired in app.js)
+    // deliberately skips express.json()'s parsing for this one route.
+    try {
+        req.body = JSON.parse(rawBody.toString("utf8") || "{}");
+    } catch (error) {
+        return res.status(200).send("EVENT_RECEIVED");
+    }
+
+    next();
+};

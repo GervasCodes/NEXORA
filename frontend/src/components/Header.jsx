@@ -27,6 +27,12 @@ function useNavLinks() {
     if (user?.role === "buyer") links.push({ to: "/bookings", label: t("nav.bookings") });
     if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes") });
     if (user?.role === "buyer") links.push({ to: "/saved", label: t("nav.saved") });
+    if (user?.role === "buyer") links.push({ to: "/account/wallet", label: t("nav.wallet") });
+    if (user?.role === "buyer") links.push({ to: "/loyalty", label: "Loyalty" });
+    if (user?.role === "buyer") links.push({ to: "/affiliate", label: "Affiliate" });
+    links.push({ to: "/group-buys", label: "Group buys" });
+    links.push({ to: "/live-selling", label: "Live selling" });
+    links.push({ to: "/guides", label: "Guides" });
     if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart") });
     if (user) links.push({ to: "/account", label: t("nav.account") });
 
@@ -126,10 +132,10 @@ export default function Header() {
     };
 
     // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
-    // Unification) - Wallet doesn't apply to buyers (that's a
-    // seller/delivery-agent earning concept), so Cart takes that slot
-    // instead, matching how prominently Cart already sits in this
-    // header's own mobile icon row above.
+    // Unification) - fixed to 5 slots, so newer buyer destinations
+    // (Wallet added in Phase Q2) live in the desktop icon row/Account
+    // page instead of competing for a bottom-nav slot; Cart keeps its
+    // slot here as the buyer's actual highest-frequency action.
     const buyerBottomNavItems = [
         { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
         { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },

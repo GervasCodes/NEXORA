@@ -173,6 +173,24 @@ router.get(
     paymentController.getAvailablePaymentMethods
 );
 
+// Wallet top-up (Phase Q2) - literal path, same registration-order
+// reasoning as "/methods" and "/verification-fee/*" above.
+router.post(
+    "/wallet/topup",
+    authMiddleware,
+    authorize("buyer"),
+    paymentController.initiateWalletTopUp
+);
+
+router.post(
+    "/:orderId/wallet",
+    authMiddleware,
+    authorize("buyer"),
+    orderIdValidation,
+    validationMiddleware,
+    paymentController.initiateWalletOrderPayment
+);
+
 router.get(
     "/:orderId",
     authMiddleware,

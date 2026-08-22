@@ -323,6 +323,25 @@ exports.getTopProducts = async (sellerId, limit = 5) => {
     return rows;
 };
 
+// Phase Q8 (AI demand forecasting): per-product sales velocity over the
+// trailing window, joined with the product's current live stock/price -
+// the actual "how fast is this selling, how much is left" arithmetic AI
+// only phrases a suggestion on top of (see ai.service.js#suggestRestockAndPricing).
+// Active products only - a delisted product has nothing to restock.
+exports.getSalesVelocityByProduct = async (sellerId, days = 30) => {
+    const [rows] = await db.query(
+        `SELECT p.id, p.name, p.slug, p.stock, p.price, p.discount_price,
+                COALESCE(SUM(oi.quantity), 0) AS units_sold_in_window
+        FROM products p
+        LEFT JOIN order_items oi ON oi.product_id = p.id
+            AND oi.order_id IN (SELECT id FROM orders WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY))
+        WHERE p.seller_id = ? AND p.is_active = 1
+        GROUP BY p.id, p.name, p.slug, p.stock, p.price, p.discount_price`,
+        [days, sellerId]
+    );
+    return rows;
+};
+
 // Buyers who've placed more than one order containing this seller's items.
 exports.getRepeatCustomerCount = async (sellerId) => {
     const [[row]] = await db.query(

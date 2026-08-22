@@ -83,3 +83,127 @@ exports.resolveFlag = async (id, status, adminId) => {
     }
     await fraudRepository.resolve(id, status, adminId);
 };
+
+// --- Dashboard / anomaly detection (Phase Q9 - Admin Tools) ---
+// Same philosophy as the rules above: plain, checkable statistics over
+// fraud_flags, computed fresh on every request - not a trained model,
+// nothing persisted. "Anomaly" means "this day's flag count sits more
+// standard deviations above its own trailing baseline than normal
+// day-to-day noise would explain", using the platform's own history as
+// the only reference point.
+
+const TREND_WINDOW_DAYS = 30;
+const RECENT_WINDOW_DAYS = 7;
+const DAILY_ANOMALY_STDDEV_MULTIPLIER = 2;
+// Guards against a quiet baseline (e.g. a new platform averaging under
+// one flag/day) making any single ordinary day look "anomalous" just
+// because the stddev is tiny - a day needs to clear this absolute floor
+// too, not just the statistical one.
+const DAILY_ANOMALY_MIN_COUNT = 3;
+const RULE_SPIKE_MULTIPLIER = 2;
+const RULE_SPIKE_MIN_RECENT_COUNT = 3;
+
+function averageOf(nums) {
+    return nums.length ? nums.reduce((sum, n) => sum + n, 0) / nums.length : 0;
+}
+
+function stddevOf(nums, avg) {
+    if (nums.length < 2) return 0;
+    const variance = nums.reduce((sum, n) => sum + (n - avg) ** 2, 0) / nums.length;
+    return Math.sqrt(variance);
+}
+
+// fraud.repository#getDailyFlagCounts only returns days that had at
+// least one flag - this fills every day in the window with 0 so the
+// trend chart and the baseline math both see a real, continuous series.
+function buildDailySeries(rawCounts, days) {
+    const byDay = new Map(rawCounts.map((r) => [r.day, r.count]));
+    const series = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        series.push({ day: key, count: byDay.get(key) || 0 });
+    }
+    return series;
+}
+
+exports.getDashboardStats = async () => {
+    const [rawDaily, ruleRecent, ruleTrend, severityBreakdown, resolutionBreakdown, topFlaggedEntities] = await Promise.all([
+        fraudRepository.getDailyFlagCounts(TREND_WINDOW_DAYS),
+        fraudRepository.getRuleBreakdown(RECENT_WINDOW_DAYS),
+        fraudRepository.getRuleBreakdown(TREND_WINDOW_DAYS),
+        fraudRepository.getOpenSeverityBreakdown(),
+        fraudRepository.getResolutionBreakdown(TREND_WINDOW_DAYS),
+        fraudRepository.getTopFlaggedEntities(8)
+    ]);
+
+    const dailySeries = buildDailySeries(rawDaily, TREND_WINDOW_DAYS);
+    const baselineDays = dailySeries.slice(0, dailySeries.length - RECENT_WINDOW_DAYS);
+    const recentDays = dailySeries.slice(dailySeries.length - RECENT_WINDOW_DAYS);
+
+    const baselineCounts = baselineDays.map((d) => d.count);
+    const baselineAvg = averageOf(baselineCounts);
+    const baselineStddev = stddevOf(baselineCounts, baselineAvg);
+    const dailyThreshold = baselineAvg + DAILY_ANOMALY_STDDEV_MULTIPLIER * baselineStddev;
+
+    const daily = dailySeries.map((d) => {
+        const inRecentWindow = recentDays.some((r) => r.day === d.day);
+        const isAnomaly = inRecentWindow && d.count >= DAILY_ANOMALY_MIN_COUNT && d.count > dailyThreshold;
+        return { ...d, isAnomaly };
+    });
+
+    const anomalyDays = daily.filter((d) => d.isAnomaly).map((d) => ({
+        day: d.day,
+        count: d.count,
+        reason: `${d.count} flags raised on ${d.day} - above the past month's typical rate of about ${baselineAvg.toFixed(1)}/day.`
+    }));
+
+    const last7DayCount = recentDays.reduce((sum, d) => sum + d.count, 0);
+    const baselineWeeklyAvg = baselineAvg * RECENT_WINDOW_DAYS;
+    const percentChangeVsBaseline = baselineWeeklyAvg > 0
+        ? Math.round(((last7DayCount - baselineWeeklyAvg) / baselineWeeklyAvg) * 100)
+        : (last7DayCount > 0 ? 100 : 0);
+
+    // Per-rule spike check: this rule's last-7-day count vs its own
+    // trailing baseline (the 30-day count minus the recent 7, scaled
+    // back down to a 7-day rate so the comparison is apples-to-apples).
+    const ruleTrendByCode = new Map(ruleTrend.map((r) => [r.ruleCode, r]));
+    const baselineWindowDays = TREND_WINDOW_DAYS - RECENT_WINDOW_DAYS;
+    const ruleBreakdown = ruleRecent.map((recent) => {
+        const trend = ruleTrendByCode.get(recent.ruleCode) || { count: recent.count, highCount: recent.highCount };
+        const baselineCount = Math.max(0, trend.count - recent.count);
+        const baselineWeeklyRate = (baselineCount / baselineWindowDays) * RECENT_WINDOW_DAYS;
+        const isSpike = recent.count >= RULE_SPIKE_MIN_RECENT_COUNT
+            && recent.count > baselineWeeklyRate * RULE_SPIKE_MULTIPLIER;
+        return {
+            ruleCode: recent.ruleCode,
+            recentCount: recent.count,
+            recentHighCount: recent.highCount,
+            baselineWeeklyRate: Math.round(baselineWeeklyRate * 10) / 10,
+            isSpike
+        };
+    }).sort((a, b) => b.recentCount - a.recentCount);
+
+    const openTotal = severityBreakdown.reduce((sum, s) => sum + s.count, 0);
+    const confirmed = resolutionBreakdown.find((r) => r.status === "confirmed")?.count || 0;
+    const dismissed = resolutionBreakdown.find((r) => r.status === "dismissed")?.count || 0;
+    const resolvedTotal = confirmed + dismissed;
+
+    return {
+        dailySeries: daily,
+        anomalyDays,
+        summary: {
+            openTotal,
+            last7DayCount,
+            baselineWeeklyAvg: Math.round(baselineWeeklyAvg * 10) / 10,
+            percentChangeVsBaseline,
+            confirmedCount: confirmed,
+            dismissedCount: dismissed,
+            confirmedRate: resolvedTotal > 0 ? Math.round((confirmed / resolvedTotal) * 100) : null
+        },
+        severityBreakdown,
+        ruleBreakdown,
+        topFlaggedEntities
+    };
+};

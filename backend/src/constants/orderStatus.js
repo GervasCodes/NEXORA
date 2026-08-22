@@ -6,7 +6,7 @@ exports.ORDER_STATUSES = [
     "cancelled"
 ];
 
-exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "snippe", "malipopay_card", "paypal"];
+exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "snippe", "malipopay_card", "paypal", "wallet"];
 
 // Statuses a buyer is allowed to cancel from
 exports.CANCELLABLE_STATUSES = ["pending", "processing"];
@@ -17,6 +17,14 @@ exports.SELLER_STATUS_TRANSITIONS = {
     processing: ["shipped", "cancelled"],
     shipped: ["delivered"]
 };
+
+// Checkout buyer-protection insurance add-on (Phase Q1) - see
+// order.service.js#calculateBuyerProtectionFee. 1.5% of cart subtotal,
+// floored/capped so it's meaningful on a cheap order and not excessive
+// on a very large one.
+exports.BUYER_PROTECTION_FEE_RATE = 0.015;
+exports.BUYER_PROTECTION_FEE_MIN = 1000; // TZS
+exports.BUYER_PROTECTION_FEE_MAX = 20000; // TZS
 
 // Vehicle types a delivery agent can register with (migration 032).
 exports.VEHICLE_TYPES = ["bicycle", "motorcycle", "tuktuk", "car", "van", "truck"];

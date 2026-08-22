@@ -2,13 +2,18 @@ const db = require("../../config/db");
 
 // Shared by createOrder/createSplitOrder below: insert one `orders` row
 // (optionally as a child of `parentOrderId`) and return its insertId.
-const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount }) => {
+// buyerProtectionAddon/Fee (Phase Q1) only apply to the top-level row a
+// buyer actually pays for (standalone order, or the parent of a split
+// cart) - child orders default to 0/false since the guarantee covers the
+// whole cart, not a single vendor's slice of it.
+const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0 }) => {
     const [orderResult] = await connection.query(
         `INSERT INTO orders
         (order_number, buyer_id, parent_order_id, is_parent, status, payment_status, payment_method,
-         shipping_address, shipping_city, shipping_region, shipping_phone,
-         delivery_lat, delivery_lng, total_amount)
-        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         shipping_address, shipping_city, shipping_region, shipping_phone, pickup_point_id,
+         delivery_lat, delivery_lng, total_amount, buyer_protection_addon, buyer_protection_fee,
+         loyalty_points_redeemed, loyalty_discount_amount)
+        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             orderNumber,
             buyerId,
@@ -19,9 +24,14 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
             shippingInfo.shipping_city,
             shippingInfo.shipping_region,
             shippingInfo.shipping_phone,
+            pickupPointId,
             shippingInfo.delivery_lat ?? null,
             shippingInfo.delivery_lng ?? null,
-            totalAmount
+            totalAmount,
+            buyerProtectionAddon ? 1 : 0,
+            buyerProtectionFee,
+            loyaltyPointsRedeemed,
+            loyaltyDiscountAmount
         ]
     );
 
@@ -89,14 +99,16 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
 // Create a single (non-split) order + its items + decrement stock, all in
 // one transaction. cartItems: rows from cart_items joined with product
 // price/stock (see order.service.js). Used for single-vendor checkouts.
-exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount) => {
+exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}) => {
     const connection = await db.getConnection();
 
     try {
         await connection.beginTransaction();
 
         const orderId = await insertOrderRow(connection, {
-            buyerId, parentOrderId: null, isParent: false, orderNumber, shippingInfo, totalAmount
+            buyerId, parentOrderId: null, isParent: false, orderNumber, shippingInfo, totalAmount,
+            buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
+            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount
         });
 
         await insertOrderItems(connection, orderId, cartItems);
@@ -127,14 +139,16 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
 // sellerGroups: array of { sellerId, items, subtotal } - `items` in the
 // same shape createOrder expects, `subtotal` is that seller's slice of
 // the cart total.
-exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sellerGroups, totalAmount) => {
+exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sellerGroups, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}) => {
     const connection = await db.getConnection();
 
     try {
         await connection.beginTransaction();
 
         const parentOrderId = await insertOrderRow(connection, {
-            buyerId, parentOrderId: null, isParent: true, orderNumber: parentOrderNumber, shippingInfo, totalAmount
+            buyerId, parentOrderId: null, isParent: true, orderNumber: parentOrderNumber, shippingInfo, totalAmount,
+            buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
+            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount
         });
 
         const childOrders = [];
@@ -149,7 +163,8 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
                 isParent: false,
                 orderNumber: childOrderNumber,
                 shippingInfo,
-                totalAmount: group.subtotal
+                totalAmount: group.subtotal,
+                pickupPointId
             });
 
             await insertOrderItems(connection, childOrderId, group.items);

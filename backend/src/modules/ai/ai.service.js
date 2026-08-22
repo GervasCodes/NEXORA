@@ -4,6 +4,7 @@ const settingsService = require("../settings/settings.service");
 const orderService = require("../order/order.service");
 const recommendationService = require("../recommendation/recommendation.service");
 const sellerService = require("../seller/seller.service");
+const sellerRepository = require("../seller/seller.repository");
 const bookingService = require("../booking/booking.service");
 const availabilityService = require("../availability/availability.service");
 const serviceRepository = require("../service/service.repository");
@@ -358,6 +359,82 @@ exports.summarizeSellerAnalytics = async ({ userId }) => {
 
     return {
         summary: reply || `You've had ${analytics.totals.totalOrders} orders totaling ${analytics.totals.grossSales} in gross sales, with ${analytics.repeatCustomers} repeat customers.`,
+        aiGenerated: Boolean(reply)
+    };
+};
+
+// --- Phase Q8: AI demand forecasting for sellers (restock/pricing) -------
+//
+// Same "rule-based facts first, AI phrases a suggestion on top" pattern
+// as every other feature in this file. The actual forecast math is
+// plain arithmetic on real sales history (units sold in the trailing
+// window / window length = daily velocity; current stock / velocity =
+// days of stock remaining) - never AI-invented. AI only picks out which
+// products most need attention and phrases why, in plain language. This
+// is advisory only: it returns text and numbers for the seller to read,
+// never adjusts a product's stock or price itself.
+const RESTOCK_WINDOW_DAYS = 30;
+const LOW_STOCK_DAYS_THRESHOLD = 14; // "restock soon" if fewer than this many days of stock remain at current pace
+const SLOW_MOVER_MIN_STOCK = 10; // "consider discounting" only applies once there's actually meaningful stock sitting still
+
+exports.suggestRestockAndPricing = async ({ userId }) => {
+    const rows = await sellerRepository.getSalesVelocityByProduct(userId, RESTOCK_WINDOW_DAYS);
+
+    const withVelocity = rows.map((p) => {
+        const dailyVelocity = Number(p.units_sold_in_window) / RESTOCK_WINDOW_DAYS;
+        const daysOfStockRemaining = dailyVelocity > 0 ? Number(p.stock) / dailyVelocity : null; // null = no recent sales to project from
+        return { ...p, dailyVelocity, daysOfStockRemaining };
+    });
+
+    const restockSoon = withVelocity
+        .filter((p) => p.daysOfStockRemaining !== null && p.daysOfStockRemaining < LOW_STOCK_DAYS_THRESHOLD)
+        .sort((a, b) => a.daysOfStockRemaining - b.daysOfStockRemaining)
+        .slice(0, 5);
+
+    const slowMovers = withVelocity
+        .filter((p) => p.units_sold_in_window === 0 && Number(p.stock) >= SLOW_MOVER_MIN_STOCK)
+        .slice(0, 5);
+
+    if (restockSoon.length === 0 && slowMovers.length === 0) {
+        return {
+            restockSoon: [],
+            slowMovers: [],
+            explanation: "Nothing needs attention right now - no products are close to running out, and no well-stocked products have gone unsold recently.",
+            aiGenerated: false
+        };
+    }
+
+    const facts =
+        `Restock window analyzed: trailing ${RESTOCK_WINDOW_DAYS} days\n` +
+        `Products projected to run out within ${LOW_STOCK_DAYS_THRESHOLD} days at current sales pace: ` +
+        (restockSoon.length > 0
+            ? restockSoon.map((p) => `${p.name} (${Math.round(p.daysOfStockRemaining)} days left, ${p.stock} in stock)`).join(", ")
+            : "none") +
+        `\nProducts with ${SLOW_MOVER_MIN_STOCK}+ units in stock but zero sales in the window: ` +
+        (slowMovers.length > 0
+            ? slowMovers.map((p) => `${p.name} (${p.stock} in stock, priced at ${p.discount_price || p.price})`).join(", ")
+            : "none");
+
+    const reply = await callProvider({
+        userId,
+        feature: "seller_demand_forecast",
+        system: `Write a short (2-4 sentence) plain-text note for a seller about restocking and pricing, using ONLY the facts given below. For products about to run out, suggest restocking soon. For well-stocked products with no recent sales, you may suggest considering a discount to move inventory - but never invent a specific discount percentage or amount, since you don't have their cost/margin data. This is advisory only - never state or imply that any price or stock level has already been changed.\n\nFacts:\n${facts}`,
+        userMessage: "Give me restock and pricing suggestions.",
+        maxTokens: 220
+    });
+
+    const fallbackParts = [];
+    if (restockSoon.length > 0) {
+        fallbackParts.push(`Restock soon: ${restockSoon.map((p) => `${p.name} (~${Math.round(p.daysOfStockRemaining)} days of stock left)`).join(", ")}.`);
+    }
+    if (slowMovers.length > 0) {
+        fallbackParts.push(`Slow movers worth a look: ${slowMovers.map((p) => p.name).join(", ")} - well stocked but no sales in the last ${RESTOCK_WINDOW_DAYS} days.`);
+    }
+
+    return {
+        restockSoon: restockSoon.map((p) => ({ id: p.id, name: p.name, slug: p.slug, stock: p.stock, daysOfStockRemaining: Math.round(p.daysOfStockRemaining) })),
+        slowMovers: slowMovers.map((p) => ({ id: p.id, name: p.name, slug: p.slug, stock: p.stock, price: p.discount_price || p.price })),
+        explanation: reply || fallbackParts.join(" "),
         aiGenerated: Boolean(reply)
     };
 };

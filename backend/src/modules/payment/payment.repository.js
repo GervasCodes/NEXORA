@@ -40,6 +40,31 @@ exports.findPendingVerificationFeePayment = async (sellerId) => {
     return rows[0];
 };
 
+// ---- Wallet top-up payments (Phase Q2) -------------------------------
+// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// exactly - a top-up has no order, just a buyer (via seller_id, reused
+// as "the human this payment is for" the same way it already is for a
+// verification fee - see 084's migration note on `topup_id` for why a
+// dedicated column was still needed) and a topup_id.
+
+exports.createTopUpPayment = async (buyerId, topupId, amount) => {
+    const [result] = await db.query(
+        `INSERT INTO payments (order_id, seller_id, topup_id, method, status, amount, purpose)
+        VALUES (NULL, ?, ?, 'mobile_money', 'pending', ?, 'wallet_topup')`,
+        [buyerId, topupId, amount]
+    );
+    return result.insertId;
+};
+
+exports.findPendingTopUpPayment = async (topupId) => {
+    const [rows] = await db.query(
+        `SELECT * FROM payments WHERE topup_id = ? AND purpose = 'wallet_topup' AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1`,
+        [topupId]
+    );
+    return rows[0];
+};
+
 // ---- Subscription payments (Revenue & Product Enhancements) ---------------
 // Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
 // exactly - a subscription payment has no order/booking, just a seller

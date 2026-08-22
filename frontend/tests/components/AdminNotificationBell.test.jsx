@@ -10,7 +10,7 @@ vi.mock("../../src/api/client", () => ({
 
 let mockUser = { role: "admin" };
 vi.mock("../../src/context/AuthContext", () => ({
-    useAuth: () => ({ user: mockUser })
+    useAuth: () => ({ user: mockUser, sessionReady: true })
 }));
 
 let mockSocket = null;

@@ -44,6 +44,7 @@ exports.notify = async ({
     message,
     relatedOrderId,
     withEmail,
+    withWhatsApp,
     url
 }) => {
     const contact = await notificationRepository.getUserContact(userId);
@@ -105,6 +106,17 @@ exports.notify = async ({
     if (withEmail && contact?.email) {
         const body = `${resolvedMessage}\n\n${t(locale, "email.footer")}`;
         await sendEmail(contact.email, resolvedTitle, body);
+    }
+
+    // Phase Q3: opt-in only (contact.whatsapp_order_updates), and only
+    // when the caller explicitly asked for this leg (withWhatsApp) -
+    // most notify() call sites are things a WhatsApp message would be
+    // noise for (a chat reply, a wishlist price drop), so this is never
+    // on by default the way the in-app notification itself is.
+    if (withWhatsApp && contact?.whatsapp_order_updates && contact?.phone) {
+        const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
+        whatsappProvider.sendText(contact.phone, `${resolvedTitle}\n${resolvedMessage}`)
+            .catch((error) => logger.warn({ err: error }, "whatsapp send error (notify)"));
     }
 };
 

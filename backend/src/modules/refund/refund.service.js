@@ -41,35 +41,55 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Mirrors the ER_DUP_ENTRY code mysql2 throws on a UNIQUE constraint hit.
 const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062);
 
-const findOrCreateRefundRow = async ({ dispute, payment, amount, requestedBy }) => {
-    const existing = await refundRepository.findByDisputeId(dispute.id);
+// Phase Q1: generalized over the refund's source (a dispute or a
+// return) rather than being dispute-only. `source` is
+// { type: "dispute" | "return", id, orderId, buyerId, sellerId }.
+// idempotency_key/dispute_id/return_id are what actually enforce "one
+// refund per source" at the DB layer (see findByDisputeId/findByReturnId
+// below) - this just recovers the existing row on a race/retry instead
+// of erroring.
+const findExistingForSource = async (source) => (
+    source.type === "dispute"
+        ? refundRepository.findByDisputeId(source.id)
+        : refundRepository.findByReturnId(source.id)
+);
+
+const findOrCreateRefundRow = async ({ source, payment, amount, requestedBy }) => {
+    const existing = await findExistingForSource(source);
     if (existing) {
         return { refund: existing, alreadyExisted: true };
     }
 
     try {
         const id = await refundRepository.create({
-            disputeId: dispute.id,
+            disputeId: source.type === "dispute" ? source.id : null,
+            returnId: source.type === "return" ? source.id : null,
             paymentId: payment.id,
-            orderId: dispute.order_id,
-            buyerId: dispute.buyer_id,
-            sellerId: dispute.seller_id,
+            orderId: source.orderId,
+            buyerId: source.buyerId,
+            sellerId: source.sellerId,
             provider: payment.method,
             amount,
-            idempotencyKey: `dispute:${dispute.id}`,
+            idempotencyKey: `${source.type}:${source.id}`,
             requestedBy
         });
         return { refund: await refundRepository.findById(id), alreadyExisted: false };
     } catch (err) {
         if (isDuplicateKeyError(err)) {
             // Lost a race with another concurrent call for the same
-            // dispute - the winner's row is the source of truth.
-            const raced = await refundRepository.findByDisputeId(dispute.id);
+            // source - the winner's row is the source of truth.
+            const raced = await findExistingForSource(source);
             if (raced) return { refund: raced, alreadyExisted: true };
         }
         throw err;
     }
 };
+
+// Refund rows come from either a dispute or a return (Phase Q1) - this
+// just renders whichever source pointer is set, for provider references
+// and log/audit text.
+const sourceLabel = (refund) => (refund.dispute_id ? `dispute #${refund.dispute_id}` : `return #${refund.return_id}`);
+const sourceSlug = (refund) => (refund.dispute_id ? `dispute_${refund.dispute_id}` : `return_${refund.return_id}`);
 
 // Calls the actual payment provider for one refund attempt. Returns
 // { success, reference } on a completed call, or throws/returns
@@ -82,8 +102,8 @@ const callProvider = async (refund, payment) => {
             return { success: false, error: "Order has no phone number on file to refund to" };
         }
         const result = await mobileMoneyProvider.refund(order.shipping_phone, refund.amount, {
-            reference: `NEXORA-REFUND-DISPUTE-${refund.dispute_id}`,
-            description: `Refund for dispute #${refund.dispute_id}`
+            reference: `NEXORA-REFUND-${sourceSlug(refund).toUpperCase()}`,
+            description: `Refund for ${sourceLabel(refund)}`
         });
         return {
             success: Boolean(result.success),
@@ -99,7 +119,7 @@ const callProvider = async (refund, payment) => {
         const result = await snippeProvider.refundPayment({
             transactionReference: payment.transaction_reference,
             amountTzs: refund.amount,
-            reason: `dispute_${refund.dispute_id}`
+            reason: sourceSlug(refund)
         });
         return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
     }
@@ -121,7 +141,7 @@ const callProvider = async (refund, payment) => {
             transactionReference: payment.transaction_reference,
             phoneNumber: order.shipping_phone,
             amountTzs: refund.amount,
-            reason: `dispute_${refund.dispute_id}`
+            reason: sourceSlug(refund)
         });
         return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
     }
@@ -143,6 +163,10 @@ const callProvider = async (refund, payment) => {
     return { success: false, error: `No automatic refund path for payment method "${payment.method}"` };
 };
 
+// Refund rows now come from either a dispute or a return (Phase Q1) -
+// sourceLabel/sourceSlug (declared above, near callProvider) render
+// whichever source pointer is set for logs/audit text.
+
 const attemptWithRetries = async (refund, payment) => {
     let lastError = null;
 
@@ -154,11 +178,17 @@ const attemptWithRetries = async (refund, payment) => {
 
             if (result.success) {
                 await refundRepository.markCompleted(refund.id, result.reference || null);
+                if (refund.return_id) {
+                    // Lazy require: return.service.js requires this module to
+                    // trigger the refund in the first place - avoids a
+                    // circular require at module-load time.
+                    require("../return/return.service").markRefunded(refund.return_id).catch(() => {});
+                }
                 auditService.log({
                     userId: refund.buyer_id,
                     eventType: "refund.completed",
-                    description: `Refund of ${refund.amount} completed for dispute #${refund.dispute_id} via ${payment.method} (attempt ${attempt})`,
-                    metadata: { refundId: refund.id, disputeId: refund.dispute_id, orderId: refund.order_id, provider: payment.method, reference: result.reference }
+                    description: `Refund of ${refund.amount} completed for ${sourceLabel(refund)} via ${payment.method} (attempt ${attempt})`,
+                    metadata: { refundId: refund.id, disputeId: refund.dispute_id, returnId: refund.return_id, orderId: refund.order_id, provider: payment.method, reference: result.reference }
                 });
                 return { status: "completed" };
             }
@@ -177,8 +207,8 @@ const attemptWithRetries = async (refund, payment) => {
     auditService.log({
         userId: refund.buyer_id,
         eventType: "refund.failed",
-        description: `Refund of ${refund.amount} FAILED after ${MAX_ATTEMPTS} attempts for dispute #${refund.dispute_id} via ${payment.method}: ${lastError}`,
-        metadata: { refundId: refund.id, disputeId: refund.dispute_id, orderId: refund.order_id, provider: payment.method, error: lastError }
+        description: `Refund of ${refund.amount} FAILED after ${MAX_ATTEMPTS} attempts for ${sourceLabel(refund)} via ${payment.method}: ${lastError}`,
+        metadata: { refundId: refund.id, disputeId: refund.dispute_id, returnId: refund.return_id, orderId: refund.order_id, provider: payment.method, error: lastError }
     });
     return { status: "failed", error: lastError };
 };
@@ -188,45 +218,48 @@ const attemptWithRetries = async (refund, payment) => {
 // Called from dispute.service.js resolveDispute(). `dispute` is the
 // pre-resolution dispute row (has order_id/buyer_id/seller_id); `amount`
 // is the refund_amount already validated by the caller.
-exports.autoRefundForDispute = async ({ dispute, amount, requestedBy }) => {
-    const payment = await paymentRepository.findByOrderId(dispute.order_id);
+// Shared by autoRefundForDispute/autoRefundForReturn below - everything
+// past "look up the payment" is identical regardless of which one
+// triggered it, only the audit-log text differs (via sourceType/label).
+const triggerRefund = async ({ source, label, amount, requestedBy }) => {
+    const payment = await paymentRepository.findByOrderId(source.orderId);
 
     if (!payment || payment.status !== "completed") {
         auditService.log({
-            userId: dispute.buyer_id,
+            userId: source.buyerId,
             eventType: "refund.manual_required",
-            description: `Dispute #${dispute.id} resolved with a refund, but no completed payment was found on order #${dispute.order_id} - needs manual handling`,
-            metadata: { disputeId: dispute.id, orderId: dispute.order_id }
+            description: `${label} resolved with a refund, but no completed payment was found on order #${source.orderId} - needs manual handling`,
+            metadata: { [`${source.type}Id`]: source.id, orderId: source.orderId }
         });
         return { status: "manual_required", reason: "No completed payment found for this order" };
     }
 
-    const { refund, alreadyExisted } = await findOrCreateRefundRow({ dispute, payment, amount, requestedBy });
+    const { refund, alreadyExisted } = await findOrCreateRefundRow({ source, payment, amount, requestedBy });
 
     if (alreadyExisted) {
         auditService.log({
-            userId: dispute.buyer_id,
+            userId: source.buyerId,
             eventType: "refund.duplicate_trigger_skipped",
-            description: `Refund already exists (status=${refund.status}) for dispute #${dispute.id} - skipped duplicate auto-refund trigger`,
-            metadata: { refundId: refund.id, disputeId: dispute.id }
+            description: `Refund already exists (status=${refund.status}) for ${label} - skipped duplicate auto-refund trigger`,
+            metadata: { refundId: refund.id, [`${source.type}Id`]: source.id }
         });
         return { status: refund.status, refundId: refund.id };
     }
 
     auditService.log({
-        userId: dispute.buyer_id,
+        userId: source.buyerId,
         eventType: "refund.triggered",
-        description: `Automatic refund of ${amount} triggered for dispute #${dispute.id} (order #${dispute.order_id}, via ${payment.method})`,
-        metadata: { refundId: refund.id, disputeId: dispute.id, orderId: dispute.order_id, provider: payment.method }
+        description: `Automatic refund of ${amount} triggered for ${label} (order #${source.orderId}, via ${payment.method})`,
+        metadata: { refundId: refund.id, [`${source.type}Id`]: source.id, orderId: source.orderId, provider: payment.method }
     });
 
     if (payment.method === "cash_on_delivery") {
         await refundRepository.markManualRequired(refund.id, "Cash on delivery has no online reversal - refund the buyer manually and mark this refund complete once done");
         auditService.log({
-            userId: dispute.buyer_id,
+            userId: source.buyerId,
             eventType: "refund.manual_required",
-            description: `Refund for dispute #${dispute.id} needs manual handling - payment was Cash on Delivery`,
-            metadata: { refundId: refund.id, disputeId: dispute.id }
+            description: `Refund for ${label} needs manual handling - payment was Cash on Delivery`,
+            metadata: { refundId: refund.id, [`${source.type}Id`]: source.id }
         });
         return { status: "manual_required", refundId: refund.id };
     }
@@ -234,6 +267,22 @@ exports.autoRefundForDispute = async ({ dispute, amount, requestedBy }) => {
     const result = await attemptWithRetries(await refundRepository.findById(refund.id), payment);
     return { ...result, refundId: refund.id };
 };
+
+exports.autoRefundForDispute = async ({ dispute, amount, requestedBy }) => triggerRefund({
+    source: { type: "dispute", id: dispute.id, orderId: dispute.order_id, buyerId: dispute.buyer_id, sellerId: dispute.seller_id },
+    label: `dispute #${dispute.id}`,
+    amount,
+    requestedBy
+});
+
+// Called from return.service.js#markReceived once a returned item is
+// confirmed back in the seller's hands.
+exports.autoRefundForReturn = async ({ orderReturn, amount, requestedBy }) => triggerRefund({
+    source: { type: "return", id: orderReturn.id, orderId: orderReturn.order_id, buyerId: orderReturn.buyer_id, sellerId: orderReturn.seller_id },
+    label: `return #${orderReturn.id}`,
+    amount,
+    requestedBy
+});
 
 // Admin-triggered manual retry of a 'failed' or 'manual_required' refund
 // (refund.controller.js -> POST /admin/refunds/:id/retry).
@@ -266,5 +315,7 @@ exports.retryRefund = async (refundId, adminId) => {
 exports.getRefund = async (refundId) => refundRepository.findById(refundId);
 
 exports.getRefundForDispute = async (disputeId) => refundRepository.findByDisputeId(disputeId);
+
+exports.getRefundForReturn = async (returnId) => refundRepository.findByReturnId(returnId);
 
 exports.listRefunds = async ({ status, limit } = {}) => refundRepository.findAll({ status, limit });

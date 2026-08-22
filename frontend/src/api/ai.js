@@ -29,6 +29,9 @@ export const generateMarketingCopy = (payload) =>
 export const summarizeSellerAnalytics = () =>
     api.get("/ai/seller/analytics/summary").then((res) => res.data.data);
 
+export const suggestRestockAndPricing = () =>
+    api.get("/ai/seller/demand-forecast").then((res) => res.data.data);
+
 export const suggestAvailability = (serviceId) =>
     api.get(`/ai/seller/services/${serviceId}/availability-suggestion`).then((res) => res.data.data);
 

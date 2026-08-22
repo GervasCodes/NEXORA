@@ -107,6 +107,15 @@ exports.summarizeSellerAnalytics = async (req, res) => {
     }
 };
 
+exports.suggestRestockAndPricing = async (req, res) => {
+    try {
+        const result = await aiService.suggestRestockAndPricing({ userId: req.user.id });
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+    }
+};
+
 exports.suggestAvailability = async (req, res) => {
     try {
         const result = await aiService.suggestAvailability({ userId: req.user.id, serviceId: req.params.serviceId });

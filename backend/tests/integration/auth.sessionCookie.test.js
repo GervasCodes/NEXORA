@@ -71,7 +71,13 @@ describe("POST /api/v1/auth/login/verify-otp - session cookie issuance", () => {
 
         expect(sessionCookie).toBeDefined();
         expect(sessionCookie).toMatch(/HttpOnly/i);
-        expect(sessionCookie).toMatch(/SameSite=Strict/i);
+        // Not Strict: sessionCookie.js#sameSitePolicy() intentionally uses
+        // "None" in production and "Lax" everywhere else (including this
+        // test env, NODE_ENV=test) - "Strict"/"Lax" never attach to the
+        // cross-site fetch/XHR/socket.io calls the real frontend makes to
+        // this API, which is exactly the bug that policy was changed to
+        // fix (see sessionCookie.js's comment for the full story).
+        expect(sessionCookie).toMatch(/SameSite=Lax/i);
 
         expect(csrfCookie).toBeDefined();
         // The defining property of the CSRF cookie: NOT HttpOnly, so the

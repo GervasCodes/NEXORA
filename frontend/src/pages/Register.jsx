@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
@@ -16,6 +16,7 @@ const initialForm = {
     role: "buyer",
     vehicle_type: "motorcycle",
     vehicle_plate_number: "",
+    referral_code: "",
     terms_accepted: false
 };
 
@@ -40,7 +41,8 @@ export default function Register() {
     const { register } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const [form, setForm] = useState(initialForm);
+    const [searchParams] = useSearchParams();
+    const [form, setForm] = useState(() => ({ ...initialForm, referral_code: searchParams.get("ref") || "" }));
     const [countryDial, setCountryDial] = useState(DEFAULT_COUNTRY_DIAL);
     const [files, setFiles] = useState({});
     const [idDocType, setIdDocType] = useState("national_id");

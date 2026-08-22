@@ -55,6 +55,6 @@ exports.getUserEmail = async (userId) => {
 // whatever language the request that triggered the notification happened
 // to be in.
 exports.getUserContact = async (userId) => {
-    const [rows] = await db.query("SELECT email, language FROM users WHERE id = ?", [userId]);
+    const [rows] = await db.query("SELECT email, phone, language, whatsapp_order_updates FROM users WHERE id = ?", [userId]);
     return rows[0] || null;
 };

@@ -7,17 +7,34 @@ const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
 const fraudService = require("../fraud/fraud.service");
 const auditService = require("../audit/audit.service");
+const kycService = require("../kyc/kyc.service");
+const pickupPointService = require("../pickupPoint/pickupPoint.service");
+const referralService = require("../referral/referral.service");
+const businessService = require("../business/business.service");
 const logger = require("../../utils/logger").child({ module: "order" });
 const Sentry = require("../../config/sentry");
 const {
     CANCELLABLE_STATUSES,
-    SELLER_STATUS_TRANSITIONS
+    SELLER_STATUS_TRANSITIONS,
+    BUYER_PROTECTION_FEE_RATE,
+    BUYER_PROTECTION_FEE_MIN,
+    BUYER_PROTECTION_FEE_MAX
 } = require("../../constants/orderStatus");
 
 const generateOrderNumber = () => {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.floor(1000 + Math.random() * 9000);
     return `ORD-${timestamp}-${random}`;
+};
+
+// Checkout buyer-protection insurance add-on (Phase Q1): a flat
+// percentage of the cart subtotal, clamped to a min/max so it's neither
+// negligible on a tiny order nor disproportionate on a huge one. Applied
+// to the whole cart, not per vendor - see insertOrderRow's comment in
+// order.repository.js for why it only lands on the top-level order row.
+const calculateBuyerProtectionFee = (subtotal) => {
+    const raw = subtotal * BUYER_PROTECTION_FEE_RATE;
+    return Number(Math.min(Math.max(raw, BUYER_PROTECTION_FEE_MIN), BUYER_PROTECTION_FEE_MAX).toFixed(2));
 };
 
 // Checkout: turn the buyer's current cart into an order. A cart with
@@ -58,7 +75,16 @@ exports.checkout = async (buyerId, shippingInfo) => {
             throw new Error(`Only ${product.stock} of "${item.name}" left in stock`);
         }
 
-        const unitPrice = item.discount_price ?? item.price;
+        // B2B / bulk ordering (Phase Q7) - the best bulk tier this line
+        // item's quantity qualifies for beats the regular/discount price,
+        // if one exists. Available to any buyer (see migration 089's
+        // comment on product_bulk_price_tiers for why this isn't gated
+        // behind business-account verification), computed fresh at
+        // checkout rather than trusting whatever price the cart itself
+        // was showing (cart quantities can change after a product was
+        // first added).
+        const bulkUnitPrice = await businessService.getBulkUnitPrice(item.product_id, item.quantity);
+        const unitPrice = bulkUnitPrice ?? (item.discount_price ?? item.price);
         const subtotal = Number((unitPrice * item.quantity).toFixed(2));
 
         const cartItem = {
@@ -80,8 +106,51 @@ exports.checkout = async (buyerId, shippingInfo) => {
     }
 
     const orderNumber = generateOrderNumber();
-    const roundedTotal = Number(totalAmount.toFixed(2));
     const isMultiVendor = bySeller.size > 1;
+
+    // Agent/kiosk pickup points (Phase Q5) - substitute the pickup
+    // point's own address in for shippingInfo's before anything is
+    // written, so every downstream consumer (delivery agent routing,
+    // delivery fee calc, order confirmation email) just sees "the
+    // delivery destination" without needing to know it's a pickup point
+    // rather than the buyer's home. shipping_phone stays the buyer's
+    // own number - that's their contact info, not the destination.
+    let pickupPointId = null;
+    if (shippingInfo.pickup_point_id) {
+        const pickupPoint = await pickupPointService.assertActiveAndGetAddress(shippingInfo.pickup_point_id);
+        pickupPointId = pickupPoint.id;
+        shippingInfo = {
+            ...shippingInfo,
+            shipping_address: pickupPoint.address,
+            shipping_city: pickupPoint.city,
+            shipping_region: pickupPoint.region,
+            delivery_lat: pickupPoint.latitude,
+            delivery_lng: pickupPoint.longitude
+        };
+    }
+
+    const wantsBuyerProtection = Boolean(shippingInfo.buyer_protection_addon);
+    const buyerProtectionFee = wantsBuyerProtection ? calculateBuyerProtectionFee(totalAmount) : 0;
+
+    // Loyalty points redemption (Phase Q7) - quoted (validated, not yet
+    // deducted) here so the discount can be folded into roundedTotal;
+    // actually committed (balance deducted) only after the order row
+    // exists below, so a checkout that fails after this point never
+    // burns points for an order that was never created.
+    const pointsToRedeem = Number(shippingInfo.loyalty_points_redeemed) || 0;
+    const { pointsRedeemed, discountAmount: loyaltyDiscount } = await referralService.quoteRedemption(buyerId, pointsToRedeem);
+
+    const roundedTotal = Number((totalAmount + buyerProtectionFee - loyaltyDiscount).toFixed(2));
+
+    // Progressive KYC (Phase Q1): a buyer's tier caps how large a single
+    // order can be - see kyc.service.js#enforceOrderLimit. Checked here,
+    // against the final charge total (subtotal + insurance fee), before
+    // any order/payment row exists, so a blocked checkout leaves nothing
+    // behind to clean up.
+    await kycService.enforceOrderLimit(buyerId, roundedTotal);
+
+    const buyerProtection = { addon: wantsBuyerProtection, fee: buyerProtectionFee };
+    const loyalty = { pointsRedeemed, discountAmount: loyaltyDiscount };
 
     let orderId;
     let vendorCount = 1;
@@ -92,7 +161,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
             orderNumber,
             shippingInfo,
             Array.from(bySeller.values()),
-            roundedTotal
+            roundedTotal,
+            buyerProtection,
+            pickupPointId,
+            loyalty
         );
         orderId = parentOrderId;
         vendorCount = bySeller.size;
@@ -102,9 +174,26 @@ exports.checkout = async (buyerId, shippingInfo) => {
             orderNumber,
             shippingInfo,
             cartItems,
-            roundedTotal
+            roundedTotal,
+            buyerProtection,
+            pickupPointId,
+            loyalty
         );
     }
+
+    // Only now that the order row genuinely exists do we actually burn
+    // the points quoted above (see quoteRedemption's comment) - fire-
+    // and-forget is NOT appropriate here (unlike most other post-order
+    // side effects in this file), so this is awaited before continuing.
+    await referralService.commitRedemption(buyerId, pointsRedeemed);
+
+    // Affiliate attribution (Phase Q7) - fire-and-forget, resolves to a
+    // no-op if no click_token was submitted or it doesn't check out (see
+    // affiliate.service.js#attributeOrder). Uses the actual order total
+    // (post buyer-protection-fee, post loyalty-discount) since that's
+    // genuinely what NEXORA earned commission-worthy revenue on.
+    require("../affiliate/affiliate.service").attributeOrder(orderId, buyerId, shippingInfo.affiliate_click_token)
+        .catch((err) => logger.error({ err, orderId }, "affiliate attribution error"));
 
     await notificationService.notify({
         userId: buyerId,
@@ -113,7 +202,8 @@ exports.checkout = async (buyerId, shippingInfo) => {
         messageKey: isMultiVendor ? "notifications.order.placed.messageMultiVendor" : "notifications.order.placed.messageSingle",
         messageParams: { orderNumber, vendorCount },
         relatedOrderId: orderId,
-        withEmail: true
+        withEmail: true,
+        withWhatsApp: true
     });
 
     // Fire-and-forget: fraud flagging is advisory (surfaces in the admin
@@ -379,6 +469,7 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         messageKey: "notifications.order.statusUpdated.message",
         messageParams: { orderNumber: order.order_number, status: newStatus },
         relatedOrderId: orderId,
-        withEmail: true
+        withEmail: true,
+        withWhatsApp: true
     });
 };

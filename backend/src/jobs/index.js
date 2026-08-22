@@ -13,6 +13,7 @@ const bookingLifecycleJob = require("./bookingLifecycle.job");
 const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
 const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 const monetizationScheduleJob = require("./monetizationSchedule.job");
+const groupBuyExpiryJob = require("./groupBuyExpiry.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -98,7 +99,12 @@ exports.startJobs = () => {
     // than the replay window matters for - see webhookReplayCleanup.job.js.
     cron.schedule("10 3 * * *", safeRun("webhookReplayCleanup", webhookReplayCleanupJob));
 
+    // Every 15 minutes: resolve group buys whose deadline has passed -
+    // see groupBuyExpiry.job.js. Same cadence as staleOrders since both
+    // are "a deadline quietly passed, go clean it up" jobs.
+    cron.schedule("*/15 * * * *", safeRun("groupBuyExpiry", groupBuyExpiryJob));
+
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute)"
+        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min)"
     );
 };

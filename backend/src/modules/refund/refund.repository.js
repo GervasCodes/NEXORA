@@ -6,12 +6,16 @@ const db = require("../../config/db");
 // resolveDispute() somehow invoked twice for the same dispute) hits the
 // unique constraint and findByDisputeId() below is used to recover the
 // existing row instead of erroring the caller.
-exports.create = async ({ disputeId, paymentId, orderId, buyerId, sellerId, provider, amount, idempotencyKey, requestedBy }) => {
+// Phase Q1: `disputeId` and `returnId` are now mutually exclusive source
+// pointers (see migration 083) - exactly one must be passed. Both are
+// still nullable/unique at the DB layer, which is what actually
+// guarantees "one refund per dispute" / "one refund per return".
+exports.create = async ({ disputeId, returnId, paymentId, orderId, buyerId, sellerId, provider, amount, idempotencyKey, requestedBy }) => {
     const [result] = await db.query(
         `INSERT INTO refunds
-            (dispute_id, payment_id, order_id, buyer_id, seller_id, provider, amount, idempotency_key, requested_by, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-        [disputeId, paymentId, orderId, buyerId, sellerId || null, provider, amount, idempotencyKey, requestedBy || null]
+            (dispute_id, return_id, payment_id, order_id, buyer_id, seller_id, provider, amount, idempotency_key, requested_by, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [disputeId || null, returnId || null, paymentId, orderId, buyerId, sellerId || null, provider, amount, idempotencyKey, requestedBy || null]
     );
     return result.insertId;
 };
@@ -23,6 +27,11 @@ exports.findById = async (id) => {
 
 exports.findByDisputeId = async (disputeId) => {
     const [rows] = await db.query("SELECT * FROM refunds WHERE dispute_id = ?", [disputeId]);
+    return rows[0];
+};
+
+exports.findByReturnId = async (returnId) => {
+    const [rows] = await db.query("SELECT * FROM refunds WHERE return_id = ?", [returnId]);
     return rows[0];
 };
 

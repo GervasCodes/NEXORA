@@ -11,6 +11,7 @@ import PageLoader from "../components/PageLoader";
 import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
 import { useAIAssistant } from "../context/AIAssistantContext";
+import FiscalReceiptBadge from "../components/FiscalReceiptBadge";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -328,12 +329,18 @@ export default function OrderDetail() {
                     {order.buyer_confirmed_at && (
                         <p className="text-xs text-teal mt-0.5">Receipt confirmed {formatDate(order.buyer_confirmed_at)}</p>
                     )}
+                    {!order.is_parent && order.payment_status === "paid" && (
+                        <FiscalReceiptBadge orderId={order.id} />
+                    )}
                 </div>
                 <div className="col-span-2">
-                    <p className="text-ash mb-0.5">Delivering to</p>
+                    <p className="text-ash mb-0.5">{order.pickup_point_id ? "Pickup point" : "Delivering to"}</p>
                     <p className="font-medium">
                         {order.shipping_address}, {order.shipping_city}, {order.shipping_region}
                     </p>
+                    {order.pickup_point_id && (
+                        <p className="text-xs text-ash mt-0.5">Collect in person once it arrives - you'll be notified.</p>
+                    )}
                     <p className="text-ash text-xs mt-0.5">{order.shipping_phone}</p>
                 </div>
             </div>
@@ -462,6 +469,12 @@ export default function OrderDetail() {
                     <Link to={`/disputes/new?order_id=${id}`}
                         className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-coral hover:text-coral transition-colors focus-ring">
                         ⚠️ Report a problem
+                    </Link>
+                )}
+                {!order.is_parent && order.status === "delivered" && (
+                    <Link to={`/returns/new?order_id=${id}`}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring">
+                        ↩️ Request a return
                     </Link>
                 )}
             </div>

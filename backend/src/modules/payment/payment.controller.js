@@ -7,6 +7,24 @@ const Sentry = require("../../config/sentry");
 // utils/redirectValidator.js's header comment for why.
 const { assertAllowedRedirect } = require("../../utils/redirectValidator");
 
+exports.initiateWalletTopUp = async (req, res) => {
+    try {
+        const result = await paymentService.initiateWalletTopUp(req.user.id, req.body.phone, req.body.amount);
+        return res.status(201).json({ success: true, message: result.message, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.initiateWalletOrderPayment = async (req, res) => {
+    try {
+        const result = await paymentService.initiateWalletOrderPayment(req.params.orderId, req.user.id);
+        return res.status(200).json({ success: true, message: "Paid from wallet balance", data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.initiateMobileMoneyPayment = async (req, res) => {
     try {
         const result = await paymentService.initiateMobileMoneyPayment(

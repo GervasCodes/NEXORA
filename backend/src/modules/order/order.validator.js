@@ -29,7 +29,26 @@ exports.checkoutValidation = [
     body("delivery_lng")
         .optional({ nullable: true })
         .isFloat({ min: -180, max: 180 })
-        .withMessage("Invalid delivery longitude")
+        .withMessage("Invalid delivery longitude"),
+
+    body("buyer_protection_addon")
+        .optional()
+        .isBoolean()
+        .withMessage("Invalid buyer protection selection"),
+
+    body("pickup_point_id")
+        .optional({ nullable: true })
+        .isInt({ gt: 0 })
+        .withMessage("Invalid pickup point"),
+
+    body("loyalty_points_redeemed")
+        .optional({ nullable: true })
+        .isInt({ min: 0 })
+        .withMessage("Invalid loyalty points amount"),
+
+    body("affiliate_click_token")
+        .optional({ nullable: true })
+        .isLength({ max: 40 })
 ];
 
 exports.orderIdValidation = [

@@ -43,6 +43,11 @@ module.exports = {
             replacement: "bidhaa mbadala",
             compensation: "fidia",
             no_action: "hakuna hatua"
+        },
+        kycTier: {
+            tier0: "Usajili rahisi",
+            tier1: "Kitambulisho kimethibitishwa",
+            tier2: "Uthibitisho wa hali ya juu"
         }
     },
 
@@ -96,6 +101,25 @@ module.exports = {
         "dispute.resolved.noteSuffix": " Kumbuka: {note}",
         "dispute.resolved.sellerMessage": "Mgogoro {disputeNumber} kwenye agizo lako umetatuliwa: {resolution}.{refundNote}",
         "dispute.resolved.refundNote": " Kiasi cha kurejeshwa: {amount}.",
+
+        "return.requested.title": "Ombi jipya la kurejesha bidhaa",
+        "return.requested.message": "Mnunuzi ameomba kurejesha bidhaa kwenye agizo {orderNumber}.",
+        "return.approved.title": "Ombi la kurejesha limekubaliwa",
+        "return.approved.message": "Ombi lako la kurejesha limekubaliwa. Rejesha bidhaa ili kuendelea.",
+        "return.rejected.title": "Ombi la kurejesha limekataliwa",
+        "return.rejected.message": "Ombi lako la kurejesha limekataliwa: {reason}",
+        "return.shippedBack.title": "Bidhaa imerejeshwa",
+        "return.shippedBack.message": "Mnunuzi amekurejeshea bidhaa.",
+        "return.received.title": "Bidhaa imepokelewa - marejesho yanaendelea",
+        "return.received.message": "Bidhaa yako iliyorejeshwa imepokelewa na marejesho ya {amount} yameanzishwa.",
+
+        "kyc.approved.title": "Uthibitisho umekubaliwa",
+        "kyc.approved.message": "Umepandishwa hadi {tier}. Kiwango chako cha agizo kimeongezeka.",
+        "kyc.rejected.title": "Ombi la uthibitisho limekataliwa",
+        "kyc.rejected.message": "Ombi lako la kupandisha uthibitisho limekataliwa: {reason}",
+
+        "support.reply.title": "Jibu jipya kwenye ombi lako la usaidizi",
+        "support.reply.message": "Timu yetu ya usaidizi imejibu ombi lako.",
 
         "order.placed.title": "Agizo limewekwa",
         "order.placed.messageMultiVendor": "Agizo lako {orderNumber} (wachuuzi {vendorCount}) limewekwa kwa mafanikio.",

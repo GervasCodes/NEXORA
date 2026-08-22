@@ -6,7 +6,8 @@ exports.findById = async (userId) => {
                 account_verification_status, account_verification_rejection_reason,
                 account_verification_submitted_at, account_verification_reviewed_at,
                 language, theme, currency, is_active, created_at,
-                vehicle_type, vehicle_plate_number
+                vehicle_type, vehicle_plate_number, whatsapp_order_updates, data_saver_enabled,
+                referral_code, loyalty_points, business_account_status
         FROM users WHERE id = ?`,
         [userId]
     );
@@ -54,13 +55,14 @@ exports.updateProfile = async (userId, data) => {
     await db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, params);
 };
 
-exports.updateSettings = async (userId, { language, theme, currency }) => {
+exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled }) => {
     const fields = [];
     const params = [];
 
     if (language !== undefined) { fields.push("language = ?"); params.push(language); }
     if (theme !== undefined) { fields.push("theme = ?"); params.push(theme); }
     if (currency !== undefined) { fields.push("currency = ?"); params.push(currency); }
+    if (dataSaverEnabled !== undefined) { fields.push("data_saver_enabled = ?"); params.push(dataSaverEnabled ? 1 : 0); }
 
     if (fields.length === 0) return;
 

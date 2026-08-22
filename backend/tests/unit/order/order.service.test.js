@@ -6,6 +6,9 @@ jest.mock("../../../src/modules/delivery/deliveryPricing.service");
 jest.mock("../../../src/modules/delivery/delivery.service");
 jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/fraud/fraud.service");
+jest.mock("../../../src/modules/business/business.service");
+jest.mock("../../../src/modules/kyc/kyc.service");
+jest.mock("../../../src/modules/audit/audit.service");
 jest.mock("../../../src/socket/socket");
 
 const orderRepository = require("../../../src/modules/order/order.repository");
@@ -16,6 +19,8 @@ const deliveryPricingService = require("../../../src/modules/delivery/deliveryPr
 const deliveryService = require("../../../src/modules/delivery/delivery.service");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const fraudService = require("../../../src/modules/fraud/fraud.service");
+const businessService = require("../../../src/modules/business/business.service");
+const kycService = require("../../../src/modules/kyc/kyc.service");
 const socket = require("../../../src/socket/socket");
 
 const orderService = require("../../../src/modules/order/order.service");
@@ -47,6 +52,18 @@ beforeEach(() => {
     notificationService.notify.mockResolvedValue(undefined);
     fraudService.evaluateOrder.mockResolvedValue(undefined);
     socket.emitToAdmins.mockImplementation(() => {});
+    // No bulk-price tier applies by default - matches every existing
+    // test's price math below, which assumes plain price/discount_price
+    // totals with no bulk discount in play (see business.service.js#
+    // getBulkUnitPrice: null means "no tier qualifies, fall back to the
+    // product's normal price", exactly like before this Q7 integration
+    // existed). Individual tests can override this per-item.
+    businessService.getBulkUnitPrice.mockResolvedValue(null);
+    // Buyer's tier isn't over their order limit by default - matches
+    // kyc.service.js#enforceOrderLimit's real "unlimited (tier2)" /
+    // "under the cap" no-op return. Individual tests can override to
+    // exercise the "throws, checkout blocked" path.
+    kycService.enforceOrderLimit.mockResolvedValue(undefined);
 });
 
 describe("order.service.checkout", () => {

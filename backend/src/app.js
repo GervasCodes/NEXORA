@@ -41,6 +41,20 @@ const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
 const wishlistRoutes = require("./modules/wishlist/wishlist.routes");
 const disputeRoutes = require("./modules/dispute/dispute.routes");
+const returnRoutes = require("./modules/return/return.routes");
+const kycRoutes = require("./modules/kyc/kyc.routes");
+const buyerWalletRoutes = require("./modules/buyerWallet/buyerWallet.routes");
+const loanRoutes = require("./modules/loan/loan.routes");
+const supportRoutes = require("./modules/support/support.routes");
+const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
+const efdRoutes = require("./modules/efd/efd.routes");
+const pickupPointRoutes = require("./modules/pickupPoint/pickupPoint.routes");
+const contentRoutes = require("./modules/content/content.routes");
+const referralRoutes = require("./modules/referral/referral.routes");
+const groupBuyRoutes = require("./modules/groupBuy/groupBuy.routes");
+const liveSellingRoutes = require("./modules/liveSelling/liveSelling.routes");
+const businessRoutes = require("./modules/business/business.routes");
+const affiliateRoutes = require("./modules/affiliate/affiliate.routes");
 const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
 const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
@@ -147,6 +161,21 @@ app.post(
     "/api/v1/payments/webhooks/malipopay-card",
     express.raw({ type: "application/json" }),
     require("./modules/payment/payment.controller").malipopayCardWebhook
+);
+
+// WhatsApp Cloud API inbound webhook (Phase Q3) - same raw-body
+// requirement as the two routes directly above, for the same reason
+// (X-Hub-Signature-256 verification needs the exact bytes Meta signed,
+// see webhookAuth.middleware.js#verifyWhatsAppWebhook). The GET
+// verification challenge Meta sends when the webhook URL is first
+// configured doesn't carry a body to verify, so it skips straight to
+// the controller.
+app.get("/api/v1/whatsapp/webhook", require("./modules/whatsapp/whatsapp.controller").verifyWebhook);
+app.post(
+    "/api/v1/whatsapp/webhook",
+    express.raw({ type: "application/json" }),
+    require("./middleware/webhookAuth.middleware").verifyWhatsAppWebhook,
+    require("./modules/whatsapp/whatsapp.controller").receiveMessage
 );
 
 app.use(express.json());
@@ -340,6 +369,25 @@ app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
 app.use("/api/v1/disputes", disputeRoutes);
+app.use("/api/v1/returns", returnRoutes);
+app.use("/api/v1/kyc", kycRoutes);
+// Deliberately NOT nested under "/api/v1/wallet" (the seller wallet
+// module's mount) - that router's own auth/role middleware runs on
+// every path under its prefix before Express falls through to the next
+// matching router, which would reject a buyer before ever reaching this
+// one. A sibling path avoids the collision entirely.
+app.use("/api/v1/buyer-wallet", buyerWalletRoutes);
+app.use("/api/v1/loans", loanRoutes);
+app.use("/api/v1/support", supportRoutes);
+app.use("/api/v1/whatsapp", whatsappRoutes);
+app.use("/api/v1/efd", efdRoutes);
+app.use("/api/v1/pickup-points", pickupPointRoutes);
+app.use("/api/v1/content", contentRoutes);
+app.use("/api/v1/loyalty", referralRoutes);
+app.use("/api/v1/group-buys", groupBuyRoutes);
+app.use("/api/v1/live-selling", liveSellingRoutes);
+app.use("/api/v1/business", businessRoutes);
+app.use("/api/v1/affiliate", affiliateRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);

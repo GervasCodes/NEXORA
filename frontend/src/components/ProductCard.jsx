@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
+import { useDataSaver } from "../context/DataSaverContext";
 import Button from "./ui/Button";
 
 
@@ -14,6 +15,7 @@ function ProductCard({ product, layout = "grid" }) {
     const wishlist = useWishlist();
     const cart = useCart();
     const toast = useToast();
+    const dataSaver = useDataSaver();
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const stock = Number(product.stock);
     const saved = wishlist?.isSaved(product.id);
@@ -47,7 +49,7 @@ function ProductCard({ product, layout = "grid" }) {
         <div className={`bg-line/40 rounded-md overflow-hidden relative ${isList ? "w-24 h-24 sm:w-32 sm:h-32 shrink-0" : "aspect-square mb-3"}`}>
             {product.image_url ? (
                 <img
-                    src={product.image_url}
+                    src={dataSaver?.optimize(product.image_url) || product.image_url}
                     alt={product.name}
                     loading="lazy"
                     decoding="async"

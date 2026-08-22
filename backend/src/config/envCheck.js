@@ -41,7 +41,17 @@ const KNOWN_VARS = [
     // Phase RF5 (red-flag remediation): Redis caching layer. All optional -
     // omitting REDIS_URL just means the app runs uncached (see
     // config/redis.js), never a hard failure.
-    "REDIS_URL", "REDIS_DISABLED", "REDIS_TLS_REJECT_UNAUTHORIZED", "CACHE_TTL_SECONDS"
+    "REDIS_URL", "REDIS_DISABLED", "REDIS_TLS_REJECT_UNAUTHORIZED", "CACHE_TTL_SECONDS",
+    // Phase Q3 (Communication Channels): WhatsApp Cloud API. All optional -
+    // omitting these just means whatsapp/providers/whatsapp.provider.js
+    // falls back to its simulate provider outside production (same shape
+    // as MOBILE_MONEY_PROVIDER above).
+    "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET",
+    "FRONTEND_URL",
+    // Phase Q4 (Tax Compliance): TRA VFD e-invoicing. Optional - omitting
+    // these falls back to efd/providers/simulate.provider.js outside
+    // production, same shape as the payment providers above.
+    "TRA_VFD_BASE_URL", "TRA_VFD_API_KEY"
 ];
 
 // Vars whose complete absence should be called out explicitly, not just

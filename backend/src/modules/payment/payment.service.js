@@ -126,7 +126,115 @@ exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
     };
 };
 
-// ---- Subscription payments (Revenue & Product Enhancements) ---------------
+// ---- Wallet top-up & wallet-funded order payment (Phase Q2) -------------
+// initiateWalletTopUp mirrors initiateVerificationFeePayment's shape -
+// mobile money is the only way to fund the wallet (you can't top up the
+// wallet from the wallet). initiateWalletOrderPayment is different: a
+// wallet-funded order never touches an external provider at all, so it's
+// synchronous and has no webhook/pending state to wait for.
+
+exports.initiateWalletTopUp = async (buyerId, phone, amount) => {
+    if (!amount || Number(amount) <= 0) {
+        throw new Error("Invalid top-up amount");
+    }
+
+    const buyerWalletRepository = require("../buyerWallet/buyerWallet.repository");
+    const topupId = await buyerWalletRepository.createTopUp(buyerId, amount);
+    const paymentId = await paymentRepository.createTopUpPayment(buyerId, topupId, amount);
+
+    const reference = `TOPUP-${topupId}`;
+
+    let providerResult;
+    try {
+        providerResult = await mobileMoneyProvider.initiate(phone, amount, {
+            reference,
+            purpose: "wallet_topup",
+            description: "NEXORA wallet top-up"
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        await buyerWalletRepository.markTopUpFailed(topupId);
+        throw error;
+    }
+
+    if (!providerResult.success) {
+        await paymentRepository.markFailed(paymentId);
+        await buyerWalletRepository.markTopUpFailed(topupId);
+        throw new Error("Top-up could not be initiated. Please try again");
+    }
+
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+
+    return {
+        status: "pending",
+        message: "Check your phone to complete the top-up.",
+        transactionReference: providerResult.transactionReference
+    };
+};
+
+exports._handleWalletTopupWebhook = async (topupId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
+    const buyerWalletRepository = require("../buyerWallet/buyerWallet.repository");
+    const buyerWalletService = require("../buyerWallet/buyerWallet.service");
+
+    const payment = await paymentRepository.findPendingTopUpPayment(topupId);
+    if (!payment) {
+        return { alreadyProcessed: true };
+    }
+
+    if (!success) {
+        await paymentRepository.markFailed(payment.id);
+        await buyerWalletRepository.markTopUpFailed(topupId);
+        return { topupId, success: false };
+    }
+
+    const receiptNumber = generateReceiptNumber();
+    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
+    await buyerWalletRepository.markTopUpCompleted(topupId);
+    await buyerWalletService.creditFromTopUp(payment.seller_id, payment.amount, topupId);
+
+    return { topupId, success: true, receiptNumber };
+};
+
+// Called from order.service.js#checkout (or a "pay with wallet" retry on
+// an existing pending order) when the buyer picked "wallet" as their
+// payment method. Debits the buyer's balance and marks the payment/order
+// paid in the same call - there's no external gateway round trip to
+// wait for, so unlike every other initiate*Payment above this either
+// fully succeeds or throws, with nothing left "pending".
+exports.initiateWalletOrderPayment = async (orderId, buyerId) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order || order.buyer_id !== buyerId) {
+        throw new Error("Order not found");
+    }
+    if (order.payment_method !== "wallet") {
+        throw new Error("This order is not set up for wallet payment");
+    }
+    if (order.payment_status === "paid") {
+        throw new Error("This order has already been paid");
+    }
+    if (order.status === "cancelled") {
+        throw new Error("This order has been cancelled and can no longer be paid");
+    }
+
+    let payment = await paymentRepository.findByOrderId(orderId);
+    if (!payment) {
+        const paymentId = await paymentRepository.create(orderId, "wallet", order.total_amount);
+        payment = { id: paymentId };
+    }
+
+    const buyerWalletService = require("../buyerWallet/buyerWallet.service");
+    await buyerWalletService.debitForOrder(buyerId, order.total_amount, orderId);
+
+    // Delegates the rest (mark completed, seller wallet crediting, order
+    // status transition, buyer/seller notifications) to the exact same
+    // path a real provider webhook takes - the wallet debit above is the
+    // only thing that differs from a mobile-money/card order, everything
+    // downstream of "payment succeeded" is identical.
+    return exports._handleOrderPaymentWebhook(orderId, true, `WALLET-${orderId}`);
+};
+
+
 // Follows initiateVerificationFeePayment's shape exactly - a
 // subscription_id (not an order_id/booking_id) identifies what's being
 // paid for, and the SUB-<subscriptionId> reference routes the webhook
@@ -458,6 +566,7 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
     const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
     const bookingMatch = /^BOOKING-(\d+)$/.exec(providerReference || "");
     const subscriptionMatch = /^SUB-(\d+)$/.exec(providerReference || "");
+    const topupMatch = /^TOPUP-(\d+)$/.exec(providerReference || "");
 
     if (orderMatch) {
         return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
@@ -473,6 +582,10 @@ exports.handleProviderWebhook = async ({ providerReference, success, transaction
 
     if (subscriptionMatch) {
         return exports._handleSubscriptionPaymentWebhook(Number(subscriptionMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
+    }
+
+    if (topupMatch) {
+        return exports._handleWalletTopupWebhook(Number(topupMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
     throw new Error(`Unrecognized payment reference: ${providerReference}`);
@@ -707,16 +820,43 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
                 logger.error({ err, orderId: child.id, parentOrderId: orderId }, "Seller wallet credit error");
                 Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { orderId: child.id, parentOrderId: orderId } });
             });
+            // EFD e-invoicing (Phase Q4) - a receipt is per (single-vendor)
+            // child order, same reasoning as wallet crediting just above.
+            // No-op if the seller hasn't registered/been verified for EFD.
+            require("../efd/efd.service").issueReceiptForOrder(child.id).catch((err) => {
+                logger.error({ err, orderId: child.id, parentOrderId: orderId }, "EFD receipt issuance error");
+                Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "efd-receipt" }, extra: { orderId: child.id, parentOrderId: orderId } });
+            });
         }
     } else {
         walletService.creditSellersForOrder(orderId).catch((err) => {
             logger.error({ err, orderId }, "Seller wallet credit error");
             Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { orderId } });
         });
+        require("../efd/efd.service").issueReceiptForOrder(orderId).catch((err) => {
+            logger.error({ err, orderId }, "EFD receipt issuance error");
+            Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "efd-receipt" }, extra: { orderId } });
+        });
     }
 
     const socketModule = require("../../socket/socket");
     socketModule.emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
+
+    // Referral & loyalty (Phase Q7) - once per order (not per child), on
+    // the buyer's own account, since both are buyer-scoped concepts. The
+    // amount used is what was actually charged, falling back to the
+    // order's own total if the provider didn't report a charged amount
+    // back (see chargedAmount's other uses above).
+    if (order) {
+        const referralService = require("../referral/referral.service");
+        const chargedForPoints = chargedAmount || order.total_amount;
+        referralService.awardPointsForOrder(order.buyer_id, orderId, chargedForPoints).catch((err) => {
+            logger.error({ err, orderId }, "Loyalty points award error");
+        });
+        referralService.maybeAwardReferralBonus(order.buyer_id).catch((err) => {
+            logger.error({ err, orderId }, "Referral bonus award error");
+        });
+    }
 
     if (orderForNotify) {
         // Notify the buyer's own room too - Snippe/mobile-money redirects

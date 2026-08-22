@@ -43,6 +43,11 @@ module.exports = {
             replacement: "a replacement item",
             compensation: "compensation",
             no_action: "no action"
+        },
+        kycTier: {
+            tier0: "Light signup",
+            tier1: "ID verified",
+            tier2: "Enhanced verification"
         }
     },
 
@@ -96,6 +101,25 @@ module.exports = {
         "dispute.resolved.noteSuffix": " Note: {note}",
         "dispute.resolved.sellerMessage": "Dispute {disputeNumber} on your order was resolved: {resolution}.{refundNote}",
         "dispute.resolved.refundNote": " Refund amount: {amount}.",
+
+        "return.requested.title": "New return request",
+        "return.requested.message": "A buyer requested a return on order {orderNumber}.",
+        "return.approved.title": "Return approved",
+        "return.approved.message": "Your return request was approved. Ship the item back to continue.",
+        "return.rejected.title": "Return rejected",
+        "return.rejected.message": "Your return request was rejected: {reason}",
+        "return.shippedBack.title": "Return shipped back",
+        "return.shippedBack.message": "The buyer has shipped the item back to you.",
+        "return.received.title": "Return received - refund on the way",
+        "return.received.message": "Your returned item was received and a refund of {amount} has been triggered.",
+
+        "kyc.approved.title": "Verification approved",
+        "kyc.approved.message": "You've been upgraded to {tier}. Your order limit has increased.",
+        "kyc.rejected.title": "Verification request rejected",
+        "kyc.rejected.message": "Your verification upgrade request was rejected: {reason}",
+
+        "support.reply.title": "New reply on your support ticket",
+        "support.reply.message": "Our support team has replied to your ticket.",
 
         "order.placed.title": "Order placed",
         "order.placed.messageMultiVendor": "Your order {orderNumber} ({vendorCount} vendors) has been placed successfully.",

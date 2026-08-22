@@ -10,6 +10,9 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
+import SupportWidget from "./components/SupportWidget";
+import OnboardingTour from "./components/OnboardingTour";
+import AffiliateClickTracker from "./components/AffiliateClickTracker";
 import Button from "./components/ui/Button";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
 import NexoraAIButton from "./components/ai/NexoraAIButton";
@@ -51,6 +54,18 @@ const Saved = lazy(() => import("./pages/Saved"));
 const Disputes = lazy(() => import("./pages/Disputes"));
 const NewDispute = lazy(() => import("./pages/NewDispute"));
 const DisputeDetail = lazy(() => import("./pages/DisputeDetail"));
+const Returns = lazy(() => import("./pages/Returns"));
+const NewReturn = lazy(() => import("./pages/NewReturn"));
+const ReturnDetail = lazy(() => import("./pages/ReturnDetail"));
+const KycStatus = lazy(() => import("./pages/KycStatus"));
+const WalletPage = lazy(() => import("./pages/WalletPage"));
+const Guides = lazy(() => import("./pages/Guides"));
+const GuideDetail = lazy(() => import("./pages/GuideDetail"));
+const Loyalty = lazy(() => import("./pages/Loyalty"));
+const GroupBuys = lazy(() => import("./pages/GroupBuys"));
+const GroupBuyDetail = lazy(() => import("./pages/GroupBuyDetail"));
+const Affiliate = lazy(() => import("./pages/Affiliate"));
+const LiveSelling = lazy(() => import("./pages/LiveSelling"));
 const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
 
@@ -76,6 +91,11 @@ const SellerSponsorship = lazy(() => import("./pages/seller/SellerSponsorship"))
 const SellerFeaturedStore = lazy(() => import("./pages/seller/SellerFeaturedStore"));
 const SellerDepartmentSponsorship = lazy(() => import("./pages/seller/SellerDepartmentSponsorship"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
+const SellerReturns = lazy(() => import("./pages/seller/SellerReturns"));
+const SellerLoans = lazy(() => import("./pages/seller/SellerLoans"));
+const SellerTaxInfo = lazy(() => import("./pages/seller/SellerTaxInfo"));
+const SellerGroupBuys = lazy(() => import("./pages/seller/SellerGroupBuys"));
+const SellerLiveSelling = lazy(() => import("./pages/seller/SellerLiveSelling"));
 
 const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"));
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
@@ -105,7 +125,13 @@ const AdminDepartmentSponsorship = lazy(() => import("./pages/admin/AdminDepartm
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
+const AdminFraudDashboard = lazy(() => import("./pages/admin/AdminFraudDashboard"));
 const AdminDisputes = lazy(() => import("./pages/admin/AdminDisputes"));
+const AdminReturns = lazy(() => import("./pages/admin/AdminReturns"));
+const AdminSupport = lazy(() => import("./pages/admin/AdminSupport"));
+const AdminEfd = lazy(() => import("./pages/admin/AdminEfd"));
+const AdminPickupPoints = lazy(() => import("./pages/admin/AdminPickupPoints"));
+const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 
 export default function App() {
@@ -206,6 +232,9 @@ export default function App() {
             <DepartmentMaintenanceListener />
 
             <Header />
+            <SupportWidget />
+            <OnboardingTour />
+            <AffiliateClickTracker />
 
             <RouteProgressBar />
 
@@ -241,6 +270,21 @@ export default function App() {
                         {/* Shared: buyer, seller, or admin - dispute.service.js enforces per-dispute access */}
                         <Route path="/disputes/:id" element={<RequireAuth><DisputeDetail /></RequireAuth>} />
 
+                        <Route path="/returns" element={<RequireBuyer><Returns /></RequireBuyer>} />
+                        <Route path="/returns/new" element={<RequireBuyer><NewReturn /></RequireBuyer>} />
+                        {/* Shared: buyer, seller, or admin - return.service.js enforces per-return access */}
+                        <Route path="/returns/:id" element={<RequireAuth><ReturnDetail /></RequireAuth>} />
+
+                        <Route path="/account/kyc" element={<RequireBuyer><KycStatus /></RequireBuyer>} />
+                        <Route path="/account/wallet" element={<RequireBuyer><WalletPage /></RequireBuyer>} />
+                        <Route path="/guides" element={<Guides />} />
+                        <Route path="/guides/:slug" element={<GuideDetail />} />
+                        <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
+                        <Route path="/group-buys" element={<GroupBuys />} />
+                        <Route path="/group-buys/:id" element={<GroupBuyDetail />} />
+                        <Route path="/affiliate" element={<RequireBuyer><Affiliate /></RequireBuyer>} />
+                        <Route path="/live-selling" element={<LiveSelling />} />
+
                         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
                         <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
                         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
@@ -270,6 +314,11 @@ export default function App() {
                             <Route path="department-sponsorship" element={<SellerDepartmentSponsorship />} />
                             <Route path="subscription" element={<SellerSubscription />} />
                             <Route path="disputes" element={<SellerDisputes />} />
+                            <Route path="returns" element={<SellerReturns />} />
+                            <Route path="loans" element={<SellerLoans />} />
+                            <Route path="tax-info" element={<SellerTaxInfo />} />
+                            <Route path="group-buys" element={<SellerGroupBuys />} />
+                            <Route path="live-selling" element={<SellerLiveSelling />} />
                         </Route>
 
                         <Route path="/delivery" element={<RequireDeliveryAgent><DeliveryLayout /></RequireDeliveryAgent>}>
@@ -303,7 +352,13 @@ export default function App() {
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />
+                            <Route path="fraud-dashboard" element={<AdminFraudDashboard />} />
                             <Route path="disputes" element={<AdminDisputes />} />
+                            <Route path="returns" element={<AdminReturns />} />
+                            <Route path="support" element={<AdminSupport />} />
+                            <Route path="efd" element={<AdminEfd />} />
+                            <Route path="pickup-points" element={<AdminPickupPoints />} />
+                            <Route path="content" element={<AdminContent />} />
                             <Route path="audit-logs" element={<AdminAuditLogs />} />
                         </Route>
 

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage, LANGUAGES } from "../context/LanguageContext";
 import { useCurrency, CURRENCIES } from "../context/CurrencyContext";
+import { useDataSaver } from "../context/DataSaverContext";
 import PhoneInput from "../components/PhoneInput";
 import PageMeta from "../components/PageMeta";
 
@@ -13,6 +14,7 @@ export default function Account() {
     const { theme, setTheme, syncFromProfile: syncTheme } = useTheme();
     const { language, setLanguage, syncFromProfile: syncLanguage, t } = useLanguage();
     const { currency, setCurrency, syncFromProfile: syncCurrency } = useCurrency();
+    const { enabled: dataSaverEnabled, setEnabled: setDataSaverEnabled, syncFromProfile: syncDataSaver } = useDataSaver();
     const navigate = useNavigate();
 
     const [profile, setProfile] = useState(null);
@@ -42,6 +44,7 @@ export default function Account() {
             syncTheme(data.data.theme);
             syncLanguage(data.data.language);
             syncCurrency(data.data.currency);
+            syncDataSaver(Boolean(data.data.data_saver_enabled));
         }).catch(() => {});
     };
 
@@ -92,6 +95,11 @@ export default function Account() {
     const handleCurrencyChange = (code) => {
         setCurrency(code);
         persistSettings({ currency: code });
+    };
+
+    const handleDataSaverChange = (value) => {
+        setDataSaverEnabled(value);
+        persistSettings({ dataSaverEnabled: value });
     };
 
     // --- Password change (OTP-gated) ---
@@ -254,6 +262,38 @@ export default function Account() {
                             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <p className="text-xs text-ash mt-1">Product prices will display in this currency. Default is TZS.</p>
+                    </div>
+
+                    {user?.role === "buyer" && (
+                        <div>
+                            <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                <span className="text-sm">
+                                    WhatsApp order updates
+                                    <span className="block text-ash text-xs mt-0.5">Get order status messages on WhatsApp instead of (or alongside) email</span>
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    defaultChecked={Boolean(user?.whatsapp_order_updates)}
+                                    onChange={(e) => {
+                                        api.put("/whatsapp/opt-in", { enabled: e.target.checked }).catch(() => {});
+                                    }}
+                                />
+                            </label>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="flex items-center justify-between gap-3 cursor-pointer">
+                            <span className="text-sm">
+                                Data saver mode
+                                <span className="block text-ash text-xs mt-0.5">Load smaller images to use less data - handy on a slow or metered connection</span>
+                            </span>
+                            <input
+                                type="checkbox"
+                                checked={dataSaverEnabled}
+                                onChange={(e) => handleDataSaverChange(e.target.checked)}
+                            />
+                        </label>
                     </div>
 
                     {status.settings && (

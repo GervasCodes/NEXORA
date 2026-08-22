@@ -492,6 +492,16 @@ const releaseItems = async (items) => {
     }
 
     for (const sellerId of releasedSellerIds) {
+        // Phase Q2: intercept as much of what just moved into `balance`
+        // as an active working-capital advance still needs, before the
+        // seller notification below (which always fires regardless, so
+        // a seller with a loan still hears "your earnings were
+        // released" even if most/all of it just went to repayment).
+        require("../loan/loan.service").applyRepaymentOnRelease(sellerId).catch((err) => {
+            logger.error({ err, sellerId }, "loan auto-repayment error");
+            Sentry.captureException(err, { tags: { area: "wallet", stage: "loan-repayment" }, extra: { sellerId } });
+        });
+
         notificationService.notify({
             userId: sellerId,
             type: "wallet_release",

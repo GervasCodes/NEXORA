@@ -87,6 +87,19 @@ router.get(
     aiController.summarizeSellerAnalytics
 );
 
+// Phase Q8 (AI demand forecasting). Same auth/gating as the analytics
+// summary right above it - a seller-facing advisory feature, same
+// verification-fee-paid gate the rest of this seller AI surface uses.
+router.get(
+    "/seller/demand-forecast",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireVerificationFeePaid,
+    aiLimiter,
+    aiController.suggestRestockAndPricing
+);
+
 router.get(
     "/seller/services/:serviceId/availability-suggestion",
     authMiddleware,

@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
 import { useCurrency } from "../context/CurrencyContext";
+import { useDataSaver } from "../context/DataSaverContext";
 
 // Human-readable label per pricing_model (migration 062). Kept here
 // rather than duplicated across ServiceCard/ServiceDetail.
@@ -14,6 +15,7 @@ const PRICING_LABELS = {
 
 function ServiceCard({ service, layout = "grid" }) {
     const { format } = useCurrency();
+    const dataSaver = useDataSaver();
     const hasDiscount = service.discount_price && Number(service.discount_price) < Number(service.base_price);
     const isList = layout === "list";
     const priceSuffix = PRICING_LABELS[service.pricing_model] || "";
@@ -22,7 +24,7 @@ function ServiceCard({ service, layout = "grid" }) {
         <div className={`bg-line/40 rounded-md overflow-hidden relative ${isList ? "w-24 h-24 sm:w-32 sm:h-32 shrink-0" : "aspect-square mb-3"}`}>
             {service.image_url ? (
                 <img
-                    src={service.image_url}
+                    src={dataSaver?.optimize(service.image_url) || service.image_url}
                     alt={service.title}
                     loading="lazy"
                     decoding="async"

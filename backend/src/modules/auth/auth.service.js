@@ -5,6 +5,7 @@ const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const appError = require("../../utils/appError");
 
 const userRepository = require("./auth.repository");
+const referralService = require("../referral/referral.service");
 
 // Roles that must submit verification documents before an account can be
 // created at all - see requireApprovedSeller / requireApprovedDeliveryAgent
@@ -125,6 +126,13 @@ exports.register = async (userData, files = {}) => {
             }
             await userRepository.insertVerificationHistory(userId, "submitted", null, null, connection);
         }
+
+        // Referral & loyalty (Phase Q7) - assigns this new user their own
+        // referral code, and links them to whoever referred them (if
+        // userData.referral_code was submitted and is valid). Both parts
+        // happen in this same transaction, so a referral link is never
+        // recorded for a user row that didn't actually get created.
+        await referralService.setupNewUserReferral(userId, userData.referral_code, connection);
 
         await connection.commit();
 

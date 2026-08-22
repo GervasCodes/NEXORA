@@ -112,3 +112,40 @@ different arrangement (e.g. a provider-side marketplace/split-payment
 product, or NEXORA obtaining its own registration). This review cannot
 substitute for that - it exists to make that conversation faster by
 having the actual mechanics laid out up front.
+
+## Addendum (Phase Q2): buyer wallet top-up and seller advances
+
+Two Phase Q2 features raise their own, separate questions beyond the
+escrow behavior above, and should go through the same advocate review
+before real money touches them:
+
+1. **Buyer wallet top-up** (`buyerWallet` module) lets a buyer pre-load
+   a balance ahead of any purchase, which is a materially different
+   thing from escrow: the platform is now holding a buyer's money with
+   no specific transaction attached to it yet, for an indefinite
+   period, redeemable back into products later. Depending on
+   jurisdiction, a general-purpose stored-value balance like this can
+   itself trigger e-money/stored-value-instrument licensing
+   requirements distinct from the marketplace-escrow question above -
+   this is a common enough pattern (Amazon, Jumia, etc. all have store
+   credit/wallets) that it's very likely coverable, but it should be
+   confirmed rather than assumed given it's new here.
+2. **Seller working-capital advances** (`loan` module) is NEXORA
+   extending credit to a seller against their own future earnings. This
+   is conceptually closer to a lending product than a payments feature,
+   and depending on jurisdiction may fall under separate consumer-credit
+   or lending regulation regardless of how the repayment mechanism is
+   implemented (automatic deduction from held_balance here, rather than
+   a seller repaying "by hand", doesn't change what the underlying
+   product is). This is the item in this addendum most worth flagging
+   specifically to the advocate, as it's the furthest outside what a
+   typical marketplace-escrow license would be expected to cover.
+
+Both features currently only move money between NEXORA-controlled
+ledger balances and the existing provider rails already covered above
+(top-up funds arrive via mobile money the same way an order payment
+does; a loan disburses into the seller's existing wallet balance, no
+new money enters or leaves the system at disbursement time) - so
+mechanically they reuse the same provider relationships. The open
+question is purely regulatory classification of what those balances
+represent, not a new payment-processing integration.

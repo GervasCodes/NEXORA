@@ -22,7 +22,12 @@ exports.updateSettingsValidation = [
     body("currency")
         .optional()
         .isLength({ min: 3, max: 10 })
-        .withMessage("Invalid currency code")
+        .withMessage("Invalid currency code"),
+
+    body("dataSaverEnabled")
+        .optional()
+        .isBoolean()
+        .withMessage("dataSaverEnabled must be a boolean")
 ];
 
 exports.verifyPasswordChangeOtpValidation = [

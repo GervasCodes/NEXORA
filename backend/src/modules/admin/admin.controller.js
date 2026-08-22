@@ -615,6 +615,21 @@ exports.listFraudFlags = async (req, res) => {
     }
 };
 
+// Phase Q9 (Admin Tools) - anomaly-detection dashboard: trend/breakdown
+// data over fraud_flags plus the simple statistical spike checks
+// computed in fraud.service.js#getDashboardStats. Read-only, separate
+// from the open-queue endpoint above.
+exports.getFraudDashboard = async (req, res) => {
+    try {
+        const data = await fraudService.getDashboardStats();
+
+        return res.json({ success: true, data });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // ---- Refunds (Phase 2 - Refund Automation) -----------------------------
 // Automatic refunds are triggered by dispute.service.js when a dispute
 // is resolved in the buyer's favor; these endpoints are for triage of

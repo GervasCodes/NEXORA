@@ -10,6 +10,7 @@ import { CartProvider } from "./context/CartContext.jsx";
 import { SocketProvider } from "./context/SocketContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { CurrencyProvider } from "./context/CurrencyContext.jsx";
+import { DataSaverProvider } from "./context/DataSaverContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
@@ -65,6 +66,7 @@ createRoot(document.getElementById("root")).render(
             <ThemeProvider>
                 <LanguageProvider>
                     <CurrencyProvider>
+                        <DataSaverProvider>
                         <BrowserRouter>
                             <AuthProvider>
                                 <SocketProvider>
@@ -82,6 +84,7 @@ createRoot(document.getElementById("root")).render(
                                 </SocketProvider>
                             </AuthProvider>
                         </BrowserRouter>
+                        </DataSaverProvider>
                     </CurrencyProvider>
                 </LanguageProvider>
             </ThemeProvider>

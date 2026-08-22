@@ -5,7 +5,7 @@
 // dependency" approach. viewBox width is fixed at 100 units so each
 // point's x coordinate doubles as its left-offset percentage, which is
 // what the hover-tooltip overlay below relies on.
-export default function LineChart({ data, labelKey, valueKey, formatValue, highlightKey }) {
+export default function LineChart({ data, labelKey, valueKey, formatValue, highlightKey, highlightLabel = "projected" }) {
     if (!data || data.length === 0) {
         return <p className="text-ash text-sm">No data to display.</p>;
     }
@@ -81,7 +81,7 @@ export default function LineChart({ data, labelKey, valueKey, formatValue, highl
                             style={{ top: `${(p.y / H) * 100}%`, marginTop: "-6px" }}
                         >
                             {display}
-                            {p.projected && <span className="text-mango"> · projected</span>}
+                            {p.projected && <span className="text-mango"> · {highlightLabel}</span>}
                             {p.label !== undefined && <span className="text-paper/60"> · {p.label}</span>}
                         </div>
                     </div>

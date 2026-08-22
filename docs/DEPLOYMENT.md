@@ -207,6 +207,10 @@ is safe to use as-is.
       (frontend `.env`) for error tracking — see "Observability" below.
       Optional but recommended; the app runs fine without it, you just
       won't get alerted to production errors
+- [ ] `REDIS_URL` set for the category/department + product browse/search
+      caching layer (section 6.6) — optional; the app runs correctly
+      without it, every read just goes straight to MySQL instead of
+      sometimes hitting a warm cache
 
 ## 6.5 Observability
 
@@ -236,6 +240,67 @@ is safe to use as-is.
   raise `DB_POOL_CONNECTION_LIMIT` with headroom under that ceiling —
   every backend process/instance gets its own pool of this size, so with
   N backend instances the real total is `N × DB_POOL_CONNECTION_LIMIT`.
+
+## 6.6 Caching (Redis) — Phase RF5
+
+Category/department listings and product browse/search results
+(`GET /categories`, `GET /categories/departments`,
+`GET /categories/departments/:slug`, `GET /products`,
+`GET /products/filters/sellers`, `GET /products/filters/regions`) are
+cached in Redis for 30-60s to take repeat read load off MySQL. Nothing
+involving live inventory counts, checkout pricing, or payments is cached
+— see `backend/src/modules/category/category.service.js` and
+`backend/src/modules/product/product.service.js` for exactly which reads
+are wrapped, and `backend/src/utils/cache.js` for the caching mechanism
+itself (versioned keys, bumped on the relevant admin/seller write paths —
+not a TTL-only cache).
+
+**This is entirely optional.** With no `REDIS_URL` set, every one of
+those reads goes straight to MySQL, exactly as before this phase — there
+is no code path that requires Redis to be present, and no error is raised
+if it's missing or goes down mid-request (see "Outage behavior" below).
+
+### Setup (Aiven Redis, matching the existing Aiven MySQL setup)
+
+1. In your Aiven console, create a Redis service (or reuse an existing
+   one) in the same project as your MySQL service.
+2. Aiven's service overview page gives you a single connection URI in the
+   form `rediss://default:<password>@<host>:<port>` (note the extra `s` —
+   TLS is already included, unlike the separate `DB_SSL*` vars MySQL
+   needs because Aiven hands MySQL connection details as discrete
+   fields instead).
+3. Set `REDIS_URL` to that exact URI in `backend/.env` (or your
+   host's environment-variable settings, e.g. Render's dashboard). No
+   other Redis env var is required — Aiven's cert chain validates
+   correctly against `REDIS_TLS_REJECT_UNAUTHORIZED`'s default (`true`).
+
+```
+# backend/.env
+REDIS_URL=rediss://default:your-aiven-password@your-service-host.aivencloud.com:12345
+```
+
+Optional tuning vars (all have working defaults — set only if you have a
+specific reason to):
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `CACHE_TTL_SECONDS` | `45` | How long a cached entry lives before expiring on its own, within the 30-60s band this phase targets |
+| `REDIS_TLS_REJECT_UNAUTHORIZED` | `true` | Set to `false` only for a self-signed/dev Redis without a trusted cert chain — never needed for Aiven |
+| `REDIS_DISABLED` | unset | Set to `true` to force-disable caching even when `REDIS_URL` is present (e.g. temporarily, for debugging) |
+
+No migration, restart-only rollout, or manual cache-warming step is
+needed — the app picks up `REDIS_URL` on next boot and starts caching
+immediately; there's nothing to pre-populate.
+
+### Outage behavior
+
+If Redis is unreachable (wrong credentials, service down, network
+partition), every cached read falls back to a direct MySQL query for that
+request — the response is identical, just not served from cache. This is
+covered by `backend/tests/unit/utils/cache.test.js`. You'll see a one-time
+`"redis unavailable - caching layer degraded to direct DB reads"` warning
+in the logs (and a matching Sentry event, tagged `area: redis-cache`, if
+`SENTRY_DSN` is set) — not a flood of one per failed request.
 
 ## 7. Running everything together (local dev)
 

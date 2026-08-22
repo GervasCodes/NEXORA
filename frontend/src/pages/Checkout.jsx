@@ -9,13 +9,27 @@ import PhoneInput from "../components/PhoneInput";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+import { getStoredAffiliateClickToken } from "../components/AffiliateClickTracker";
 
 const initialForm = {
     shipping_address: "",
     shipping_city: "",
     shipping_region: "",
     shipping_phone: "",
-    payment_method: "mobile_money"
+    payment_method: "mobile_money",
+    buyer_protection_addon: false,
+    pickup_point_id: ""
+};
+
+// Mirrors order.service.js#calculateBuyerProtectionFee - client-side
+// estimate only, purely for display; the backend recomputes and charges
+// the authoritative amount.
+const BUYER_PROTECTION_FEE_RATE = 0.015;
+const BUYER_PROTECTION_FEE_MIN = 1000;
+const BUYER_PROTECTION_FEE_MAX = 20000;
+const estimateBuyerProtectionFee = (subtotal) => {
+    const raw = subtotal * BUYER_PROTECTION_FEE_RATE;
+    return Math.min(Math.max(raw, BUYER_PROTECTION_FEE_MIN), BUYER_PROTECTION_FEE_MAX);
 };
 
 // Non-card, non-provider-agnostic options - these keep their own fixed
@@ -86,6 +100,56 @@ export default function Checkout() {
     const [providersFetchFailed, setProvidersFetchFailed] = useState(false);
     const configuredKeys = configuredProviders && configuredProviders.map((provider) => provider.key);
 
+    // Loyalty points redemption (Phase Q7) - fetched once; the server
+    // re-validates the balance regardless (see order.service.js's
+    // quoteRedemption), this is purely for showing an accurate max/
+    // estimate before submitting.
+    const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+    const [pointsToRedeem, setPointsToRedeem] = useState(0);
+    useEffect(() => {
+        api.get("/loyalty/me").then(({ data }) => setLoyaltyBalance(data.data.balance)).catch(() => {});
+    }, []);
+
+    // Agent/kiosk pickup points (Phase Q5) - fetched once; selecting one
+    // auto-fills the address fields the checkout payload already sends
+    // (server re-validates and re-substitutes the pickup point's own
+    // address regardless, see order.service.js#checkout, but the
+    // checkout endpoint's own validator still expects non-empty address
+    // fields either way).
+    const [deliveryType, setDeliveryType] = useState("home");
+    const [pickupPoints, setPickupPoints] = useState([]);
+    useEffect(() => {
+        api.get("/pickup-points").then(({ data }) => setPickupPoints(data.data)).catch(() => {});
+    }, []);
+
+    const selectPickupPoint = (id) => {
+        const point = pickupPoints.find((p) => String(p.id) === String(id));
+        if (!point) {
+            setForm((f) => ({ ...f, pickup_point_id: "" }));
+            return;
+        }
+        setForm((f) => ({
+            ...f,
+            pickup_point_id: point.id,
+            shipping_address: point.address,
+            shipping_city: point.city,
+            shipping_region: point.region
+        }));
+    };
+
+    // Wallet top-up (Phase Q2) - only offered as a payment method once
+    // there's an actual balance to spend; a zero/no-wallet buyer just
+    // never sees the option, rather than seeing it and hitting an
+    // "insufficient balance" error on submit.
+    const [walletBalance, setWalletBalance] = useState(0);
+    useEffect(() => {
+        let cancelled = false;
+        api.get("/buyer-wallet/me")
+            .then(({ data }) => { if (!cancelled) setWalletBalance(Number(data.data.balance) || 0); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
         api.get("/payments/methods")
@@ -136,6 +200,7 @@ export default function Checkout() {
 
     const visiblePaymentMethods = [
         ...filterStatic(PAYMENT_METHODS_BEFORE_CARDS),
+        ...(walletBalance > 0 ? [{ value: "wallet", label: `Wallet balance (${format(walletBalance)})` }] : []),
         ...cardPaymentMethods,
         ...filterStatic(PAYMENT_METHODS_AFTER_CARDS)
     ];
@@ -172,6 +237,9 @@ export default function Checkout() {
         try {
             const payload = {
                 ...form,
+                pickup_point_id: form.pickup_point_id || undefined,
+                loyalty_points_redeemed: pointsToRedeem || undefined,
+                affiliate_click_token: getStoredAffiliateClickToken() || undefined,
                 delivery_lat: pin?.lat ?? null,
                 delivery_lng: pin?.lng ?? null
             };
@@ -182,6 +250,12 @@ export default function Checkout() {
 
             if (form.payment_method === "mobile_money") {
                 await api.post(`/payments/${orderId}/initiate`);
+
+            } else if (form.payment_method === "wallet") {
+                // Synchronous - no gateway round trip, so there's nothing
+                // to redirect for. A wallet balance too low to cover the
+                // order surfaces as a normal error from this call.
+                await api.post(`/payments/${orderId}/wallet`);
 
             } else if (selectedCardMethod) {
                 // Drives whichever card rail was selected (Snippe,
@@ -230,6 +304,9 @@ export default function Checkout() {
     }
 
     const busy = submitting || redirecting;
+    const buyerProtectionFee = form.buyer_protection_addon ? estimateBuyerProtectionFee(total) : 0;
+    const loyaltyDiscount = pointsToRedeem * 10; // mirrors referral.service.js's POINT_VALUE_TZS
+    const grandTotal = Number((total + buyerProtectionFee - loyaltyDiscount).toFixed(2));
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-5 gap-10 animate-fade-in">
@@ -237,27 +314,69 @@ export default function Checkout() {
             <form onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
-                <Input
-                    label={t("checkout.streetAddress")}
-                    required
-                    value={form.shipping_address}
-                    onChange={update("shipping_address")}
-                />
+                <p className="text-xs font-semibold uppercase tracking-wide text-ash">Step 1 · Delivery</p>
 
-                <div className="grid grid-cols-2 gap-3">
-                    <Input
-                        label={t("checkout.city")}
-                        required
-                        value={form.shipping_city}
-                        onChange={update("shipping_city")}
-                    />
-                    <Input
-                        label={t("checkout.region")}
-                        required
-                        value={form.shipping_region}
-                        onChange={update("shipping_region")}
-                    />
+                <div className="flex gap-2 mb-2">
+                    <button
+                        type="button"
+                        onClick={() => { setDeliveryType("home"); setForm({ ...form, pickup_point_id: "" }); }}
+                        className={`flex-1 border rounded-md px-3 py-2 text-sm transition-colors ${deliveryType === "home" ? "border-ink bg-ink text-paper" : "border-line"}`}
+                    >
+                        Deliver to my address
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setDeliveryType("pickup")}
+                        className={`flex-1 border rounded-md px-3 py-2 text-sm transition-colors ${deliveryType === "pickup" ? "border-ink bg-ink text-paper" : "border-line"}`}
+                    >
+                        Pickup point / kiosk
+                    </button>
                 </div>
+
+                {deliveryType === "pickup" ? (
+                    <div>
+                        <label htmlFor="checkout-pickup-point" className="block text-sm mb-1">Choose a pickup point</label>
+                        <select
+                            id="checkout-pickup-point"
+                            required
+                            value={form.pickup_point_id}
+                            onChange={(e) => selectPickupPoint(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                        >
+                            <option value="" disabled>Select a location</option>
+                            {pickupPoints.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name} — {p.city}</option>
+                            ))}
+                        </select>
+                        {form.pickup_point_id && (
+                            <p className="text-xs text-ash mt-1">{form.shipping_address}, {form.shipping_city}</p>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        <Input
+                            label={t("checkout.streetAddress")}
+                            required
+                            value={form.shipping_address}
+                            onChange={update("shipping_address")}
+                        />
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input
+                                label={t("checkout.city")}
+                                required
+                                value={form.shipping_city}
+                                onChange={update("shipping_city")}
+                            />
+                            <Input
+                                label={t("checkout.region")}
+                                required
+                                value={form.shipping_region}
+                                onChange={update("shipping_region")}
+                            />
+                        </div>
+                    </>
+                )}
 
                 <div>
                     <label htmlFor="checkout-phone" className="block text-sm mb-1">{t("checkout.contactPhone")}</label>
@@ -270,6 +389,8 @@ export default function Checkout() {
                 </div>
 
                 <LocationPicker value={pin} onChange={setPin} />
+
+                <p className="text-xs font-semibold uppercase tracking-wide text-ash pt-2">Step 2 · Payment</p>
 
                 <fieldset className="border-0 p-0 m-0 min-w-0">
                     <legend className="block text-sm mb-2">{t("checkout.paymentMethod")}</legend>
@@ -295,6 +416,43 @@ export default function Checkout() {
                     </div>
                 </fieldset>
 
+                <fieldset className="border border-line rounded-md p-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={form.buyer_protection_addon}
+                            onChange={(e) => setForm({ ...form, buyer_protection_addon: e.target.checked })}
+                        />
+                        <span className="text-sm">
+                            <span className="font-medium">{t("checkout.buyerProtection.title")}</span>
+                            <span className="block text-ash text-xs mt-0.5">
+                                {t("checkout.buyerProtection.description")} · +{format(estimateBuyerProtectionFee(total))}
+                            </span>
+                        </span>
+                    </label>
+                </fieldset>
+
+                {loyaltyBalance > 0 && (
+                    <fieldset className="border border-line rounded-md p-3">
+                        <label htmlFor="checkout-loyalty-points" className="block text-sm font-medium mb-1">
+                            Loyalty points ({loyaltyBalance} available)
+                        </label>
+                        <div className="flex items-center gap-3">
+                            <input
+                                id="checkout-loyalty-points"
+                                type="number"
+                                min="0"
+                                max={loyaltyBalance}
+                                value={pointsToRedeem}
+                                onChange={(e) => setPointsToRedeem(Math.max(0, Math.min(loyaltyBalance, Number(e.target.value) || 0)))}
+                                className="w-28 border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                            />
+                            <span className="text-xs text-ash">= {format(pointsToRedeem * 10)} off</span>
+                        </div>
+                    </fieldset>
+                )}
+
                 {error && (
                     <p key={errorTick} role="alert" className="text-coral text-sm animate-slide-down">
                         {error}
@@ -303,11 +461,12 @@ export default function Checkout() {
 
                 <Button type="submit" disabled={busy} fullWidth className="gap-2 active:scale-[0.99]">
                     {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
-                    {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(total)}`}
+                    {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(grandTotal)}`}
                 </Button>
             </form>
 
             <div className="md:col-span-2 animate-slide-up" style={{ animationDelay: "80ms" }}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ash">Step 3 · Review</p>
                 <h2 className="font-display text-lg mb-3">{t("checkout.orderSummary")}</h2>
                 <ul className="space-y-3 mb-4">
                     {items.map((item) => (
@@ -317,9 +476,21 @@ export default function Checkout() {
                         </li>
                     ))}
                 </ul>
+                {form.buyer_protection_addon && (
+                    <div className="flex justify-between text-sm text-ash mb-2">
+                        <span>{t("checkout.buyerProtection.title")}</span>
+                        <span>{format(buyerProtectionFee)}</span>
+                    </div>
+                )}
+                {pointsToRedeem > 0 && (
+                    <div className="flex justify-between text-sm text-teal mb-2">
+                        <span>Loyalty points redeemed</span>
+                        <span>-{format(loyaltyDiscount)}</span>
+                    </div>
+                )}
                 <div className="flex justify-between border-t border-line pt-3">
                     <span className="text-sm">{t("common.total")}</span>
-                    <span className="price font-medium">{format(total)}</span>
+                    <span className="price font-medium">{format(grandTotal)}</span>
                 </div>
             </div>
         </div>

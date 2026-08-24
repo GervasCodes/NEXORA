@@ -7,7 +7,7 @@ import PageMeta from "../components/PageMeta";
 
 export default function BrowseProducts() {
     const [filters, setFilters] = useState({});
-    // Nexora AI-parsed filters (Phase B1, feature #2) are layered on top
+    // Nexora AI-parsed filters  are layered on top
     // of whatever ProductFilters last emitted, not a replacement for it -
     // the regular filter controls are spread second in the params below,
     // so any manual filter change always wins over a stale AI-parsed one.

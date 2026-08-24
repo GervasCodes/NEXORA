@@ -11,30 +11,38 @@ import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
+import ToolsMenu from "./ToolsMenu";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
+//
+// Each entry carries a `group`: "primary" links keep their own slot in
+// the desktop icon row (the handful of highest-frequency actions),
+// "secondary" links live inside the ToolsMenu dropdown instead so the
+// row doesn't grow every time another feature (Loyalty, Affiliate,
+// Group buys...) ships. The mobile drawer ignores `group` entirely and
+// still lists everything flat, exactly as before.
 function useNavLinks() {
     const { user } = useAuth();
     const { t } = useLanguage();
 
     const links = [];
-    if (user?.role === "seller") links.push({ to: "/seller", label: t("nav.dashboard") });
-    if (user?.role === "delivery_agent") links.push({ to: "/delivery", label: t("nav.deliveries") });
-    if (user?.role === "admin") links.push({ to: "/admin", label: t("nav.admin") });
-    if (user?.role === "buyer" || user?.role === "seller") links.push({ to: "/messages", label: t("nav.messages") });
-    if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders") });
-    if (user?.role === "buyer") links.push({ to: "/bookings", label: t("nav.bookings") });
-    if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes") });
-    if (user?.role === "buyer") links.push({ to: "/saved", label: t("nav.saved") });
-    if (user?.role === "buyer") links.push({ to: "/account/wallet", label: t("nav.wallet") });
-    if (user?.role === "buyer") links.push({ to: "/loyalty", label: "Loyalty" });
-    if (user?.role === "buyer") links.push({ to: "/affiliate", label: "Affiliate" });
-    links.push({ to: "/group-buys", label: "Group buys" });
-    links.push({ to: "/live-selling", label: "Live selling" });
-    links.push({ to: "/guides", label: "Guides" });
-    if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart") });
-    if (user) links.push({ to: "/account", label: t("nav.account") });
+    if (user?.role === "seller") links.push({ to: "/seller", label: t("nav.dashboard"), group: "primary" });
+    if (user?.role === "delivery_agent") links.push({ to: "/delivery", label: t("nav.deliveries"), group: "primary" });
+    if (user?.role === "admin") links.push({ to: "/admin", label: t("nav.admin"), group: "primary" });
+    if (user?.role === "buyer" || user?.role === "seller") links.push({ to: "/messages", label: t("nav.messages"), group: "primary" });
+    if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders"), group: "primary" });
+    if (user?.role === "buyer") links.push({ to: "/bookings", label: t("nav.bookings"), group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes"), group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/saved", label: t("nav.saved"), group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/account/wallet", label: t("nav.wallet"), group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/loyalty", label: "Loyalty", group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/affiliate", label: "Affiliate", group: "secondary" });
+    links.push({ to: "/group-buys", label: "Group buys", group: "secondary" });
+    links.push({ to: "/live-selling", label: "Live selling", group: "secondary" });
+    links.push({ to: "/guides", label: "Guides", group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart"), group: "primary" });
+    if (user) links.push({ to: "/account", label: t("nav.account"), group: "primary" });
 
     return links;
 }
@@ -86,6 +94,13 @@ export default function Header() {
     const location = useLocation();
     const [menuOpen, setMenuOpen] = useState(false);
     const links = useNavLinks();
+    // Desktop icon row only ever shows the primary links directly - the
+    // rest live inside ToolsMenu. The mobile drawer below still maps
+    // over the full, un-split `links` array.
+    const primaryLinks = links.filter((l) => l.group !== "secondary");
+    const secondaryLinks = links
+        .filter((l) => l.group === "secondary")
+        .map((l) => ({ ...l, icon: NAV_ICON_BY_PATH[l.to] || CartIcon }));
 
     // Only buyers/sellers ever see a "/messages" link (see useNavLinks
     // above), so there's no point polling for anyone else. sessionReady
@@ -114,7 +129,7 @@ export default function Header() {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [menuOpen]);
 
-    // Phase 4: sign-out now requires an explicit confirmation instead of
+    // sign-out now requires an explicit confirmation instead of
     // firing on a single click - a stray tap (easy on the mobile drawer's
     // compact rows) used to log someone out immediately with no way back
     // except signing in again.
@@ -131,9 +146,9 @@ export default function Header() {
         navigate("/");
     };
 
-    // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
+    // Buyer's mobile bottom nav (Mobile Navigation
     // Unification) - fixed to 5 slots, so newer buyer destinations
-    // (Wallet added in Phase Q2) live in the desktop icon row/Account
+    // (Wallet added in Q2) live in the desktop icon row/Account
     // page instead of competing for a bottom-nav slot; Cart keeps its
     // slot here as the buyer's actual highest-frequency action.
     const buyerBottomNavItems = [
@@ -201,7 +216,7 @@ export default function Header() {
                         active={isActive("/products")}
                     />
 
-                    {links.map((link) => (
+                    {primaryLinks.map((link) => (
                         <IconNavLink
                             key={link.to}
                             to={link.to}
@@ -221,6 +236,8 @@ export default function Header() {
                             }
                         />
                     ))}
+
+                    <ToolsMenu links={secondaryLinks} isActive={isActive} />
 
                     {user && <NotificationBell />}
                     {user?.role === "admin" && <AdminNotificationBell />}

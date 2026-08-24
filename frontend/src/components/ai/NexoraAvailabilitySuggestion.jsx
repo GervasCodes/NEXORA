@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { suggestAvailability } from "../../api/ai";
 import { SparkleIcon } from "./NexoraFraudExplain";
 
-// Phase B2 — seller availability AI suggestion. Rule-based on the backend;
+// seller availability AI suggestion. Rule-based on the backend;
 // purely advisory, never sets availability itself.
 export default function NexoraAvailabilitySuggestion({ serviceId, refreshToken }) {
     const [suggestion, setSuggestion] = useState(null);

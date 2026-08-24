@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 /**
- * Phase 6: Animation System — loaders.
+ * Animation System — loaders.
  *
  * A slim progress bar across the very top of the viewport that sweeps in
  * on every route change, the same idea as the bar YouTube/GitHub show

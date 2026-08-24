@@ -1,3 +1,5 @@
+import GuidesNavIcon from "./GuidesNavIcon";
+
 // Small hand-drawn icon set for the header nav (Phase 3: Header UI).
 // Kept as plain inline SVGs - same style already used for the cart/menu
 // icons in Header.jsx - rather than pulling in an icon library dependency
@@ -162,6 +164,55 @@ export function WalletIcon({ className }) {
     );
 }
 
+// Loyalty points - a star badge, distinct from AffiliateIcon's share
+// nodes and from AdminIcon's shield-checkmark at nav-icon size.
+export function LoyaltyIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z" />
+        </svg>
+    );
+}
+
+// Affiliate / referrals - three linked nodes, reading as "share this
+// with your network" rather than a running balance (WalletIcon) or a
+// crowd of people (GroupBuysIcon).
+export function AffiliateIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <circle cx="5.5" cy="12" r="2.2" />
+            <circle cx="18.5" cy="5.5" r="2.2" />
+            <circle cx="18.5" cy="18.5" r="2.2" />
+            <path d="M7.5 10.9 16.5 6.6M7.5 13.1l9 4.3" />
+        </svg>
+    );
+}
+
+// Group buys - two overlapping people, distinct from AccountIcon's
+// single person at nav-icon size.
+export function GroupBuysIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <circle cx="9" cy="8.5" r="3.2" />
+            <path d="M3 20c0-3.6 2.7-6.2 6-6.2s6 2.6 6 6.2" />
+            <circle cx="17.5" cy="8" r="2.3" />
+            <path d="M15.6 13.9c2.5.4 4.4 2.7 4.4 5.6" />
+        </svg>
+    );
+}
+
+// Live selling - a broadcast/play glyph (signal arcs + play triangle),
+// distinct from MessagesIcon's chat bubble.
+export function LiveSellingIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M4.8 6.3a9 9 0 0 0 0 11.4M19.2 6.3a9 9 0 0 1 0 11.4" />
+            <circle cx="12" cy="12" r="6.5" />
+            <path d="M10.3 9.5v5l4-2.5z" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
 export function SignInIcon({ className }) {
     return (
         <svg {...base} className={className}>
@@ -182,6 +233,14 @@ export function SignOutIcon({ className }) {
 
 // One lookup so Header.jsx can pick an icon purely from a link's `to`
 // path, without every call site needing its own if/else chain.
+//
+// Every entry here used to point at a *specific* icon except Wallet,
+// Loyalty, Affiliate, Group buys and Guides - those five routes had no
+// entry at all, so Header.jsx's `NAV_ICON_BY_PATH[link.to] || CartIcon`
+// fallback silently rendered the shopping-cart icon for all of them.
+// They're now each their own glyph so the nav row (and the mobile
+// drawer, which reads from this same map) doesn't show five identical
+// cart icons next to the real cart.
 export const NAV_ICON_BY_PATH = {
     "/products": BrowseIcon,
     "/services": ServicesIcon,
@@ -194,5 +253,11 @@ export const NAV_ICON_BY_PATH = {
     "/disputes": DisputesIcon,
     "/saved": SavedIcon,
     "/cart": CartIcon,
-    "/account": AccountIcon
+    "/account": AccountIcon,
+    "/account/wallet": WalletIcon,
+    "/loyalty": LoyaltyIcon,
+    "/affiliate": AffiliateIcon,
+    "/group-buys": GroupBuysIcon,
+    "/live-selling": LiveSellingIcon,
+    "/guides": GuidesNavIcon
 };

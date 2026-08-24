@@ -5,20 +5,20 @@ const SESSION_KEY = "nexora_splash_shown";
 export default function SplashScreen({ onDone }) {
     const videoRef = useRef(null);
     const [leaving, setLeaving] = useState(false);
-    // Phase 7: whether the video has actually buffered enough to play -
+    // Whether the video has actually buffered enough to play -
     // used to crossfade it in over the branded wordmark frame below,
     // instead of the video just popping in whenever the browser gets
     // around to decoding its first frame (which, on a slow connection,
     // used to leave nothing but the ambient glow on screen with no
     // brand mark for a beat).
     const [videoReady, setVideoReady] = useState(false);
-    // Phase 7: if the clip 404s or otherwise fails, the old behavior was
+    // if the clip 404s or otherwise fails, the old behavior was
     // to call `finish()` immediately from `onError` - on a broken video
     // that meant the splash could disappear having shown no branding at
     // all. Now it falls back to the CSS wordmark frame for a short,
     // deliberate beat instead of an invisible flash.
     const [videoFailed, setVideoFailed] = useState(false);
-    // Phase 7: the "tap to skip" hint now fades in after a short delay
+    // the "tap to skip" hint now fades in after a short delay
     // instead of being on screen from frame one, so the very first
     // moment reads as pure brand rather than a UI hint competing with it.
     const [showSkipHint, setShowSkipHint] = useState(false);
@@ -101,7 +101,7 @@ export default function SplashScreen({ onDone }) {
                 style={{ background: "radial-gradient(circle, #1D4ED8 0%, transparent 70%)", animationDelay: "1s" }}
             />
 
-            {/* Phase 7: branded wordmark frame - on screen from the very
+            {/* branded wordmark frame - on screen from the very
                 first paint (no dependency on the video having loaded
                 anything yet), and reuses the exact same "NEXORA" mark
                 treatment as Header.jsx/Footer.jsx (font-display italic)
@@ -132,7 +132,7 @@ export default function SplashScreen({ onDone }) {
                 letterbox space is left, so there's still no bare/dead
                 background showing around the video.
 
-                Phase 7: opacity is now tied to `videoReady` (set from
+                opacity is now tied to `videoReady` (set from
                 `onCanPlay`) rather than always being on top - it crossfades
                 in over the wordmark frame above instead of just appearing
                 whenever the browser happens to paint its first decoded

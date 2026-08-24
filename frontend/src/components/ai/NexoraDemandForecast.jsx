@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { suggestRestockAndPricing } from "../../api/ai";
 
-// Phase Q8 (AI Extensions - advisory only). seller.repository.js#getSalesVelocityByProduct
+// AI Extensions - advisory only. seller.repository.js#getSalesVelocityByProduct
 // computes the actual restock-urgency/slow-mover numbers this reads (see
 // ai.service.js#suggestRestockAndPricing) - this only asks Nexora AI to
 // phrase a suggestion on top of them. Silently renders nothing if the

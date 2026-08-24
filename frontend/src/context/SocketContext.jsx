@@ -18,7 +18,7 @@ export function SocketProvider({ children }) {
     const [connectionState, setConnectionState] = useState("disconnected");
 
     useEffect(() => {
-        // Phase 4 (Testing & Session Hardening): no more reading a token
+        // Testing & Session Hardening no more reading a token
         // out of localStorage - the session lives in an httpOnly cookie
         // now (see AuthContext.jsx / api/client.js). `user` alone gates
         // whether to connect; the cookie itself authenticates the

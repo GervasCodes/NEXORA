@@ -19,7 +19,7 @@ const STATUS_LABELS = {
     cancelled: "Cancelled"
 };
 
-// Merchant-Type-Aware Dashboard (Phase 4) - GET /seller/analytics stays
+// Merchant-Type-Aware Dashboard - GET /seller/analytics stays
 // the single source of truth for the paid Verified Seller fee gate
 // (requireVerificationFeePaid isn't merchant-type-specific, so every
 // merchant type still needs it called once to know whether analytics is
@@ -73,17 +73,21 @@ export default function SellerAnalytics() {
 
     const [analytics, setAnalytics] = useState(null);
     const [bookingStats, setBookingStats] = useState(null);
-    // Phase A5 (Advanced Analytics) - period comparison + top customers
+
+    // Advanced Analytics - period comparison + top customers
     // for this seller's product sales.
+
     const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [feeRequired, setFeeRequired] = useState(null); // required_fee amount, or null if not locked
     const [exportingType, setExportingType] = useState(null);
+
     // Trend view toggle - Bar/Line render the exact same dailySales data,
     // this just swaps which of the two chart components draws it.
     const [chartView, setChartView] = useState("bar");
-    // Phase P8 (Analytics Visualization) - custom date-range selection,
+
+    // Advanced Analytics Visualization - custom date-range selection,
     // same shape as AdminDashboard.jsx's equivalent state.
     const [customStart, setCustomStart] = useState("");
     const [customEnd, setCustomEnd] = useState("");
@@ -120,6 +124,7 @@ export default function SellerAnalytics() {
 
     // Re-fetches just the advanced-analytics section with the chosen
     // custom range, same pattern as AdminDashboard.jsx's applyCustomRange.
+
     const applyCustomRange = () => {
         setCustomRangeError("");
         if (!customStart || !customEnd) {
@@ -139,6 +144,7 @@ export default function SellerAnalytics() {
 
     // Same blob-download pattern the admin dashboard uses for its CSV
     // exports - Bearer auth means a plain <a href> can't be used.
+
     const handleExportCsv = useCallback((type) => {
         setExportingType(type);
         api.get(`/seller/analytics/export?type=${type}`, { responseType: "blob" })
@@ -158,6 +164,7 @@ export default function SellerAnalytics() {
     // Skeleton mirrors the real dashboard's shape (stat cards, chart,
     // two product/service lists) rather than a full-page blocking
     // spinner - Phase 8 UX Polish ("heavy dashboards" call-out).
+
     if (loading) {
         return (
             <div className="animate-fade-in">
@@ -302,7 +309,7 @@ export default function SellerAnalytics() {
                         <div className="mb-10">
                             <p className="text-sm font-medium mb-4">Advanced analytics</p>
 
-                            {/* Phase P8 (Analytics Visualization) - custom date-range
+                            {/* Analytics Visualization - custom date-range
                                 selection, same shape/behavior as AdminDashboard.jsx's
                                 equivalent section. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
@@ -376,7 +383,7 @@ export default function SellerAnalytics() {
                                 )}
                             </div>
 
-                            {/* Phase P8 (Analytics Visualization) - GMV bar chart alongside
+                            {/* Analytics Visualization - GMV bar chart alongside
                                 the text cards, same pairing AdminDashboard.jsx uses. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
                                 <p className="text-sm font-medium mb-4">Period comparison, visualized</p>
@@ -438,7 +445,7 @@ export default function SellerAnalytics() {
                                     )}
                                 </div>
 
-                                {/* Phase P8 (Analytics Visualization) - "Add seller
+                                {/* Analytics Visualization - "Add seller
                                     leaderboard": platform-wide top 5 (public storefront
                                     info, same as admin sees) plus this seller's own
                                     rank/row highlighted even when it falls outside the

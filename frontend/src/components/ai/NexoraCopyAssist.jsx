@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { generateListingDraft, generateMarketingCopy } from "../../api/ai";
 
-// Phase B2 features #6 (listing/description generator) and #8 (AI
+// features #6 (listing/description generator) and #8 (AI
 // marketing assistant) share this one control - both are "type a few
 // details, get a draft back, review/edit before it goes anywhere".
 // `onApply` is only called when the seller explicitly clicks "Use this

@@ -22,7 +22,7 @@ export default function AdminOrders() {
         api.get("/admin/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
     }, []);
 
-    // Phase 9D manual early release - bypasses the normal delivered +
+    // manual early release - bypasses the normal delivered +
     // escrow_hold_days timing gate for one order, but the backend still
     // refuses to release anything covered by an open dispute. See
     // docs/ESCROW_ANALYSIS.md section 3.4.

@@ -8,7 +8,7 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 
-// Phase 5: a still-pending request is now declined via reject (below),
+// A still-pending request is now declined via reject (below),
 // not cancel - cancel stays for a confirmed booking either side needs
 // to back out of. See booking.service.js#rejectBooking.
 const CANCELLABLE = ["confirmed"];

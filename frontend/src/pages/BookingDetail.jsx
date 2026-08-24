@@ -41,7 +41,7 @@ export default function BookingDetail() {
     const [error, setError] = useState("");
     const [phone, setPhone] = useState("");
 
-    // Phase 4 (Customer Experience) - "Improved customer booking journey":
+    // "Improved customer booking journey":
     // a completed booking now carries can_review/review from the API
     // (see booking.service.js#getBookingById), so this form only needs
     // to show up when there's actually something to review, without a
@@ -68,7 +68,7 @@ export default function BookingDetail() {
 
     // Handles the buyer landing back on this page after a Snippe checkout
     // or PayPal approval - mirrors OrderDetail.jsx's own ?payment= handling
-    // exactly (Phase 3), just keyed to a booking instead of an order.
+    // exactly , just keyed to a booking instead of an order.
     const pollForPaymentConfirmation = (attempt = 0) => {
         api.get(`/bookings/${id}`).then(({ data }) => {
             const fresh = data.data;
@@ -147,7 +147,7 @@ export default function BookingDetail() {
 
     // Skeleton mirrors the real page's shape (header block, status
     // timeline, details card) rather than a full-page blocking spinner
-    // - Phase 8 UX Polish ("Booking pages" call-out).
+    // - Polish ("Booking pages" call-out).
     if (loading) {
         return (
             <div className="max-w-2xl mx-auto px-4 py-8">
@@ -207,7 +207,7 @@ export default function BookingDetail() {
         }
     };
 
-    // Phase 5: provider-only decline of a still-pending request - see
+    // Provider-only decline of a still-pending request - see
     // booking.service.js#rejectBooking. Kept separate from handleCancel
     // so the two actions can't drift (e.g. one gaining a confirmation
     // step the other doesn't).

@@ -7,7 +7,8 @@ vi.mock("../../src/api/client", () => ({
     extractErrorMessage: (error) => error?.response?.data?.message || "Something went wrong. Please try again",
     registerSuspensionHandler: vi.fn(),
     registerSessionExpiredHandler: vi.fn(),
-    registerCsrfExpiredHandler: vi.fn()
+    registerCsrfExpiredHandler: vi.fn(),
+    setCsrfToken: vi.fn()
 }));
 
 import api from "../../src/api/client";

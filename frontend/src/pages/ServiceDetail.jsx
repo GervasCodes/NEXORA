@@ -219,7 +219,7 @@ export default function ServiceDetail() {
             .finally(() => setLoading(false));
     }, [slug]);
 
-    // Phase 4 (Customer Experience) - a service's reviews are read here,
+    // (Customer Experience) - a service's reviews are read here,
     // but submitted from BookingDetail.jsx once a booking is completed
     // (a review is booking-keyed, not service-keyed - see migration
     // 065's design notes), so this page only ever displays them.

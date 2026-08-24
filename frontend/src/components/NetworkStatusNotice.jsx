@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useToast } from "../context/ToastContext.jsx";
 
-// Phase 5 (Resilience & Growth). Renders nothing itself - just wires
+// Resilience & Growth. Renders nothing itself - just wires
 // window "online"/"offline" events to the existing toast system so a
 // buyer mid-checkout (or a seller mid-upload) gets an explicit signal
 // instead of silently-failing requests with no explanation. Deliberately

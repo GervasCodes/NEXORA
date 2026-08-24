@@ -7,7 +7,7 @@ import { STORE_THEMES } from "../../utils/storeThemes";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 
-// Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
+// (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
 // and SellerServices' MerchantTypeGate (in-dashboard upgrade prompt)
 // already call. No new backend logic: the route/validator/service/

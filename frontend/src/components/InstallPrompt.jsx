@@ -17,14 +17,25 @@ export default function InstallPrompt() {
 
     useEffect(() => {
         const handleBeforeInstallPrompt = (event) => {
-            event.preventDefault();
-
             // Respect an earlier dismissal for the rest of this browser
             // profile - a banner that reappears on every visit after
             // someone already said "not now" is the kind of thing that
             // makes people distrust a PWA prompt rather than use it.
+            //
+            // This check has to happen BEFORE preventDefault(), not
+            // after: calling preventDefault() promises the browser "I'll
+            // show my own install UI instead, hang onto this event for
+            // me" - if we then bail out for a dismissed user without
+            // ever calling event.prompt() on it, that promise is never
+            // kept. That's exactly what produced the console warning
+            // ("preventDefault() called... must call prompt() to show
+            // the banner") on every single page load for anyone who'd
+            // dismissed the prompt once. For a dismissed user we don't
+            // want to show anything at all, so we just don't intercept
+            // the event in the first place.
             if (localStorage.getItem(DISMISSED_KEY) === "1") return;
 
+            event.preventDefault();
             setDeferredEvent(event);
             setVisible(true);
         };

@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 
-// Merchant-Type-Aware Dashboard (Phase 4) - the same product/service
+// Merchant-Type-Aware Dashboard the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
 // applied to the Overview stat cards and quick actions instead of nav
 // visibility. `hybrid` gets both sections; `product`/`service` only

@@ -17,12 +17,34 @@ const api = axios.create({
 // login - see backend/src/middleware/csrf.middleware.js for the
 // double-submit pattern this is half of. document.cookie is a flat
 // "a=1; b=2" string; there's no built-in parser for it.
+//
+// This only actually works when frontend and backend share an origin
+// (local dev, both on localhost). In production they're cross-origin
+// (frontend on nexoramarketplace.online, API on an onrender.com
+// subdomain - see backend/src/utils/sessionCookie.js) - a cookie set by
+// a cross-origin response is stored under THAT origin, not ours, so
+// document.cookie here can never see it no matter how fresh/valid it is
+// server-side. Every mutating admin/seller/buyer action was hitting
+// CSRF_TOKEN_INVALID (403) in production because of exactly this: the
+// header was silently never attached. See csrfToken below for the actual
+// fix - kept this cookie read only as a same-origin/local-dev fallback.
 const readCookie = (name) => {
     const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
     return match ? decodeURIComponent(match[1]) : null;
 };
 
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
+
+// The real, production-safe source for the CSRF header. AuthContext.jsx
+// populates this from the response BODY of a successful login or
+// /auth/me call (see auth.controller.js) - a channel that's
+// same-origin-protected (a cross-site attacker can't read our response
+// bodies either) but, unlike a cookie set by a cross-origin response,
+// actually reaches this page's own JS.
+let csrfToken = null;
+export const setCsrfToken = (token) => {
+    csrfToken = token || null;
+};
 
 // AuthContext registers a handler here on mount. api/client.js lives
 // outside the React tree, so this is the hook that lets a suspension
@@ -68,9 +90,9 @@ api.interceptors.request.use((config) => {
     // see csrf.middleware.js. Only needed on requests that change state;
     // attaching it to GETs would be harmless but pointless.
     if (MUTATING_METHODS.has(config.method)) {
-        const csrfToken = readCookie("nexora_csrf");
-        if (csrfToken) {
-            config.headers["X-CSRF-Token"] = csrfToken;
+        const token = csrfToken || readCookie("nexora_csrf");
+        if (token) {
+            config.headers["X-CSRF-Token"] = token;
         }
     }
 
@@ -82,7 +104,7 @@ api.interceptors.request.use((config) => {
     // cookie itself is the real source of truth and isn't readable here;
     // this just avoids updating the timestamp for someone who's clearly
     // never logged in at all.)
-    if (readCookie("nexora_csrf")) {
+    if (csrfToken || readCookie("nexora_csrf")) {
         localStorage.setItem("nexora_last_activity", Date.now().toString());
     }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { parseSearchQuery } from "../../api/ai";
 
-// Phase B1 feature #2: smart product search. This never talks to the
+// feature #2: smart product search. This never talks to the
 // product listing directly - it only turns free text into the same
 // {search, min_price, max_price, sort} shape ProductFilters already
 // produces (see BrowseProducts.jsx), so the actual product query still

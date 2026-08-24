@@ -76,7 +76,7 @@ function ServiceCard({ service, layout = "grid" }) {
         </div>
     );
 
-    // Phase 4 (Customer Experience) - same row shape as ProductCard.jsx's
+    // Customer Experience - same row shape as ProductCard.jsx's
     // ratingAndStock (category takes the stock slot, since a service
     // listing has no stock concept), so both card types line up the same
     // way instead of the category and rating stacking as separate rows.

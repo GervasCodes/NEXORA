@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { explainForecast, explainPersonalizationHealth } from "../../api/ai";
 
-// Phase B3 features #13 (predictive analytics) and #14 (personalization).
+// features #13 (predictive analytics) and #14 (personalization).
 // admin.service.js#getAnalytics's linear-regression forecast and
 // recommendation.service.js's rule-based "for you" ranking are both
 // completely unchanged by this component - it only asks Nexora AI to

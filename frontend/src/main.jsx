@@ -36,7 +36,7 @@ if ("serviceWorker" in navigator) {
         });
     });
 
-    // Phase 5 (Resilience & Growth): sw.js calls self.skipWaiting() on
+    // (Resilience & Growth): sw.js calls self.skipWaiting() on
     // every install, so a newly-deployed service worker takes over an
     // already-open tab's requests almost immediately - but that tab's
     // already-loaded JS/HTML in memory is still the old build. Rather

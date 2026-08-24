@@ -142,7 +142,7 @@ export default function App() {
     const navigate = useNavigate();
     const toast = useToast();
 
-    // Phase 2: Session expiry. Fires for either an idle-timeout (see
+    //  Session expiry. Fires for either an idle-timeout (see
     // AuthContext.jsx's isIdleExpired check on load) or a session that
     // died server-side mid-use (401 caught in api/client.js). Either way
     // the person gets an explicit reason instead of a silent bounce, then

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 
 // Unified mobile bottom navigation (Monetization Control roadmap,
-// Section 6 - Mobile Navigation Unification). One shared component so
+//  Mobile Navigation Unification). One shared component so
 // Buyer (mounted from Header.jsx), Seller (mounted from
 // SellerLayout.jsx), and Delivery Agent (mounted from
 // DeliveryLayout.jsx) all get the same look, the same touch-target

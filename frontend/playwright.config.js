@@ -1,7 +1,7 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
 
-// Phase 4 (Testing & Session Hardening): visual snapshot coverage for a
+// (Testing & Session Hardening): visual snapshot coverage for a
 // curated set of critical pages and breakpoints - Home, Checkout,
 // ProductDetail, each at mobile and desktop. Deliberately curated, not
 // exhaustive - visual regression suites get expensive to maintain fast

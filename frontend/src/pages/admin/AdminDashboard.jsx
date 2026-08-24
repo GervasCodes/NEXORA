@@ -15,10 +15,10 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
     const [analytics, setAnalytics] = useState(null);
     const [servicesAnalytics, setServicesAnalytics] = useState(null);
-    // Phase 4 (Analytics & Business Metrics) - GMV / take rate / repeat
+    // Analytics & Business Metrics - GMV / take rate / repeat
     // buyers / provider retention, blended across products + services.
     const [businessMetrics, setBusinessMetrics] = useState(null);
-    // Phase A5 (Advanced Analytics) - period comparison, top customers,
+    // Advanced Analytics - period comparison, top customers,
     // seller leaderboard.
     const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export default function AdminDashboard() {
     // Trend view toggle - Bar/Line render the exact same chartData, this
     // just swaps which of the two chart components draws it.
     const [chartView, setChartView] = useState("bar");
-    // Phase P8 (Analytics Visualization) - custom date-range selection
+    // Analytics Visualization - custom date-range selection
     // for the Advanced analytics section. Kept as plain yyyy-mm-dd
     // strings (what <input type="date"> gives you) - only parsed into
     // Dates / sent to the API when "Apply" is clicked, not on every
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
         ]
         : [];
 
-    // Phase 5 (Growth) - services counterpart of chartData above.
+    // Growth - services counterpart of chartData above.
     const bookingChartData = servicesAnalytics
         ? [
             ...servicesAnalytics.dailyBookingSales,
@@ -452,7 +452,7 @@ export default function AdminDashboard() {
                         )}
                     </div>
 
-                    {/* Phase P8 (Analytics Visualization) - GMV bar chart alongside the
+                    {/* Analytics Visualization - GMV bar chart alongside the
                         text cards above, current vs. previous period side by side for
                         week/month/custom so the comparison reads visually, not just as
                         two numbers and a percent badge. */}

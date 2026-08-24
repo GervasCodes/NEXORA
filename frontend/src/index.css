@@ -156,7 +156,7 @@ body {
     }
 }
 
-/* ---- Phase 9: shared UI/UX animation helpers ------------------------- */
+/* ---- Shared UI/UX animation helpers ------------------------- */
 
 /* Shimmering placeholder used by <Skeleton /> while data loads - a plain
    CSS gradient sweep rather than a JS-driven animation, so it costs
@@ -182,7 +182,7 @@ body {
 .stagger-5 { animation-delay: 200ms; }
 .stagger-6 { animation-delay: 240ms; }
 
-/* Phase 5: UI/UX modernization - a slim, on-brand scrollbar for
+/* Shared UI/UX modernization - a slim, on-brand scrollbar for
    horizontally-scrolling rows (ProductRow, etc.) instead of the bulky
    OS-default scrollbar that clashes with the glass/rounded aesthetic
    everywhere else. Firefox uses the standard properties; WebKit/Chromium

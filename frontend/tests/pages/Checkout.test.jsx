@@ -105,7 +105,7 @@ describe("Checkout page", () => {
         expect(screen.getAllByText("TZS 10000").length).toBeGreaterThan(0);
     });
 
-    // Phase 3 (Accessibility & Internationalization): checkout is one of
+    // (Accessibility & Internationalization): checkout is one of
     // the three flows named for the manual screen-reader audit. Automated
     // axe-core scanning catches the class of issue a screen-reader pass
     // would surface first - unlabeled fields, missing form structure,

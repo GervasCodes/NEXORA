@@ -108,7 +108,7 @@ describe("NewDispute page", () => {
         expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    // Phase 3 (Accessibility & Internationalization): dispute filing is
+    // (Accessibility & Internationalization): dispute filing is
     // one of the three flows named for the manual screen-reader audit -
     // see the matching note in Checkout.test.jsx on what this automated
     // check does and doesn't cover. This test is what caught every field

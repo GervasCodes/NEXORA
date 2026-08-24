@@ -11,7 +11,7 @@ const DEFAULT_IMAGE = "/icon-512.png";
 
 /**
  * Page-level <title> + Open Graph / Twitter Card meta tags -
- * Phase 2 Metadata & Error Polish.
+ * Metadata & Error Polish.
  *
  * Usage: drop <PageMeta title="..." description="..." /> near the top of
  * any page component. `title` is automatically suffixed with "· NEXORA"

@@ -60,7 +60,7 @@ describe("Bookings page", () => {
         expect(screen.getByText("TZS 450000.00")).toBeInTheDocument();
     });
 
-    // Phase 3 (Accessibility & Internationalization): booking is one of
+    // (Accessibility & Internationalization): booking is one of
     // the three flows named for the manual screen-reader audit - see the
     // matching note in Checkout.test.jsx on what this automated check
     // does and doesn't cover.

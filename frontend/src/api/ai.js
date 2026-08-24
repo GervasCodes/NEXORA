@@ -16,7 +16,7 @@ export const explainRecommendations = (context) =>
 export const explainOrderStatus = (orderId) =>
     api.post(`/ai/orders/${orderId}/explain`).then((res) => res.data.data);
 
-// --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---
+// --- seller/provider AI (draft-generation, no auto-execute) ---
 // Every response here is a draft the seller/provider must review before
 // using it anywhere - none of these save/publish anything themselves.
 
@@ -38,7 +38,7 @@ export const suggestAvailability = (serviceId) =>
 export const explainDeliveryRoute = () =>
     api.get("/ai/delivery/route").then((res) => res.data.data);
 
-// --- Phase B3: Admin AI Copilot (advisory only, never auto-acts) ---------
+// --- Admin AI Copilot (advisory only, never auto-acts) ---------
 // Every response here is read-only or a draft the admin must review -
 // none of these save/resolve/dismiss anything themselves.
 

@@ -183,7 +183,7 @@ export default function SellerLayout() {
         { to: "/account", label: "Profile", icon: AccountIcon }
     ];
 
-    // Phase 1 direct-access guard: only for tabs whose page has no
+    // direct-access guard: only for tabs whose page has no
     // merchant-type fallback UI of its own (selfGated tabs - Services,
     // Bookings, Availability, Pricing - are intentionally left alone so
     // their existing upgrade-prompt/empty-state behavior isn't

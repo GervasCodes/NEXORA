@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { summarizeSellerAnalytics } from "../../api/ai";
 
-// Phase B2 feature #7. seller.service.js#getAnalytics stays the single
+// feature #7. seller.service.js#getAnalytics stays the single
 // source of truth for every number shown elsewhere on this page - this
 // only asks Nexora AI to turn the same numbers into a couple of
 // readable sentences. Silently renders nothing if the call fails, since

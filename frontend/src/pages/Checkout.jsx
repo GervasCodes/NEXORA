@@ -89,7 +89,7 @@ export default function Checkout() {
     const [errorTick, setErrorTick] = useState(0);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // Phase 5 (Resilience & Growth), extended for MalipoPay Card: null =
+    // (Resilience & Growth), extended for MalipoPay Card: null =
     // still loading / endpoint unavailable - in either case every method
     // stays visible (fail-open), so this lookup can never make checkout
     // show FEWER options than it did before this phase if something's
@@ -137,7 +137,7 @@ export default function Checkout() {
         }));
     };
 
-    // Wallet top-up (Phase Q2) - only offered as a payment method once
+    // Wallet top-up  - only offered as a payment method once
     // there's an actual balance to spend; a zero/no-wallet buyer just
     // never sees the option, rather than seeing it and hitting an
     // "insufficient balance" error on submit.

@@ -83,7 +83,7 @@ const delivery = {
     agent_current_lng: 39.20,
     pickup: { lat: -6.79, lng: 39.19 },
     destination: { lat: -6.90, lng: 39.30 },
-    // Phase 5C: distance/ETA now come from the backend's road-routing
+    // Distance/ETA now come from the backend's road-routing
     // calculation (see GET /delivery/:id -> buildTrackingSummary) rather
     // than a client-side straight-line estimate.
     distance_remaining_km: 12.4,

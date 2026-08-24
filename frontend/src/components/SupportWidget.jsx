@@ -83,9 +83,14 @@ export default function SupportWidget() {
     };
 
     return (
-        <div className="fixed bottom-5 right-5 z-40">
+        // Bottom-left, opposite corner from NexoraAIButton (bottom-right) -
+        // the two used to share the same right-side corner and stack on
+        // top of each other. Same mobile safe-area offset NexoraAIButton
+        // already uses, so this also clears MobileBottomNav on mobile
+        // instead of sitting under it.
+        <div className="fixed left-5 z-40 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-5">
             {open && (
-                <div className="mb-3 w-80 max-h-[28rem] flex flex-col bg-paper border border-line rounded-lg shadow-xl overflow-hidden">
+                <div className="mb-3 w-80 max-w-[90vw] max-h-[28rem] flex flex-col bg-paper border border-line rounded-lg shadow-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-line">
                         <p className="font-display text-sm">
                             {activeTicket ? activeTicket.subject : creating ? "New ticket" : "Support"}

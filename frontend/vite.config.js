@@ -67,21 +67,23 @@ export default defineConfig({
         // forks worker" errors partway through a run - not a bug in the
         // tests themselves (every file here passes fine in isolation or
         // with fewer concurrent workers). This showed up in practice on
-        // Windows: 3 files (Checkout.test.jsx, Login.test.jsx,
-        // MessageSearch.test.jsx) failed to even start their worker
-        // while the other 39 files' 232 tests all passed - a spawn/
-        // response timeout, not a test failure. `pool: "threads"` uses
-        // worker_threads instead of child_process forks, which is
-        // meaningfully cheaper to spin up per-worker on Windows (no new
-        // process/AV-scan per worker) and is the standard fix for this
-        // exact symptom; maxThreads is capped lower than the old
-        // maxForks and both timeouts raised for extra headroom. Raise
-        // maxThreads or revert to the forks pool if running on a
-        // beefier CI box.
+        // Windows twice now: first Checkout.test.jsx, Login.test.jsx and
+        // MessageSearch.test.jsx failed to even start their worker under
+        // the default pool, then - after switching to `pool: "threads"`
+        // with maxThreads capped at 2 below, which fixed it that time -
+        // the *same* symptom came back on a later run, just against a
+        // different trio (Checkout.test.jsx, Login.test.jsx,
+        // NewDispute.test.jsx). Two workers was still enough concurrent
+        // spawn/startup load to time out on this machine. singleThread
+        // removes concurrency entirely - only one worker ever needs to
+        // start, so there's nothing left to contend over - at the cost
+        // of running the suite serially instead of in parallel. On a
+        // beefier or CI box, raise maxThreads (or drop singleThread
+        // and pool.threads entirely) to get parallelism back.
         pool: "threads",
         poolOptions: {
             threads: {
-                maxThreads: 2
+                singleThread: true
             }
         },
         testTimeout: 20000,

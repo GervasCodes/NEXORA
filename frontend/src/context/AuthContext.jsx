@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
-import api, { extractErrorMessage, registerSuspensionHandler, registerSessionExpiredHandler, registerCsrfExpiredHandler } from "../api/client";
+import api, { extractErrorMessage, registerSuspensionHandler, registerSessionExpiredHandler, registerCsrfExpiredHandler, setCsrfToken } from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -108,6 +108,14 @@ export function AuthProvider({ children }) {
             .then(({ data }) => {
                 setUser(data.data.user);
                 localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
+                // Re-hydrates the in-memory CSRF token on every page
+                // load/reload - it doesn't survive a reload on its own
+                // (see api/client.js), and the cookie itself can't be
+                // read back out client-side in production. Without this,
+                // a returning visitor's first PUT/POST/DELETE of the
+                // session would 403 with CSRF_TOKEN_INVALID until they
+                // happened to log in again.
+                setCsrfToken(data.data.csrfToken);
             })
             .catch(() => {
                 // A 401 here already goes through api/client.js's response
@@ -153,6 +161,13 @@ export function AuthProvider({ children }) {
             localStorage.setItem("nexora_user", JSON.stringify(data.data.user));
             setUser(data.data.user);
             setSessionReady(true);
+            // See api/client.js - the CSRF cookie itself can't be read
+            // back out by this page's JS in production (cross-origin),
+            // so the same value comes back here in the response body
+            // instead. Without this, the very next mutating request
+            // (e.g. an admin deactivating something right after login)
+            // would 403 with CSRF_TOKEN_INVALID.
+            setCsrfToken(data.data.csrfToken);
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
@@ -194,6 +209,7 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("nexora_user");
         localStorage.removeItem("nexora_last_activity");
         setUser(null);
+        setCsrfToken(null);
     }, []);
 
     const updateUser = useCallback((patch) => {

@@ -13,7 +13,7 @@ function sectionKeyFor(pathname) {
 }
 
 /**
- * Phase 6: Animation System — page transitions.
+ * Animation System — page transitions.
  *
  * Gives route changes a soft fade + rise instead of the page just
  * snapping into place, without touching any individual page component.

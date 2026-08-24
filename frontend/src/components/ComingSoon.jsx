@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 // Standalone "feature not live yet" screen. Currently only used for the
-// disabled Services department (Phase 1 of the Services/Dark-Mode/
+// disabled Services department (Part of the Services/Dark-Mode/
 // Deletion plan - see DepartmentPage.jsx), kept generic (title/description
 // props) in case another department needs the same treatment later.
 export default function ComingSoon({

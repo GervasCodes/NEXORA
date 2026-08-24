@@ -302,7 +302,7 @@ export default function OrderDetail() {
 
             {!order.is_parent && <OrderTimeline status={order.status} />}
 
-            {/* Phase B1: order-status assistant - reads this same real
+            {/*  Order-status assistant - reads this same real
                 order via /ai/orders/:id/explain, AI only phrases it. */}
             {!order.is_parent && assistant && (
                 <button

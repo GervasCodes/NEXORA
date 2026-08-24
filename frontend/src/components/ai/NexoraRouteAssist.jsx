@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { explainDeliveryRoute } from "../../api/ai";
 
-// Phase B2 feature #10. Stop order is computed rule-based on the
+// feature #10. Stop order is computed rule-based on the
 // backend (ai.service.js#explainDeliveryRoute - a nearest-neighbor
 // chain over real delivery coordinates) - this only shows the
 // resulting summary. Purely advisory: it never updates a delivery's

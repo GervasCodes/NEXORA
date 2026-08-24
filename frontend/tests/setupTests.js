@@ -11,7 +11,7 @@ import * as matchers from "@testing-library/jest-dom/matchers";
 import { toHaveNoViolations } from "jest-axe";
 
 expect.extend(matchers);
-// Phase 3 (Accessibility & Internationalization): jest-axe's own
+// (Accessibility & Internationalization): jest-axe's own
 // "jest-axe/extend-expect" subpath has the same auto-registration problem
 // documented above for jest-dom - it's built for jest's `expect`, not
 // vitest's, and silently no-ops under this project's vitest 4 / chai 6
@@ -34,7 +34,7 @@ class IntersectionObserverStub {
 
 global.IntersectionObserver = IntersectionObserverStub;
 
-// Phase 2 (Metadata & Error Polish): react-helmet-async's <Helmet> throws
+// (Metadata & Error Polish): react-helmet-async's <Helmet> throws
 // ("Cannot read properties of undefined (reading 'add')") when rendered
 // without a <HelmetProvider> ancestor - and none of the existing page
 // test files wrap with one (each wraps manually with just MemoryRouter,

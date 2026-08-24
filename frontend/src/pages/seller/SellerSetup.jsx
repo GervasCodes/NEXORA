@@ -4,7 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 
-// Nexora Services Phase 2 (Onboarding) - the three choices map straight
+// (Onboarding) - the three choices map straight
 // onto seller_profiles.merchant_type (migration 062: product/service/
 // hybrid). "product" is the DB column's own default, so a seller who
 // skips this (or leaves it on the preselected option) needs no extra

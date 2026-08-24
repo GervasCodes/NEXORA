@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-// Phase 5 (Resilience & Growth), refined in Phase 3 (Session/UX
-// improvements): a pending update used to sit as a dismissible banner
+// Resilience & Growth, refined in  Session/UX
+// improvements a pending update used to sit as a dismissible banner
 // until the person happened to notice it and click Reload - if they
 // missed it (or dismissed it), the tab kept running old JS against a
 // newer backend API, which is what produced confusing mid-session

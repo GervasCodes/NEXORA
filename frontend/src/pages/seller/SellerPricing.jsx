@@ -6,7 +6,7 @@ import PageMeta from "../../components/PageMeta";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-// Phase 5 (Growth) - Dynamic Pricing. Mirrors SellerAvailability.jsx's
+// Dynamic Pricing. Mirrors SellerAvailability.jsx's
 // shape (service picker + form + list) since both are "manage something
 // per-service, standalone nav page, not linked off the services list"
 // pages in this codebase. A pricing rule is the automated layer that

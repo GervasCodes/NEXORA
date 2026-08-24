@@ -14,13 +14,20 @@ const crypto = require("crypto");
 //
 // Double-submit cookie pattern: at login, the server sets a second,
 // deliberately non-httpOnly cookie (`nexora_csrf`) alongside the session
-// cookie. The frontend reads that cookie with plain JS and echoes it
-// back as an `X-CSRF-Token` header on every mutating request. A
-// cross-site attacker can trigger a request that carries the cookie
-// automatically, but has no way to read the cookie's value to also set
-// the matching header - so a mismatch (or missing header) means the
-// request didn't originate from a page that could actually read the
-// cookie, i.e. not our own frontend.
+// cookie, AND returns that same value in the login response body (see
+// auth.controller.js#verifyLoginOtp - that second part exists because in
+// a cross-origin deployment, the frontend's own JS can't actually read a
+// cookie this response set, only the backend can - document.cookie is
+// scoped to the page's own origin, not the responding server's). The
+// frontend echoes that value back as an `X-CSRF-Token` header on every
+// mutating request, while the browser separately auto-attaches the
+// cookie itself to the request (cross-site cookie attachment on outgoing
+// requests works fine with SameSite=None, unlike cross-origin JS reads).
+// A cross-site attacker can trigger a request that carries the cookie
+// automatically, but was never in a position to have received that
+// login response body in the first place (same-origin policy) - so a
+// mismatch (or missing header) means the request didn't originate from
+// our own frontend.
 //
 // Only applies to cookie-authenticated requests. A request carrying its
 // own `Authorization: Bearer` header (API clients, the existing backend

@@ -104,6 +104,20 @@ exports.verifyLoginOtp = async (req, res) => {
         // and exfiltrate it). A second, deliberately readable cookie
         // carries a CSRF token the frontend must echo back on mutating
         // requests - see csrf.middleware.js.
+        //
+        // BUT: that cookie is set by this response, which in production
+        // is a cross-origin request (frontend on nexoramarketplace.online,
+        // this API on an onrender.com subdomain - see sessionCookie.js).
+        // A cookie set via a cross-origin response is stored under THIS
+        // origin, not the frontend's - document.cookie on the frontend's
+        // own pages can never see it, regardless of httpOnly. So the
+        // cookie still gets set (the browser auto-attaches it to future
+        // requests to this API, which works fine cross-site with
+        // SameSite=None), but the frontend now also gets the same value
+        // here, in the response body, which IS same-origin-protected
+        // (no more readable to a cross-site attacker than the cookie
+        // approach was) and doesn't depend on cross-origin cookie storage
+        // at all. See api/client.js's in-memory csrfToken.
         res.cookie("nexora_session", result.token, sessionCookieOptions());
         const csrfToken = generateCsrfToken();
         res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
@@ -111,7 +125,7 @@ exports.verifyLoginOtp = async (req, res) => {
         res.json({
             success: true,
             message: "Login successful",
-            data: { user: result.user }
+            data: { user: result.user, csrfToken }
         });
 
     } catch (error) {
@@ -204,5 +218,14 @@ exports.me = async (req, res) => {
         return res.status(401).json({ success: false, message: t(req.locale, "common.unauthorized") });
     }
     delete user.password;
-    res.json({ success: true, data: { user } });
+    // Re-hydrates api/client.js's in-memory CSRF token on page load/reload
+    // (that value doesn't survive a reload since it's memory-only - see
+    // verifyLoginOtp above for why it can't just be read back out of the
+    // cookie on the frontend). This isn't minting a new token, just
+    // echoing back whatever nexora_csrf the browser already sent on this
+    // request - the backend can read that fine either way, since the
+    // restriction is specifically on cross-origin document.cookie access
+    // from the frontend's own JS, not on the backend reading its own
+    // cookies.
+    res.json({ success: true, data: { user, csrfToken: req.cookies?.nexora_csrf || null } });
 };

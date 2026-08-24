@@ -7,7 +7,7 @@ import LineChart from "../../components/LineChart";
 import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
 
-// Phase Q9 (Admin Tools) - anomaly-detection dashboard. Everything here
+// Admin Tools - anomaly-detection dashboard. Everything here
 // is a visualization of GET /admin/fraud-dashboard, which itself is
 // plain statistics over the existing fraud_flags table (see
 // fraud.service.js#getDashboardStats) - no model, nothing predicted.

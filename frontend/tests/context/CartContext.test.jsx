@@ -42,7 +42,7 @@ beforeEach(() => {
 
 describe("CartContext", () => {
     it("fetches the cart on mount for a logged-in buyer", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: true });
         api.get.mockResolvedValue({ data: { data: { items: [{ product_id: 5, quantity: 2 }], total: 2000 } } });
 
         renderWithProvider();
@@ -53,7 +53,7 @@ describe("CartContext", () => {
     });
 
     it("never calls the cart endpoint for a logged-out user, and stays empty", async () => {
-        mockUseAuth.mockReturnValue({ user: null });
+        mockUseAuth.mockReturnValue({ user: null, sessionReady: true });
 
         renderWithProvider();
 
@@ -62,7 +62,7 @@ describe("CartContext", () => {
     });
 
     it("never calls the cart endpoint for a non-buyer role (seller)", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "seller" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "seller" }, sessionReady: true });
 
         renderWithProvider();
 
@@ -71,7 +71,7 @@ describe("CartContext", () => {
     });
 
     it("adds an item then refreshes the cart from the server", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: true });
         api.get
             .mockResolvedValueOnce({ data: { data: { items: [], total: 0 } } }) // initial mount
             .mockResolvedValueOnce({ data: { data: { items: [{ product_id: 5, quantity: 2 }], total: 2000 } } }); // post-add refresh
@@ -88,7 +88,7 @@ describe("CartContext", () => {
     });
 
     it("returns a failure result with a message when adding to cart fails, without throwing", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: true });
         api.get.mockResolvedValue({ data: { data: { items: [], total: 0 } } });
         api.post.mockRejectedValue({ response: { data: { message: "Out of stock" } } });
 
@@ -109,7 +109,7 @@ describe("CartContext", () => {
     });
 
     it("updates quantity via PUT and removes an item via DELETE, each followed by a refresh", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: true });
         api.get.mockResolvedValue({ data: { data: { items: [], total: 0 } } });
         api.put.mockResolvedValue({});
         api.delete.mockResolvedValue({});
@@ -127,8 +127,24 @@ describe("CartContext", () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
     });
 
+    // The actual bug this file's mocks now guard against: `user` on its
+    // own is only ever the *optimistic* value from localStorage until
+    // AuthContext's /auth/me check confirms it (see AuthContext.jsx).
+    // Firing GET /cart against that alone - before sessionReady flips
+    // true - produced a 401 on every load for anyone whose session had
+    // actually expired server-side, even before this component had any
+    // real signal either way.
+    it("never calls the cart endpoint while the session is still being confirmed, even with an optimistic user", async () => {
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: false });
+
+        renderWithProvider();
+
+        await waitFor(() => expect(screen.getByTestId("total")).toHaveTextContent("0"));
+        expect(api.get).not.toHaveBeenCalled();
+    });
+
     it("sums itemCount across multiple distinct line items, not just item rows", async () => {
-        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" } });
+        mockUseAuth.mockReturnValue({ user: { id: 1, role: "buyer" }, sessionReady: true });
         api.get.mockResolvedValue({
             data: { data: { items: [{ product_id: 1, quantity: 3 }, { product_id: 2, quantity: 4 }], total: 999 } }
         });

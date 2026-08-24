@@ -5,13 +5,21 @@ import { useAuth } from "./AuthContext";
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const [items, setItems] = useState([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
 
     const refresh = useCallback(async () => {
-        if (!user || user.role !== "buyer") {
+        // sessionReady gates this the same way NotificationBell.jsx
+        // already had to be fixed to: `user` alone is only the
+        // *optimistic* value straight out of localStorage (see
+        // AuthContext.jsx's loadStoredUser) until the /auth/me check
+        // confirms or corrects it. Firing GET /cart against that stale
+        // value produced a 401 on every load for anyone whose session
+        // had actually expired - the same request would just fire again,
+        // correctly, once sessionReady flips true and this effect re-runs.
+        if (!user || !sessionReady || user.role !== "buyer") {
             setItems([]);
             setTotal(0);
             return;
@@ -27,7 +35,7 @@ export function CartProvider({ children }) {
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, sessionReady]);
 
     useEffect(() => {
         refresh();

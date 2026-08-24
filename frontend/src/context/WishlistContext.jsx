@@ -5,12 +5,17 @@ import { useAuth } from "./AuthContext";
 const WishlistContext = createContext(null);
 
 export function WishlistProvider({ children }) {
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const [ids, setIds] = useState(new Set());
     const [loaded, setLoaded] = useState(false);
 
     const refresh = useCallback(() => {
-        if (!user || user.role !== "buyer") {
+        // Same sessionReady gating as CartContext.jsx/NotificationBell.jsx -
+        // `user` alone is only the optimistic localStorage value until
+        // /auth/me confirms it (see AuthContext.jsx), so firing this
+        // against `user` alone was producing a 401 on every load for
+        // anyone whose session had actually expired.
+        if (!user || !sessionReady || user.role !== "buyer") {
             setIds(new Set());
             setLoaded(true);
             return;
@@ -19,7 +24,7 @@ export function WishlistProvider({ children }) {
             .then(({ data }) => setIds(new Set(data.data)))
             .catch(() => {})
             .finally(() => setLoaded(true));
-    }, [user]);
+    }, [user, sessionReady]);
 
     useEffect(refresh, [refresh]);
 

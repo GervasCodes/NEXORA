@@ -3,6 +3,8 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -16,7 +18,7 @@ export default function AdminWithdrawals() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [notes, setNotes] = useState({});
-    const [error, setError] = useState("");
+    const toast = useToast();
 
     const load = () => {
         api.get("/admin/withdrawals").then(({ data }) => setWithdrawals(data.data)).finally(() => setLoading(false));
@@ -26,12 +28,11 @@ export default function AdminWithdrawals() {
 
     const act = async (id, action) => {
         setBusyId(id);
-        setError("");
         try {
             await api.put(`/admin/withdrawals/${id}/${action}`, { admin_note: notes[id] || undefined });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -40,7 +41,7 @@ export default function AdminWithdrawals() {
     if (loading) return <PageLoader />;
 
     if (withdrawals.length === 0) {
-        return <p className="text-ash text-sm">No withdrawal requests yet.</p>;
+        return <EmptyState title="No withdrawal requests yet." />;
     }
 
     return (
@@ -49,7 +50,6 @@ export default function AdminWithdrawals() {
             <h1 className="font-display text-2xl mb-1">Withdrawal requests</h1>
             <p className="text-ash text-sm mb-8">Seller payout requests from their wallet balance.</p>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="space-y-4">
                 {withdrawals.map((w) => (

@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const emptyForm = { name: "" };
 
@@ -10,7 +11,7 @@ export default function AdminStoreTypes() {
     const [storeTypes, setStoreTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
@@ -34,7 +35,6 @@ export default function AdminStoreTypes() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError("");
         try {
             if (editingId) {
                 await api.put(`/store-types/${editingId}`, form);
@@ -45,7 +45,7 @@ export default function AdminStoreTypes() {
             setEditingId(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -53,12 +53,11 @@ export default function AdminStoreTypes() {
 
     const toggleActive = async (storeType) => {
         setBusyId(storeType.id);
-        setError("");
         try {
             await api.put(`/store-types/${storeType.id}/${storeType.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -93,7 +92,6 @@ export default function AdminStoreTypes() {
                 )}
             </form>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {storeTypes.map((t) => (

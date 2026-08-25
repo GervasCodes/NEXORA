@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, Link, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SplashScreen from "./components/SplashScreen";
@@ -87,9 +87,7 @@ const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
 const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"));
-const SellerSponsorship = lazy(() => import("./pages/seller/SellerSponsorship"));
-const SellerFeaturedStore = lazy(() => import("./pages/seller/SellerFeaturedStore"));
-const SellerDepartmentSponsorship = lazy(() => import("./pages/seller/SellerDepartmentSponsorship"));
+const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 const SellerReturns = lazy(() => import("./pages/seller/SellerReturns"));
 const SellerLoans = lazy(() => import("./pages/seller/SellerLoans"));
@@ -142,7 +140,7 @@ export default function App() {
     const navigate = useNavigate();
     const toast = useToast();
 
-    //  Session expiry. Fires for either an idle-timeout (see
+    // Phase 2: Session expiry. Fires for either an idle-timeout (see
     // AuthContext.jsx's isIdleExpired check on load) or a session that
     // died server-side mid-use (401 caught in api/client.js). Either way
     // the person gets an explicit reason instead of a silent bounce, then
@@ -309,9 +307,14 @@ export default function App() {
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
                             <Route path="wallet" element={<SellerWallet />} />
-                            <Route path="sponsorship" element={<SellerSponsorship />} />
-                            <Route path="featured-store" element={<SellerFeaturedStore />} />
-                            <Route path="department-sponsorship" element={<SellerDepartmentSponsorship />} />
+                            <Route path="promote" element={<SellerPromote />} />
+                            {/* Phase 3 (A3): sponsorship/featured-store/department-sponsorship
+                                are now tabs on the "Promote" hub above - these three keep the
+                                old URLs working (bookmarks, old links) by redirecting into the
+                                matching tab instead of rendering their own separate page. */}
+                            <Route path="sponsorship" element={<Navigate to="/seller/promote?tab=sponsorship" replace />} />
+                            <Route path="featured-store" element={<Navigate to="/seller/promote?tab=featured-store" replace />} />
+                            <Route path="department-sponsorship" element={<Navigate to="/seller/promote?tab=department-sponsorship" replace />} />
                             <Route path="subscription" element={<SellerSubscription />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                             <Route path="returns" element={<SellerReturns />} />

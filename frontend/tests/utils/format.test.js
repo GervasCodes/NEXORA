@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatMoney, formatDate, formatShortDate } from "../../src/utils/format";
+import { describe, it, expect, afterEach } from "vitest";
+import { formatMoney, formatDate, formatShortDate, formatDateTime, formatMonthYear, setFormatLocale } from "../../src/utils/format";
 
 describe("formatMoney", () => {
     it("formats a whole number with the TZS prefix and thousands separators", () => {
@@ -30,5 +30,56 @@ describe("formatDate", () => {
 describe("formatShortDate", () => {
     it("formats an ISO date string as 'D Mon' with no year", () => {
         expect(formatShortDate("2026-03-05T12:00:00Z")).toBe("5 Mar");
+    });
+});
+
+// Phase 1 (Remediation, E4): formatDate/formatShortDate/formatDateTime/
+// formatMonthYear used to always format via "en-GB" regardless of the
+// user's chosen language. setFormatLocale is how LanguageContext keeps
+// them in sync - these tests guard the mapping itself.
+describe("setFormatLocale", () => {
+    afterEach(() => {
+        // Reset to the default so this suite doesn't leak locale state
+        // into other test files.
+        setFormatLocale("en");
+    });
+
+    it("maps 'sw' to the sw-TZ locale for date formatting", () => {
+        setFormatLocale("sw");
+        expect(formatDate("2026-03-05T12:00:00Z")).toBe(
+            new Date("2026-03-05T12:00:00Z").toLocaleDateString("sw-TZ", {
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+            })
+        );
+    });
+
+    it("keeps en-GB formatting for 'en' and any other/unset language", () => {
+        setFormatLocale("en");
+        expect(formatDate("2026-03-05T12:00:00Z")).toBe("5 Mar 2026");
+        expect(formatShortDate("2026-03-05T12:00:00Z")).toBe("5 Mar");
+
+        setFormatLocale("fr");
+        expect(formatDate("2026-03-05T12:00:00Z")).toBe("5 Mar 2026");
+    });
+
+    it("applies the active locale to formatDateTime and formatMonthYear too", () => {
+        setFormatLocale("sw");
+        expect(formatDateTime("2026-03-05T12:00:00Z")).toBe(
+            new Date("2026-03-05T12:00:00Z").toLocaleString("sw-TZ", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            })
+        );
+        expect(formatMonthYear("2026-03-05T12:00:00Z")).toBe(
+            new Date("2026-03-05T12:00:00Z").toLocaleDateString("sw-TZ", {
+                month: "short",
+                year: "numeric"
+            })
+        );
     });
 });

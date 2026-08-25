@@ -5,6 +5,7 @@ import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -13,7 +14,7 @@ const STATUS_STYLES = {
 };
 
 
-export default function SellerFeaturedStore() {
+export default function SellerFeaturedStore({ embedded = false }) {
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -87,8 +88,12 @@ export default function SellerFeaturedStore() {
 
     return (
         <div>
-            <PageMeta title="Featured Store" noIndex />
-            <h1 className="font-display text-2xl mb-1">Featured stores</h1>
+            {!embedded && (
+                <>
+                    <PageMeta title="Featured Store" noIndex />
+                    <h1 className="font-display text-2xl mb-1">Featured stores</h1>
+                </>
+            )}
             <p className="text-ash text-sm mb-8">
                 Pay to rank first in a department's "Featured stores" row.
                 Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance.
@@ -168,7 +173,7 @@ export default function SellerFeaturedStore() {
 
             <p className="text-sm font-medium mb-3">Your campaigns</p>
             {campaigns.length === 0 ? (
-                <p className="text-ash text-sm">No featured store campaigns yet.</p>
+                <EmptyState title="No featured store campaigns yet." />
             ) : (
                 <ul className="space-y-2">
                     {campaigns.map((c) => (

@@ -363,6 +363,18 @@ exports.getSellerOrderDetail = async (orderId, sellerId) => {
 
     const items = await orderRepository.findOrderItemsBySeller(orderId, sellerId);
 
+    // C1 (Phase 4 remediation): same "stuck wallet credit" signal as
+    // getSellerOrders/findOrdersBySeller above, computed here instead of
+    // in SQL since `items` (already scoped to this seller) already
+    // carries wallet_credited per row - see the longer comment on
+    // findOrdersBySeller for why the 10-minute grace window exists.
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const paidLongEnoughAgo = Boolean(order.updated_at) && (Date.now() - new Date(order.updated_at).getTime()) > TEN_MINUTES_MS;
+    const walletCreditPending = order.payment_method !== "cash_on_delivery"
+        && order.payment_status === "paid"
+        && paidLongEnoughAgo
+        && items.some((item) => !item.wallet_credited);
+
     // Only expose what a seller needs - not the buyer's payment method internals
     return {
         id: order.id,
@@ -375,6 +387,7 @@ exports.getSellerOrderDetail = async (orderId, sellerId) => {
         shipping_region: order.shipping_region,
         shipping_phone: order.shipping_phone,
         created_at: order.created_at,
+        wallet_credit_pending: walletCreditPending,
         items
     };
 };

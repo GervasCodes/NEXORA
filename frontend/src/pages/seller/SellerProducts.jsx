@@ -5,6 +5,7 @@ import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const PAGE_SIZE = 20;
 
@@ -14,7 +15,7 @@ export default function SellerProducts() {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
@@ -41,7 +42,6 @@ export default function SellerProducts() {
 
     const load = () => {
         setLoading(true);
-        setError("");
         const params = { page, limit: PAGE_SIZE };
         if (search.trim()) params.search = search.trim();
         if (categoryId) params.category_id = categoryId;
@@ -53,7 +53,7 @@ export default function SellerProducts() {
                 setPagination(data.pagination || { page: 1, totalPages: 1, total: data.data.length });
                 setSelectedIds([]);
             })
-            .catch((err) => setError(extractErrorMessage(err)))
+            .catch((err) => toast?.error(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -61,12 +61,11 @@ export default function SellerProducts() {
 
     const toggleActive = async (product) => {
         setBusyId(product.id);
-        setError("");
         try {
             await api.put(`/products/${product.id}/${product.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -88,12 +87,11 @@ export default function SellerProducts() {
 
     const bulkSetActive = async (isActive) => {
         setBulkBusy(true);
-        setError("");
         try {
             await api.put("/products/bulk/status", { ids: selectedIds, is_active: isActive });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBulkBusy(false);
         }
@@ -154,7 +152,6 @@ export default function SellerProducts() {
                 </div>
             </div>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {selectedIds.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 border border-line bg-line/20 rounded-lg px-4 py-2.5 mb-4">

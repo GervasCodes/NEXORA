@@ -4,6 +4,7 @@ import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     requested: "bg-mango/20 text-mango-dark",
@@ -59,7 +60,7 @@ export default function AdminReturns() {
             {loading ? (
                 <PageLoader />
             ) : returns.length === 0 ? (
-                <p className="text-ash text-sm">No return requests match this filter.</p>
+                <EmptyState title="No return requests match this filter." />
             ) : (
                 <ul className="space-y-3">
                     {returns.map((r) => (

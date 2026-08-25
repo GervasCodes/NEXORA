@@ -17,6 +17,9 @@ export default function Footer() {
                 </div>
 
                 <nav className="flex flex-wrap gap-x-5 gap-y-2 border-t border-frost/10 pt-5 text-frost/60">
+                    <Link to="/status" className="hover:text-frost hover:underline">
+                        {t("footer.status")}
+                    </Link>
                     {LEGAL_DOC_LIST.map((d) => (
                         <Link key={d.slug} to={`/legal/${d.slug}`} className="hover:text-frost hover:underline">
                             {d.shortTitle}

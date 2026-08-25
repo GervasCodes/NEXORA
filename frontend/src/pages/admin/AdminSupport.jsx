@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatDate } from "../../utils/format";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -87,7 +88,7 @@ export default function AdminSupport() {
                     {loading ? (
                         <PageLoader />
                     ) : tickets.length === 0 ? (
-                        <p className="text-ash text-sm">No tickets match this filter.</p>
+                        <EmptyState title="No tickets match this filter." />
                     ) : (
                         <ul className="space-y-2">
                             {tickets.map((t) => (

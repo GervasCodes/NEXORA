@@ -3,6 +3,7 @@ import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -34,7 +35,7 @@ export default function AdminDepartmentSponsorship() {
             </p>
 
             {campaigns.length === 0 ? (
-                <p className="text-ash text-sm">No department sponsorship campaigns yet.</p>
+                <EmptyState title="No department sponsorship campaigns yet." />
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {campaigns.map((c) => (

@@ -45,6 +45,15 @@ export function CurrencyProvider({ children }) {
     }, [setCurrency]);
 
     // amountTzs: a price as stored in the database (always TZS).
+    // Phase 2 (Remediation, E3): this converts a TZS settlement amount into
+    // the buyer's chosen display currency and labels it accordingly - use
+    // this for buyer-facing prices (product/service listings, cart,
+    // checkout). It is display-only: the amount that actually settles is
+    // still the TZS figure. For settlement-currency figures that must stay
+    // in TZS regardless of the viewer's currency preference (seller
+    // payouts, wallet balances, admin financial views), use
+    // utils/format.js's formatMoney() instead and pair it with a visible
+    // "TZS" label.
     const format = useCallback((amountTzs) => {
         const value = (Number(amountTzs) || 0) * RATES_PER_TZS[currency];
         const maximumFractionDigits = currency === "TZS" ? 0 : 2;

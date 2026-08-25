@@ -5,19 +5,26 @@
  * back to its non-AI behavior instead of guessing.
  *
  * AI_PROVIDER selects which adapter to even consider ("anthropic" |
- * "openai"); unset (the default for a fresh checkout of this phase)
- * means no provider is wired up at all, and getActiveProvider() returns
- * null. Each adapter additionally checks its own API-key env var via
- * isConfigured() - AI_PROVIDER=anthropic with no ANTHROPIC_API_KEY set
- * still resolves to "no active provider", not a crash.
+ * "openai" | "gemini" | "groq" | "openrouter"); unset (the default for a
+ * fresh checkout of this phase) means no provider is wired up at all,
+ * and getActiveProvider() returns null. Each adapter additionally checks
+ * its own API-key env var via isConfigured() - AI_PROVIDER=anthropic
+ * with no ANTHROPIC_API_KEY set still resolves to "no active provider",
+ * not a crash.
  */
 
 const anthropicProvider = require("./anthropic.provider");
 const openaiProvider = require("./openai.provider");
+const geminiProvider = require("./gemini.provider");
+const groqProvider = require("./groq.provider");
+const openrouterProvider = require("./openrouter.provider");
 
 const PROVIDERS = {
     anthropic: anthropicProvider,
-    openai: openaiProvider
+    openai: openaiProvider,
+    gemini: geminiProvider,
+    groq: groqProvider,
+    openrouter: openrouterProvider
 };
 
 // Returns the configured provider's adapter, or null if AI_PROVIDER is

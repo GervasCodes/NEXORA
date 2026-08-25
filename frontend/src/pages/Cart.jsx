@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useToast } from "../context/ToastContext";
 import { SkeletonList } from "../components/Skeleton";
 import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
@@ -12,7 +13,22 @@ export default function Cart() {
     const { items, total, loading, updateQuantity, removeFromCart } = useCart();
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const toast = useToast();
     const [placing, setPlacing] = useState(false);
+
+    // updateQuantity/removeFromCart already return { success, message } (see
+    // CartContext.jsx) - this page just wasn't surfacing that message
+    // anywhere, so a failed update silently no-opped. Route it through the
+    // shared toast, same as every other buyer-flow page.
+    const handleQuantityChange = async (productId, quantity) => {
+        const result = await updateQuantity(productId, quantity);
+        if (!result?.success) toast?.error(result?.message || "Couldn't update quantity.");
+    };
+
+    const handleRemove = async (productId) => {
+        const result = await removeFromCart(productId);
+        if (!result?.success) toast?.error(result?.message || "Couldn't remove item.");
+    };
 
     if (loading) {
         return (
@@ -65,11 +81,11 @@ export default function Cart() {
                                     min="1"
                                     max={item.stock}
                                     value={item.quantity}
-                                    onChange={(e) => updateQuantity(item.product_id, Math.max(1, Number(e.target.value)))}
+                                    onChange={(e) => handleQuantityChange(item.product_id, Math.max(1, Number(e.target.value)))}
                                     className="w-16 border border-line rounded-md px-2 py-1 text-sm focus-ring transition-colors focus:border-teal"
                                 />
                                 <button
-                                    onClick={() => removeFromCart(item.product_id)}
+                                    onClick={() => handleRemove(item.product_id)}
                                     className="text-xs text-coral hover:underline transition-opacity hover:opacity-70"
                                 >
                                     {t("common.remove")}

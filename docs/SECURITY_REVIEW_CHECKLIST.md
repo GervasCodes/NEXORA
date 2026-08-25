@@ -10,6 +10,11 @@ faith.
 Status legend: ✅ Implemented · ⚠️ Partial / needs reviewer judgment ·
 ❌ Not implemented / known gap.
 
+Last verified against commit `865ce08` (2026-08-25). Claims in this
+document reflect the codebase as of that commit — re-verify against
+`git log` / `git diff` if it's meaningfully older than the code you're
+reviewing.
+
 ## 1. Authentication & session management
 
 | Item | Status | Notes |
@@ -106,11 +111,18 @@ than assuming silence means "checked and fine":
 
 - Frontend XSS surface: spot-checked for `dangerouslySetInnerHTML` and
   similar React escape hatches — none found in `frontend/src` as of
-  this pass. Not a full re-audit of every render path, and the JWT is
-  stored in `localStorage` rather than an httpOnly cookie, so any XSS
-  bug introduced later (e.g. a future feature rendering raw HTML) would
-  be able to exfiltrate a session token — worth re-checking whenever a
-  new HTML-rendering feature is added.
+  this pass. Not a full re-audit of every render path. As of Phase 4
+  (Testing & Session Hardening) the session token itself no longer
+  travels through JS-accessible storage: it lives in an httpOnly cookie
+  set by the server, so an XSS bug can't read it directly via
+  `document.cookie` or `localStorage` — see `frontend/src/api/client.js`
+  and `backend/src/utils/sessionCookie.js`. The double-submit CSRF token
+  (`nexora_csrf`) that pairs with it is deliberately *not* httpOnly (the
+  frontend has to read and echo it back as an `X-CSRF-Token` header —
+  see `csrf.middleware.js`), so an XSS bug could still exfiltrate the
+  CSRF token; combined with the httpOnly session cookie, that alone
+  isn't enough to forge a session from a different origin, but is still
+  worth re-checking whenever a new HTML-rendering feature is added.
 - Infrastructure/hosting-level review (network segmentation, database
   access controls, backup encryption) — outside this repo's scope.
 - Penetration testing / dynamic testing of any kind. This checklist is a

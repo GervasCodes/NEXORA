@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
+import EmptyState from "../../components/ui/EmptyState";
 
 const EMPTY_FORM = { title: "", excerpt: "", seoMetaDescription: "", coverImageUrl: "", bodyMarkdown: "" };
 
@@ -74,7 +75,7 @@ export default function AdminContent() {
 
             <h2 className="font-display text-lg mb-3">All guides</h2>
             {articles.length === 0 ? (
-                <p className="text-ash text-sm">No guides yet.</p>
+                <EmptyState title="No guides yet." />
             ) : (
                 <ul className="space-y-2">
                     {articles.map((a) => (

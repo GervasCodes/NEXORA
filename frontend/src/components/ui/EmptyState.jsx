@@ -9,8 +9,12 @@
  */
 export default function EmptyState({ title, hint, action, icon }) {
     return (
-        <div className="text-center py-24 animate-slide-up">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-line/40 flex items-center justify-center">
+        // D1 (Phase 4 remediation): role="status" so a screen-reader user
+        // navigating into a list that turned out to be empty hears "Nothing
+        // here yet" (or the caller's title) announced, the same way a
+        // sighted user just sees it - previously this was a silent <div>.
+        <div className="text-center py-24 animate-slide-up" role="status">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-line/40 flex items-center justify-center" aria-hidden="true">
                 {icon || (
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7 text-ash">
                         <circle cx="11" cy="11" r="7" />

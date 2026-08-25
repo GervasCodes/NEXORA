@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
+import { useToast } from "../../context/ToastContext";
 
 const DOC_LABELS = {
     owner_photo: "Owner photo / selfie",
@@ -26,7 +28,7 @@ export default function AdminAccountVerifications() {
     const [role, setRole] = useState("");
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [expanded, setExpanded] = useState(null);
     const [detail, setDetail] = useState({});
     const [busyId, setBusyId] = useState(null);
@@ -38,7 +40,7 @@ export default function AdminAccountVerifications() {
         if (role) params.role = role;
         api.get("/admin/account-verifications", { params })
             .then(({ data }) => setRows(data.data))
-            .catch((err) => setError(extractErrorMessage(err)))
+            .catch((err) => toast?.error(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -58,12 +60,11 @@ export default function AdminAccountVerifications() {
 
     const approve = async (userId) => {
         setBusyId(userId);
-        setError("");
         try {
             await api.put(`/admin/account-verifications/${userId}/approve`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -72,16 +73,15 @@ export default function AdminAccountVerifications() {
     const reject = async (userId) => {
         const reason = reasons[userId]?.trim();
         if (!reason) {
-            setError("Enter a rejection reason first.");
+            toast?.error("Enter a rejection reason first.");
             return;
         }
         setBusyId(userId);
-        setError("");
         try {
             await api.put(`/admin/account-verifications/${userId}/reject`, { reason });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -121,11 +121,10 @@ export default function AdminAccountVerifications() {
                 </select>
             </div>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
             {loading && <p className="text-ash text-sm">Loading…</p>}
 
             {!loading && rows.length === 0 && (
-                <p className="text-ash text-sm">No {status} accounts{role ? ` (${ROLE_LABELS[role]})` : ""}.</p>
+                <EmptyState title={`No ${status} accounts${role ? ` (${ROLE_LABELS[role]})` : ""}.`} />
             )}
 
             <ul className="divide-y divide-line border-y border-line">

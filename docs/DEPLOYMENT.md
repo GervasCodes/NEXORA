@@ -302,6 +302,38 @@ covered by `backend/tests/unit/utils/cache.test.js`. You'll see a one-time
 in the logs (and a matching Sentry event, tagged `area: redis-cache`, if
 `SENTRY_DSN` is set) — not a flood of one per failed request.
 
+## 6.7 AI providers (optional)
+
+Nexora AI's features (assistant chat, seller listing/marketing drafts,
+analytics summaries, availability suggestions, delivery-route
+explanations, etc. — see `backend/src/modules/ai/`) all have a
+non-AI, rule-based fallback and work with **no provider configured at
+all**. Wiring up a provider only upgrades those features' output; it
+never gates access to the underlying pages.
+
+To enable one, set `AI_PROVIDER` to exactly one of the supported
+values plus that provider's API key:
+
+| `AI_PROVIDER` | Required key | Optional `AI_MODEL` default | Notes |
+|---|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` | Native Anthropic Messages API |
+| `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` | Also honors `AI_PROVIDER_BASE_URL` to point at any OpenAI-compatible endpoint (Azure OpenAI, a self-hosted gateway) |
+| `gemini` | `GEMINI_API_KEY` | `gemini-2.0-flash` | Google Generative Language API |
+| `groq` | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | OpenAI-compatible endpoint |
+| `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o-mini` | OpenAI-compatible; `AI_MODEL` can name any model OpenRouter routes to (e.g. `anthropic/claude-3.5-haiku`). Optional `AI_OPENROUTER_SITE_URL`/`AI_OPENROUTER_SITE_NAME` are used only for OpenRouter's own attribution dashboard |
+
+```
+# backend/.env — enable exactly one
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your-key-here
+```
+
+Setting `AI_PROVIDER` to anything other than the five values above, or
+leaving its required key unset, doesn't crash the app — it logs a
+one-time boot warning and every AI feature quietly uses its non-AI
+fallback (see `backend/src/modules/ai/providers/registry.js`). No
+provider's key is ever required by `envCheck.js`'s startup validation.
+
 ## 7. Running everything together (local dev)
 
 From the repo root, in two terminals:

@@ -12,8 +12,12 @@ import Button from "./Button";
  */
 export default function ErrorState({ title, hint, onRetry }) {
     return (
-        <div className="text-center py-24 animate-slide-up">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-coral/10 flex items-center justify-center">
+        // D1 (Phase 4 remediation): role="alert" (assertive live region) so
+        // a screen-reader user is actually told a fetch failed, instead of
+        // only seeing it - unlike EmptyState's "status" (an empty list
+        // isn't urgent), a failure the user may need to act on right away.
+        <div className="text-center py-24 animate-slide-up" role="alert">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-coral/10 flex items-center justify-center" aria-hidden="true">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7 text-coral">
                     <circle cx="12" cy="12" r="9" />
                     <path d="M12 8v5" />

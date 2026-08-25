@@ -5,6 +5,7 @@ import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
 import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
+import { useToast } from "../context/ToastContext";
 
 export default function Messages() {
     const { user } = useAuth();
@@ -12,7 +13,7 @@ export default function Messages() {
     const [loading, setLoading] = useState(true);
     const [confirmingId, setConfirmingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [maintenance, setMaintenance] = useState(null);
     const [query, setQuery] = useState("");
 
@@ -50,13 +51,12 @@ export default function Messages() {
 
     const handleDeleteConversation = async (conversationId) => {
         setDeletingId(conversationId);
-        setError("");
         try {
             await api.delete(`/chat/conversations/${conversationId}`);
             setConversations((prev) => prev.filter((c) => c.id !== conversationId));
             setConfirmingId(null);
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setDeletingId(null);
         }
@@ -102,7 +102,6 @@ export default function Messages() {
                 />
             </div>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {query.trim() && filtered.length === 0 && (
                 <p className="text-ash text-sm text-center py-10">No conversations match "{query.trim()}".</p>

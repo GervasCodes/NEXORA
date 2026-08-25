@@ -3,6 +3,7 @@ import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 
 export default function SellerReviews() {
@@ -61,7 +62,7 @@ export default function SellerReviews() {
             {error && <p className="text-sm text-coral mb-4">{error}</p>}
 
             {reviews.length === 0 ? (
-                <p className="text-ash text-sm">No reviews yet.</p>
+                <EmptyState title="No reviews yet." />
             ) : (
                 <ul className="space-y-4">
                     {reviews.map((r) => (

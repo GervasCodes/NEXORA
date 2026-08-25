@@ -4,6 +4,7 @@ import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -39,7 +40,7 @@ export default function SellerDisputes() {
             <p className="text-ash text-sm mb-8">Issues buyers have raised on your orders.</p>
 
             {disputes.length === 0 ? (
-                <p className="text-ash text-sm">No disputes have been filed against your orders.</p>
+                <EmptyState title="No disputes have been filed against your orders." />
             ) : (
                 <ul className="space-y-3">
                     {disputes.map((d) => (

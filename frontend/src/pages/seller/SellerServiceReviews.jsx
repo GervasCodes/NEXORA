@@ -3,8 +3,9 @@ import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
-// (Customer Experience) - provider-side counterpart of
+// Phase 4 (Customer Experience) - provider-side counterpart of
 // SellerReviews.jsx, same paginated-list-with-reply shape, just hitting
 // /reviews/provider/:providerId (booking-keyed reviews) instead of
 // /reviews/store/:sellerId (product-keyed reviews). Reply posts through
@@ -67,7 +68,7 @@ export default function SellerServiceReviews() {
             {error && <p className="text-sm text-coral mb-4">{error}</p>}
 
             {reviews.length === 0 ? (
-                <p className="text-ash text-sm">No reviews yet.</p>
+                <EmptyState title="No reviews yet." />
             ) : (
                 <ul className="space-y-4">
                     {reviews.map((r) => (

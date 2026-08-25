@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useToast } from "../context/ToastContext";
 import LocationPicker from "../components/LocationPicker";
 import PhoneInput from "../components/PhoneInput";
 import Button from "../components/ui/Button";
@@ -83,13 +84,12 @@ export default function Checkout() {
     const { items, total, refresh } = useCart();
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const toast = useToast();
     const [form, setForm] = useState(initialForm);
     const [pin, setPin] = useState(null);
-    const [error, setError] = useState("");
-    const [errorTick, setErrorTick] = useState(0);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // (Resilience & Growth), extended for MalipoPay Card: null =
+    // Phase 5 (Resilience & Growth), extended for MalipoPay Card: null =
     // still loading / endpoint unavailable - in either case every method
     // stays visible (fail-open), so this lookup can never make checkout
     // show FEWER options than it did before this phase if something's
@@ -137,7 +137,7 @@ export default function Checkout() {
         }));
     };
 
-    // Wallet top-up  - only offered as a payment method once
+    // Wallet top-up (Phase Q2) - only offered as a payment method once
     // there's an actual balance to spend; a zero/no-wallet buyer just
     // never sees the option, rather than seeing it and hitting an
     // "insufficient balance" error on submit.
@@ -221,18 +221,9 @@ export default function Checkout() {
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
-    const showError = (message) => {
-        setError(message);
-        // Bumping this key re-triggers the CSS animation even if the same
-        // error string appears twice in a row (React would otherwise skip
-        // re-rendering an "unchanged" text node's animation).
-        setErrorTick((v) => v + 1);
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError("");
 
         try {
             const payload = {
@@ -288,7 +279,7 @@ export default function Checkout() {
             navigate(`/orders/${orderId}`, { state: { justPlaced: true } });
 
         } catch (err) {
-            showError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -451,12 +442,6 @@ export default function Checkout() {
                             <span className="text-xs text-ash">= {format(pointsToRedeem * 10)} off</span>
                         </div>
                     </fieldset>
-                )}
-
-                {error && (
-                    <p key={errorTick} role="alert" className="text-coral text-sm animate-slide-down">
-                        {error}
-                    </p>
                 )}
 
                 <Button type="submit" disabled={busy} fullWidth className="gap-2 active:scale-[0.99]">

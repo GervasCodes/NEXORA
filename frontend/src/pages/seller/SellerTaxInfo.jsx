@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatDate } from "../../utils/format";
+import EmptyState from "../../components/ui/EmptyState";
 
 export default function SellerTaxInfo() {
     const [taxInfo, setTaxInfo] = useState(null);
@@ -100,7 +101,7 @@ export default function SellerTaxInfo() {
 
             <h2 className="font-display text-lg mb-3">Fiscal receipts</h2>
             {receipts.length === 0 ? (
-                <p className="text-ash text-sm">No fiscal receipts yet.</p>
+                <EmptyState title="No fiscal receipts yet." />
             ) : (
                 <ul className="space-y-2">
                     {receipts.filter((r) => r.status !== "not_applicable").map((r) => (

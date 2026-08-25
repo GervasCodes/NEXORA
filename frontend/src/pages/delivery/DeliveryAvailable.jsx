@@ -5,13 +5,14 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function DeliveryAvailable() {
     const { t } = useLanguage();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [message, setMessage] = useState("");
 
     const load = () => {
@@ -23,14 +24,13 @@ export default function DeliveryAvailable() {
 
     const claim = async (orderId) => {
         setBusyId(orderId);
-        setError("");
         setMessage("");
         try {
             await api.post(`/delivery/${orderId}/claim`);
             setMessage(t("delivery.agent.available.claimed"));
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -42,7 +42,6 @@ export default function DeliveryAvailable() {
         <div>
             <PageMeta title="Available Deliveries" noIndex />
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {orders.length === 0 && (
                 <p className="text-ash text-sm">{t("delivery.agent.available.empty")}</p>

@@ -3,10 +3,11 @@ import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-// Dynamic Pricing. Mirrors SellerAvailability.jsx's
+// Phase 5 (Growth) - Dynamic Pricing. Mirrors SellerAvailability.jsx's
 // shape (service picker + form + list) since both are "manage something
 // per-service, standalone nav page, not linked off the services list"
 // pages in this codebase. A pricing rule is the automated layer that
@@ -163,7 +164,7 @@ export default function SellerPricing() {
                     {loadingRules ? (
                         <p className="text-ash text-sm">Loading pricing rules…</p>
                     ) : rules.length === 0 ? (
-                        <p className="text-ash text-sm">No pricing rules yet for this service.</p>
+                        <EmptyState title="No pricing rules yet for this service." />
                     ) : (
                         <ul className="divide-y divide-line border-y border-line">
                             {rules.map((rule) => (

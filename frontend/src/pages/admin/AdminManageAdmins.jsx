@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const emptyForm = { first_name: "", last_name: "", email: "", phone: "", password: "", admin_level: "admin" };
 
@@ -10,7 +11,7 @@ export default function AdminManageAdmins() {
     const { user } = useAuth();
     const [admins, setAdmins] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [busyId, setBusyId] = useState(null);
     const [form, setForm] = useState(emptyForm);
     const [creating, setCreating] = useState(false);
@@ -18,7 +19,7 @@ export default function AdminManageAdmins() {
     const isSuperAdmin = user?.admin_level === "super_admin";
 
     const load = () => {
-        api.get("/admin/admins").then(({ data }) => setAdmins(data.data)).catch((err) => setError(extractErrorMessage(err))).finally(() => setLoading(false));
+        api.get("/admin/admins").then(({ data }) => setAdmins(data.data)).catch((err) => toast?.error(extractErrorMessage(err))).finally(() => setLoading(false));
     };
 
     useEffect(() => { if (isSuperAdmin) load(); else setLoading(false); }, [isSuperAdmin]);
@@ -34,14 +35,13 @@ export default function AdminManageAdmins() {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        setError("");
         setCreating(true);
         try {
             await api.post("/admin/admins", form);
             setForm(emptyForm);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setCreating(false);
         }
@@ -49,12 +49,11 @@ export default function AdminManageAdmins() {
 
     const changeLevel = async (adminId, admin_level) => {
         setBusyId(adminId);
-        setError("");
         try {
             await api.put(`/admin/admins/${adminId}/permissions`, { admin_level });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -62,12 +61,11 @@ export default function AdminManageAdmins() {
 
     const remove = async (adminId) => {
         setBusyId(adminId);
-        setError("");
         try {
             await api.delete(`/admin/admins/${adminId}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -77,7 +75,6 @@ export default function AdminManageAdmins() {
         <div>
             <PageMeta title="Manage Admins" noIndex />
             <h1 className="font-display text-2xl mb-6">Admins</h1>
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <form onSubmit={handleCreate} className="grid sm:grid-cols-2 gap-3 max-w-xl mb-10 border border-line rounded-lg p-5">
                 <h2 className="font-display text-lg sm:col-span-2 mb-1">Add a new admin</h2>

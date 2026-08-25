@@ -7,6 +7,10 @@ detail on any given piece. This document doesn't replace `docs/API.md`,
 `docs/DATABASE.md`, `docs/DEPLOYMENT.md`, or `docs/SRS.md` — it sits
 above them as a map.
 
+Last verified against commit `865ce08` (2026-08-25). Re-verify against
+`git log` / `git diff` if it's meaningfully older than the code you're
+reviewing.
+
 ## 1. System overview
 
 NEXORA is a multi-vendor marketplace with two commerce models sharing

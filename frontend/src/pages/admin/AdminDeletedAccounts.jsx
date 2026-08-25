@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 
 export default function AdminDeletedAccounts() {
@@ -65,7 +66,7 @@ export default function AdminDeletedAccounts() {
             </p>
 
             {users.length === 0 ? (
-                <p className="text-ash text-sm">No deleted accounts.</p>
+                <EmptyState title="No deleted accounts." />
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {users.map((u) => (

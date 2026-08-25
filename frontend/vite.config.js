@@ -67,23 +67,31 @@ export default defineConfig({
         // forks worker" errors partway through a run - not a bug in the
         // tests themselves (every file here passes fine in isolation or
         // with fewer concurrent workers). This showed up in practice on
-        // Windows twice now: first Checkout.test.jsx, Login.test.jsx and
-        // MessageSearch.test.jsx failed to even start their worker under
-        // the default pool, then - after switching to `pool: "threads"`
-        // with maxThreads capped at 2 below, which fixed it that time -
-        // the *same* symptom came back on a later run, just against a
-        // different trio (Checkout.test.jsx, Login.test.jsx,
-        // NewDispute.test.jsx). Two workers was still enough concurrent
-        // spawn/startup load to time out on this machine. singleThread
-        // removes concurrency entirely - only one worker ever needs to
-        // start, so there's nothing left to contend over - at the cost
-        // of running the suite serially instead of in parallel. On a
-        // beefier or CI box, raise maxThreads (or drop singleThread
-        // and pool.threads entirely) to get parallelism back.
-        pool: "threads",
+        // Windows multiple times now, against a different trio of files
+        // each time (Checkout.test.jsx/Login.test.jsx/
+        // MessageSearch.test.jsx, then Checkout.test.jsx/Login.test.jsx/
+        // NewDispute.test.jsx) - i.e. it's about *worker startup*
+        // contention, not anything specific to those files.
+        // `pool: "threads"` + `singleThread: true` (the previous setting
+        // here) removes concurrency between test files, but worker_threads
+        // still share one Node process and its startup still goes through
+        // a handshake that AV real-time scanning can stall past Vitest's
+        // internal (not independently configurable) startup timeout - so
+        // the same symptom came back even single-threaded.
+        // `pool: "forks"` spawns a real child_process instead of an
+        // in-process worker_thread; each fork's startup is a plain OS
+        // process launch with no thread-handshake step to stall on, which
+        // is the actual point of failure here - so this is a different
+        // *mechanism*, not just "try singleThread again but for forks".
+        // `singleFork: true` keeps the "only one worker ever needs to
+        // start" property from before (still serial, not parallel) so
+        // there's nothing left to contend over either way. On a beefier
+        // or CI box, raise poolOptions.forks.maxForks (or drop
+        // singleFork) to get parallelism back.
+        pool: "forks",
         poolOptions: {
-            threads: {
-                singleThread: true
+            forks: {
+                singleFork: true
             }
         },
         testTimeout: 20000,

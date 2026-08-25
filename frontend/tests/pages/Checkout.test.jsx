@@ -30,6 +30,14 @@ vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ format: (amount) => `TZS ${amount}` })
 }));
 
+// Checkout surfaces order-submission failures via the shared toast (see
+// ToastContext.jsx) rather than an inline banner - assert against this spy
+// instead of DOM text.
+const mockToastError = vi.fn();
+vi.mock("../../src/context/ToastContext", () => ({
+    useToast: () => ({ error: mockToastError, success: vi.fn(), info: vi.fn() })
+}));
+
 vi.mock("../../src/context/LanguageContext", () => ({
     useLanguage: () => ({
         t: (key) => ({
@@ -81,6 +89,7 @@ beforeEach(() => {
     mockNavigate.mockClear();
     mockRefresh.mockClear();
     mockUseCart.mockReset();
+    mockToastError.mockClear();
     api.post.mockReset();
     delete window.location;
     window.location = { ...originalLocation, href: "", origin: "https://nexora.tz" };
@@ -105,7 +114,7 @@ describe("Checkout page", () => {
         expect(screen.getAllByText("TZS 10000").length).toBeGreaterThan(0);
     });
 
-    // (Accessibility & Internationalization): checkout is one of
+    // Phase 3 (Accessibility & Internationalization): checkout is one of
     // the three flows named for the manual screen-reader audit. Automated
     // axe-core scanning catches the class of issue a screen-reader pass
     // would surface first - unlabeled fields, missing form structure,
@@ -229,7 +238,7 @@ describe("Checkout page", () => {
         const submitButton = screen.getByRole("button", { name: /Place order/ });
         await user.click(submitButton);
 
-        await waitFor(() => expect(screen.getByText("Out of stock")).toBeInTheDocument());
+        await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("Out of stock"));
         expect(submitButton).not.toBeDisabled();
         expect(mockNavigate).not.toHaveBeenCalled();
     });
@@ -243,6 +252,6 @@ describe("Checkout page", () => {
 
         await user.click(screen.getByRole("button", { name: /Place order/ }));
 
-        await waitFor(() => expect(screen.getByText(extractErrorMessage({}))).toBeInTheDocument());
+        await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(extractErrorMessage({})));
     });
 });

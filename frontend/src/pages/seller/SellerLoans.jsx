@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatMoney, formatDate } from "../../utils/format";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     active: "bg-mango/20 text-mango-dark",
@@ -105,7 +106,7 @@ export default function SellerLoans() {
 
             <h2 className="font-display text-lg mb-3">Advance history</h2>
             {loans.length === 0 ? (
-                <p className="text-ash text-sm">No advances yet.</p>
+                <EmptyState title="No advances yet." />
             ) : (
                 <ul className="space-y-2">
                     {loans.map((loan) => (

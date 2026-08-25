@@ -3,12 +3,14 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
     const [loading, setLoading] = useState(true);
     const [email, setEmail] = useState("");
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [submitting, setSubmitting] = useState(false);
     const [busyId, setBusyId] = useState(null);
 
@@ -23,13 +25,12 @@ export default function SellerDeliveryTeam() {
     const handleAdd = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError("");
         try {
             await api.post("/seller/delivery-agents", { email });
             setEmail("");
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -37,12 +38,11 @@ export default function SellerDeliveryTeam() {
 
     const handleRemove = async (agentId) => {
         setBusyId(agentId);
-        setError("");
         try {
             await api.delete(`/seller/delivery-agents/${agentId}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -77,10 +77,9 @@ export default function SellerDeliveryTeam() {
                 </Button>
             </form>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {roster.length === 0 ? (
-                <p className="text-ash text-sm">No agents added yet.</p>
+                <EmptyState title="No agents added yet." />
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {roster.map((agent) => (

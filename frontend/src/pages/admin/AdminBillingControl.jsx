@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const FLAGS = [
     {
@@ -35,7 +36,7 @@ export default function AdminBillingControl() {
     const [status, setStatus] = useState(null);
     const [schedule, setSchedule] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [savingKey, setSavingKey] = useState(null);
 
     const [scheduleForm, setScheduleForm] = useState({ setting_key: FLAGS[0].key, enabled: true, scheduled_at: "" });
@@ -49,7 +50,7 @@ export default function AdminBillingControl() {
                 setStatus(statusRes.data.data);
                 setSchedule(scheduleRes.data.data);
             })
-            .catch((err) => setError(extractErrorMessage(err)))
+            .catch((err) => toast?.error(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -57,12 +58,11 @@ export default function AdminBillingControl() {
 
     const toggleFlag = async (key, nextEnabled) => {
         setSavingKey(key);
-        setError("");
         try {
             const { data } = await api.put("/admin/monetization", { [key]: nextEnabled });
             setStatus(data.data);
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSavingKey(null);
         }
@@ -88,7 +88,7 @@ export default function AdminBillingControl() {
             await api.delete(`/admin/monetization/schedule/${id}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         }
     };
 
@@ -103,7 +103,6 @@ export default function AdminBillingControl() {
                 a flag here takes effect immediately for every seller/provider, no redeploy needed.
             </p>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <div className="border border-line rounded-lg divide-y divide-line max-w-2xl mb-8">
                 {FLAGS.map((flag) => {

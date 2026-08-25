@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+import { setFormatLocale } from "../utils/format";
 
 const LanguageContext = createContext(null);
 
@@ -19,6 +20,7 @@ export const DICTIONARY = {
         "nav.orders": "Orders",
         "nav.bookings": "Bookings",
         "nav.disputes": "Disputes",
+        "nav.returns": "Returns",
         "nav.saved": "Saved",
         "nav.wallet": "Wallet",
         "nav.cart": "Cart",
@@ -427,6 +429,7 @@ export const DICTIONARY = {
         "calendar.pastDate": "Past date",
         "calendar.notAvailable": "Not available",
 
+        "footer.status": "System status",
         "footer.tagline": "A regional marketplace connecting buyers, sellers & delivery partners."
     },
     sw: {
@@ -438,6 +441,7 @@ export const DICTIONARY = {
         "nav.orders": "Maagizo",
         "nav.bookings": "Uhifadhi",
         "nav.disputes": "Migogoro",
+        "nav.returns": "Marejesho",
         "nav.saved": "Iliyohifadhiwa",
         "nav.wallet": "Pochi",
         "nav.cart": "Kikapu",
@@ -847,6 +851,7 @@ export const DICTIONARY = {
         "calendar.pastDate": "Tarehe iliyopita",
         "calendar.notAvailable": "Haipatikani",
 
+        "footer.status": "Hali ya mfumo",
         "footer.tagline": "Soko la kikanda linalounganisha wanunuzi, wauzaji na washirika wa usafirishaji."
     }
 };
@@ -858,6 +863,15 @@ const loadStoredLanguage = () => {
 
 export function LanguageProvider({ children }) {
     const [language, setLanguageState] = useState(loadStoredLanguage);
+
+    // Phase 1 (Remediation, E4): keep utils/format.js's date formatters
+    // in sync with the active language so `sw` renders dates via the
+    // "sw-TZ" locale instead of always falling back to "en-GB" - see the
+    // comment above setFormatLocale for why this is a module-level sync
+    // rather than a formatDate(...) argument.
+    useEffect(() => {
+        setFormatLocale(language);
+    }, [language]);
 
     const setLanguage = useCallback((next) => {
         if (!DICTIONARY[next]) return;

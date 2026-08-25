@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import { formatDateTime } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 // Unified "Maintenance Management" screen. Departments and services keep
 // their own dedicated admin pages (AdminCategories.jsx,
@@ -408,14 +409,14 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestMa
 export default function AdminMaintenance() {
     const [overview, setOverview] = useState({ departments: [], services: [], modules: [] });
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [busyId, setBusyId] = useState(null);
     const [prompt, setPrompt] = useState(null); // { sectionKey, item, mode: "maintenance" | "deactivate" }
 
     const load = () => {
         api.get("/admin/maintenance/overview")
             .then(({ data }) => setOverview(data.data))
-            .catch((err) => setError(extractErrorMessage(err)))
+            .catch((err) => toast?.error(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -424,12 +425,11 @@ export default function AdminMaintenance() {
     const activate = async (sectionKey, item) => {
         const id = item.key || item.id;
         setBusyId(`${sectionKey}-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].activatePath(item));
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -441,13 +441,12 @@ export default function AdminMaintenance() {
     const deactivate = async (sectionKey, item, message) => {
         const id = item.key || item.id;
         setBusyId(`${sectionKey}-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].deactivatePath(item), { message });
             setPrompt(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -459,13 +458,12 @@ export default function AdminMaintenance() {
     const enterMaintenance = async (sectionKey, item, message) => {
         const id = item.id;
         setBusyId(`${sectionKey}-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].maintenancePath(item), { message });
             setPrompt(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -475,13 +473,12 @@ export default function AdminMaintenance() {
     const trueDeactivate = async (sectionKey, item) => {
         const id = item.id;
         setBusyId(`${sectionKey}-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].deactivatePath(item));
             setPrompt(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -490,13 +487,12 @@ export default function AdminMaintenance() {
     const scheduleDepartment = async (item, { message, start_at, end_at }) => {
         const id = item.id;
         setBusyId(`departments-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY.departments.schedulePath(item), { message, start_at, end_at });
             setPrompt(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -505,12 +501,11 @@ export default function AdminMaintenance() {
     const cancelSchedule = async (sectionKey, item) => {
         const id = item.id;
         setBusyId(`${sectionKey}-${id}`);
-        setError("");
         try {
             await api.put(SECTION_COPY[sectionKey].cancelSchedulePath(item));
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -528,7 +523,6 @@ export default function AdminMaintenance() {
                 Shoppers get a live toast the moment a department enters or exits maintenance.
             </p>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <DepartmentsUnderMaintenance
                 departments={overview.departments}

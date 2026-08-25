@@ -4,13 +4,15 @@ import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 export default function SellerOrders() {
     const [orders, setOrders] = useState([]);
     const [roster, setRoster] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [shipChoice, setShipChoice] = useState({}); // orderId -> agentId or "" for platform
 
     const load = () => {
@@ -22,7 +24,6 @@ export default function SellerOrders() {
 
     const updateStatus = async (orderId, status, agentId) => {
         setBusyId(orderId);
-        setError("");
         try {
             await api.put(`/orders/${orderId}/status`, {
                 status,
@@ -30,7 +31,7 @@ export default function SellerOrders() {
             });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -43,9 +44,8 @@ export default function SellerOrders() {
             <PageMeta title="Orders" noIndex />
             <h1 className="font-display text-2xl mb-6">Orders</h1>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
-            {orders.length === 0 && <p className="text-ash text-sm">No orders yet.</p>}
+            {orders.length === 0 && <EmptyState title="No orders yet." />}
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((order) => (
@@ -59,6 +59,15 @@ export default function SellerOrders() {
                             <span className="text-xs font-medium px-2 py-1 rounded-full bg-line text-ash capitalize">
                                 {order.status}
                             </span>
+
+                            {order.wallet_credit_pending && (
+                                <span
+                                    className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-800"
+                                    title="This order is paid but the payout to your wallet hasn't gone through yet. Our team has been alerted - contact support if it doesn't clear soon."
+                                >
+                                    Payout pending
+                                </span>
+                            )}
 
                             <p className="price text-sm">{formatMoney(order.total_amount)}</p>
                         </div>

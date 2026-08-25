@@ -45,6 +45,33 @@ describe("ai/providers/registry.getActiveProvider", () => {
         expect(provider).not.toBeNull();
         expect(provider.name).toBe("openai");
     });
+
+    it("returns the gemini adapter when selected and configured", () => {
+        process.env.AI_PROVIDER = "gemini";
+        process.env.GEMINI_API_KEY = "gm-test";
+
+        const provider = registry.getActiveProvider();
+        expect(provider).not.toBeNull();
+        expect(provider.name).toBe("gemini");
+    });
+
+    it("returns the groq adapter when selected and configured", () => {
+        process.env.AI_PROVIDER = "groq";
+        process.env.GROQ_API_KEY = "gsk-test";
+
+        const provider = registry.getActiveProvider();
+        expect(provider).not.toBeNull();
+        expect(provider.name).toBe("groq");
+    });
+
+    it("returns the openrouter adapter when selected and configured", () => {
+        process.env.AI_PROVIDER = "openrouter";
+        process.env.OPENROUTER_API_KEY = "or-test";
+
+        const provider = registry.getActiveProvider();
+        expect(provider).not.toBeNull();
+        expect(provider.name).toBe("openrouter");
+    });
 });
 
 describe("ai/providers/registry.isAnyConfigured", () => {

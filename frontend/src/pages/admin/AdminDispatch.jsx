@@ -5,6 +5,7 @@ import { formatMoney } from "../../utils/format";
 import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const statusStyles = {
     assigned: "bg-line text-ash",
@@ -174,7 +175,7 @@ export default function AdminDispatch() {
             )}
 
             <h2 className="font-display text-lg mb-3">Online agents</h2>
-            {agents.length === 0 && <p className="text-ash text-sm">No agents online right now.</p>}
+            {agents.length === 0 && <EmptyState title="No agents online right now." />}
             {agents.length > 0 && (
                 <ul className="divide-y divide-line border-y border-line">
                     {agents.map((a) => (

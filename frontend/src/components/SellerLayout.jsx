@@ -19,10 +19,9 @@ import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, Wallet
 // shared and always shown. Visibility is resolved against
 // seller_profiles.merchant_type - see isTabVisible below. `hybrid`
 // sellers see every tab, per CHANGES.md's Permission Matrix.
-// Reviews/Service reviews, Collections/Sponsorship/Featured
-// stores/Department sponsorship (all keyed off the product
-// `categories` table - see departmentSponsorship/featuredStore
-// repositories) and Delivery team/Disputes (order-only dispute
+// Reviews/Service reviews, Collections/Promote (sponsorship, featured
+// stores, and department sponsorship are tabs within it - see
+// SellerPromote.jsx) and Delivery team/Disputes (order-only dispute
 // types) follow the same product/service split as the Catalog and
 // Orders groups they sit alongside.
 //
@@ -77,9 +76,7 @@ const groups = [
     {
         label: "Growth",
         tabs: [
-            { to: "/seller/sponsorship", label: "Sponsorship", category: "product" },
-            { to: "/seller/featured-store", label: "Featured stores", category: "product" },
-            { to: "/seller/department-sponsorship", label: "Department sponsorship", category: "product" },
+            { to: "/seller/promote", label: "Promote", category: "product" },
             { to: "/seller/subscription", label: "Subscription" }
         ]
     },
@@ -183,7 +180,7 @@ export default function SellerLayout() {
         { to: "/account", label: "Profile", icon: AccountIcon }
     ];
 
-    // direct-access guard: only for tabs whose page has no
+    // Phase 1 direct-access guard: only for tabs whose page has no
     // merchant-type fallback UI of its own (selfGated tabs - Services,
     // Bookings, Availability, Pricing - are intentionally left alone so
     // their existing upgrade-prompt/empty-state behavior isn't

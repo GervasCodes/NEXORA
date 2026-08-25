@@ -5,6 +5,7 @@ import Button from "../../components/ui/Button";
 import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import { useToast } from "../../context/ToastContext";
 
 const NEXT_STATUS = {
     assigned: [{ value: "picked_up", labelKey: "delivery.agent.mine.markPickedUp" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }],
@@ -25,7 +26,7 @@ export default function DeliveryMine() {
     const [deliveries, setDeliveries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [routeRefresh, setRouteRefresh] = useState(0);
 
     const load = () => {
@@ -36,13 +37,12 @@ export default function DeliveryMine() {
 
     const updateStatus = async (orderId, status) => {
         setBusyId(orderId);
-        setError("");
         try {
             await api.put(`/delivery/${orderId}/status`, { status });
             load();
             setRouteRefresh((t) => t + 1);
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -57,7 +57,6 @@ export default function DeliveryMine() {
     return (
         <div>
             <PageMeta title="My Deliveries" noIndex />
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <NexoraRouteAssist refreshToken={routeRefresh} />
 

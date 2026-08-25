@@ -4,6 +4,7 @@ import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     requested: "bg-mango/20 text-mango-dark",
@@ -41,7 +42,7 @@ export default function SellerReturns() {
             <p className="text-ash text-sm mb-8">Return requests buyers have filed on your orders.</p>
 
             {returns.length === 0 ? (
-                <p className="text-ash text-sm">No return requests yet.</p>
+                <EmptyState title="No return requests yet." />
             ) : (
                 <ul className="space-y-3">
                     {returns.map((r) => (

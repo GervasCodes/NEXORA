@@ -8,6 +8,7 @@ import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
 import { useLanguage } from "../context/LanguageContext";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -99,8 +100,17 @@ export default function DisputeDetail() {
         }
     };
 
+    // Phase 1 (Remediation): swapped the native window.confirm() for the
+    // shared ConfirmDialog component - matches how Header.jsx already
+    // confirms sign-out instead of a browser-native alert.
+    const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
+
+    const requestWithdraw = () => {
+        setWithdrawConfirmOpen(true);
+    };
+
     const withdraw = async () => {
-        if (!window.confirm(t("dispute.detail.withdrawConfirm"))) return;
+        setWithdrawConfirmOpen(false);
         setBusy("withdraw");
         setError("");
         try {
@@ -353,7 +363,7 @@ export default function DisputeDetail() {
             {isBuyer && canAct && (
                 <div className="mb-8">
                     <button
-                        onClick={withdraw}
+                        onClick={requestWithdraw}
                         disabled={busy === "withdraw"}
                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
                     >
@@ -361,6 +371,17 @@ export default function DisputeDetail() {
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={withdrawConfirmOpen}
+                title={t("dispute.detail.withdraw")}
+                description={t("dispute.detail.withdrawConfirm")}
+                confirmLabel={t("dispute.detail.withdraw")}
+                cancelLabel={t("common.cancel") || "Cancel"}
+                danger
+                onConfirm={withdraw}
+                onCancel={() => setWithdrawConfirmOpen(false)}
+            />
 
             {/* Messages thread */}
             <div>

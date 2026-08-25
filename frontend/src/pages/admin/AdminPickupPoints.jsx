@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
+import EmptyState from "../../components/ui/EmptyState";
 
 const EMPTY_FORM = { name: "", address: "", city: "", region: "", contactPhone: "", operatingHours: "" };
 
@@ -81,7 +82,7 @@ export default function AdminPickupPoints() {
 
             <h2 className="font-display text-lg mb-3">All pickup points</h2>
             {points.length === 0 ? (
-                <p className="text-ash text-sm">None added yet.</p>
+                <EmptyState title="None added yet." />
             ) : (
                 <ul className="space-y-2">
                     {points.map((p) => (

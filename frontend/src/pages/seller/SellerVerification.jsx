@@ -5,6 +5,7 @@ import { formatMoney } from "../../utils/format";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -17,7 +18,7 @@ export default function SellerVerification() {
     const [verification, setVerification] = useState(null);
     const [files, setFiles] = useState({});
     const [phone, setPhone] = useState("");
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [message, setMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [paying, setPaying] = useState(false);
@@ -57,7 +58,7 @@ export default function SellerVerification() {
                 clearInterval(pollRef.current);
                 setAwaitingConfirmation(false);
                 setMessage("");
-                setError("We haven't received confirmation yet. If you completed the payment on your phone, this page will update automatically once it's confirmed - you can also refresh later.");
+                toast?.error("We haven't received confirmation yet. If you completed the payment on your phone, this page will update automatically once it's confirmed - you can also refresh later.");
             }
         }, 4000);
     };
@@ -66,11 +67,10 @@ export default function SellerVerification() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError("");
         setMessage("");
 
         if (!files.national_id || !files.voter_id || !files.business_registration) {
-            setError("Please attach all three documents.");
+            toast?.error("Please attach all three documents.");
             return;
         }
 
@@ -88,7 +88,7 @@ export default function SellerVerification() {
             setMessage("Documents submitted. An admin will review them shortly.");
             refreshProfile?.();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -96,7 +96,6 @@ export default function SellerVerification() {
 
     const handlePay = async (e) => {
         e.preventDefault();
-        setError("");
         setMessage("");
         setPaying(true);
         try {
@@ -106,7 +105,7 @@ export default function SellerVerification() {
             setAwaitingConfirmation(true);
             pollForConfirmation();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setPaying(false);
         }
@@ -140,7 +139,6 @@ export default function SellerVerification() {
                 </p>
             )}
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
             {message && <p className="text-teal text-sm mb-4">{message}</p>}
 
             {canSubmit && (

@@ -111,6 +111,15 @@ export function DisputesIcon({ className }) {
     );
 }
 
+export function ReturnsIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M3 10h11a5 5 0 0 1 0 10h-2" />
+            <path d="M7 6 3 10l4 4" />
+        </svg>
+    );
+}
+
 export function SavedIcon({ className }) {
     return (
         <svg {...base} className={className}>
@@ -251,6 +260,7 @@ export const NAV_ICON_BY_PATH = {
     "/orders": OrdersIcon,
     "/bookings": BookingsIcon,
     "/disputes": DisputesIcon,
+    "/returns": ReturnsIcon,
     "/saved": SavedIcon,
     "/cart": CartIcon,
     "/account": AccountIcon,

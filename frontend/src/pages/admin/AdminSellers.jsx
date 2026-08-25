@@ -3,12 +3,14 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 export default function AdminSellers() {
     const [sellers, setSellers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
 
     const load = () => {
         api.get("/admin/sellers").then(({ data }) => setSellers(data.data)).finally(() => setLoading(false));
@@ -18,12 +20,11 @@ export default function AdminSellers() {
 
     const toggleVerified = async (seller) => {
         setBusyId(seller.user_id);
-        setError("");
         try {
             await api.put(`/admin/sellers/${seller.user_id}/${seller.is_verified ? "unverify" : "verify"}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -35,9 +36,8 @@ export default function AdminSellers() {
         <div>
             <PageMeta title="Sellers" noIndex />
             <h1 className="font-display text-2xl mb-6">Sellers</h1>
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
-            {sellers.length === 0 && <p className="text-ash text-sm">No stores yet.</p>}
+            {sellers.length === 0 && <EmptyState title="No stores yet." />}
 
             <ul className="divide-y divide-line border-y border-line">
                 {sellers.map((s) => (

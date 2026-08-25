@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatMoney } from "../../utils/format";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -82,7 +83,7 @@ export default function SellerGroupBuys() {
 
             <h2 className="font-display text-lg mb-3">Your group buys</h2>
             {groups.length === 0 ? (
-                <p className="text-ash text-sm">None yet.</p>
+                <EmptyState title="None yet." />
             ) : (
                 <ul className="space-y-2">
                     {groups.map((g) => (

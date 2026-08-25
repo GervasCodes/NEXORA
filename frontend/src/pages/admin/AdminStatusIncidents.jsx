@@ -3,6 +3,8 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 const COMPONENTS = ["platform", "payments", "orders", "bookings", "delivery", "notifications"];
 const SEVERITIES = ["minor", "major", "critical"];
@@ -18,7 +20,7 @@ const STATUS_STYLES = {
 export default function AdminStatusIncidents() {
     const [incidents, setIncidents] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
 
     const [showForm, setShowForm] = useState(false);
     const [title, setTitle] = useState("");
@@ -31,7 +33,7 @@ export default function AdminStatusIncidents() {
         setLoading(true);
         api.get("/status/admin/incidents")
             .then(({ data }) => setIncidents(data.data))
-            .catch(() => setError("Couldn't load incidents."))
+            .catch(() => toast?.error("Couldn't load incidents."))
             .finally(() => setLoading(false));
     };
 
@@ -39,7 +41,6 @@ export default function AdminStatusIncidents() {
 
     const submitIncident = async (e) => {
         e.preventDefault();
-        setError("");
         setSubmitting(true);
         try {
             await api.post("/status/admin/incidents", { title, message, component, severity });
@@ -50,19 +51,18 @@ export default function AdminStatusIncidents() {
             setShowForm(false);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
     };
 
     const updateStatus = async (id, status) => {
-        setError("");
         try {
             await api.put(`/status/admin/incidents/${id}`, { status });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         }
     };
 
@@ -79,7 +79,6 @@ export default function AdminStatusIncidents() {
             </div>
             <p className="text-ash text-sm mb-6">Shown publicly on the /status page. Mark an incident resolved once it's fixed.</p>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {showForm && (
                 <form onSubmit={submitIncident} className="border border-line rounded-lg p-4 mb-6 space-y-3 max-w-lg">
@@ -103,7 +102,7 @@ export default function AdminStatusIncidents() {
             )}
 
             {incidents.length === 0 ? (
-                <p className="text-ash text-sm">No incidents on record.</p>
+                <EmptyState title="No incidents on record." />
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {incidents.map((incident) => (

@@ -3,6 +3,7 @@ import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -22,7 +23,7 @@ export default function AdminOrders() {
         api.get("/admin/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
     }, []);
 
-    // manual early release - bypasses the normal delivered +
+    // Phase 9D manual early release - bypasses the normal delivered +
     // escrow_hold_days timing gate for one order, but the backend still
     // refuses to release anything covered by an open dispute. See
     // docs/ESCROW_ANALYSIS.md section 3.4.
@@ -53,7 +54,7 @@ export default function AdminOrders() {
             <PageMeta title="Orders" noIndex />
             <h1 className="font-display text-2xl mb-6">All orders</h1>
 
-            {orders.length === 0 && <p className="text-ash text-sm">No orders yet.</p>}
+            {orders.length === 0 && <EmptyState title="No orders yet." />}
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((o) => (

@@ -7,8 +7,9 @@ import BookingStatusBadge from "../../components/BookingStatusBadge";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
-// A still-pending request is now declined via reject (below),
+// Phase 5: a still-pending request is now declined via reject (below),
 // not cancel - cancel stays for a confirmed booking either side needs
 // to back out of. See booking.service.js#rejectBooking.
 const CANCELLABLE = ["confirmed"];
@@ -21,7 +22,7 @@ export default function SellerBookings() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
 
     const load = () => {
         if (!isProvider) {
@@ -36,12 +37,11 @@ export default function SellerBookings() {
 
     const handleConfirm = async (booking) => {
         setBusyId(booking.id);
-        setError("");
         try {
             await api.put(`/bookings/${booking.id}/confirm`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -49,12 +49,11 @@ export default function SellerBookings() {
 
     const handleReject = async (booking) => {
         setBusyId(booking.id);
-        setError("");
         try {
             await api.put(`/bookings/${booking.id}/reject`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -62,12 +61,11 @@ export default function SellerBookings() {
 
     const handleCancel = async (booking) => {
         setBusyId(booking.id);
-        setError("");
         try {
             await api.put(`/bookings/${booking.id}/cancel`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -90,7 +88,6 @@ export default function SellerBookings() {
             <PageMeta title="Bookings" noIndex />
             <h1 className="font-display text-2xl mb-6">{t("booking.seller.title")}</h1>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {bookings.length === 0 && <p className="text-ash text-sm">{t("booking.seller.empty")}</p>}
 

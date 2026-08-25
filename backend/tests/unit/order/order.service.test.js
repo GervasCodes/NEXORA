@@ -482,10 +482,77 @@ describe("order.service.getSellerOrderDetail", () => {
             shipping_region: "Dar",
             shipping_phone: "0700000000",
             created_at: "2026-01-01",
+            wallet_credit_pending: false,
             items: [{ id: 1, name: "Widget" }]
         });
         expect(result.payment_reference).toBeUndefined();
         expect(result.buyer_id).toBeUndefined();
+    });
+
+    // C1 (Phase 4 remediation): the fire-and-forget wallet-crediting call in
+    // payment.service.js can fail silently from the seller's point of view -
+    // wallet_credit_pending is the signal that surfaces it in the API.
+    it("flags wallet_credit_pending when paid, non-COD, long enough ago, and an item is still uncredited", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1,
+            order_number: "ORD-1",
+            status: "processing",
+            payment_status: "paid",
+            payment_method: "mobile_money",
+            updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+            created_at: "2026-01-01"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.findOrderItemsBySeller.mockResolvedValue([{ id: 1, name: "Widget", wallet_credited: false }]);
+
+        const result = await orderService.getSellerOrderDetail(1, 10);
+
+        expect(result.wallet_credit_pending).toBe(true);
+    });
+
+    it("does not flag wallet_credit_pending when the order was paid recently (grace window)", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1,
+            payment_status: "paid",
+            payment_method: "mobile_money",
+            updated_at: new Date().toISOString()
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.findOrderItemsBySeller.mockResolvedValue([{ id: 1, wallet_credited: false }]);
+
+        const result = await orderService.getSellerOrderDetail(1, 10);
+
+        expect(result.wallet_credit_pending).toBe(false);
+    });
+
+    it("does not flag wallet_credit_pending for Cash on Delivery orders", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1,
+            payment_status: "paid",
+            payment_method: "cash_on_delivery",
+            updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString()
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.findOrderItemsBySeller.mockResolvedValue([{ id: 1, wallet_credited: false }]);
+
+        const result = await orderService.getSellerOrderDetail(1, 10);
+
+        expect(result.wallet_credit_pending).toBe(false);
+    });
+
+    it("does not flag wallet_credit_pending once all items are credited", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1,
+            payment_status: "paid",
+            payment_method: "mobile_money",
+            updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString()
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.findOrderItemsBySeller.mockResolvedValue([{ id: 1, wallet_credited: true }]);
+
+        const result = await orderService.getSellerOrderDetail(1, 10);
+
+        expect(result.wallet_credit_pending).toBe(false);
     });
 });
 

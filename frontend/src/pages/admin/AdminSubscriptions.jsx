@@ -4,6 +4,8 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -17,7 +19,7 @@ export default function AdminSubscriptions() {
     const [plans, setPlans] = useState([]);
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const { user } = useAuth();
     const isSuperAdmin = user?.admin_level === "super_admin";
     const [editingId, setEditingId] = useState(null);
@@ -31,7 +33,7 @@ export default function AdminSubscriptions() {
                 setPlans(plansRes.data.data);
                 setSubscriptions(subsRes.data.data);
             })
-            .catch(() => setError("Couldn't load subscription data."))
+            .catch(() => toast?.error("Couldn't load subscription data."))
             .finally(() => setLoading(false));
     };
 
@@ -49,7 +51,6 @@ export default function AdminSubscriptions() {
 
     const saveEdit = async (planId) => {
         setSaving(true);
-        setError("");
         try {
             await api.put(`/admin/subscription-plans/${planId}`, {
                 price: Number(draft.price),
@@ -60,7 +61,7 @@ export default function AdminSubscriptions() {
             setEditingId(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -77,7 +78,6 @@ export default function AdminSubscriptions() {
                     Pricing, commission overrides, and listing limits for each tier. Changes apply to new/renewing subscriptions - already-active periods keep the rate a seller was quoted.
                 </p>
 
-                {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
                 <div className="overflow-x-auto border border-line rounded-lg">
                     <table className="w-full text-sm">
@@ -150,7 +150,7 @@ export default function AdminSubscriptions() {
                 <p className="text-ash text-sm mb-6">Most recent 500 subscription records, newest first.</p>
 
                 {subscriptions.length === 0 ? (
-                    <p className="text-ash text-sm">No paid subscriptions yet.</p>
+                    <EmptyState title="No paid subscriptions yet." />
                 ) : (
                     <ul className="divide-y divide-line border-y border-line">
                         {subscriptions.map((s) => (

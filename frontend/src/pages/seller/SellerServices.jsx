@@ -5,11 +5,13 @@ import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
 // seller until they choose one of these.
-function MerchantTypeGate({ onSwitch, switching, error }) {
+function MerchantTypeGate({ onSwitch, switching }) {
     return (
         <div>
             <h1 className="font-display text-2xl mb-2">Services</h1>
@@ -18,8 +20,6 @@ function MerchantTypeGate({ onSwitch, switching, error }) {
                 event spaces and more - from the same NEXORA account you already
                 sell products from.
             </p>
-
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <div className="grid sm:grid-cols-2 gap-4 max-w-xl">
                 <button
@@ -53,7 +53,7 @@ export default function SellerServices() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [switching, setSwitching] = useState(false);
-    const [switchError, setSwitchError] = useState("");
+    const toast = useToast();
 
     const isProvider = profile?.merchant_type === "service" || profile?.merchant_type === "hybrid";
 
@@ -70,12 +70,11 @@ export default function SellerServices() {
 
     const handleSwitch = async (merchantType) => {
         setSwitching(true);
-        setSwitchError("");
         try {
             await api.put("/seller/merchant-type", { merchant_type: merchantType });
             await refreshProfile?.();
         } catch (err) {
-            setSwitchError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSwitching(false);
         }
@@ -87,7 +86,7 @@ export default function SellerServices() {
             await api.put(`/services/${service.id}/${service.status === "published" ? "unpublish" : "publish"}`);
             load();
         } catch (err) {
-            setSwitchError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -104,7 +103,7 @@ export default function SellerServices() {
     };
 
     if (!isProvider) {
-        return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} error={switchError} />;
+        return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} />;
     }
 
     if (loading) return <PageLoader />;
@@ -119,10 +118,8 @@ export default function SellerServices() {
                 </Button>
             </div>
 
-            {switchError && <p role="alert" className="text-coral text-sm mb-4">{switchError}</p>}
-
             {services.length === 0 && (
-                <p className="text-ash text-sm">You haven't listed any services yet.</p>
+                <EmptyState title="You haven't listed any services yet." />
             )}
 
             <ul className="divide-y divide-line border-y border-line">

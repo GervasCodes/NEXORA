@@ -6,6 +6,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage, LANGUAGES } from "../context/LanguageContext";
 import { useCurrency, CURRENCIES } from "../context/CurrencyContext";
 import { useDataSaver } from "../context/DataSaverContext";
+import { useToast } from "../context/ToastContext";
 import PhoneInput from "../components/PhoneInput";
 import PageMeta from "../components/PageMeta";
 
@@ -15,6 +16,7 @@ export default function Account() {
     const { language, setLanguage, syncFromProfile: syncLanguage, t } = useLanguage();
     const { currency, setCurrency, syncFromProfile: syncCurrency } = useCurrency();
     const { enabled: dataSaverEnabled, setEnabled: setDataSaverEnabled, syncFromProfile: syncDataSaver } = useDataSaver();
+    const toast = useToast();
     const navigate = useNavigate();
 
     const [profile, setProfile] = useState(null);
@@ -28,7 +30,6 @@ export default function Account() {
     const [reauthToken, setReauthToken] = useState(null);
     const [newPassword, setNewPassword] = useState("");
 
-    const [status, setStatus] = useState({});
     const [busy, setBusy] = useState("");
 
     const load = () => {
@@ -50,8 +51,6 @@ export default function Account() {
 
     useEffect(load, []);
 
-    const say = (key, message, error) => setStatus((s) => ({ ...s, [key]: { message, error } }));
-
     const saveProfile = async (e) => {
         e.preventDefault();
         setBusy("profile");
@@ -59,9 +58,9 @@ export default function Account() {
             const { data } = await api.put("/account/profile", profileForm);
             setProfile(data.data);
             updateUser(data.data);
-            say("profile", "Profile updated.", false);
+            toast?.success("Profile updated.");
         } catch (err) {
-            say("profile", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -74,9 +73,9 @@ export default function Account() {
             const { data } = await api.put("/account/settings", patch);
             setProfile(data.data);
             updateUser(data.data);
-            say("settings", "Saved.", false);
+            toast?.success("Saved.");
         } catch (err) {
-            say("settings", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -105,13 +104,12 @@ export default function Account() {
     // --- Password change (OTP-gated) ---
     const requestPasswordOtp = async () => {
         setBusy("password");
-        setStatus((s) => ({ ...s, password: null }));
         try {
             await api.post("/account/password/request-otp");
             setPwdStep("otp");
-            say("password", "We emailed you a 6-digit code.", false);
+            toast?.success("We emailed you a 6-digit code.");
         } catch (err) {
-            say("password", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -125,9 +123,9 @@ export default function Account() {
             setReauthToken(data.data.reauth_token);
             setPwdStep("form");
             setPwdCode("");
-            say("password", "Verified. Choose your new password.", false);
+            toast?.success("Verified. Choose your new password.");
         } catch (err) {
-            say("password", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -141,9 +139,9 @@ export default function Account() {
             setPwdStep("idle");
             setNewPassword("");
             setReauthToken(null);
-            say("password", "Password changed.", false);
+            toast?.success("Password changed.");
         } catch (err) {
-            say("password", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -154,7 +152,6 @@ export default function Account() {
         setPwdCode("");
         setNewPassword("");
         setReauthToken(null);
-        setStatus((s) => ({ ...s, password: null }));
     };
 
     const deleteAccount = async (e) => {
@@ -165,7 +162,7 @@ export default function Account() {
             logout();
             navigate("/");
         } catch (err) {
-            say("delete", extractErrorMessage(err), true);
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusy("");
         }
@@ -212,10 +209,6 @@ export default function Account() {
                             onChange={(phone) => setProfileForm({ ...profileForm, phone })}
                         />
                     </div>
-
-                    {status.profile && (
-                        <p className={`text-sm ${status.profile.error ? "text-coral" : "text-teal"}`}>{status.profile.message}</p>
-                    )}
 
                     <button type="submit" disabled={busy === "profile"}
                         className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
@@ -296,9 +289,6 @@ export default function Account() {
                         </label>
                     </div>
 
-                    {status.settings && (
-                        <p className={`text-sm ${status.settings.error ? "text-coral" : "text-teal"}`}>{status.settings.message}</p>
-                    )}
                 </div>
             </section>
 
@@ -325,10 +315,6 @@ export default function Account() {
                                 placeholder="000000" />
                         </div>
 
-                        {status.password && (
-                            <p className={`text-sm ${status.password.error ? "text-coral" : "text-teal"}`}>{status.password.message}</p>
-                        )}
-
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "password" || pwdCode.length !== 6}
                                 className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
@@ -351,10 +337,6 @@ export default function Account() {
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
 
-                        {status.password && (
-                            <p className={`text-sm ${status.password.error ? "text-coral" : "text-teal"}`}>{status.password.message}</p>
-                        )}
-
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "password"}
                                 className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
@@ -366,10 +348,6 @@ export default function Account() {
                             </button>
                         </div>
                     </form>
-                )}
-
-                {pwdStep === "idle" && status.password && (
-                    <p className={`text-sm mt-2 ${status.password.error ? "text-coral" : "text-teal"}`}>{status.password.message}</p>
                 )}
             </section>
 
@@ -394,8 +372,6 @@ export default function Account() {
                                 onChange={(e) => setDeletePassword(e.target.value)}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
-
-                        {status.delete && <p role="alert" className="text-coral text-sm">{status.delete.message}</p>}
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "delete"}

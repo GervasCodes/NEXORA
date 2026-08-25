@@ -48,12 +48,17 @@ function ToastItem({ toast, onClose }) {
     }, []);
 
     return (
+        // D1 (Phase 4 remediation): an error toast is announced assertively
+        // (role="alert", interrupts) since it's often the only signal a
+        // failed action gets; success/info stay role="status" (polite,
+        // waits its turn) since those are confirmations, not something the
+        // user needs to react to immediately.
         <div
-            role="status"
+            role={toast.type === "error" ? "alert" : "status"}
             className={`glass-strong border ${style.border} rounded-lg px-4 py-3 shadow-lg flex items-start gap-2.5 pointer-events-auto
                 transition-all duration-200 ${leaving ? "opacity-0 translate-y-1 scale-95" : "opacity-100 translate-y-0 scale-100 animate-slide-up"}`}
         >
-            <span className={style.icon}><ToastIcon type={toast.type} /></span>
+            <span className={style.icon} aria-hidden="true"><ToastIcon type={toast.type} /></span>
             <p className="text-sm text-ink flex-1 min-w-0">{toast.message}</p>
             <button onClick={close} aria-label="Dismiss" className="text-ash hover:text-ink transition-colors shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">

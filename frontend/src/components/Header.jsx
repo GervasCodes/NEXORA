@@ -9,7 +9,7 @@ import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
-import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import { NAV_ICON_BY_PATH, BrowseIcon, ServicesIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
 
@@ -34,6 +34,7 @@ function useNavLinks() {
     if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders"), group: "primary" });
     if (user?.role === "buyer") links.push({ to: "/bookings", label: t("nav.bookings"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes"), group: "secondary" });
+    if (user?.role === "buyer") links.push({ to: "/returns", label: t("nav.returns"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/saved", label: t("nav.saved"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/account/wallet", label: t("nav.wallet"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/loyalty", label: "Loyalty", group: "secondary" });
@@ -129,7 +130,7 @@ export default function Header() {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [menuOpen]);
 
-    // sign-out now requires an explicit confirmation instead of
+    // Phase 4: sign-out now requires an explicit confirmation instead of
     // firing on a single click - a stray tap (easy on the mobile drawer's
     // compact rows) used to log someone out immediately with no way back
     // except signing in again.
@@ -146,9 +147,9 @@ export default function Header() {
         navigate("/");
     };
 
-    // Buyer's mobile bottom nav (Mobile Navigation
+    // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
     // Unification) - fixed to 5 slots, so newer buyer destinations
-    // (Wallet added in Q2) live in the desktop icon row/Account
+    // (Wallet added in Phase Q2) live in the desktop icon row/Account
     // page instead of competing for a bottom-nav slot; Cart keeps its
     // slot here as the buyer's actual highest-frequency action.
     const buyerBottomNavItems = [
@@ -214,6 +215,13 @@ export default function Header() {
                         label={t("nav.browse")}
                         icon={BrowseIcon}
                         active={isActive("/products")}
+                    />
+
+                    <IconNavLink
+                        to="/services"
+                        label={t("nav.services")}
+                        icon={ServicesIcon}
+                        active={isActive("/services")}
                     />
 
                     {primaryLinks.map((link) => (
@@ -351,6 +359,16 @@ export default function Header() {
                         >
                             <BrowseIcon className="w-[18px] h-[18px] shrink-0" />
                             {t("nav.browse")}
+                        </Link>
+
+                        <Link
+                            to="/services"
+                            onClick={() => setMenuOpen(false)}
+                            className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
+                                ${isActive("/services") ? "text-teal" : "hover:text-teal"}`}
+                        >
+                            <ServicesIcon className="w-[18px] h-[18px] shrink-0" />
+                            {t("nav.services")}
                         </Link>
 
                         {links.map((link) => {

@@ -4,6 +4,8 @@ import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 
 export default function SellerCollections() {
@@ -11,7 +13,7 @@ export default function SellerCollections() {
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState("");
     const [creating, setCreating] = useState(false);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [busyId, setBusyId] = useState(null);
 
     const [selectedId, setSelectedId] = useState(null);
@@ -47,20 +49,18 @@ export default function SellerCollections() {
     const handleSelect = (collectionId) => {
         setSelectedId(collectionId);
         setAddProductId("");
-        setError("");
         loadCollectionProducts(collectionId);
     };
 
     const handleCreate = async (e) => {
         e.preventDefault();
         setCreating(true);
-        setError("");
         try {
             await api.post("/seller/collections", { name });
             setName("");
             loadCollections();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setCreating(false);
         }
@@ -68,7 +68,6 @@ export default function SellerCollections() {
 
     const handleDeleteCollection = async (collectionId) => {
         setBusyId(collectionId);
-        setError("");
         try {
             await api.delete(`/seller/collections/${collectionId}`);
             if (selectedId === collectionId) {
@@ -77,7 +76,7 @@ export default function SellerCollections() {
             }
             loadCollections();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -88,14 +87,13 @@ export default function SellerCollections() {
         if (!addProductId) return;
 
         setAddingProduct(true);
-        setError("");
         try {
             await api.post(`/seller/collections/${selectedId}/products`, { product_id: addProductId });
             setAddProductId("");
             loadCollectionProducts(selectedId);
             loadCollections();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setAddingProduct(false);
         }
@@ -103,13 +101,12 @@ export default function SellerCollections() {
 
     const handleRemoveProduct = async (productId) => {
         setBusyProductId(productId);
-        setError("");
         try {
             await api.delete(`/seller/collections/${selectedId}/products/${productId}`);
             loadCollectionProducts(selectedId);
             loadCollections();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyProductId(null);
         }
@@ -151,10 +148,9 @@ export default function SellerCollections() {
                 </Button>
             </form>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {collections.length === 0 ? (
-                <p className="text-ash text-sm">You haven't created any collections yet.</p>
+                <EmptyState title="You haven't created any collections yet." />
             ) : (
                 <div className="grid md:grid-cols-[220px_1fr] gap-6">
                     <ul className="divide-y divide-line border-y border-line">

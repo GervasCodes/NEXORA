@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 // Mirrors backend/src/modules/audit/audit.constants.js's EVENT_TYPE_GROUPS -
 // the `value` here is exactly the `category` query param the backend
@@ -166,7 +167,7 @@ export default function AdminAuditLogs() {
             {loading ? (
                 <p className="text-ash text-sm">Loading audit logs…</p>
             ) : logs.length === 0 ? (
-                <p className="text-ash text-sm">No audit log entries match these filters.</p>
+                <EmptyState title="No audit log entries match these filters." />
             ) : (
                 <>
                     <ul className="space-y-2">

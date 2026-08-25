@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 const DOC_LABELS = {
     national_id: "National ID",
@@ -12,7 +14,7 @@ const DOC_LABELS = {
 export default function AdminVerifications() {
     const [pending, setPending] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [expanded, setExpanded] = useState(null);
     const [documents, setDocuments] = useState({});
     const [busyId, setBusyId] = useState(null);
@@ -38,12 +40,11 @@ export default function AdminVerifications() {
 
     const approve = async (sellerId) => {
         setBusyId(sellerId);
-        setError("");
         try {
             await api.put(`/admin/verifications/${sellerId}/approve`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -52,16 +53,15 @@ export default function AdminVerifications() {
     const reject = async (sellerId) => {
         const reason = reasons[sellerId]?.trim();
         if (!reason) {
-            setError("Enter a rejection reason first.");
+            toast?.error("Enter a rejection reason first.");
             return;
         }
         setBusyId(sellerId);
-        setError("");
         try {
             await api.put(`/admin/verifications/${sellerId}/reject`, { reason });
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -73,9 +73,8 @@ export default function AdminVerifications() {
         <div>
             <PageMeta title="Verifications" noIndex />
             <h1 className="font-display text-2xl mb-6">Seller verifications</h1>
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
-            {pending.length === 0 && <p className="text-ash text-sm">No pending verification requests.</p>}
+            {pending.length === 0 && <EmptyState title="No pending verification requests." />}
 
             <ul className="divide-y divide-line border-y border-line">
                 {pending.map((s) => (

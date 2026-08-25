@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useToast } from "../../context/ToastContext";
 
 const emptyForm = { name: "", description: "", display_order: 0 };
 
@@ -11,7 +12,7 @@ export default function AdminServiceCategories() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [uploadingCoverId, setUploadingCoverId] = useState(null);
-    const [error, setError] = useState("");
+    const toast = useToast();
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
@@ -39,7 +40,6 @@ export default function AdminServiceCategories() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError("");
         try {
             if (editingId) {
                 await api.put(`/service-categories/${editingId}`, form);
@@ -50,7 +50,7 @@ export default function AdminServiceCategories() {
             setEditingId(null);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -58,12 +58,11 @@ export default function AdminServiceCategories() {
 
     const toggleActive = async (category) => {
         setBusyId(category.id);
-        setError("");
         try {
             await api.put(`/service-categories/${category.id}/${category.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -76,14 +75,13 @@ export default function AdminServiceCategories() {
         const file = e.target.files[0];
         if (!file) return;
         setUploadingCoverId(category.id);
-        setError("");
         try {
             const body = new FormData();
             body.append("cover", file);
             await api.post(`/service-categories/${category.id}/cover`, body);
             load();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            toast?.error(extractErrorMessage(err));
         } finally {
             setUploadingCoverId(null);
             e.target.value = "";
@@ -130,7 +128,6 @@ export default function AdminServiceCategories() {
                 )}
             </form>
 
-            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             <ul className="divide-y divide-line border-y border-line">
                 {categories.map((c) => (

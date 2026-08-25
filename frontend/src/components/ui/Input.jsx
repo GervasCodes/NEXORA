@@ -33,6 +33,7 @@ const Input = forwardRef(function Input(
                 id={inputId}
                 ref={ref}
                 aria-invalid={error ? "true" : undefined}
+                aria-required={required || undefined}
                 aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
                 className={[
                     "w-full border rounded-md px-3 py-2 text-sm bg-paper text-ink focus-ring transition-colors",
@@ -44,7 +45,7 @@ const Input = forwardRef(function Input(
                 {...rest}
             />
             {error ? (
-                <p id={`${inputId}-error`} className="mt-1 text-xs text-coral">
+                <p id={`${inputId}-error`} className="mt-1 text-xs text-coral" role="alert">
                     {error}
                 </p>
             ) : hint ? (

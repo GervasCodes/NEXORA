@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
+import EmptyState from "../../components/ui/EmptyState";
 
 const EMPTY_FORM = { title: "", description: "", externalLink: "", scheduledAt: "" };
 
@@ -83,7 +84,7 @@ export default function SellerLiveSelling() {
 
             <h2 className="font-display text-lg mb-3">Your sessions</h2>
             {sessions.length === 0 ? (
-                <p className="text-ash text-sm">None scheduled yet.</p>
+                <EmptyState title="None scheduled yet." />
             ) : (
                 <ul className="space-y-2">
                     {sessions.map((s) => (

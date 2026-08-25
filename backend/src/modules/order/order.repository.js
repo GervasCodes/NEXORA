@@ -326,18 +326,36 @@ exports.updateOrderStatusForChildren = async (parentOrderId, status) => {
 // actually verified - only Cash on Delivery orders are legitimately
 // visible before payment_status flips to 'paid' (COD is only marked paid
 // after the buyer confirms receipt, see payment.service.js#confirmDeliveryReceipt).
+// C1 (Phase 4 remediation): a paid order's wallet credit is applied
+// fire-and-forget (see payment.service.js's creditSellersForOrder(...)
+// .catch(...) calls) - if that background step throws, the seller
+// otherwise has no way to know their payout for this order is stuck
+// short of contacting support. wallet_credit_pending flags exactly that
+// case: the order is paid (so crediting should have already run), the
+// payment wasn't Cash on Delivery (COD has no wallet-credit step to get
+// stuck), this seller still has at least one uncredited order_items row,
+// and enough time has passed since the order last changed that a normal
+// in-flight credit would have finished - this avoids flashing "pending"
+// for the split-second window between payment confirmation and the
+// async credit call actually completing.
 exports.findOrdersBySeller = async (sellerId) => {
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
-                o.total_amount, o.created_at
+                o.total_amount, o.created_at,
+                EXISTS (
+                    SELECT 1 FROM order_items oi2
+                    WHERE oi2.order_id = o.id AND oi2.seller_id = ? AND oi2.wallet_credited = FALSE
+                ) AND o.payment_method != 'cash_on_delivery'
+                  AND o.payment_status = 'paid'
+                  AND o.updated_at < (NOW() - INTERVAL 10 MINUTE) AS wallet_credit_pending
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         WHERE oi.seller_id = ?
             AND (o.payment_method = 'cash_on_delivery' OR o.payment_status = 'paid')
         ORDER BY o.created_at DESC`,
-        [sellerId]
+        [sellerId, sellerId]
     );
-    return rows;
+    return rows.map((row) => ({ ...row, wallet_credit_pending: !!row.wallet_credit_pending }));
 };
 
 // Every non-parent order (standalone or child) has exactly one seller

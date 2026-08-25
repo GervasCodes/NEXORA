@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
+import EmptyState from "../../components/ui/EmptyState";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -70,7 +71,7 @@ export default function AdminDisputes() {
             {loading ? (
                 <p className="text-ash">Loading disputes…</p>
             ) : disputes.length === 0 ? (
-                <p className="text-ash text-sm">No disputes match this filter.</p>
+                <EmptyState title="No disputes match this filter." />
             ) : (
                 <ul className="space-y-3">
                     {disputes.map((d) => (

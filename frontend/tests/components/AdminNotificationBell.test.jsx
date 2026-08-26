@@ -10,6 +10,11 @@ vi.mock("../../src/api/client", () => ({
 
 let mockUser = { role: "admin" };
 vi.mock("../../src/context/AuthContext", () => ({
+    // sessionReady gates the unread-count fetch effect (see
+    // AdminNotificationBell.jsx) the same way it gates NotificationBell.jsx/
+    // CartContext.jsx/etc - it must be true here or that effect bails before
+    // ever calling api.get, and every "await screen.findByText(...)" below
+    // just times out waiting for a fetch that never happened.
     useAuth: () => ({ user: mockUser, sessionReady: true })
 }));
 

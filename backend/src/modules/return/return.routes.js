@@ -5,6 +5,9 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const maintenanceCheck = require("../../middleware/maintenance.middleware");
+// Return evidence (e.g. a photo of a damaged item, or a receipt) may be
+// an image or a PDF - same middleware used for KYC and dispute evidence.
+const upload = require("../../middleware/uploadDocument.middleware");
 
 const returnController = require("./return.controller");
 const {
@@ -41,5 +44,12 @@ router.put("/:id/ship-back", authorize("buyer"), shippedBackValidation, validati
 // --- Shared (buyer, seller, or admin - access is checked per return in
 // return.service.js since it depends on which return) ---
 router.get("/:id", returnIdValidation, validationMiddleware, returnController.getDetail);
+router.post(
+    "/:id/evidence",
+    upload.single("file"),
+    returnIdValidation,
+    validationMiddleware,
+    returnController.addEvidence
+);
 
 module.exports = router;

@@ -13,19 +13,36 @@ const FALLBACK_GRADIENTS = [
     "linear-gradient(135deg, #1E3A8A 0%, #9FC1F2 100%)"
 ];
 
+// Phase 6 (item 23) follow-up: the team decided to replace the
+// gradient-and-initial placeholder with a real photo for the
+// "services" department specifically. This is a real, verified,
+// freely-licensed photo (Unsplash License - free for commercial use,
+// no attribution required: https://unsplash.com/license), not a
+// fabricated URL - "Businessmen are shaking hands in a professional
+// gesture" by Ambre Estève (https://unsplash.com/photos/bGczI5fXbmo).
+// Only "services" has a sourced photo so far; every other department
+// (phones-electronics, fashion-beauty, home-living, groceries-food)
+// still falls back to the gradient below until a curated photo per
+// category is sourced - this is a partial rollout of that decision,
+// not a full curated set.
+const CURATED_COVER_IMAGES = {
+    services: "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop"
+};
+
 export default function DepartmentCard({ department, index }) {
     const gradient = FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length];
     const trending = department.trending || [];
+    const coverImage = department.cover_image_url || CURATED_COVER_IMAGES[department.slug];
 
     return (
         <Link
             to={`/departments/${department.slug}`}
             className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
         >
-            <div className="aspect-[4/3] relative overflow-hidden" style={!department.cover_image_url ? { background: gradient } : undefined}>
-                {department.cover_image_url ? (
+            <div className="aspect-[4/3] relative overflow-hidden" style={!coverImage ? { background: gradient } : undefined}>
+                {coverImage ? (
                     <img
-                        src={department.cover_image_url}
+                        src={coverImage}
                         alt={department.name}
                         loading="lazy"
                         decoding="async"

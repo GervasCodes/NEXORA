@@ -116,11 +116,27 @@ export default function SellerVerification() {
     return (
         <div>
             <PageMeta title="Verification" noIndex />
-            <h1 className="font-display text-2xl mb-1">Seller verification</h1>
-            <p className="text-ash text-sm mb-6">
-                Verified sellers can add and sell products, and unlock the paid Verified Seller badge with advanced
-                analytics, revenue reports, and premium tools.
-            </p>
+            {/*
+              Phase 6 (New UI/UX & Imagery Additions, item 20): same
+              illustrated trust badge treatment as KycStatus.jsx, for
+              consistency between the two verification flows. See the
+              comment there re: inline SVG vs. commissioned photography.
+            */}
+            <div className="flex items-center gap-4 mb-6 border border-line rounded-lg p-4 bg-teal/5">
+                <div className="w-14 h-14 rounded-full bg-teal/10 flex items-center justify-center shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-7 h-7 text-teal">
+                        <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3Z" />
+                        <path d="M9 12.5l2 2 4-4.5" />
+                    </svg>
+                </div>
+                <div>
+                    <p className="font-display text-lg mb-1">Seller verification</p>
+                    <p className="text-ash text-sm">
+                        Verified sellers can add and sell products, and unlock the paid Verified Seller badge with
+                        advanced analytics, revenue reports, and premium tools.
+                    </p>
+                </div>
+            </div>
 
             <BillingStatusBanner flagKey="monetization_verification_fee_enabled" label="Verification fee" />
 

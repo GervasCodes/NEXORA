@@ -130,6 +130,37 @@ exports.uploadProductImage = async (req, res) => {
     }
 };
 
+exports.deleteProductImage = async (req, res) => {
+    try {
+        await productService.deleteProductImage(req.user.id, req.params.id, req.params.imageId);
+        return res.json({ success: true, message: "Photo removed" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.setPrimaryProductImage = async (req, res) => {
+    try {
+        await productService.setPrimaryImage(req.user.id, req.params.id, req.params.imageId);
+        return res.json({ success: true, message: "Primary photo updated" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.reorderProductImages = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    try {
+        await productService.reorderProductImages(req.user.id, req.params.id, req.body.ids);
+        return res.json({ success: true, message: "Photo order updated" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.uploadProductVideo = async (req, res) => {
     try {
         if (!req.file) {
@@ -159,6 +190,28 @@ exports.uploadProductVideo = async (req, res) => {
     }
 };
 
+exports.deleteProductVideo = async (req, res) => {
+    try {
+        await productService.deleteProductVideo(req.user.id, req.params.id, req.params.videoId);
+        return res.json({ success: true, message: "Video removed" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.reorderProductVideos = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    try {
+        await productService.reorderProductVideos(req.user.id, req.params.id, req.body.ids);
+        return res.json({ success: true, message: "Video order updated" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.uploadProductAudio = async (req, res) => {
     try {
         if (!req.file) {
@@ -185,6 +238,28 @@ exports.uploadProductAudio = async (req, res) => {
             success: false,
             message: error.message
         });
+    }
+};
+
+exports.deleteProductAudio = async (req, res) => {
+    try {
+        await productService.deleteProductAudio(req.user.id, req.params.id, req.params.audioId);
+        return res.json({ success: true, message: "Audio removed" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.reorderProductAudio = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    try {
+        await productService.reorderProductAudio(req.user.id, req.params.id, req.body.ids);
+        return res.json({ success: true, message: "Audio order updated" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
     }
 };
 

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -7,6 +7,10 @@ import { useToast } from "../context/ToastContext";
 import { SkeletonList } from "../components/Skeleton";
 import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
+
+// Same debounce interval as SearchBox.jsx's DEBOUNCE_MS - quantity edits
+// were previously firing an API call on every keystroke/spinner click.
+const QUANTITY_DEBOUNCE_MS = 400;
 
 export default function Cart() {
     const { format } = useCurrency();
@@ -16,16 +20,48 @@ export default function Cart() {
     const toast = useToast();
     const [placing, setPlacing] = useState(false);
 
+    // Local, per-item override so the input reflects what's being typed
+    // immediately, while the actual updateQuantity() call is debounced.
+    // Cleared once the debounced call resolves, at which point `items`
+    // (from CartContext) is the source of truth again.
+    const [pendingQuantities, setPendingQuantities] = useState({});
+    const debounceTimers = useRef({});
+
+    useEffect(() => {
+        const timers = debounceTimers.current;
+        return () => {
+            Object.values(timers).forEach(clearTimeout);
+        };
+    }, []);
+
+    const displayQuantity = (item) =>
+        pendingQuantities[item.product_id] !== undefined ? pendingQuantities[item.product_id] : item.quantity;
+
     // updateQuantity/removeFromCart already return { success, message } (see
     // CartContext.jsx) - this page just wasn't surfacing that message
     // anywhere, so a failed update silently no-opped. Route it through the
     // shared toast, same as every other buyer-flow page.
-    const handleQuantityChange = async (productId, quantity) => {
-        const result = await updateQuantity(productId, quantity);
-        if (!result?.success) toast?.error(result?.message || "Couldn't update quantity.");
+    const handleQuantityChange = (productId, quantity) => {
+        setPendingQuantities((prev) => ({ ...prev, [productId]: quantity }));
+
+        clearTimeout(debounceTimers.current[productId]);
+        debounceTimers.current[productId] = setTimeout(async () => {
+            const result = await updateQuantity(productId, quantity);
+            if (!result?.success) toast?.error(result?.message || "Couldn't update quantity.");
+            setPendingQuantities((prev) => {
+                const { [productId]: _discard, ...rest } = prev;
+                return rest;
+            });
+        }, QUANTITY_DEBOUNCE_MS);
     };
 
     const handleRemove = async (productId) => {
+        clearTimeout(debounceTimers.current[productId]);
+        delete debounceTimers.current[productId];
+        setPendingQuantities((prev) => {
+            const { [productId]: _discard, ...rest } = prev;
+            return rest;
+        });
         const result = await removeFromCart(productId);
         if (!result?.success) toast?.error(result?.message || "Couldn't remove item.");
     };
@@ -80,8 +116,8 @@ export default function Cart() {
                                     type="number"
                                     min="1"
                                     max={item.stock}
-                                    value={item.quantity}
-                                    onChange={(e) => handleQuantityChange(item.product_id, Math.max(1, Number(e.target.value)))}
+                                    value={displayQuantity(item)}
+                                    onChange={(e) => handleQuantityChange(item.product_id, Math.max(1, Number(e.target.value) || 1))}
                                     className="w-16 border border-line rounded-md px-2 py-1 text-sm focus-ring transition-colors focus:border-teal"
                                 />
                                 <button

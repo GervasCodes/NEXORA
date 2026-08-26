@@ -90,3 +90,12 @@ exports.getDetail = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+exports.addEvidence = async (req, res) => {
+    try {
+        const data = await returnService.addEvidence(req.params.id, req.user.id, req.user.role, req.file);
+        return res.json({ success: true, message: "Evidence added", data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};

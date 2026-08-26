@@ -51,7 +51,12 @@ const KNOWN_VARS = [
     // Phase Q4 (Tax Compliance): TRA VFD e-invoicing. Optional - omitting
     // these falls back to efd/providers/simulate.provider.js outside
     // production, same shape as the payment providers above.
-    "TRA_VFD_BASE_URL", "TRA_VFD_API_KEY"
+    "TRA_VFD_BASE_URL", "TRA_VFD_API_KEY",
+    // Upload malware scanning (ClamAV via clamd). Optional outside
+    // production - omitting CLAMAV_HOST just skips scanning with a
+    // warning (see utils/malwareScan.js), same shape as BREVO_API_KEY
+    // above. Required in production (enforced below).
+    "CLAMAV_HOST", "CLAMAV_PORT"
 ];
 
 // Vars whose complete absence should be called out explicitly, not just
@@ -114,6 +119,10 @@ exports.check = () => {
 
     if (process.env.NODE_ENV === "production" && !process.env.MOBILE_MONEY_PROVIDER) {
         problems.push("MOBILE_MONEY_PROVIDER is not set in production - mobile money payments will fail to resolve a provider (see mobileMoney.provider.js)");
+    }
+
+    if (process.env.NODE_ENV === "production" && !process.env.CLAMAV_HOST) {
+        problems.push("CLAMAV_HOST is not set in production - uploads will be rejected until malware scanning is configured (see utils/malwareScan.js)");
     }
 
     return problems;

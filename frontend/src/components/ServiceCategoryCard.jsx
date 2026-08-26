@@ -19,6 +19,14 @@ const FALLBACK_GRADIENTS = [
 // category card links to its own dedicated /services/category/:slug page
 // (mirrors DepartmentCard.jsx linking to /departments/:slug). `active` just
 // highlights whichever card matches the page currently being viewed.
+//
+// Phase 6 (item 23) follow-up: same curated-photo decision as
+// DepartmentCard.jsx, applied to the "All services" tile specifically
+// since it represents services in general (the individual categories -
+// accommodation, transportation, tourism, etc. - don't have a sourced
+// photo yet and keep the dark gradient + grid icon below).
+const ALL_SERVICES_COVER_IMAGE = "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop";
+
 export default function ServiceCategoryCard({ category, index, active, totalCount }) {
     const isAll = !category;
     const gradient = FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length];
@@ -36,9 +44,17 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
         >
             <div
                 className="aspect-[4/3] relative overflow-hidden"
-                style={isAll ? { background: "linear-gradient(135deg, #111827 0%, #374151 100%)" } : (!category.cover_image_url ? { background: gradient } : undefined)}
+                style={!isAll && !category.cover_image_url ? { background: gradient } : undefined}
             >
-                {!isAll && category.cover_image_url ? (
+                {isAll ? (
+                    <img
+                        src={ALL_SERVICES_COVER_IMAGE}
+                        alt="All services"
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                ) : category.cover_image_url ? (
                     <img
                         src={category.cover_image_url}
                         alt={category.name}
@@ -48,16 +64,7 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        {isAll ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-8 h-8 text-frost/90">
-                                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                                <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                            </svg>
-                        ) : (
-                            <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
-                        )}
+                        <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
                     </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />

@@ -53,7 +53,7 @@ exports.addProductImage = async (
     displayOrder
 ) => {
 
-    await db.query(
+    const [result] = await db.query(
         `INSERT INTO product_images
         (product_id, image_url, is_primary, display_order)
         VALUES (?, ?, ?, ?)`,
@@ -64,6 +64,8 @@ exports.addProductImage = async (
             displayOrder
         ]
     );
+
+    return result.insertId;
 };
 
 exports.findById = async (productId) => {
@@ -271,12 +273,83 @@ exports.countExistingImages = async (productId) => {
     return rows[0].count;
 };
 
+// Phase (Seller Product Management): delete/set-primary/reorder controls
+// for photos already uploaded. `product_id` is included in every WHERE
+// clause here (not just `id`) so these can't be used to touch another
+// seller's row even if an id were guessed/reused across products - the
+// service layer additionally confirms the product itself belongs to the
+// requesting seller before calling any of these.
+exports.findImageById = async (productId, imageId) => {
+    const [rows] = await db.query(
+        "SELECT id, image_url, is_primary, display_order FROM product_images WHERE id = ? AND product_id = ?",
+        [imageId, productId]
+    );
+    return rows[0];
+};
+
+exports.deleteProductImage = async (productId, imageId) => {
+    const [result] = await db.query(
+        "DELETE FROM product_images WHERE id = ? AND product_id = ?",
+        [imageId, productId]
+    );
+    return result.affectedRows > 0;
+};
+
+exports.hasPrimaryImage = async (productId) => {
+    const [rows] = await db.query(
+        "SELECT id FROM product_images WHERE product_id = ? AND is_primary = 1 LIMIT 1",
+        [productId]
+    );
+    return rows.length > 0;
+};
+
+// Promotes the earliest-remaining photo (by display_order) to primary -
+// used after deleting whichever photo was previously the primary one, so
+// a product never ends up with zero primary images (findAll's browse-card
+// image_url subquery, and the product-detail hero, both assume exactly
+// one primary photo when any exist).
+exports.promoteEarliestImageToPrimary = async (productId) => {
+    const [rows] = await db.query(
+        "SELECT id FROM product_images WHERE product_id = ? ORDER BY display_order ASC LIMIT 1",
+        [productId]
+    );
+    if (!rows[0]) return;
+    await db.query(
+        "UPDATE product_images SET is_primary = 1 WHERE id = ?",
+        [rows[0].id]
+    );
+};
+
+exports.setPrimaryImage = async (productId, imageId) => {
+    await db.query(
+        "UPDATE product_images SET is_primary = (id = ?) WHERE product_id = ?",
+        [imageId, productId]
+    );
+};
+
+// Shared by the three reorder exports below - `table` is always one of
+// the three hardcoded literals passed at each call site, never user
+// input, so there's no injection surface despite the string interpolation.
+const reorderMediaDisplayOrder = async (table, productId, orderedIds) => {
+    await Promise.all(
+        orderedIds.map((id, index) =>
+            db.query(
+                `UPDATE ${table} SET display_order = ? WHERE id = ? AND product_id = ?`,
+                [index, id, productId]
+            )
+        )
+    );
+};
+
+exports.reorderProductImages = (productId, orderedIds) =>
+    reorderMediaDisplayOrder("product_images", productId, orderedIds);
+
 // Seller's own catalog - includes inactive products, unlike the public listing
 // Phase 6A - Product Videos. Mirrors addProductImage/findImagesByProductId/
 // countExistingImages above, minus is_primary (see migration 044's comment
 // for why videos don't have a "cover" concept).
 exports.addProductVideo = async (productId, videoUrl, displayOrder) => {
-    await db.query(
+    const [result] = await db.query(
         `INSERT INTO product_videos
         (product_id, video_url, display_order)
         VALUES (?, ?, ?)`,
@@ -286,6 +359,8 @@ exports.addProductVideo = async (productId, videoUrl, displayOrder) => {
             displayOrder
         ]
     );
+
+    return result.insertId;
 };
 
 exports.findVideosByProductId = async (productId) => {
@@ -307,11 +382,22 @@ exports.countExistingVideos = async (productId) => {
     return rows[0].count;
 };
 
+exports.deleteProductVideo = async (productId, videoId) => {
+    const [result] = await db.query(
+        "DELETE FROM product_videos WHERE id = ? AND product_id = ?",
+        [videoId, productId]
+    );
+    return result.affectedRows > 0;
+};
+
+exports.reorderProductVideos = (productId, orderedIds) =>
+    reorderMediaDisplayOrder("product_videos", productId, orderedIds);
+
 // Phase 6B - Product Audio. Same shape as the product_videos functions
 // above, and the same reasoning for no is_primary (see migration 045's
 // comment).
 exports.addProductAudio = async (productId, audioUrl, displayOrder) => {
-    await db.query(
+    const [result] = await db.query(
         `INSERT INTO product_audio
         (product_id, audio_url, display_order)
         VALUES (?, ?, ?)`,
@@ -321,6 +407,8 @@ exports.addProductAudio = async (productId, audioUrl, displayOrder) => {
             displayOrder
         ]
     );
+
+    return result.insertId;
 };
 
 exports.findAudioByProductId = async (productId) => {
@@ -341,6 +429,17 @@ exports.countExistingAudio = async (productId) => {
     );
     return rows[0].count;
 };
+
+exports.deleteProductAudio = async (productId, audioId) => {
+    const [result] = await db.query(
+        "DELETE FROM product_audio WHERE id = ? AND product_id = ?",
+        [audioId, productId]
+    );
+    return result.affectedRows > 0;
+};
+
+exports.reorderProductAudio = (productId, orderedIds) =>
+    reorderMediaDisplayOrder("product_audio", productId, orderedIds);
 
 // Seller's own product list, with the same search/category/status/
 // pagination shape admin.repository.js#findAllProducts uses (search plan,

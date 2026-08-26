@@ -4,7 +4,10 @@ const router = express.Router();
 const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
-const upload = require("../../middleware/upload.middleware");
+// Dispute evidence (e.g. a receipt or a delivery note) is commonly a
+// PDF, not just a photo - use the image-or-PDF middleware instead of
+// the image-only one.
+const upload = require("../../middleware/uploadDocument.middleware");
 const maintenanceCheck = require("../../middleware/maintenance.middleware");
 
 const disputeController = require("./dispute.controller");

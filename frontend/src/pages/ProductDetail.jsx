@@ -9,6 +9,8 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import Button from "../components/ui/Button";
 import RecommendedProducts from "../components/RecommendedProducts";
 import PageMeta from "../components/PageMeta";
+import ImageLightbox from "../components/chat/ImageLightbox";
+import Avatar from "../components/ui/Avatar";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -21,6 +23,7 @@ export default function ProductDetail() {
     const [reviews, setReviews] = useState(null);
     const [reviewSort, setReviewSort] = useState("newest");
     const [activeImage, setActiveImage] = useState(0);
+    const [lightboxSrc, setLightboxSrc] = useState(null);
     const [quantity, setQuantity] = useState(1);
     const [status, setStatus] = useState("");
     const [loading, setLoading] = useState(true);
@@ -158,7 +161,14 @@ export default function ProductDetail() {
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
                         {images[activeImage]?.image_url ? (
-                            <img src={images[activeImage].image_url} alt={product.name} className="w-full h-full object-cover" />
+                            <button
+                                type="button"
+                                onClick={() => setLightboxSrc(images[activeImage].image_url)}
+                                className="w-full h-full cursor-zoom-in focus-ring"
+                                aria-label="Open full-size image"
+                            >
+                                <img src={images[activeImage].image_url} alt={product.name} className="w-full h-full object-cover" />
+                            </button>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-ash text-sm">No image</div>
                         )}
@@ -357,9 +367,12 @@ export default function ProductDetail() {
                 <ul className="space-y-4">
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
-                            <div className="flex justify-between items-baseline mb-1">
-                                <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
-                                <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                                <Avatar firstName={r.first_name} lastName={r.last_name} size="sm" />
+                                <div className="flex-1 flex justify-between items-baseline">
+                                    <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                    <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
+                                </div>
                             </div>
                             <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
                             {r.comment && <p className="text-sm text-ink/80">{r.comment}</p>}
@@ -388,6 +401,8 @@ export default function ProductDetail() {
             </section>
 
             <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title="You may also like" />
+
+            <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
         </div>
     );
 }

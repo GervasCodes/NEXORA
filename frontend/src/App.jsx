@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SplashScreen from "./components/SplashScreen";
@@ -13,7 +13,6 @@ import InstallPrompt from "./components/InstallPrompt";
 import SupportWidget from "./components/SupportWidget";
 import OnboardingTour from "./components/OnboardingTour";
 import AffiliateClickTracker from "./components/AffiliateClickTracker";
-import Button from "./components/ui/Button";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
 import NexoraAIButton from "./components/ai/NexoraAIButton";
 import NexoraAIDrawer from "./components/ai/NexoraAIDrawer";
@@ -68,6 +67,7 @@ const Affiliate = lazy(() => import("./pages/Affiliate"));
 const LiveSelling = lazy(() => import("./pages/LiveSelling"));
 const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
@@ -365,15 +365,7 @@ export default function App() {
                             <Route path="audit-logs" element={<AdminAuditLogs />} />
                         </Route>
 
-                        <Route path="*" element={
-                            <div className="max-w-lg mx-auto py-24 px-6 text-center">
-                                <p className="font-display text-2xl mb-2">Page not found</p>
-                                <p className="text-ash text-sm mb-6">The page you're looking for doesn't exist or may have moved.</p>
-                                <Button as={Link} to="/">
-                                    Go to Home
-                                </Button>
-                            </div>
-                        } />
+                        <Route path="*" element={<NotFound />} />
                         </Routes>
                     </PageTransition>
                 </Suspense>

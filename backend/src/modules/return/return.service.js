@@ -21,6 +21,7 @@ const deliveryRepository = require("../delivery/delivery.repository");
 const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
 const refundService = require("../refund/refund.service");
+const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const logger = require("../../utils/logger").child({ module: "return" });
 const Sentry = require("../../config/sentry");
 
@@ -39,8 +40,11 @@ const assertParticipant = (ret, userId, role) => {
 const getFullReturn = async (returnId) => {
     const ret = await returnRepository.findById(returnId);
     if (!ret) return null;
-    const history = await returnRepository.findHistory(returnId);
-    return { ...ret, history };
+    const [history, evidence] = await Promise.all([
+        returnRepository.findHistory(returnId),
+        returnRepository.findEvidence(returnId)
+    ]);
+    return { ...ret, history, evidence };
 };
 
 // ---- Buyer: request a return -------------------------------------------
@@ -263,6 +267,25 @@ exports.markReceived = async (returnId, actorId, role) => {
 exports.markRefunded = async (returnId) => {
     await returnRepository.updateStatus(returnId, "refunded");
     await returnRepository.addHistory(returnId, "refunded", null, null);
+};
+
+// ---- Evidence (mirrors dispute.service.js's addEvidence) ----------------
+
+exports.addEvidence = async (returnId, userId, role, file) => {
+    const ret = await returnRepository.findById(returnId);
+    assertParticipant(ret, userId, role);
+
+    if (["rejected", "refunded", "cancelled"].includes(ret.status)) {
+        throw new Error(`Evidence can't be added - this return is "${ret.status}"`);
+    }
+    if (!file) {
+        throw new Error("No file uploaded");
+    }
+
+    const result = await uploadToCloudinary(file.buffer, "nexora/returns", "auto");
+    await returnRepository.addEvidence(returnId, userId, result.secure_url);
+
+    return getFullReturn(returnId);
 };
 
 // ---- Reads ----------------------------------------------------------------

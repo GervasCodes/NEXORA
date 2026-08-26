@@ -6,7 +6,7 @@
     <meta name="description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
     <meta name="theme-color" content="#070912" />
     <!--
-      (Resilience & Growth): these five href/src values used to be
+      Phase 5 (Resilience & Growth): these five href/src values used to be
       relative ("public/manifest.json", "public/icon-180.png", "src/main.jsx").
       That resolves fine for the root URL, but this is a client-routed SPA
       (BrowserRouter) - a deep link or a hard refresh on any non-root route
@@ -33,6 +33,32 @@
     <meta name="apple-mobile-web-app-title" content="NEXORA" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>NEXORA — Marketplace</title>
+    <!--
+      Phase 5 (Visual Polish & Metadata): static site-default Open Graph /
+      Twitter Card tags. PageMeta.jsx already injects these per-page via
+      react-helmet-async, but that only reaches crawlers that execute
+      JS - link-preview bots (WhatsApp, Facebook, Telegram, LinkedIn,
+      Twitter/X) generally fetch the raw HTML and don't run React, so
+      without a static fallback here they see no og:image at all. These
+      tags are the site-wide default; PageMeta's per-page <meta> tags
+      (same property names) take precedence for any crawler that does
+      render JS, since they're appended after this static markup in the
+      document. Same "no dedicated 1200x630 OG banner in the repo yet"
+      caveat as PageMeta.jsx - icon-512.png is a reasonable, honest
+      fallback rather than a fabricated marketing image; swap both this
+      and PageMeta's DEFAULT_IMAGE once a proper banner exists.
+    -->
+    <meta property="og:site_name" content="NEXORA" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="NEXORA — Marketplace" />
+    <meta property="og:description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="NEXORA — Marketplace" />
+    <meta name="twitter:description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
+    <meta name="twitter:image" content="/icon-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

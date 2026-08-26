@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
@@ -51,6 +51,14 @@ beforeEach(() => {
     baseCart.removeFromCart.mockClear();
 });
 
+// Cart.jsx debounces quantity edits (QUANTITY_DEBOUNCE_MS = 400ms) before
+// calling updateQuantity, so tests that assert on updateQuantity need fake
+// timers to advance past that delay instead of asserting synchronously
+// right after firing the change event.
+afterEach(() => {
+    vi.useRealTimers();
+});
+
 describe("Cart page", () => {
     it("shows a loading skeleton while the cart is loading", () => {
         mockUseCart.mockReturnValue({ ...baseCart, loading: true });
@@ -87,7 +95,8 @@ describe("Cart page", () => {
         expect(screen.getByText("TZS 13000")).toBeInTheDocument();
     });
 
-    it("calls updateQuantity with the new value when a quantity input changes", () => {
+    it("calls updateQuantity with the new value when a quantity input changes", async () => {
+        vi.useFakeTimers();
         mockUseCart.mockReturnValue({
             ...baseCart,
             items: [{ cart_item_id: 1, product_id: 10, name: "Crochet Bag", unit_price: 5000, quantity: 2, subtotal: 10000, stock: 5 }],
@@ -98,10 +107,19 @@ describe("Cart page", () => {
         const input = screen.getByDisplayValue("2");
         fireEvent.change(input, { target: { value: "4" } });
 
+        // Quantity edits are debounced (QUANTITY_DEBOUNCE_MS) before
+        // updateQuantity is called - advance past that delay and flush
+        // the microtask queue so the pending `await updateQuantity(...)`
+        // resolves too.
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(400);
+        });
+
         expect(baseCart.updateQuantity).toHaveBeenCalledWith(10, 4);
     });
 
-    it("never lets the quantity drop below 1", () => {
+    it("never lets the quantity drop below 1", async () => {
+        vi.useFakeTimers();
         mockUseCart.mockReturnValue({
             ...baseCart,
             items: [{ cart_item_id: 1, product_id: 10, name: "Crochet Bag", unit_price: 5000, quantity: 2, subtotal: 10000, stock: 5 }],
@@ -111,6 +129,10 @@ describe("Cart page", () => {
 
         const input = screen.getByDisplayValue("2");
         fireEvent.change(input, { target: { value: "0" } });
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(400);
+        });
 
         expect(baseCart.updateQuantity).toHaveBeenCalledWith(10, 1);
     });

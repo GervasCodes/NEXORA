@@ -70,10 +70,31 @@ export default function KycStatus() {
     return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Verification level" noIndex />
-            <h1 className="font-display text-2xl mb-1">Verification level</h1>
-            <p className="text-ash text-sm mb-8">
-                Higher verification tiers raise how much you can spend in a single order.
-            </p>
+            {/*
+              Phase 6 (New UI/UX & Imagery Additions, item 20): supporting
+              imagery for the trust/verification flow, which was
+              previously text-and-badge-only. No photography has been
+              supplied for this, so this is an illustrated trust badge
+              (an inline SVG, not a placeholder <img> - a badge/shield
+              motif reads fine at any resolution and doesn't need a real
+              photo shoot the way Home.jsx's hero collage or
+              OnboardingTour's steps do). Flagging in case the team would
+              rather commission real photography here instead.
+            */}
+            <div className="flex items-center gap-4 mb-6 border border-line rounded-lg p-4 bg-teal/5">
+                <div className="w-14 h-14 rounded-full bg-teal/10 flex items-center justify-center shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-7 h-7 text-teal">
+                        <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3Z" />
+                        <path d="M9 12.5l2 2 4-4.5" />
+                    </svg>
+                </div>
+                <div>
+                    <p className="font-display text-lg mb-1">Verification level</p>
+                    <p className="text-ash text-sm">
+                        Higher verification tiers raise how much you can spend in a single order.
+                    </p>
+                </div>
+            </div>
 
             <div className="border border-line rounded-lg p-4 mb-8">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Current tier</p>

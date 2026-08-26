@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
@@ -7,6 +7,14 @@ import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 
+// There's no socket event yet for "an order entered the manual available-
+// for-pickup pool" (see delivery.service.js's fallback-pool comments) -
+// the offer system (delivery:offer) only pushes to one nearest agent at a
+// time, not the shared pool this page reads from. Polling is the stopgap
+// until a dedicated broadcast (e.g. "delivery:pool_updated" to an
+// "agents" room) is added server-side.
+const POLL_INTERVAL_MS = 15000;
+
 export default function DeliveryAvailable() {
     const { t } = useLanguage();
     const [orders, setOrders] = useState([]);
@@ -14,13 +22,34 @@ export default function DeliveryAvailable() {
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
     const [message, setMessage] = useState("");
+    const inFlightRef = useRef(false);
 
-    const load = () => {
-        setLoading(true);
-        api.get("/delivery/available").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
+    // `silent` skips the loading flag so periodic polling ticks update the
+    // list in place rather than re-showing the full-page loader on every
+    // refresh - only the very first load (and a manual claim's follow-up
+    // load()) show it.
+    const load = (silent = false) => {
+        if (inFlightRef.current) return;
+        inFlightRef.current = true;
+        if (!silent) setLoading(true);
+        api
+            .get("/delivery/available")
+            .then(({ data }) => setOrders(data.data))
+            .catch(() => {
+                // Silent - a missed poll tick isn't worth surfacing an error
+                // toast for; the next tick (or a manual refresh) recovers.
+            })
+            .finally(() => {
+                inFlightRef.current = false;
+                if (!silent) setLoading(false);
+            });
     };
 
-    useEffect(load, []);
+    useEffect(() => {
+        load();
+        const interval = setInterval(() => load(true), POLL_INTERVAL_MS);
+        return () => clearInterval(interval);
+    }, []);
 
     const claim = async (orderId) => {
         setBusyId(orderId);

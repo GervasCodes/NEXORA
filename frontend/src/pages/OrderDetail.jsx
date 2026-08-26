@@ -44,7 +44,15 @@ export default function OrderDetail() {
     const [actionMessage, setActionMessage] = useState(
         location.state?.justPlaced ? "Order placed successfully." : ""
     );
-    const [actionError, setActionError] = useState("");
+    const [actionError, setActionError] = useState(
+        // Checkout redirects here (instead of stranding the buyer on the
+        // checkout page) when the order was created but the payment step
+        // right after it failed - see Checkout.jsx's handleSubmit catch
+        // block. The order already exists; only the payment needs retrying.
+        location.state?.paymentFailed
+            ? "Your order was placed, but we couldn't start the payment. You can retry payment below."
+            : ""
+    );
     const [busy, setBusy] = useState(false);
 
     const load = () => {
@@ -302,7 +310,7 @@ export default function OrderDetail() {
 
             {!order.is_parent && <OrderTimeline status={order.status} />}
 
-            {/*  Order-status assistant - reads this same real
+            {/* Phase B1: order-status assistant - reads this same real
                 order via /ai/orders/:id/explain, AI only phrases it. */}
             {!order.is_parent && assistant && (
                 <button

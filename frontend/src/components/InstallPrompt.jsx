@@ -1,74 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useInstallPrompt, { INSTALL_DISMISSED_KEY } from "../hooks/useInstallPrompt";
 
-// Phase 5 (Resilience & Growth). Chrome/Edge/Android fire
-// "beforeinstallprompt" and then suppress their own default install UI
-// unless the page calls preventDefault() and holds onto the event to
-// replay later - without this component, that event fires and is
-// silently discarded, and NEXORA never gets a install prompt of its own.
-// (iOS Safari never fires this event at all - there, "Add to Home
-// Screen" is a manual Share-sheet action; the apple-mobile-web-app-*
-// meta tags added earlier this phase are what make that manual path
+// Phase 5 (Resilience & Growth). The beforeinstallprompt/appinstalled
+// wiring itself now lives in useInstallPrompt (extracted in Phase 5,
+// Visual Polish & Metadata, so Footer.jsx's install callout can share it)
+// - this component is just the dismissible banner UI on top of it.
+// (iOS Safari never fires beforeinstallprompt at all - there, "Add to
+// Home Screen" is a manual Share-sheet action; the apple-mobile-web-app-*
+// meta tags added in an earlier phase are what make that manual path
 // produce a proper standalone app rather than a browser-chrome shortcut.)
-const DISMISSED_KEY = "nexora_install_prompt_dismissed";
-
 export default function InstallPrompt() {
-    const [deferredEvent, setDeferredEvent] = useState(null);
-    const [visible, setVisible] = useState(false);
+    const { canInstall, promptInstall } = useInstallPrompt();
+    const [dismissed, setDismissed] = useState(() => localStorage.getItem(INSTALL_DISMISSED_KEY) === "1");
 
-    useEffect(() => {
-        const handleBeforeInstallPrompt = (event) => {
-            // Respect an earlier dismissal for the rest of this browser
-            // profile - a banner that reappears on every visit after
-            // someone already said "not now" is the kind of thing that
-            // makes people distrust a PWA prompt rather than use it.
-            //
-            // This check has to happen BEFORE preventDefault(), not
-            // after: calling preventDefault() promises the browser "I'll
-            // show my own install UI instead, hang onto this event for
-            // me" - if we then bail out for a dismissed user without
-            // ever calling event.prompt() on it, that promise is never
-            // kept. That's exactly what produced the console warning
-            // ("preventDefault() called... must call prompt() to show
-            // the banner") on every single page load for anyone who'd
-            // dismissed the prompt once. For a dismissed user we don't
-            // want to show anything at all, so we just don't intercept
-            // the event in the first place.
-            if (localStorage.getItem(DISMISSED_KEY) === "1") return;
-
-            event.preventDefault();
-            setDeferredEvent(event);
-            setVisible(true);
-        };
-
-        window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-        return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    }, []);
-
-    // Once installed (this tab or another), stop offering to install
-    // again - "appinstalled" fires regardless of which UI triggered it.
-    useEffect(() => {
-        const handleInstalled = () => {
-            setVisible(false);
-            setDeferredEvent(null);
-        };
-        window.addEventListener("appinstalled", handleInstalled);
-        return () => window.removeEventListener("appinstalled", handleInstalled);
-    }, []);
+    // Respect an earlier dismissal for the rest of this browser profile -
+    // a banner that reappears on every visit after someone already said
+    // "not now" is the kind of thing that makes people distrust a PWA
+    // prompt rather than use it.
+    const visible = canInstall && !dismissed;
 
     const dismiss = () => {
-        setVisible(false);
-        localStorage.setItem(DISMISSED_KEY, "1");
-    };
-
-    const install = async () => {
-        if (!deferredEvent) return;
-        setVisible(false);
-        deferredEvent.prompt();
-        // The outcome ("accepted"/"dismissed") isn't acted on beyond
-        // clearing the stored event - a browser's install prompt can only
-        // be shown once per captured event either way.
-        await deferredEvent.userChoice.catch(() => {});
-        setDeferredEvent(null);
+        setDismissed(true);
+        localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
     };
 
     if (!visible) return null;
@@ -88,7 +41,7 @@ export default function InstallPrompt() {
             </span>
             <p className="text-sm text-ink flex-1 min-w-0">Install NEXORA for quicker access.</p>
             <button
-                onClick={install}
+                onClick={() => { setDismissed(true); promptInstall(); }}
                 className="text-sm font-medium text-teal hover:underline shrink-0"
             >
                 Install

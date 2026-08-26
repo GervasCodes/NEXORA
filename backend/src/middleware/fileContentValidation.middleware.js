@@ -3,6 +3,8 @@
 // already buffered the file(s) into req.file/req.files, so it works
 // whether the route used `.single()`, `.array()`, or `.fields()`.
 const { classify, looksLikePlainText, logRejection } = require("../utils/fileContentValidator");
+const { scanBuffer } = require("../utils/malwareScan");
+const logger = require("../utils/logger").child({ module: "fileContentValidation" });
 
 const collectFiles = (req) => {
     const files = [];
@@ -24,7 +26,7 @@ const collectFiles = (req) => {
 // "text/plain" and whose content passes the plain-text heuristic (no
 // magic number exists for text, so this is the one category that can't
 // be verified by signature alone).
-exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {}) => (req, res, next) => {
+exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {}) => async (req, res, next) => {
     const files = collectFiles(req);
 
     if (files.length === 0) {
@@ -43,26 +45,46 @@ exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {
         }
 
         const detected = classify(buffer);
+        const typeOk =
+            (detected && allowedCategories.includes(detected.category)) ||
+            (!detected && allowPlainText && file.mimetype === "text/plain" && looksLikePlainText(buffer));
 
-        if (detected && allowedCategories.includes(detected.category)) {
-            continue;
+        if (!typeOk) {
+            logRejection({
+                reqId: req.id,
+                field: file.fieldname,
+                declaredMimetype: file.mimetype,
+                detectedCategory: detected?.category || null
+            });
+
+            return res.status(400).json({
+                success: false,
+                message: `${file.originalname || "The uploaded file"}'s content doesn't match an allowed file type.`
+            });
         }
 
-        if (!detected && allowPlainText && file.mimetype === "text/plain" && looksLikePlainText(buffer)) {
-            continue;
+        // Malware scan runs after the type check so an obviously-wrong
+        // upload gets rejected on that cheaper check first, without ever
+        // hitting the scanning service. See utils/malwareScan.js - fails
+        // closed in production if scanning isn't configured or the scan
+        // itself fails, rather than letting an unscanned file through.
+        try {
+            const { infected } = await scanBuffer(buffer, file.originalname);
+
+            if (infected) {
+                logger.warn({ reqId: req.id, field: file.fieldname }, "[upload] rejected file - malware detected");
+                return res.status(400).json({
+                    success: false,
+                    message: `${file.originalname || "The uploaded file"} failed a security scan and was rejected.`
+                });
+            }
+        } catch (err) {
+            logger.error({ reqId: req.id, field: file.fieldname, err }, "[upload] malware scan failed");
+            return res.status(502).json({
+                success: false,
+                message: "The uploaded file couldn't be scanned right now. Please try again shortly."
+            });
         }
-
-        logRejection({
-            reqId: req.id,
-            field: file.fieldname,
-            declaredMimetype: file.mimetype,
-            detectedCategory: detected?.category || null
-        });
-
-        return res.status(400).json({
-            success: false,
-            message: `${file.originalname || "The uploaded file"}'s content doesn't match an allowed file type.`
-        });
     }
 
     return next();

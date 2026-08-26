@@ -8,7 +8,7 @@ const requireProductProvider = require("../../middleware/requireProductProvider.
 const upload = require("../../middleware/upload.middleware");
 const uploadVideo = require("../../middleware/uploadVideo.middleware");
 const uploadAudio = require("../../middleware/uploadAudio.middleware");
-const { createProductValidation, bulkProductStatusValidation } = require("./product.validator");
+const { createProductValidation, bulkProductStatusValidation, reorderMediaValidation } = require("./product.validator");
 
 const productController = require("./product.controller");
 
@@ -42,6 +42,34 @@ router.post(
     productController.uploadProductImage
 );
 
+router.delete(
+    "/:id/images/:imageId",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.deleteProductImage
+);
+
+router.put(
+    "/:id/images/:imageId/primary",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.setPrimaryProductImage
+);
+
+router.put(
+    "/:id/images/reorder",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    reorderMediaValidation,
+    productController.reorderProductImages
+);
+
 router.post(
     "/:id/videos",
     authMiddleware,
@@ -52,6 +80,25 @@ router.post(
     productController.uploadProductVideo
 );
 
+router.delete(
+    "/:id/videos/:videoId",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.deleteProductVideo
+);
+
+router.put(
+    "/:id/videos/reorder",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    reorderMediaValidation,
+    productController.reorderProductVideos
+);
+
 router.post(
     "/:id/audio",
     authMiddleware,
@@ -60,6 +107,25 @@ router.post(
     requireProductProvider,
     uploadAudio.single("audio"),
     productController.uploadProductAudio
+);
+
+router.delete(
+    "/:id/audio/:audioId",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.deleteProductAudio
+);
+
+router.put(
+    "/:id/audio/reorder",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    reorderMediaValidation,
+    productController.reorderProductAudio
 );
 
 router.get(

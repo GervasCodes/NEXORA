@@ -5,7 +5,6 @@ import { formatMoney } from "../../utils/format";
 import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
 import PageMeta from "../../components/PageMeta";
-import EmptyState from "../../components/ui/EmptyState";
 
 const statusStyles = {
     assigned: "bg-line text-ash",
@@ -35,8 +34,11 @@ export default function AdminDispatch() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const loadOverview = () => {
-        setLoading(true);
+    // `silent` skips the loading flag entirely - used for socket-triggered
+    // refreshes below so they update state in place instead of re-showing
+    // the full-page skeleton (see comment above the `if (loading)` block).
+    const loadOverview = (silent = false) => {
+        if (!silent) setLoading(true);
         api
             .get("/admin/dispatch")
             .then(({ data }) => {
@@ -46,7 +48,9 @@ export default function AdminDispatch() {
                 setError(null);
             })
             .catch(() => setError("Couldn't load the dispatch board. Try refreshing."))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (!silent) setLoading(false);
+            });
     };
 
     useEffect(() => {
@@ -57,7 +61,7 @@ export default function AdminDispatch() {
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const refresh = () => loadOverview();
+        const refresh = () => loadOverview(true);
         const handlePosition = ({ agentId, lat, lng }) => {
             setAgents((prev) =>
                 prev.map((a) => (a.id === agentId ? { ...a, current_lat: lat, current_lng: lng } : a))
@@ -175,7 +179,7 @@ export default function AdminDispatch() {
             )}
 
             <h2 className="font-display text-lg mb-3">Online agents</h2>
-            {agents.length === 0 && <EmptyState title="No agents online right now." />}
+            {agents.length === 0 && <p className="text-ash text-sm">No agents online right now.</p>}
             {agents.length > 0 && (
                 <ul className="divide-y divide-line border-y border-line">
                     {agents.map((a) => (

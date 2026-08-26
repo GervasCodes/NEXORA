@@ -125,3 +125,24 @@ exports.findHistory = async (returnId) => {
     );
     return rows;
 };
+
+// ---- Evidence (mirrors dispute.repository.js's addEvidence/findEvidence) -
+
+exports.addEvidence = async (returnId, uploadedBy, fileUrl) => {
+    const [result] = await db.query(
+        "INSERT INTO return_evidence (return_id, uploaded_by, file_url) VALUES (?, ?, ?)",
+        [returnId, uploadedBy, fileUrl]
+    );
+    return result.insertId;
+};
+
+exports.findEvidence = async (returnId) => {
+    const [rows] = await db.query(
+        `SELECT id, uploaded_by, file_url, uploaded_at
+        FROM return_evidence
+        WHERE return_id = ?
+        ORDER BY uploaded_at ASC`,
+        [returnId]
+    );
+    return rows;
+};

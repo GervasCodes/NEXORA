@@ -5,6 +5,7 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import Avatar from "../../components/ui/Avatar";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
@@ -84,9 +85,12 @@ export default function SellerDeliveryTeam() {
                 <ul className="divide-y divide-line border-y border-line">
                     {roster.map((agent) => (
                         <li key={agent.id} className="py-3 flex items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm font-medium">{agent.first_name} {agent.last_name}</p>
-                                <p className="text-xs text-ash">{agent.email}</p>
+                            <div className="flex items-center gap-3">
+                                <Avatar firstName={agent.first_name} lastName={agent.last_name} size="sm" />
+                                <div>
+                                    <p className="text-sm font-medium">{agent.first_name} {agent.last_name}</p>
+                                    <p className="text-xs text-ash">{agent.email}</p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => handleRemove(agent.agent_id)}

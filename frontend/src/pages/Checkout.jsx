@@ -225,6 +225,14 @@ export default function Checkout() {
         e.preventDefault();
         setSubmitting(true);
 
+        // Declared outside the try block so the catch below can tell
+        // "the order was never created" (nothing to redirect to) apart
+        // from "the order was created but the payment step after it
+        // failed" - previously any failure past this point just showed a
+        // toast and left the buyer stranded on checkout with no way back
+        // to the order that had already been placed.
+        let orderId = null;
+
         try {
             const payload = {
                 ...form,
@@ -235,7 +243,7 @@ export default function Checkout() {
                 delivery_lng: pin?.lng ?? null
             };
             const { data } = await api.post("/orders", payload);
-            const orderId = data.data.orderId;
+            orderId = data.data.orderId;
 
             const selectedCardMethod = cardPaymentMethods.find((method) => method.value === form.payment_method);
 
@@ -280,6 +288,17 @@ export default function Checkout() {
 
         } catch (err) {
             toast?.error(extractErrorMessage(err));
+
+            // Order was created but a later payment-initiation call
+            // failed (mobile money, wallet, card, or PayPal) - send the
+            // buyer to the order they already placed instead of leaving
+            // them on checkout with a cart that may now be empty. If the
+            // failure happened before the order was created (orderId is
+            // still null), there's nothing to redirect to - just the toast.
+            if (orderId) {
+                await refresh().catch(() => {});
+                navigate(`/orders/${orderId}`, { state: { paymentFailed: true } });
+            }
         } finally {
             setSubmitting(false);
         }

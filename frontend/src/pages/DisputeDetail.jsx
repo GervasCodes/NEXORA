@@ -9,6 +9,7 @@ import PageLoader from "../components/PageLoader";
 import { useLanguage } from "../context/LanguageContext";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Avatar from "../components/ui/Avatar";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -393,9 +394,12 @@ export default function DisputeDetail() {
                     {dispute.messages?.map((m) => (
                         <li key={m.id} className="border border-line rounded-lg p-3">
                             <div className="flex items-center justify-between gap-2 mb-1">
-                                <p className="text-xs font-medium capitalize">
-                                    {m.first_name} {m.last_name} <span className="text-ash">· {m.sender_role}</span>
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Avatar firstName={m.first_name} lastName={m.last_name} size="xs" />
+                                    <p className="text-xs font-medium capitalize">
+                                        {m.first_name} {m.last_name} <span className="text-ash">· {m.sender_role}</span>
+                                    </p>
+                                </div>
                                 <p className="text-xs text-ash whitespace-nowrap">{formatDate(m.created_at)}</p>
                             </div>
                             <p className="text-sm whitespace-pre-wrap">{m.message}</p>

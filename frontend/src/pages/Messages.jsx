@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import { useToast } from "../context/ToastContext";
+import Avatar from "../components/ui/Avatar";
 
 export default function Messages() {
     const { user } = useAuth();
@@ -114,9 +115,7 @@ export default function Messages() {
                             to={`/messages/${c.id}`}
                             className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"
                         >
-                            <div className="w-10 h-10 rounded-full bg-abyss text-frost flex items-center justify-center font-display text-sm shrink-0">
-                                {otherPartyName(c).charAt(0).toUpperCase()}
-                            </div>
+                            <Avatar name={otherPartyName(c)} size="md" />
 
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">

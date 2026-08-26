@@ -176,14 +176,68 @@ exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
     // First image uploaded for a product is automatically the primary one
     const primary = existingCount === 0 ? true : Boolean(isPrimary);
 
-    await productRepository.addProductImage(
+    const imageId = await productRepository.addProductImage(
         productId,
         result.secure_url,
         primary,
         existingCount
     );
 
-    return { imageUrl: result.secure_url, isPrimary: primary };
+    return { id: imageId, imageUrl: result.secure_url, isPrimary: primary };
+};
+
+// Ownership check shared by delete/set-primary/reorder below - throws the
+// same "Product not found" a mismatched/foreign product_id would give,
+// rather than leaking whether the id exists under a different seller.
+const assertOwnsProduct = async (sellerId, productId) => {
+    const product = await productRepository.findById(productId);
+    if (!product || product.seller_id !== sellerId) {
+        throw new Error("Product not found");
+    }
+    return product;
+};
+
+exports.deleteProductImage = async (sellerId, productId, imageId) => {
+    await assertOwnsProduct(sellerId, productId);
+
+    const image = await productRepository.findImageById(productId, imageId);
+    if (!image) {
+        throw new Error("Photo not found");
+    }
+
+    await productRepository.deleteProductImage(productId, imageId);
+
+    // Deleting the primary photo would otherwise leave the product with
+    // no primary image at all (browse cards / product-detail hero both
+    // expect exactly one, when any exist) - promote whichever remains
+    // first in display order.
+    if (image.is_primary) {
+        await productRepository.promoteEarliestImageToPrimary(productId);
+    }
+
+    await cache.bumpVersion(CACHE_NAMESPACE);
+};
+
+exports.setPrimaryImage = async (sellerId, productId, imageId) => {
+    await assertOwnsProduct(sellerId, productId);
+
+    const image = await productRepository.findImageById(productId, imageId);
+    if (!image) {
+        throw new Error("Photo not found");
+    }
+
+    await productRepository.setPrimaryImage(productId, imageId);
+    await cache.bumpVersion(CACHE_NAMESPACE);
+};
+
+// `orderedIds` reflects the seller's desired top-to-bottom order; each id
+// is only re-numbered if it actually belongs to this product (the
+// `AND product_id = ?` in the UPDATE), so a stray/foreign id in the array
+// is silently ignored rather than able to touch another product's rows.
+exports.reorderProductImages = async (sellerId, productId, orderedIds) => {
+    await assertOwnsProduct(sellerId, productId);
+    await productRepository.reorderProductImages(productId, orderedIds);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
 // Phase 6A - Product Videos. Same ownership check as addProductImage,
@@ -208,9 +262,22 @@ exports.addProductVideo = async (sellerId, productId, file) => {
 
     const result = await uploadToCloudinary(file.buffer, "products/videos", "video");
 
-    await productRepository.addProductVideo(productId, result.secure_url, existingCount);
+    const videoId = await productRepository.addProductVideo(productId, result.secure_url, existingCount);
 
-    return { videoUrl: result.secure_url };
+    return { id: videoId, videoUrl: result.secure_url };
+};
+
+exports.deleteProductVideo = async (sellerId, productId, videoId) => {
+    await assertOwnsProduct(sellerId, productId);
+    const deleted = await productRepository.deleteProductVideo(productId, videoId);
+    if (!deleted) {
+        throw new Error("Video not found");
+    }
+};
+
+exports.reorderProductVideos = async (sellerId, productId, orderedIds) => {
+    await assertOwnsProduct(sellerId, productId);
+    await productRepository.reorderProductVideos(productId, orderedIds);
 };
 
 // Phase 6B - Product Audio. Same ownership check and per-product cap
@@ -235,9 +302,22 @@ exports.addProductAudio = async (sellerId, productId, file) => {
 
     const result = await uploadToCloudinary(file.buffer, "products/audio", "video");
 
-    await productRepository.addProductAudio(productId, result.secure_url, existingCount);
+    const audioId = await productRepository.addProductAudio(productId, result.secure_url, existingCount);
 
-    return { audioUrl: result.secure_url };
+    return { id: audioId, audioUrl: result.secure_url };
+};
+
+exports.deleteProductAudio = async (sellerId, productId, audioId) => {
+    await assertOwnsProduct(sellerId, productId);
+    const deleted = await productRepository.deleteProductAudio(productId, audioId);
+    if (!deleted) {
+        throw new Error("Audio clip not found");
+    }
+};
+
+exports.reorderProductAudio = async (sellerId, productId, orderedIds) => {
+    await assertOwnsProduct(sellerId, productId);
+    await productRepository.reorderProductAudio(productId, orderedIds);
 };
 
 exports.getMyProducts = async (sellerId, query = {}) => {

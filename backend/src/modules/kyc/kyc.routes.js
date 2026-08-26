@@ -4,7 +4,10 @@ const router = express.Router();
 const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
-const upload = require("../../middleware/upload.middleware");
+// KYC documents (e.g. a scanned ID or business registration certificate)
+// are commonly PDFs, not just photos - use the image-or-PDF middleware
+// instead of the image-only one.
+const upload = require("../../middleware/uploadDocument.middleware");
 
 const kycController = require("./kyc.controller");
 const { requestUpgradeValidation, requestIdValidation, rejectValidation } = require("./kyc.validator");

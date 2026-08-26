@@ -120,31 +120,75 @@ export default function Home() {
                             background: "radial-gradient(60% 100% at 15% 0%, rgba(110,168,254,0.35) 0%, rgba(7,9,18,0) 60%), radial-gradient(50% 90% at 100% 100%, rgba(29,78,216,0.35) 0%, rgba(7,9,18,0) 60%)"
                         }}
                     />
-                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
-                        <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
-                        {user?.first_name && (
-                            <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
-                        )}
-                        <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
-                            Everything you need, from sellers you trust.
-                        </h1>
-                        <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
-                            Shop thousands of products from local vendors, with delivery tracked door to door.
-                        </p>
+                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+                        <div>
+                            <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
+                            {user?.first_name && (
+                                <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
+                            )}
+                            <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
+                                Everything you need, from sellers you trust.
+                            </h1>
+                            <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
+                                Shop thousands of products from local vendors, with delivery tracked door to door.
+                            </p>
 
-                        <div className="flex flex-wrap gap-x-8 gap-y-3">
-                            {[
-                                { label: "Verified sellers", icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
-                                { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
-                                { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
-                            ].map((item) => (
-                                <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
-                                        <path d={item.icon} />
-                                    </svg>
-                                    {item.label}
-                                </div>
-                            ))}
+                            <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                {[
+                                    { label: "Verified sellers", icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
+                                    { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
+                                    { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
+                                ].map((item) => (
+                                    <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
+                                            <path d={item.icon} />
+                                        </svg>
+                                        {item.label}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/*
+                          Phase 5 (Visual Polish & Metadata): real photo showcase
+                          replacing the gradient-only hero. No product/lifestyle
+                          photography has been supplied for this - these three
+                          paths are clearly-marked placeholders (not fabricated
+                          external URLs) and need real assets dropped in at
+                          /public/images/hero/ before this ships. The collage
+                          hides below `lg` rather than resizing awkwardly, so
+                          small screens fall back to the text-only hero that
+                          was already there.
+                        */}
+                        <div className="hidden lg:grid grid-cols-2 gap-3 h-[420px]">
+                            <div className="relative rounded-2xl overflow-hidden row-span-2 border border-frost/10 bg-azure/10">
+                                <img
+                                    src="/images/hero/placeholder-1.jpg"
+                                    alt="Products available on NEXORA"
+                                    className="w-full h-full object-cover"
+                                    loading="eager"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-abyss/50 via-transparent to-transparent" />
+                            </div>
+                            <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
+                                <img
+                                    src="/images/hero/placeholder-2.jpg"
+                                    alt="A NEXORA seller preparing an order"
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                            </div>
+                            <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
+                                <img
+                                    src="/images/hero/placeholder-3.jpg"
+                                    alt="A NEXORA delivery agent on a doorstep drop-off"
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

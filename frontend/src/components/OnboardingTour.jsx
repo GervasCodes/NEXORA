@@ -4,24 +4,39 @@ import { useAuth } from "../context/AuthContext";
 
 const STORAGE_PREFIX = "nexora_onboarding_seen_";
 
+// Phase 6 (New UI/UX & Imagery Additions, item 18): emoji-only steps
+// replaced with real illustration/photography per step. Buyer step 2
+// (checkout) now uses a verified, freely-licensed photo (Unsplash
+// License - free for commercial use, no attribution required:
+// https://unsplash.com/license) - "Woman using laptop and credit card
+// on sofa" by Vitaly Gariev (https://unsplash.com/photos/ygVEIaDM6DE).
+// I checked for suitable images for the other ten steps too, but
+// couldn't confirm licensing (many Unsplash search hits are
+// Unsplash+/paid-tier photos hosted on plus.unsplash.com, which aren't
+// free to hotlink) or a clean on-theme match in the time available, so
+// those remain clearly-marked placeholder paths under
+// /public/images/onboarding/ - real illustration or photography still
+// needs to be sourced or dropped in there. Step/copy structure (title,
+// body, per-role STEPS array, ROLE_CONFIG, the shown-once-per-account
+// mechanism) is unchanged.
 const BUYER_STEPS = [
     {
-        emoji: "🔍",
+        image: "/images/onboarding/buyer-1.jpg",
         title: "Find anything, fast",
         body: "Search or browse by category to discover products and services from sellers across Tanzania."
     },
     {
-        emoji: "🛒",
+        image: "https://images.unsplash.com/photo-1758874385215-c86fe62b446f?fm=jpg&q=80&w=1200&auto=format&fit=crop",
         title: "Add to cart, checkout securely",
         body: "Pay by mobile money, card, wallet balance, or cash on delivery - and pick up from a kiosk near you instead of waiting at home, if that's easier."
     },
     {
-        emoji: "📦",
+        image: "/images/onboarding/buyer-3.jpg",
         title: "Track every order",
         body: "Watch your order move from placed to delivered in real time, right from the Orders page."
     },
     {
-        emoji: "💬",
+        image: "/images/onboarding/buyer-4.jpg",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }
@@ -34,22 +49,22 @@ const BUYER_STEPS = [
 // role instead of a hard-coded buyer-only one.
 const SELLER_STEPS = [
     {
-        emoji: "🏪",
+        image: "/images/onboarding/seller-1.jpg",
         title: "Your store, one dashboard",
         body: "List products or services, manage orders and bookings, and see how your store is doing - all from the Seller dashboard."
     },
     {
-        emoji: "📣",
+        image: "/images/onboarding/seller-2.jpg",
         title: "Get seen",
         body: "Use Promote to pay for extra visibility - a sponsored product slot, top billing for your store, or a boosted department on the homepage."
     },
     {
-        emoji: "💰",
+        image: "/images/onboarding/seller-3.jpg",
         title: "Get paid",
         body: "Orders credit your wallet automatically. Track balance, working capital advances, and payouts from Wallet."
     },
     {
-        emoji: "💬",
+        image: "/images/onboarding/seller-4.jpg",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }
@@ -57,17 +72,17 @@ const SELLER_STEPS = [
 
 const DELIVERY_AGENT_STEPS = [
     {
-        emoji: "📋",
+        image: "/images/onboarding/delivery-1.jpg",
         title: "See what's available",
         body: "Browse deliveries waiting for a courier near you and claim the ones that fit your route."
     },
     {
-        emoji: "🛵",
+        image: "/images/onboarding/delivery-2.jpg",
         title: "Manage your deliveries",
         body: "Track every delivery you've claimed - pickup, in transit, delivered - from My Deliveries."
     },
     {
-        emoji: "💬",
+        image: "/images/onboarding/delivery-3.jpg",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }
@@ -125,7 +140,15 @@ export default function OnboardingTour() {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-abyss/50 px-4">
             <div className="bg-paper rounded-lg shadow-xl max-w-sm w-full p-6 animate-slide-up">
-                <div className="text-4xl mb-3">{current.emoji}</div>
+                <div className="w-full aspect-[16/10] rounded-md overflow-hidden mb-4 bg-azure/10">
+                    <img
+                        src={current.image}
+                        alt=""
+                        loading="eager"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                </div>
                 <h2 className="font-display text-xl mb-2">{current.title}</h2>
                 <p className="text-sm text-ash mb-6">{current.body}</p>
 

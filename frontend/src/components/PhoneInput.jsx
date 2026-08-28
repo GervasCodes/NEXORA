@@ -80,7 +80,7 @@ export default function PhoneInput({ value, onChange, required = false, disabled
                     setDial(e.target.value);
                     emit(e.target.value, national);
                 }}
-                className="border border-line rounded-md px-2 py-2 text-sm w-28 shrink-0 focus-ring disabled:opacity-60"
+                className="border border-line rounded-md px-2 py-2 text-base w-28 shrink-0 focus-ring disabled:opacity-60"
             >
                 {COUNTRY_CODES.map((c) => (
                     <option key={`${c.iso2}-${c.dial}`} value={c.dial}>{c.dial} {c.iso2}</option>
@@ -99,7 +99,7 @@ export default function PhoneInput({ value, onChange, required = false, disabled
                     setNational(e.target.value);
                     emit(dial, e.target.value);
                 }}
-                className={`flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring disabled:opacity-60 ${className}`}
+                className={`flex-1 border border-line rounded-md px-3 py-2 text-base focus-ring disabled:opacity-60 ${className}`}
             />
         </div>
     );

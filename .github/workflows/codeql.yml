@@ -1,43 +1,39 @@
 name: CodeQL
 
-# Static security analysis. Runs on every push/PR to catch new findings
-# before merge, plus a weekly scheduled scan so findings surface even on
-# weeks with no commits (new CodeQL query packs, newly-disclosed patterns).
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+    branches: [main]
   schedule:
-    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+    # Every Monday at 03:00 UTC
+    - cron: "0 3 * * 1"
 
 jobs:
   analyze:
-    name: Analyze (javascript)
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
-      packages: read
       actions: read
       contents: read
+      security-events: write
 
     strategy:
       fail-fast: false
       matrix:
-        language: ["javascript"]
+        language: ["javascript-typescript"]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # javascript-typescript's default build covers both backend
-      # (CommonJS/Node) and frontend (JSX/Vite) source - no separate
-      # compile step is required for CodeQL's JS/TS analysis.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

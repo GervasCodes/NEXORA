@@ -10,6 +10,32 @@ vi.mock("../../../src/context/ToastContext", () => ({
     useToast: () => ({ error: vi.fn() })
 }));
 
+vi.mock("../../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key, params) => {
+            const template = ({
+                "seller.orders.title": "Orders",
+                "seller.orders.empty": "No orders yet.",
+                "seller.orders.payoutPendingTooltip": "This order is paid but the payout to your wallet hasn't gone through yet. Our team has been alerted - contact support if it doesn't clear soon.",
+                "seller.orders.payoutPending": "Payout pending",
+                "seller.orders.accept": "Accept",
+                "seller.orders.reject": "Reject",
+                "seller.orders.platformPool": "Platform pool",
+                "seller.orders.agentMyTeam": "{name} (my team)",
+                "seller.orders.addAgentHint": "Add a delivery agent to your roster to ship Cash on Delivery orders",
+                "seller.orders.markShipped": "Mark shipped",
+                "seller.orders.markDelivered": "Mark delivered",
+                "seller.orders.waitingConfirmation": "Waiting for buyer to confirm receipt & cash payment",
+                "common.cancel": "Cancel"
+            }[key] || key);
+            if (!params) return template;
+            return template.replace(/\{(\w+)\}/g, (match, k) => (
+                params[k] !== undefined && params[k] !== null ? String(params[k]) : ""
+            ));
+        }
+    })
+}));
+
 import api from "../../../src/api/client";
 import SellerOrders from "../../../src/pages/seller/SellerOrders";
 

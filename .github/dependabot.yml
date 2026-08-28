@@ -1,61 +1,44 @@
 version: 2
 updates:
-  # Backend dependencies (Express, mysql2, payment/webhook libs, etc).
   - package-ecosystem: "npm"
     directory: "/backend"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
     groups:
       backend-minor-patch:
-        update-types: ["minor", "patch"]
-    labels:
-      - "dependencies"
-      - "backend"
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "chore(backend deps)"
 
-  # Frontend dependencies (React, Vite, Tailwind, etc).
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
     groups:
       frontend-minor-patch:
-        update-types: ["minor", "patch"]
-    labels:
-      - "dependencies"
-      - "frontend"
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "chore(frontend deps)"
 
-  # Migration/seed tooling package.
   - package-ecosystem: "npm"
     directory: "/database"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "database"
+    groups:
+      database-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "chore(database deps)"
 
-  # Keep the CI/CD workflow actions themselves (checkout, setup-node,
-  # codeql-action, etc) patched too - Dependabot covers GitHub Actions
-  # as its own ecosystem.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "ci"
     commit-message:
       prefix: "chore(ci deps)"

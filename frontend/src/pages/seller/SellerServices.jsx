@@ -6,19 +6,18 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
 // seller until they choose one of these.
-function MerchantTypeGate({ onSwitch, switching }) {
+function MerchantTypeGate({ onSwitch, switching, t }) {
     return (
         <div>
-            <h1 className="font-display text-2xl mb-2">Services</h1>
+            <h1 className="font-display text-2xl mb-2">{t("seller.services.gateTitle")}</h1>
             <p className="text-ash text-sm mb-6 max-w-md">
-                Offer bookable services - accommodation, transportation, tours,
-                event spaces and more - from the same NEXORA account you already
-                sell products from.
+                {t("seller.services.gateDescription")}
             </p>
 
             <div className="grid sm:grid-cols-2 gap-4 max-w-xl">
@@ -28,8 +27,8 @@ function MerchantTypeGate({ onSwitch, switching }) {
                     onClick={() => onSwitch("hybrid")}
                     className="text-left border border-line rounded-lg p-4 hover:border-ink transition-colors disabled:opacity-60"
                 >
-                    <p className="font-medium text-sm mb-1">Add Services</p>
-                    <p className="text-xs text-ash">Keep selling products, and start offering services too.</p>
+                    <p className="font-medium text-sm mb-1">{t("seller.services.addServicesTitle")}</p>
+                    <p className="text-xs text-ash">{t("seller.services.addServicesHint")}</p>
                 </button>
 
                 <button
@@ -38,8 +37,8 @@ function MerchantTypeGate({ onSwitch, switching }) {
                     onClick={() => onSwitch("service")}
                     className="text-left border border-line rounded-lg p-4 hover:border-ink transition-colors disabled:opacity-60"
                 >
-                    <p className="font-medium text-sm mb-1">Switch to Services only</p>
-                    <p className="text-xs text-ash">Your store becomes a service provider instead of a product seller.</p>
+                    <p className="font-medium text-sm mb-1">{t("seller.services.switchOnlyTitle")}</p>
+                    <p className="text-xs text-ash">{t("seller.services.switchOnlyHint")}</p>
                 </button>
             </div>
         </div>
@@ -47,6 +46,7 @@ function MerchantTypeGate({ onSwitch, switching }) {
 }
 
 export default function SellerServices() {
+    const { t } = useLanguage();
     const { profile, refreshProfile } = useOutletContext();
 
     const [services, setServices] = useState([]);
@@ -103,7 +103,7 @@ export default function SellerServices() {
     };
 
     if (!isProvider) {
-        return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} />;
+        return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} t={t} />;
     }
 
     if (loading) return <PageLoader />;
@@ -112,14 +112,14 @@ export default function SellerServices() {
         <div>
             <PageMeta title="My Services" noIndex />
             <div className="flex items-center justify-between mb-6">
-                <h1 className="font-display text-2xl">Your services</h1>
+                <h1 className="font-display text-2xl">{t("seller.services.title")}</h1>
                 <Button as={Link} to="/seller/services/new" size="sm">
-                    + New service
+                    {t("seller.services.newService")}
                 </Button>
             </div>
 
             {services.length === 0 && (
-                <EmptyState title="You haven't listed any services yet." />
+                <EmptyState title={t("seller.services.emptyNoListings")} />
             )}
 
             <ul className="divide-y divide-line border-y border-line">
@@ -137,15 +137,15 @@ export default function SellerServices() {
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${
                             s.status === "published" ? "bg-teal/10 text-teal" : "bg-line text-ash"
                         }`}>
-                            {s.status === "published" ? "Published" : "Draft"}
+                            {s.status === "published" ? t("seller.services.published") : t("seller.services.draft")}
                         </span>
 
                         {!s.is_active && (
-                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">Inactive</span>
+                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">{t("seller.services.inactive")}</span>
                         )}
 
                         <Link to={`/seller/services/${s.id}/edit`} className="text-xs text-teal hover:underline">
-                            Edit
+                            {t("common.edit")}
                         </Link>
 
                         <button
@@ -153,7 +153,7 @@ export default function SellerServices() {
                             disabled={busyId === s.id}
                             className="text-xs text-ash hover:text-ink disabled:opacity-50"
                         >
-                            {s.status === "published" ? "Unpublish" : "Publish"}
+                            {s.status === "published" ? t("seller.services.unpublish") : t("seller.services.publish")}
                         </button>
 
                         <button
@@ -161,7 +161,7 @@ export default function SellerServices() {
                             disabled={busyId === s.id}
                             className="text-xs text-ash hover:text-ink disabled:opacity-50"
                         >
-                            {s.is_active ? "Deactivate" : "Activate"}
+                            {s.is_active ? t("seller.services.deactivate") : t("seller.services.activate")}
                         </button>
                     </li>
                 ))}

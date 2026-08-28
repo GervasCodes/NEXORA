@@ -20,6 +20,36 @@ vi.mock("../../src/context/AuthContext", () => ({
     })
 }));
 
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key, params) => {
+            const template = ({
+                "auth.welcomeBack": "Welcome back",
+                "auth.signInSubtitle": "Sign in to your NEXORA account.",
+                "auth.emailLabel": "Email",
+                "auth.passwordLabel": "Password",
+                "auth.forgotPasswordLink": "Forgot your password?",
+                "auth.signInButton": "Sign in",
+                "auth.signingIn": "Signing in…",
+                "auth.newHere": "New here?",
+                "auth.registerLink": "Create one",
+                "auth.otp.title": "Check your email",
+                "auth.otp.description": "We sent a 6-digit code to {email}. Enter it below to finish signing in.",
+                "auth.otp.codeLabel": "Verification code",
+                "auth.otp.verifyButton": "Verify & sign in",
+                "auth.otp.verifying": "Verifying…",
+                "auth.otp.useDifferentAccount": "Use a different account",
+                "auth.otp.resendCode": "Resend code",
+                "auth.otp.resendSuccess": "A new code has been sent."
+            }[key] || key);
+            if (!params) return template;
+            return template.replace(/\{(\w+)\}/g, (match, k) => (
+                params[k] !== undefined && params[k] !== null ? String(params[k]) : ""
+            ));
+        }
+    })
+}));
+
 import Login from "../../src/pages/Login";
 
 const renderLogin = () => render(<MemoryRouter><Login /></MemoryRouter>);

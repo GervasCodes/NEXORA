@@ -3,10 +3,12 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
 import Button from "../components/ui/Button";
+import QuantityStepper from "../components/ui/QuantityStepper";
 import RecommendedProducts from "../components/RecommendedProducts";
 import PageMeta from "../components/PageMeta";
 import ImageLightbox from "../components/chat/ImageLightbox";
@@ -14,6 +16,7 @@ import Avatar from "../components/ui/Avatar";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const { slug } = useParams();
     const { user } = useAuth();
     const { addToCart } = useCart();
@@ -102,13 +105,13 @@ export default function ProductDetail() {
             return;
         }
         if (user.role !== "buyer") {
-            setStatus("Only buyer accounts can add items to a cart.");
+            setStatus(t("product.buyerOnlyCart"));
             return;
         }
 
         setStatus("");
         const result = await addToCart(product.id, quantity);
-        setStatus(result.success ? "Added to cart." : result.message);
+        setStatus(result.success ? t("product.addedToCart") : result.message);
     };
 
     const handleMessageSeller = async () => {
@@ -117,7 +120,7 @@ export default function ProductDetail() {
             return;
         }
         if (user.role !== "buyer") {
-            setStatus("Only buyer accounts can message sellers.");
+            setStatus(t("product.buyerOnlyMessage"));
             return;
         }
 
@@ -129,19 +132,19 @@ export default function ProductDetail() {
             });
             navigate(`/messages/${data.data.id}`);
         } catch (err) {
-            setStatus("Couldn't start a conversation. Please try again.");
+            setStatus(t("product.conversationError"));
         }
     };
 
     if (loading) {
-        return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">Loading…</div>;
+        return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">{t("common.loading")}</div>;
     }
 
     if (!product) {
         return (
             <div className="max-w-6xl mx-auto px-6 py-16 text-center">
-                <p className="font-display text-2xl mb-2">Product not found</p>
-                <Link to="/" className="text-teal hover:underline text-sm">Back to marketplace</Link>
+                <p className="font-display text-2xl mb-2">{t("product.notFoundTitle")}</p>
+                <Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>
             </div>
         );
     }
@@ -165,12 +168,12 @@ export default function ProductDetail() {
                                 type="button"
                                 onClick={() => setLightboxSrc(images[activeImage].image_url)}
                                 className="w-full h-full cursor-zoom-in focus-ring"
-                                aria-label="Open full-size image"
+                                aria-label={t("product.openFullImage")}
                             >
                                 <img src={images[activeImage].image_url} alt={product.name} className="w-full h-full object-cover" />
                             </button>
                         ) : (
-                            <div className="w-full h-full flex items-center justify-center text-ash text-sm">No image</div>
+                            <div className="w-full h-full flex items-center justify-center text-ash text-sm">{t("product.noImage")}</div>
                         )}
                     </div>
                     {images.length > 1 && (
@@ -190,7 +193,7 @@ export default function ProductDetail() {
                     )}
                     {product.videos?.length > 0 && (
                         <div className="mt-6">
-                            <h2 className="font-display text-lg mb-3">Product video{product.videos.length > 1 ? "s" : ""}</h2>
+                            <h2 className="font-display text-lg mb-3">{product.videos.length > 1 ? t("product.videoTitleMany") : t("product.videoTitleOne")}</h2>
                             <div className="space-y-3">
                                 {product.videos.map((vid) => (
                                     <video key={vid.id} src={vid.video_url} controls
@@ -201,7 +204,7 @@ export default function ProductDetail() {
                     )}
                     {product.audio?.length > 0 && (
                         <div className="mt-6">
-                            <h2 className="font-display text-lg mb-3">Product audio</h2>
+                            <h2 className="font-display text-lg mb-3">{t("product.audioTitle")}</h2>
                             <div className="space-y-3">
                                 {product.audio.map((clip) => (
                                     <audio key={clip.id} src={clip.audio_url} controls className="w-full" />
@@ -216,13 +219,15 @@ export default function ProductDetail() {
                         <Link to={`/stores/${product.store_slug}`} className="hover:underline hover:text-ink">
                             {product.store_name}
                         </Link>
-                        {product.is_verified ? " · ✓ Verified store" : ""}
+                        {product.is_verified ? ` · ✓ ${t("product.verifiedStore")}` : ""}
                     </p>
                     <h1 className="font-display text-3xl mb-3">{product.name}</h1>
 
                     {reviews?.average_rating && (
                         <p className="text-sm text-ash mb-4">
-                            ★ {reviews.average_rating} average · {reviews.review_count} review{reviews.review_count === 1 ? "" : "s"}
+                            ★ {reviews.review_count === 1
+                                ? t("reviews.summaryOne", { rating: reviews.average_rating })
+                                : t("reviews.summaryMany", { rating: reviews.average_rating, count: reviews.review_count })}
                         </p>
                     )}
 
@@ -236,34 +241,32 @@ export default function ProductDetail() {
                     </div>
 
                     <p className="text-sm text-ink/80 leading-relaxed mb-6 whitespace-pre-line">
-                        {product.description || "No description provided."}
+                        {product.description || t("product.noDescription")}
                     </p>
 
                     <dl className="text-sm text-ash grid grid-cols-2 gap-y-1 mb-6 max-w-xs">
-                        {product.brand && (<><dt>Brand</dt><dd className="text-ink">{product.brand}</dd></>)}
-                        <dt>Condition</dt><dd className="text-ink capitalize">{product.product_condition}</dd>
-                        <dt>Category</dt><dd className="text-ink">{product.category_name || "—"}</dd>
-                        <dt>In stock</dt><dd className="text-ink">{product.stock}</dd>
+                        {product.brand && (<><dt>{t("product.brand")}</dt><dd className="text-ink">{product.brand}</dd></>)}
+                        <dt>{t("product.condition")}</dt><dd className="text-ink capitalize">{product.product_condition}</dd>
+                        <dt>{t("product.category")}</dt><dd className="text-ink">{product.category_name || "—"}</dd>
+                        <dt>{t("product.inStock")}</dt><dd className="text-ink">{product.stock}</dd>
                     </dl>
 
                     {Number(product.stock) > 0 ? (
                         <div className="flex items-center gap-3 mb-3">
-                            <input
-                                type="number"
-                                min="1"
-                                max={product.stock}
+                            <QuantityStepper
                                 value={quantity}
-                                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-                                className="w-20 border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                                onChange={setQuantity}
+                                min={1}
+                                max={product.stock}
                             />
                             <Button
                                 onClick={handleAddToCart}
                             >
-                                Add to cart
+                                {t("product.addToCart")}
                             </Button>
                         </div>
                     ) : (
-                        <p className="text-coral font-medium mb-3">Out of stock</p>
+                        <p className="text-coral font-medium mb-3">{t("product.outOfStock")}</p>
                     )}
 
                     {status && <p className="text-sm text-teal">{status}</p>}
@@ -272,23 +275,23 @@ export default function ProductDetail() {
                         onClick={handleMessageSeller}
                         className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring"
                     >
-                        💬 Message {product.store_name || "seller"}
+                        💬 {t("product.messageSeller", { seller: product.store_name || t("product.defaultSeller") })}
                     </button>
                 </div>
             </div>
 
             <section className="mt-16 max-w-2xl">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-1">
-                    <h2 className="font-display text-xl">Reviews</h2>
+                    <h2 className="font-display text-xl">{t("reviews.title")}</h2>
                     {reviews?.review_count > 0 && (
                         <select
                             value={reviewSort}
                             onChange={(e) => setReviewSort(e.target.value)}
                             className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring"
                         >
-                            <option value="newest">Newest</option>
-                            <option value="highest">Highest rated</option>
-                            <option value="lowest">Lowest rated</option>
+                            <option value="newest">{t("filters.sortNewest")}</option>
+                            <option value="highest">{t("filters.sortRating")}</option>
+                            <option value="lowest">{t("reviews.sortLowest")}</option>
                         </select>
                     )}
                 </div>
@@ -300,23 +303,23 @@ export default function ProductDetail() {
                         onClick={() => setShowReviewForm(true)}
                         className="text-sm text-teal hover:underline mb-4"
                     >
-                        Write a review
+                        {t("reviews.writeReview")}
                     </button>
                 )}
 
                 {showReviewForm && !justSubmittedId && (
                     <form onSubmit={handleReviewSubmit} className="border border-line rounded-lg p-4 mb-6">
-                        <label className="block text-sm mb-1">Rating</label>
+                        <label className="block text-sm mb-1">{t("reviews.ratingLabel")}</label>
                         <select
                             value={reviewRating}
                             onChange={(e) => setReviewRating(Number(e.target.value))}
                             className="border border-line rounded-md px-3 py-2 text-sm mb-3 focus-ring"
                         >
                             {[5, 4, 3, 2, 1].map((n) => (
-                                <option key={n} value={n}>{n} star{n === 1 ? "" : "s"}</option>
+                                <option key={n} value={n}>{n === 1 ? t("reviews.starsOne") : t("reviews.starsMany", { count: n })}</option>
                             ))}
                         </select>
-                        <label className="block text-sm mb-1">Comment (optional)</label>
+                        <label className="block text-sm mb-1">{t("reviews.commentLabel")}</label>
                         <textarea
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
@@ -331,14 +334,14 @@ export default function ProductDetail() {
                                 disabled={submittingReview}
                                 size="sm"
                             >
-                                {submittingReview ? "Submitting…" : "Submit review"}
+                                {submittingReview ? t("reviews.submitting") : t("reviews.submit")}
                             </Button>
                             <button
                                 type="button"
                                 onClick={() => setShowReviewForm(false)}
                                 className="text-sm text-ash hover:underline"
                             >
-                                Cancel
+                                {t("common.cancel")}
                             </button>
                         </div>
                     </form>
@@ -346,24 +349,24 @@ export default function ProductDetail() {
 
                 {justSubmittedId && (
                     <div className="border border-line rounded-lg p-4 mb-6">
-                        <p className="text-sm text-teal mb-3">Thanks for your review!</p>
+                        <p className="text-sm text-teal mb-3">{t("reviews.thanks")}</p>
                         {(() => {
                             const submitted = reviews?.reviews?.find((r) => r.id === justSubmittedId);
                             const photoCount = submitted?.photos?.length || 0;
                             return photoCount < MAX_REVIEW_PHOTOS ? (
                                 <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                                    {uploadingPhoto ? "Uploading…" : "+ Add a photo"}
+                                    {uploadingPhoto ? t("reviews.uploading") : t("reviews.addPhoto")}
                                     <input type="file" accept="image/*" onChange={handleReviewPhotoUpload} disabled={uploadingPhoto} className="hidden" />
                                 </label>
                             ) : (
-                                <p className="text-ash text-xs">Maximum of {MAX_REVIEW_PHOTOS} photos per review.</p>
+                                <p className="text-ash text-xs">{t("reviews.maxPhotos", { count: MAX_REVIEW_PHOTOS })}</p>
                             );
                         })()}
                         {reviewError && <p className="text-sm text-coral mt-3">{reviewError}</p>}
                     </div>
                 )}
 
-                {!reviews?.reviews?.length && <p className="text-ash text-sm">No reviews yet.</p>}
+                {!reviews?.reviews?.length && <p className="text-ash text-sm">{t("reviews.none")}</p>}
                 <ul className="space-y-4">
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
@@ -391,7 +394,7 @@ export default function ProductDetail() {
                             )}
                             {r.seller_reply && (
                                 <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
-                                    <p className="text-xs font-medium text-ink mb-0.5">Seller response</p>
+                                    <p className="text-xs font-medium text-ink mb-0.5">{t("reviews.sellerResponse")}</p>
                                     <p className="text-xs text-ink/80">{r.seller_reply}</p>
                                 </div>
                             )}
@@ -400,7 +403,7 @@ export default function ProductDetail() {
                 </ul>
             </section>
 
-            <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title="You may also like" />
+            <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title={t("product.youMayAlsoLike")} />
 
             <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
         </div>

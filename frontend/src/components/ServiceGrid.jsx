@@ -106,13 +106,13 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
     }, [loadMore]);
 
     const viewToggle = (
-        <div className="flex items-center justify-end gap-1 mb-4" role="group" aria-label="Service view">
+        <div className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Service view">
             <button
                 type="button"
                 onClick={() => changeLayout("grid")}
                 aria-label="Grid view"
                 aria-pressed={layout === "grid"}
-                className={`w-8 h-8 rounded-md flex items-center justify-center border transition-colors ${layout === "grid" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
+                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "grid" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                     <rect x="3" y="3" width="8" height="8" rx="1.5" />
@@ -126,7 +126,7 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
                 onClick={() => changeLayout("list")}
                 aria-label="List view"
                 aria-pressed={layout === "list"}
-                className={`w-8 h-8 rounded-md flex items-center justify-center border transition-colors ${layout === "list" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
+                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "list" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                     <rect x="3" y="4" width="18" height="3.5" rx="1" />

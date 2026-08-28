@@ -144,7 +144,7 @@ export default function NexoraAIDrawer() {
                         type="button"
                         onClick={assistant.close}
                         aria-label="Close Nexora AI"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-ash hover:text-ink hover:bg-line/50 transition-colors"
+                        className="w-11 h-11 flex items-center justify-center rounded-lg text-ash hover:text-ink hover:bg-line/50 transition-colors"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
                             <path d="M18 6 6 18M6 6l12 12" />

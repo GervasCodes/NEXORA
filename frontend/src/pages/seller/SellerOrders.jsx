@@ -5,9 +5,11 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
 
 export default function SellerOrders() {
+    const { t } = useLanguage();
     const [orders, setOrders] = useState([]);
     const [roster, setRoster] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -42,10 +44,10 @@ export default function SellerOrders() {
     return (
         <div>
             <PageMeta title="Orders" noIndex />
-            <h1 className="font-display text-2xl mb-6">Orders</h1>
+            <h1 className="font-display text-2xl mb-6">{t("seller.orders.title")}</h1>
 
 
-            {orders.length === 0 && <EmptyState title="No orders yet." />}
+            {orders.length === 0 && <EmptyState title={t("seller.orders.empty")} />}
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((order) => (
@@ -63,9 +65,9 @@ export default function SellerOrders() {
                             {order.wallet_credit_pending && (
                                 <span
                                     className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-800"
-                                    title="This order is paid but the payout to your wallet hasn't gone through yet. Our team has been alerted - contact support if it doesn't clear soon."
+                                    title={t("seller.orders.payoutPendingTooltip")}
                                 >
-                                    Payout pending
+                                    {t("seller.orders.payoutPending")}
                                 </span>
                             )}
 
@@ -81,7 +83,7 @@ export default function SellerOrders() {
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        Accept
+                                        {t("seller.orders.accept")}
                                     </Button>
                                     <Button
                                         onClick={() => updateStatus(order.id, "cancelled")}
@@ -89,7 +91,7 @@ export default function SellerOrders() {
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        Reject
+                                        {t("seller.orders.reject")}
                                     </Button>
                                 </>
                             )}
@@ -103,18 +105,18 @@ export default function SellerOrders() {
                                             className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring bg-paper"
                                         >
                                             {order.payment_method !== "cash_on_delivery" && (
-                                                <option value="">Platform pool</option>
+                                                <option value="">{t("seller.orders.platformPool")}</option>
                                             )}
                                             {roster.map((agent) => (
                                                 <option key={agent.agent_id} value={agent.agent_id}>
-                                                    {agent.first_name} {agent.last_name} (my team)
+                                                    {t("seller.orders.agentMyTeam", { name: `${agent.first_name} ${agent.last_name}` })}
                                                 </option>
                                             ))}
                                         </select>
                                     )}
                                     {order.payment_method === "cash_on_delivery" && roster.length === 0 && (
                                         <span className="text-xs text-coral">
-                                            Add a delivery agent to your roster to ship Cash on Delivery orders
+                                            {t("seller.orders.addAgentHint")}
                                         </span>
                                     )}
                                     <Button
@@ -123,7 +125,7 @@ export default function SellerOrders() {
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        Mark shipped
+                                        {t("seller.orders.markShipped")}
                                     </Button>
                                     <Button
                                         onClick={() => updateStatus(order.id, "cancelled")}
@@ -131,7 +133,7 @@ export default function SellerOrders() {
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        Cancel
+                                        {t("common.cancel")}
                                     </Button>
                                 </>
                             )}
@@ -143,13 +145,13 @@ export default function SellerOrders() {
                                     variant="secondary"
                                     size="sm"
                                 >
-                                    Mark delivered
+                                    {t("seller.orders.markDelivered")}
                                 </Button>
                             )}
 
                             {order.status === "delivered" && order.payment_status === "unpaid" && (
                                 <span className="text-xs text-ash italic">
-                                    Waiting for buyer to confirm receipt & cash payment
+                                    {t("seller.orders.waitingConfirmation")}
                                 </span>
                             )}
                         </div>

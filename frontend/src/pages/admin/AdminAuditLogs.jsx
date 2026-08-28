@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import { Pagination } from "../../components/ui/DataTable";
+import { SkeletonList } from "../../components/Skeleton";
 
 // Mirrors backend/src/modules/audit/audit.constants.js's EVENT_TYPE_GROUPS -
 // the `value` here is exactly the `category` query param the backend
@@ -113,7 +115,7 @@ export default function AdminAuditLogs() {
                         placeholder="Search description, actor, or details…"
                         value={qInput}
                         onChange={(e) => setQInput(e.target.value)}
-                        className="flex-1 min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
+                        className="flex-1 min-w-[180px] sm:min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
                     />
                     <select
                         value={category}
@@ -165,7 +167,7 @@ export default function AdminAuditLogs() {
             {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
             {loading ? (
-                <p className="text-ash text-sm">Loading audit logs…</p>
+                <SkeletonList rows={5} />
             ) : logs.length === 0 ? (
                 <EmptyState title="No audit log entries match these filters." />
             ) : (
@@ -206,26 +208,13 @@ export default function AdminAuditLogs() {
                         ))}
                     </ul>
 
-                    <div className="flex items-center justify-between mt-6 text-sm">
-                        <p className="text-ash text-xs">{meta.total} total entries</p>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={meta.page <= 1}
-                                className="text-xs border border-line px-3 py-1.5 rounded-md disabled:opacity-40"
-                            >
-                                Previous
-                            </button>
-                            <span className="text-xs text-ash">Page {meta.page} of {meta.totalPages}</span>
-                            <button
-                                onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
-                                disabled={meta.page >= meta.totalPages}
-                                className="text-xs border border-line px-3 py-1.5 rounded-md disabled:opacity-40"
-                            >
-                                Next
-                            </button>
-                        </div>
-                    </div>
+                    <Pagination
+                        page={meta.page}
+                        totalPages={meta.totalPages}
+                        total={meta.total}
+                        itemLabel="entries"
+                        onPageChange={setPage}
+                    />
                 </>
             )}
         </div>

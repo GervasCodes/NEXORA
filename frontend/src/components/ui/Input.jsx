@@ -36,7 +36,7 @@ const Input = forwardRef(function Input(
                 aria-required={required || undefined}
                 aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
                 className={[
-                    "w-full border rounded-md px-3 py-2 text-sm bg-paper text-ink focus-ring transition-colors",
+                    "w-full border rounded-md px-3 py-2 text-base bg-paper text-ink focus-ring transition-colors",
                     error ? "border-coral focus:border-coral" : "border-line focus:border-teal",
                     className
                 ]

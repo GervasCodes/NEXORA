@@ -293,13 +293,13 @@ export default function SellerProductForm() {
                 <div>
                     <label className="block text-sm mb-1">Product name</label>
                     <input required minLength={3} value={form.name} onChange={update("name")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                 </div>
 
                 <div>
                     <label className="block text-sm mb-1">Description</label>
                     <textarea rows={4} value={form.description} onChange={update("description")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     <NexoraCopyAssist
                         mode="product"
                         name={form.name}
@@ -315,12 +315,12 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Price</label>
                         <input required type="number" min="0" step="0.01" value={form.price} onChange={update("price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring price" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
                     </div>
                     <div>
                         <label className="block text-sm mb-1">Discount price (optional)</label>
                         <input type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring price" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
                     </div>
                 </div>
 
@@ -328,12 +328,12 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Stock</label>
                         <input type="number" min="0" value={form.stock} onChange={update("stock")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                     <div>
                         <label className="block text-sm mb-1">Brand (optional)</label>
                         <input value={form.brand} onChange={update("brand")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                 </div>
 
@@ -341,7 +341,7 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Condition</label>
                         <select value={form.product_condition} onChange={update("product_condition")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="new">New</option>
                             <option value="used">Used</option>
                         </select>
@@ -349,7 +349,7 @@ export default function SellerProductForm() {
                     <div>
                         <label className="block text-sm mb-1">Category</label>
                         <select required value={form.category_id} onChange={update("category_id")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="">Select…</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>

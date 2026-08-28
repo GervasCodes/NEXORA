@@ -8,12 +8,48 @@ vi.mock("../../src/api/client", () => ({
 
 vi.mock("../../src/context/LanguageContext", () => ({
     useLanguage: () => ({
-        t: (key) => ({
-            "filters.rating": "Rating",
-            "filters.sortBy": "Sort by",
-            "products.viewGrid": "Grid view",
-            "products.viewList": "List view"
-        }[key] || key)
+        t: (key, params) => {
+            const template = ({
+                "filters.rating": "Rating",
+                "filters.sortBy": "Sort by",
+                "filters.sortNewest": "Newest",
+                "filters.sortRating": "Highest rated",
+                "products.viewGrid": "Grid view",
+                "products.viewList": "List view",
+                "common.loading": "Loading…",
+                "common.browseMarketplace": "Browse the marketplace",
+                "store.notFoundTitle": "Store not found",
+                "store.noLogo": "No logo",
+                "store.verifiedBadge": "Verified",
+                "store.memberSince": "Member since {date}",
+                "store.about": "About",
+                "store.deliveryTracked": "Delivery tracked door to door",
+                "store.deliveryPickupNote": "This store has a pickup location set, so delivery fees are calculated by distance at checkout.",
+                "store.deliveryDefaultNote": "Delivery fees are calculated at checkout.",
+                "store.trustSafety": "Trust & safety",
+                "store.verifiedSellerTitle": "Verified Seller",
+                "store.verifiedSellerHint": "This seller has paid NEXORA's verification fee and passed the Verified Seller review - the same badge shown on their individual products.",
+                "store.identityVerifiedTitle": "Identity Verified",
+                "store.identityVerifiedHint": "NEXORA reviewed this seller's identity documents before their account was approved to sell - separate from, and required before, the paid Verified Seller badge above.",
+                "store.productsTitle": "Products",
+                "store.productCountOne": "1 product",
+                "store.productCountMany": "{count} products",
+                "store.noProductsTitle": "No products yet",
+                "store.noProductsHint": "This store hasn't listed anything yet - check back soon.",
+                "store.onProduct": "on {product}",
+                "reviews.title": "Reviews",
+                "reviews.sortLowest": "Lowest rated",
+                "reviews.summaryOne": "{rating} average · 1 review",
+                "reviews.summaryMany": "{rating} average · {count} reviews",
+                "reviews.none": "No reviews yet.",
+                "reviews.sellerResponse": "Seller response",
+                "reviews.loadMore": "Load more reviews"
+            }[key] || key);
+            if (!params) return template;
+            return template.replace(/\{(\w+)\}/g, (match, k) => (
+                params[k] !== undefined && params[k] !== null ? String(params[k]) : ""
+            ));
+        }
     })
 }));
 
@@ -122,7 +158,7 @@ describe("StorePage (Phase 5A)", () => {
         renderPage("no-such-store");
 
         await waitFor(() => expect(screen.getByText("Store not found")).toBeInTheDocument());
-        expect(screen.getByText("Back to marketplace")).toBeInTheDocument();
+        expect(screen.getByText("Browse the marketplace")).toBeInTheDocument();
     });
 });
 

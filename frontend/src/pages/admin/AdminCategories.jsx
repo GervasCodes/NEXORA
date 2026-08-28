@@ -3,7 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
-import { useToast } from "../../context/ToastContext";
+import EmptyState from "../../components/ui/EmptyState";
 
 const emptyForm = { name: "", description: "", display_order: 0 };
 
@@ -12,7 +12,7 @@ export default function AdminCategories() {
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const [uploadingCoverId, setUploadingCoverId] = useState(null);
-    const toast = useToast();
+    const [error, setError] = useState("");
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
@@ -40,6 +40,7 @@ export default function AdminCategories() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+        setError("");
         try {
             if (editingId) {
                 await api.put(`/categories/${editingId}`, form);
@@ -50,7 +51,7 @@ export default function AdminCategories() {
             setEditingId(null);
             load();
         } catch (err) {
-            toast?.error(extractErrorMessage(err));
+            setError(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -58,11 +59,12 @@ export default function AdminCategories() {
 
     const toggleActive = async (category) => {
         setBusyId(category.id);
+        setError("");
         try {
             await api.put(`/categories/${category.id}/${category.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
-            toast?.error(extractErrorMessage(err));
+            setError(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
@@ -74,13 +76,14 @@ export default function AdminCategories() {
         const file = e.target.files[0];
         if (!file) return;
         setUploadingCoverId(category.id);
+        setError("");
         try {
             const body = new FormData();
             body.append("cover", file);
             await api.post(`/categories/${category.id}/cover`, body);
             load();
         } catch (err) {
-            toast?.error(extractErrorMessage(err));
+            setError(extractErrorMessage(err));
         } finally {
             setUploadingCoverId(null);
             e.target.value = "";
@@ -100,13 +103,13 @@ export default function AdminCategories() {
                     placeholder="Category name"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[160px]"
+                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[140px] sm:min-w-[160px]"
                 />
                 <input
                     placeholder="Description (optional)"
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[200px]"
+                    className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[160px] sm:min-w-[200px]"
                 />
                 <input
                     type="number"
@@ -127,7 +130,11 @@ export default function AdminCategories() {
                 )}
             </form>
 
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
+            {categories.length === 0 ? (
+                <EmptyState title="No categories yet." hint="Add one using the form above." />
+            ) : (
             <ul className="divide-y divide-line border-y border-line">
                 {categories.map((c) => (
                     <li key={c.id} className="py-3 flex flex-wrap items-center gap-3">
@@ -172,6 +179,7 @@ export default function AdminCategories() {
                     </li>
                 ))}
             </ul>
+            )}
         </div>
     );
 }

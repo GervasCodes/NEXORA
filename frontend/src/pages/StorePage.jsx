@@ -8,6 +8,7 @@ import ProductRow from "../components/ProductRow";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
+import { useLanguage } from "../context/LanguageContext";
 import PageMeta from "../components/PageMeta";
 
 
@@ -61,6 +62,7 @@ function IdentityIcon({ className = "" }) {
 
 export default function StorePage() {
     const { slug } = useParams();
+    const { t } = useLanguage();
     const [store, setStore] = useState(null);
     const [loading, setLoading] = useState(true);
     const [catalogFilters, setCatalogFilters] = useState({});
@@ -126,14 +128,14 @@ export default function StorePage() {
     };
 
     if (loading) {
-        return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">Loading…</div>;
+        return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">{t("common.loading")}</div>;
     }
 
     if (!store) {
         return (
             <div className="max-w-6xl mx-auto px-6 py-16 text-center">
-                <p className="font-display text-2xl mb-2">Store not found</p>
-                <Link to="/" className="text-teal hover:underline text-sm">Back to marketplace</Link>
+                <p className="font-display text-2xl mb-2">{t("store.notFoundTitle")}</p>
+                <Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>
             </div>
         );
     }
@@ -168,7 +170,7 @@ export default function StorePage() {
                             <img src={store.store_logo} alt="" className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-line/40 text-ash text-xs">
-                                No logo
+                                {t("store.noLogo")}
                             </div>
                         )}
                     </div>
@@ -181,7 +183,7 @@ export default function StorePage() {
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                                         <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
                                     </svg>
-                                    Verified
+                                    {t("store.verifiedBadge")}
                                 </span>
                             )}
                         </div>
@@ -199,7 +201,7 @@ export default function StorePage() {
                                 </span>
                             )}
                             {store.average_rating && <span>·</span>}
-                            <span>Member since {formatMonthYear(store.created_at)}</span>
+                            <span>{t("store.memberSince", { date: formatMonthYear(store.created_at) })}</span>
                         </p>
                         {socialLinks.length > 0 && (
                             <div className="flex items-center gap-2 mt-2">
@@ -223,7 +225,7 @@ export default function StorePage() {
 
                 {store.store_description && (
                     <div className="max-w-2xl mb-8">
-                        <h2 className="font-display text-lg mb-2">About</h2>
+                        <h2 className="font-display text-lg mb-2">{t("store.about")}</h2>
                         <p className="text-sm text-ink/80 leading-relaxed whitespace-pre-line">
                             {store.store_description}
                         </p>
@@ -235,27 +237,26 @@ export default function StorePage() {
                         <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM6.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" strokeLinejoin="round" />
                     </svg>
                     <div>
-                        <p className="font-medium text-ink">Delivery tracked door to door</p>
+                        <p className="font-medium text-ink">{t("store.deliveryTracked")}</p>
                         <p className="text-xs text-ash mt-0.5">
                             {store.has_pickup_pin
-                                ? "This store has a pickup location set, so delivery fees are calculated by distance at checkout."
-                                : "Delivery fees are calculated at checkout."}
+                                ? t("store.deliveryPickupNote")
+                                : t("store.deliveryDefaultNote")}
                         </p>
                     </div>
                 </div>
 
                 {(isVerified || store.identity_verified) && (
                     <div className="max-w-2xl mb-10 space-y-4">
-                        <h2 className="font-display text-lg mb-1">Trust &amp; safety</h2>
+                        <h2 className="font-display text-lg mb-1">{t("store.trustSafety")}</h2>
 
                         {isVerified && (
                             <div className="flex items-start gap-2.5 text-sm">
                                 <VerifiedIcon className={theme.text} />
                                 <div>
-                                    <p className="font-medium text-ink">Verified Seller</p>
+                                    <p className="font-medium text-ink">{t("store.verifiedSellerTitle")}</p>
                                     <p className="text-xs text-ash mt-0.5">
-                                        This seller has paid NEXORA's verification fee and passed the Verified
-                                        Seller review - the same badge shown on their individual products.
+                                        {t("store.verifiedSellerHint")}
                                     </p>
                                 </div>
                             </div>
@@ -265,11 +266,9 @@ export default function StorePage() {
                             <div className="flex items-start gap-2.5 text-sm">
                                 <IdentityIcon className={theme.text} />
                                 <div>
-                                    <p className="font-medium text-ink">Identity Verified</p>
+                                    <p className="font-medium text-ink">{t("store.identityVerifiedTitle")}</p>
                                     <p className="text-xs text-ash mt-0.5">
-                                        NEXORA reviewed this seller's identity documents before their account
-                                        was approved to sell - separate from, and required before, the paid
-                                        Verified Seller badge above.
+                                        {t("store.identityVerifiedHint")}
                                     </p>
                                 </div>
                             </div>
@@ -282,10 +281,10 @@ export default function StorePage() {
                 ))}
 
                 <div className="pb-16">
-                    <h2 className="font-display text-xl mb-1">Products</h2>
+                    <h2 className="font-display text-xl mb-1">{t("store.productsTitle")}</h2>
                     {productCount !== null && (
                         <p className="text-ash text-xs mb-4">
-                            {productCount === 1 ? "1 product" : `${productCount} products`}
+                            {productCount === 1 ? t("store.productCountOne") : t("store.productCountMany", { count: productCount })}
                         </p>
                     )}
 
@@ -294,39 +293,38 @@ export default function StorePage() {
                     <ProductGrid
                         params={{ seller_id: store.user_id, ...catalogFilters }}
                         onResults={setProductCount}
-                        emptyTitle="No products yet"
-                        emptyHint="This store hasn't listed anything yet - check back soon."
+                        emptyTitle={t("store.noProductsTitle")}
+                        emptyHint={t("store.noProductsHint")}
                     />
                 </div>
 
                 <div className="pb-16 max-w-2xl">
                     <div className="flex items-center justify-between flex-wrap gap-3 mb-1">
-                        <h2 className="font-display text-xl">Reviews</h2>
+                        <h2 className="font-display text-xl">{t("reviews.title")}</h2>
                         {reviewSummary.review_count > 0 && (
                             <select
                                 value={reviewSort}
                                 onChange={(e) => setReviewSort(e.target.value)}
                                 className="text-xs border border-line rounded-md px-2 py-1.5 focus-ring"
                             >
-                                <option value="newest">Newest</option>
-                                <option value="highest">Highest rated</option>
-                                <option value="lowest">Lowest rated</option>
+                                <option value="newest">{t("filters.sortNewest")}</option>
+                                <option value="highest">{t("filters.sortRating")}</option>
+                                <option value="lowest">{t("reviews.sortLowest")}</option>
                             </select>
                         )}
                     </div>
                     {reviewSummary.average_rating && (
                         <p className="text-ash text-xs mb-4 flex items-center gap-0.5">
-                            <span className="text-mango">★</span> {reviewSummary.average_rating} average ·{" "}
-                            {reviewSummary.review_count === 1
-                                ? "1 review"
-                                : `${reviewSummary.review_count} reviews`}
+                            <span className="text-mango">★</span> {reviewSummary.review_count === 1
+                                ? t("reviews.summaryOne", { rating: reviewSummary.average_rating })
+                                : t("reviews.summaryMany", { rating: reviewSummary.average_rating, count: reviewSummary.review_count })}
                         </p>
                     )}
 
                     <RatingBreakdown breakdown={reviewBreakdown} reviewCount={reviewSummary.review_count} />
 
                     {!reviewsLoading && reviews.length === 0 && (
-                        <p className="text-ash text-sm">No reviews yet.</p>
+                        <p className="text-ash text-sm">{t("reviews.none")}</p>
                     )}
 
                     <ul className="space-y-4">
@@ -340,7 +338,7 @@ export default function StorePage() {
                                 {r.comment && <p className="text-sm text-ink/80 mb-1">{r.comment}</p>}
                                 {r.product_slug && (
                                     <Link to={`/products/${r.product_slug}`} className={`text-xs ${theme.text} hover:underline`}>
-                                        on {r.product_name}
+                                        {t("store.onProduct", { product: r.product_name })}
                                     </Link>
                                 )}
                                 {r.photos?.length > 0 && (
@@ -358,7 +356,7 @@ export default function StorePage() {
                                 )}
                                 {r.seller_reply && (
                                     <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
-                                        <p className="text-xs font-medium text-ink mb-0.5">Seller response</p>
+                                        <p className="text-xs font-medium text-ink mb-0.5">{t("reviews.sellerResponse")}</p>
                                         <p className="text-xs text-ink/80">{r.seller_reply}</p>
                                     </div>
                                 )}
@@ -372,7 +370,7 @@ export default function StorePage() {
                             disabled={reviewsLoading}
                             className={`mt-4 text-sm ${theme.text} hover:underline disabled:opacity-50`}
                         >
-                            {reviewsLoading ? "Loading…" : "Load more reviews"}
+                            {reviewsLoading ? t("common.loading") : t("reviews.loadMore")}
                         </button>
                     )}
                 </div>

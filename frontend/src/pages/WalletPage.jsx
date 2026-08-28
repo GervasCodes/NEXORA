@@ -5,10 +5,12 @@ import PageLoader from "../components/PageLoader";
 import PhoneInput from "../components/PhoneInput";
 import EmptyState from "../components/ui/EmptyState";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 
 export default function WalletPage() {
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -45,22 +47,22 @@ export default function WalletPage() {
     return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Wallet" noIndex />
-            <h1 className="font-display text-2xl mb-1">Wallet</h1>
-            <p className="text-ash text-sm mb-8">Top up your balance to pay for orders instantly at checkout.</p>
+            <h1 className="font-display text-2xl mb-1">{t("wallet.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("wallet.subtitle")}</p>
 
             <div className="border border-line rounded-lg p-6 mb-8">
-                <p className="text-xs uppercase tracking-widest text-ash mb-1">Balance</p>
+                <p className="text-xs uppercase tracking-widest text-ash mb-1">{t("wallet.balance")}</p>
                 <p className="font-display text-3xl">{format(summary?.balance || 0)}</p>
             </div>
 
             <form onSubmit={submitTopUp} className="space-y-4 mb-10">
-                <h2 className="font-display text-lg">Top up</h2>
+                <h2 className="font-display text-lg">{t("wallet.topUpTitle")}</h2>
                 <div>
-                    <label htmlFor="topup-phone" className="block text-sm mb-1">Mobile money number</label>
+                    <label htmlFor="topup-phone" className="block text-sm mb-1">{t("wallet.mobileMoneyNumber")}</label>
                     <PhoneInput id="topup-phone" value={phone} onChange={setPhone} required />
                 </div>
                 <div>
-                    <label htmlFor="topup-amount" className="block text-sm mb-1">Amount</label>
+                    <label htmlFor="topup-amount" className="block text-sm mb-1">{t("wallet.amount")}</label>
                     <input
                         id="topup-amount"
                         type="number"
@@ -80,15 +82,15 @@ export default function WalletPage() {
                     disabled={submitting}
                     className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                    {submitting ? "Sending…" : "Top up"}
+                    {submitting ? t("wallet.sending") : t("wallet.topUpButton")}
                 </button>
             </form>
 
-            <h2 className="font-display text-lg mb-3">Transaction history</h2>
+            <h2 className="font-display text-lg mb-3">{t("wallet.transactionHistory")}</h2>
             {summary?.transactions?.length === 0 ? (
                 <EmptyState
-                    title="No wallet transactions yet"
-                    hint="Top up above to get started, or pay for an order to see activity here."
+                    title={t("wallet.noTransactionsTitle")}
+                    hint={t("wallet.noTransactionsHint")}
                     icon={
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-7 h-7 text-ash">
                             <rect x="2" y="6" width="20" height="14" rx="2" />

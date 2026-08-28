@@ -10,16 +10,19 @@ import NexoraAnalyticsSummary from "../../components/ai/NexoraAnalyticsSummary";
 import NexoraDemandForecast from "../../components/ai/NexoraDemandForecast";
 import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
+import { useLanguage } from "../../context/LanguageContext";
 
-const STATUS_LABELS = {
-    pending: "Pending",
-    processing: "Processing",
-    shipped: "Shipped",
-    delivered: "Delivered",
-    cancelled: "Cancelled"
-};
+function useStatusLabels(t) {
+    return {
+        pending: t("seller.analytics.statusPending"),
+        processing: t("seller.analytics.statusProcessing"),
+        shipped: t("seller.analytics.statusShipped"),
+        delivered: t("seller.analytics.statusDelivered"),
+        cancelled: t("seller.analytics.statusCancelled")
+    };
+}
 
-// Merchant-Type-Aware Dashboard - GET /seller/analytics stays
+// Merchant-Type-Aware Dashboard (Phase 4) - GET /seller/analytics stays
 // the single source of truth for the paid Verified Seller fee gate
 // (requireVerificationFeePaid isn't merchant-type-specific, so every
 // merchant type still needs it called once to know whether analytics is
@@ -66,6 +69,8 @@ function summarizeBookings(bookings) {
 }
 
 export default function SellerAnalytics() {
+    const { t } = useLanguage();
+    const STATUS_LABELS = useStatusLabels(t);
     const { profile, refreshProfile } = useOutletContext();
     const merchantType = profile?.merchant_type || "product";
     const showProducts = merchantType === "product" || merchantType === "hybrid";
@@ -73,21 +78,17 @@ export default function SellerAnalytics() {
 
     const [analytics, setAnalytics] = useState(null);
     const [bookingStats, setBookingStats] = useState(null);
-
-    // Advanced Analytics - period comparison + top customers
+    // Phase A5 (Advanced Analytics) - period comparison + top customers
     // for this seller's product sales.
-
     const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [feeRequired, setFeeRequired] = useState(null); // required_fee amount, or null if not locked
     const [exportingType, setExportingType] = useState(null);
-
     // Trend view toggle - Bar/Line render the exact same dailySales data,
     // this just swaps which of the two chart components draws it.
     const [chartView, setChartView] = useState("bar");
-
-    // Advanced Analytics Visualization - custom date-range selection,
+    // Phase P8 (Analytics Visualization) - custom date-range selection,
     // same shape as AdminDashboard.jsx's equivalent state.
     const [customStart, setCustomStart] = useState("");
     const [customEnd, setCustomEnd] = useState("");
@@ -124,27 +125,25 @@ export default function SellerAnalytics() {
 
     // Re-fetches just the advanced-analytics section with the chosen
     // custom range, same pattern as AdminDashboard.jsx's applyCustomRange.
-
     const applyCustomRange = () => {
         setCustomRangeError("");
         if (!customStart || !customEnd) {
-            setCustomRangeError("Pick both a start and end date.");
+            setCustomRangeError(t("seller.analytics.pickBothDates"));
             return;
         }
         if (new Date(customEnd) <= new Date(customStart)) {
-            setCustomRangeError("End date must be after start date.");
+            setCustomRangeError(t("seller.analytics.endAfterStart"));
             return;
         }
         setLoadingCustomRange(true);
         api.get("/seller/analytics/advanced", { params: { start: customStart, end: customEnd } })
             .then(({ data }) => setAdvancedAnalytics(data.data))
-            .catch((err) => setCustomRangeError(err.response?.data?.message || "Couldn't load that range."))
+            .catch((err) => setCustomRangeError(err.response?.data?.message || t("seller.analytics.couldntLoadRange")))
             .finally(() => setLoadingCustomRange(false));
     };
 
     // Same blob-download pattern the admin dashboard uses for its CSV
     // exports - Bearer auth means a plain <a href> can't be used.
-
     const handleExportCsv = useCallback((type) => {
         setExportingType(type);
         api.get(`/seller/analytics/export?type=${type}`, { responseType: "blob" })
@@ -164,7 +163,6 @@ export default function SellerAnalytics() {
     // Skeleton mirrors the real dashboard's shape (stat cards, chart,
     // two product/service lists) rather than a full-page blocking
     // spinner - Phase 8 UX Polish ("heavy dashboards" call-out).
-
     if (loading) {
         return (
             <div className="animate-fade-in">
@@ -202,9 +200,9 @@ export default function SellerAnalytics() {
     if (feeRequired !== null) {
         return (
             <div>
-                <h1 className="font-display text-2xl mb-1">Analytics</h1>
+                <h1 className="font-display text-2xl mb-1">{t("seller.analytics.title")}</h1>
                 <p className="text-ash text-sm mb-8">
-                    Analytics is part of the paid Verified Seller features - pay the one-time fee below to unlock it.
+                    {t("seller.analytics.feeGateDescription")}
                 </p>
                 <VerificationFeeGate
                     requiredFee={feeRequired}
@@ -226,8 +224,8 @@ export default function SellerAnalytics() {
     return (
         <div className="animate-fade-in">
             <PageMeta title="Analytics" noIndex />
-            <h1 className="font-display text-2xl mb-1">Analytics</h1>
-            <p className="text-ash text-sm mb-8">How {profile.store_name} is performing.</p>
+            <h1 className="font-display text-2xl mb-1">{t("seller.analytics.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("seller.analytics.subtitle", { store: profile.store_name })}</p>
 
             <NexoraAnalyticsSummary />
             <NexoraDemandForecast />
@@ -235,10 +233,10 @@ export default function SellerAnalytics() {
             {showProducts && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                        <Stat label="Gross sales" value={formatMoney(totals.grossSales)} mono delay={0} />
-                        <Stat label={`Commission paid (${commissionRate}%)`} value={formatMoney(totals.commissionPaid)} mono delay={40} />
-                        <Stat label="Net earnings" value={formatMoney(totals.netEarnings)} mono delay={80} highlight />
-                        <Stat label="Total orders" value={totals.totalOrders} delay={120} />
+                        <Stat label={t("seller.analytics.grossSales")} value={formatMoney(totals.grossSales)} mono delay={0} />
+                        <Stat label={t("seller.analytics.commissionPaid", { rate: commissionRate })} value={formatMoney(totals.commissionPaid)} mono delay={40} />
+                        <Stat label={t("seller.analytics.netEarnings")} value={formatMoney(totals.netEarnings)} mono delay={80} highlight />
+                        <Stat label={t("seller.analytics.totalOrders")} value={totals.totalOrders} delay={120} />
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
@@ -249,21 +247,21 @@ export default function SellerAnalytics() {
 
                     <div className="border border-line rounded-lg p-4 mb-10 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "320ms" }}>
                         <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm font-medium">Sales - last 30 days</p>
+                            <p className="text-sm font-medium">{t("seller.analytics.salesLast30")}</p>
                             <div className="flex items-center border border-line rounded-md overflow-hidden text-[11px]">
                                 <button
                                     type="button"
                                     onClick={() => setChartView("bar")}
                                     className={`px-2 py-1 transition-colors ${chartView === "bar" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
                                 >
-                                    Bar
+                                    {t("seller.analytics.bar")}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setChartView("line")}
                                     className={`px-2 py-1 transition-colors ${chartView === "line" ? "bg-azure text-paper" : "text-ash hover:bg-line/30"}`}
                                 >
-                                    Line
+                                    {t("seller.analytics.line")}
                                 </button>
                             </div>
                         </div>
@@ -282,16 +280,16 @@ export default function SellerAnalytics() {
 
                     <div className="grid md:grid-cols-2 gap-6 mb-10">
                         <div className="border border-line rounded-lg p-4 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "360ms" }}>
-                            <p className="text-sm font-medium mb-4">Best-selling products</p>
+                            <p className="text-sm font-medium mb-4">{t("seller.analytics.bestSellingProducts")}</p>
                             {topProducts.length === 0 ? (
-                                <p className="text-ash text-sm">No sales yet.</p>
+                                <p className="text-ash text-sm">{t("seller.analytics.noSalesYet")}</p>
                             ) : (
                                 <ul className="space-y-3">
                                     {topProducts.map((p) => (
                                         <li key={p.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
                                             <span className="truncate pr-3">{p.name}</span>
                                             <span className="text-ash whitespace-nowrap">
-                                                {p.units_sold} sold · <span className="price">{formatMoney(p.revenue)}</span>
+                                                {t("seller.analytics.soldSuffix", { count: p.units_sold })} · <span className="price">{formatMoney(p.revenue)}</span>
                                             </span>
                                         </li>
                                     ))}
@@ -300,23 +298,23 @@ export default function SellerAnalytics() {
                         </div>
 
                         <div className="border border-line rounded-lg p-4 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "400ms" }}>
-                            <p className="text-sm font-medium mb-4">Customers</p>
-                            <Stat label="Repeat customers" value={repeatCustomers} />
+                            <p className="text-sm font-medium mb-4">{t("seller.analytics.customers")}</p>
+                            <Stat label={t("seller.analytics.repeatCustomers")} value={repeatCustomers} />
                         </div>
                     </div>
 
                     {advancedAnalytics && (
                         <div className="mb-10">
-                            <p className="text-sm font-medium mb-4">Advanced analytics</p>
+                            <p className="text-sm font-medium mb-4">{t("seller.analytics.advancedAnalytics")}</p>
 
-                            {/* Analytics Visualization - custom date-range
+                            {/* Phase P8 (Analytics Visualization) - custom date-range
                                 selection, same shape/behavior as AdminDashboard.jsx's
                                 equivalent section. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
-                                <p className="text-xs uppercase tracking-widest text-ash mb-3">Custom date range</p>
+                                <p className="text-xs uppercase tracking-widest text-ash mb-3">{t("seller.analytics.customDateRange")}</p>
                                 <div className="flex flex-wrap items-end gap-3">
                                     <label className="text-xs text-ash flex flex-col gap-1">
-                                        Start
+                                        {t("seller.analytics.start")}
                                         <input
                                             type="date"
                                             value={customStart}
@@ -325,7 +323,7 @@ export default function SellerAnalytics() {
                                         />
                                     </label>
                                     <label className="text-xs text-ash flex flex-col gap-1">
-                                        End
+                                        {t("seller.analytics.end")}
                                         <input
                                             type="date"
                                             value={customEnd}
@@ -339,7 +337,7 @@ export default function SellerAnalytics() {
                                         disabled={loadingCustomRange}
                                         className="text-sm bg-azure text-paper px-3 py-1.5 rounded-md hover:bg-azure-deep transition-colors disabled:opacity-50"
                                     >
-                                        {loadingCustomRange ? "Loading…" : "Apply"}
+                                        {loadingCustomRange ? t("common.loading") : t("seller.analytics.apply")}
                                     </button>
                                     {advancedAnalytics.periodComparison.custom && !loadingCustomRange && (
                                         <button
@@ -347,7 +345,7 @@ export default function SellerAnalytics() {
                                             onClick={() => { setCustomStart(""); setCustomEnd(""); setCustomRangeError(""); load(); }}
                                             className="text-xs text-ash hover:underline"
                                         >
-                                            Clear
+                                            {t("seller.analytics.clear")}
                                         </button>
                                     )}
                                 </div>
@@ -356,20 +354,20 @@ export default function SellerAnalytics() {
 
                             <div className={`grid grid-cols-1 gap-4 mb-6 ${advancedAnalytics.periodComparison.custom ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                                 <PeriodComparisonCard
-                                    label="This week vs last week"
+                                    label={t("seller.analytics.weekVsLastWeek")}
                                     current={advancedAnalytics.periodComparison.week.current}
                                     previous={advancedAnalytics.periodComparison.week.previous}
                                     growthPercent={advancedAnalytics.periodComparison.week.growthPercent}
                                     formatValue={formatMoney}
-                                    transactionLabel="orders"
+                                    transactionLabel={t("seller.analytics.ordersLabel")}
                                 />
                                 <PeriodComparisonCard
-                                    label="Last 30 days vs prior 30 days"
+                                    label={t("seller.analytics.monthVsPrior")}
                                     current={advancedAnalytics.periodComparison.month.current}
                                     previous={advancedAnalytics.periodComparison.month.previous}
                                     growthPercent={advancedAnalytics.periodComparison.month.growthPercent}
                                     formatValue={formatMoney}
-                                    transactionLabel="orders"
+                                    transactionLabel={t("seller.analytics.ordersLabel")}
                                 />
                                 {advancedAnalytics.periodComparison.custom && (
                                     <PeriodComparisonCard
@@ -378,25 +376,25 @@ export default function SellerAnalytics() {
                                         previous={advancedAnalytics.periodComparison.custom.previous}
                                         growthPercent={advancedAnalytics.periodComparison.custom.growthPercent}
                                         formatValue={formatMoney}
-                                        transactionLabel="orders"
+                                        transactionLabel={t("seller.analytics.ordersLabel")}
                                     />
                                 )}
                             </div>
 
-                            {/* Analytics Visualization - GMV bar chart alongside
+                            {/* Phase P8 (Analytics Visualization) - GMV bar chart alongside
                                 the text cards, same pairing AdminDashboard.jsx uses. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
-                                <p className="text-sm font-medium mb-4">Period comparison, visualized</p>
+                                <p className="text-sm font-medium mb-4">{t("seller.analytics.periodComparisonVisualized")}</p>
                                 <BarChart
                                     data={[
-                                        { label: "Last week", revenue: advancedAnalytics.periodComparison.week.previous.gmv },
-                                        { label: "This week", revenue: advancedAnalytics.periodComparison.week.current.gmv },
-                                        { label: "Prior 30d", revenue: advancedAnalytics.periodComparison.month.previous.gmv },
-                                        { label: "Last 30d", revenue: advancedAnalytics.periodComparison.month.current.gmv },
+                                        { label: t("seller.analytics.lastWeek"), revenue: advancedAnalytics.periodComparison.week.previous.gmv },
+                                        { label: t("seller.analytics.thisWeek"), revenue: advancedAnalytics.periodComparison.week.current.gmv },
+                                        { label: t("seller.analytics.prior30d"), revenue: advancedAnalytics.periodComparison.month.previous.gmv },
+                                        { label: t("seller.analytics.last30d"), revenue: advancedAnalytics.periodComparison.month.current.gmv },
                                         ...(advancedAnalytics.periodComparison.custom
                                             ? [
-                                                { label: "Custom (prior)", revenue: advancedAnalytics.periodComparison.custom.previous.gmv },
-                                                { label: "Custom (selected)", revenue: advancedAnalytics.periodComparison.custom.current.gmv }
+                                                { label: t("seller.analytics.customPrior"), revenue: advancedAnalytics.periodComparison.custom.previous.gmv },
+                                                { label: t("seller.analytics.customSelected"), revenue: advancedAnalytics.periodComparison.custom.current.gmv }
                                             ]
                                             : [])
                                     ]}
@@ -409,7 +407,7 @@ export default function SellerAnalytics() {
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="border border-line rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-4">
-                                        <p className="text-sm font-medium">Top customers</p>
+                                        <p className="text-sm font-medium">{t("seller.analytics.topCustomers")}</p>
                                         <div className="flex items-center gap-3">
                                             <button
                                                 type="button"
@@ -417,7 +415,7 @@ export default function SellerAnalytics() {
                                                 disabled={exportingType === "customers"}
                                                 className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                {exportingType === "customers" ? "Preparing…" : "Export customers ↓"}
+                                                {exportingType === "customers" ? t("seller.analytics.preparing") : t("seller.analytics.exportCustomers")}
                                             </button>
                                             <button
                                                 type="button"
@@ -425,19 +423,19 @@ export default function SellerAnalytics() {
                                                 disabled={exportingType === "products"}
                                                 className="text-xs text-teal hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                {exportingType === "products" ? "Preparing…" : "Export products ↓"}
+                                                {exportingType === "products" ? t("seller.analytics.preparing") : t("seller.analytics.exportProducts")}
                                             </button>
                                         </div>
                                     </div>
                                     {advancedAnalytics.topCustomers.length === 0 ? (
-                                        <p className="text-ash text-sm">No sales yet.</p>
+                                        <p className="text-ash text-sm">{t("seller.analytics.noSalesYet")}</p>
                                     ) : (
                                         <ul className="space-y-3">
                                             {advancedAnalytics.topCustomers.map((c) => (
                                                 <li key={c.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
                                                     <span className="truncate pr-3">{c.name}</span>
                                                     <span className="text-ash whitespace-nowrap">
-                                                        {c.transaction_count} orders · <span className="price">{formatMoney(c.total_spend)}</span>
+                                                        {t("seller.analytics.ordersSuffix", { count: c.transaction_count })} · <span className="price">{formatMoney(c.total_spend)}</span>
                                                     </span>
                                                 </li>
                                             ))}
@@ -445,7 +443,7 @@ export default function SellerAnalytics() {
                                     )}
                                 </div>
 
-                                {/* Analytics Visualization - "Add seller
+                                {/* Phase P8 (Analytics Visualization) - "Add seller
                                     leaderboard": platform-wide top 5 (public storefront
                                     info, same as admin sees) plus this seller's own
                                     rank/row highlighted even when it falls outside the
@@ -453,12 +451,12 @@ export default function SellerAnalytics() {
                                     getSellerLeaderboardStanding. */}
                                 {advancedAnalytics.leaderboardStanding && (
                                     <div className="border border-line rounded-lg p-4">
-                                        <p className="text-sm font-medium mb-1">Seller leaderboard</p>
+                                        <p className="text-sm font-medium mb-1">{t("seller.analytics.sellerLeaderboard")}</p>
                                         <p className="text-xs text-ash mb-4">
-                                            Ranked by blended product + service revenue, platform-wide.
+                                            {t("seller.analytics.leaderboardHint")}
                                         </p>
                                         {advancedAnalytics.leaderboardStanding.top.length === 0 ? (
-                                            <p className="text-ash text-sm">No paid orders or bookings yet.</p>
+                                            <p className="text-ash text-sm">{t("seller.analytics.noRankedYet")}</p>
                                         ) : (
                                             <ul className="space-y-2.5">
                                                 {advancedAnalytics.leaderboardStanding.top.map((s) => (
@@ -479,7 +477,7 @@ export default function SellerAnalytics() {
                                             <div className="mt-3 pt-3 border-t border-line flex items-center gap-2 text-sm bg-teal/10 -mx-2 px-2 py-1.5 rounded-md">
                                                 <span className="text-ash text-xs w-5 shrink-0">{advancedAnalytics.leaderboardStanding.own.rank}</span>
                                                 <span className="flex-1 min-w-0 truncate">
-                                                    You · of {advancedAnalytics.leaderboardStanding.totalRankedSellers} ranked sellers
+                                                    {t("seller.analytics.youOfRanked", { total: advancedAnalytics.leaderboardStanding.totalRankedSellers })}
                                                 </span>
                                                 <span className="price text-xs font-medium shrink-0">
                                                     {formatMoney(advancedAnalytics.leaderboardStanding.own.total_revenue)}
@@ -487,7 +485,7 @@ export default function SellerAnalytics() {
                                             </div>
                                         )}
                                         {!advancedAnalytics.leaderboardStanding.own && (
-                                            <p className="text-xs text-ash mt-3">No paid revenue yet, so you're not ranked.</p>
+                                            <p className="text-xs text-ash mt-3">{t("seller.analytics.notRankedYet")}</p>
                                         )}
                                     </div>
                                 )}
@@ -500,15 +498,15 @@ export default function SellerAnalytics() {
             {showServices && bookingStats && (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                        <Stat label="Booking revenue" value={formatMoney(bookingStats.grossBookingRevenue)} mono delay={0} />
-                        <Stat label="Total bookings" value={bookingStats.totalBookings} delay={40} />
-                        <Stat label="Pending bookings" value={bookingStats.pendingBookings} delay={80} />
+                        <Stat label={t("seller.analytics.bookingRevenue")} value={formatMoney(bookingStats.grossBookingRevenue)} mono delay={0} />
+                        <Stat label={t("seller.analytics.totalBookings")} value={bookingStats.totalBookings} delay={40} />
+                        <Stat label={t("seller.analytics.pendingBookings")} value={bookingStats.pendingBookings} delay={80} />
                     </div>
 
                     <div className="border border-line rounded-lg p-4 mb-10 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "320ms" }}>
-                        <p className="text-sm font-medium mb-4">Booking revenue - last 30 days</p>
+                        <p className="text-sm font-medium mb-4">{t("seller.analytics.bookingRevenueLast30")}</p>
                         {bookingStats.dailyBookings.length === 0 ? (
-                            <p className="text-ash text-sm">No paid bookings yet.</p>
+                            <p className="text-ash text-sm">{t("seller.analytics.noPaidBookings")}</p>
                         ) : (
                             <>
                                 <BarChart data={bookingStats.dailyBookings} labelKey="day" valueKey="amount" formatValue={formatMoney} />
@@ -521,16 +519,16 @@ export default function SellerAnalytics() {
                     </div>
 
                     <div className="border border-line rounded-lg p-4 animate-slide-up hover:shadow-md transition-shadow" style={{ animationDelay: "360ms" }}>
-                        <p className="text-sm font-medium mb-4">Best-booked services</p>
+                        <p className="text-sm font-medium mb-4">{t("seller.analytics.bestBookedServices")}</p>
                         {bookingStats.topServices.length === 0 ? (
-                            <p className="text-ash text-sm">No bookings yet.</p>
+                            <p className="text-ash text-sm">{t("seller.analytics.noBookingsYet")}</p>
                         ) : (
                             <ul className="space-y-3">
                                 {bookingStats.topServices.map((s) => (
                                     <li key={s.id} className="flex items-center justify-between text-sm px-2 -mx-2 py-1 rounded-md transition-colors hover:bg-line/30">
                                         <span className="truncate pr-3">{s.name}</span>
                                         <span className="text-ash whitespace-nowrap">
-                                            {s.bookings} booked · <span className="price">{formatMoney(s.revenue)}</span>
+                                            {t("seller.analytics.bookedSuffix", { count: s.bookings })} · <span className="price">{formatMoney(s.revenue)}</span>
                                         </span>
                                     </li>
                                 ))}

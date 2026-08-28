@@ -167,7 +167,7 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
                         value={sellerId}
                         onChange={handleSellerChange}
                         disabled={sellersError || sellers.length === 0}
-                        className="w-44 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
+                        className="w-44 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
                     >
                         <option value="">{t("filters.allStores")}</option>
                         {sellers.map((seller) => (
@@ -187,7 +187,7 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
                         value={region}
                         onChange={handleRegionChange}
                         disabled={regionsError || regions.length === 0}
-                        className="w-40 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
+                        className="w-40 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
                     >
                         <option value="">{t("filters.allLocations")}</option>
                         {regions.map((r) => (
@@ -205,7 +205,7 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
                     id="filter-rating"
                     value={minRating}
                     onChange={handleRatingChange}
-                    className="w-32 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink"
+                    className="w-32 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink"
                 >
                     <option value="">{t("filters.anyRating")}</option>
                     {RATING_OPTIONS.map((stars) => (
@@ -224,7 +224,7 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
                     id="filter-sort"
                     value={sort}
                     onChange={handleSortChange}
-                    className="w-40 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink"
+                    className="w-40 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink"
                 >
                     {SORT_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{t(option.labelKey)}</option>

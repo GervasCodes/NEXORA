@@ -171,7 +171,7 @@ export default function Register() {
                             accept="image/*"
                             required
                             onChange={updateFile("owner_photo")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                         />
                     </div>
 
@@ -180,7 +180,7 @@ export default function Register() {
                         <select
                             value={idDocType}
                             onChange={(e) => setIdDocType(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper mb-2"
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper mb-2"
                         >
                             <option value="national_id">{t("auth.verify.nationalId")}</option>
                             <option value="voter_id">{t("auth.verify.voterId")}</option>
@@ -190,7 +190,7 @@ export default function Register() {
                             accept="image/*,application/pdf"
                             required
                             onChange={updateFile("id_document")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                         />
                     </div>
 
@@ -202,7 +202,7 @@ export default function Register() {
                                 accept="image/*,application/pdf"
                                 required
                                 onChange={updateFile("drivers_license")}
-                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                                className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                             />
                         </div>
                     )}
@@ -214,7 +214,7 @@ export default function Register() {
                                 <select
                                     value={form.vehicle_type}
                                     onChange={update("vehicle_type")}
-                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                                    className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                                 >
                                     <option value="bicycle">{t("auth.verify.bicycle")}</option>
                                     <option value="motorcycle">{t("auth.verify.motorcycle")}</option>
@@ -231,7 +231,7 @@ export default function Register() {
                                     placeholder="e.g. T123 ABC"
                                     value={form.vehicle_plate_number}
                                     onChange={update("vehicle_plate_number")}
-                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
+                                    className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                                 />
                             </div>
                         </div>
@@ -299,7 +299,7 @@ export default function Register() {
                             value={countryDial}
                             onChange={(e) => setCountryDial(e.target.value)}
                             aria-label={t("auth.countryCodeLabel")}
-                            className="w-32 shrink-0 border border-line rounded-md px-2 py-2 text-sm focus-ring bg-paper"
+                            className="w-32 shrink-0 border border-line rounded-md px-2 py-2 text-base focus-ring bg-paper"
                         >
                             {COUNTRY_CODES.map((c) => (
                                 <option key={c.iso2} value={c.dial}>
@@ -335,7 +335,7 @@ export default function Register() {
                 <div>
                     <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
                     <select value={form.role} onChange={update("role")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                         <option value="buyer">{t("auth.roleBuyer")}</option>
                         <option value="seller">{t("auth.roleSeller")}</option>
                         <option value="delivery_agent">{t("auth.roleDeliveryAgent")}</option>

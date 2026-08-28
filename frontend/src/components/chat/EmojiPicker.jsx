@@ -7,7 +7,7 @@ export const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"
 export default function EmojiPicker({ onSelect, myReactions = [], className = "" }) {
     return (
         <div
-            className={`glass-strong rounded-full shadow-lg px-2 py-1.5 flex items-center gap-0.5 animate-pop-in ${className}`}
+            className={`glass-strong rounded-full shadow-lg px-2 py-1.5 flex items-center gap-1 overflow-x-auto max-w-full animate-pop-in ${className}`}
             role="menu"
             aria-label="React with an emoji"
         >
@@ -18,7 +18,7 @@ export default function EmojiPicker({ onSelect, myReactions = [], className = ""
                     role="menuitem"
                     onClick={() => onSelect(emoji)}
                     aria-pressed={myReactions.includes(emoji)}
-                    className={`text-lg leading-none w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-125 active:scale-95 ${
+                    className={`text-lg leading-none w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-transform hover:scale-125 active:scale-95 ${
                         myReactions.includes(emoji) ? "bg-mango/20" : "hover:bg-line/40"
                     }`}
                 >

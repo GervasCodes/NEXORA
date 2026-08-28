@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import { useToast } from "../context/ToastContext";
@@ -10,6 +11,7 @@ import Avatar from "../components/ui/Avatar";
 
 export default function Messages() {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [conversations, setConversations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmingId, setConfirmingId] = useState(null);
@@ -69,11 +71,11 @@ export default function Messages() {
     if (conversations.length === 0) {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-                <p className="font-display text-2xl mb-2">No messages yet</p>
+                <p className="font-display text-2xl mb-2">{t("messages.emptyTitle")}</p>
                 <p className="text-ash text-sm">
                     {user.role === "buyer"
-                        ? "Message a seller from any product page to start a conversation."
-                        : "Buyers can message you from your product pages."}
+                        ? t("messages.emptyHintBuyer")
+                        : t("messages.emptyHintSeller")}
                 </p>
             </div>
         );
@@ -82,7 +84,7 @@ export default function Messages() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Messages" noIndex />
-            <h1 className="font-display text-3xl mb-6">Messages</h1>
+            <h1 className="font-display text-3xl mb-6">{t("messages.title")}</h1>
 
             <div className="relative mb-6">
                 <svg
@@ -98,14 +100,14 @@ export default function Messages() {
                 <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search conversations…"
+                    placeholder={t("messages.searchPlaceholder")}
                     className="w-full border border-line rounded-full pl-9 pr-4 py-2 text-sm focus-ring"
                 />
             </div>
 
 
             {query.trim() && filtered.length === 0 && (
-                <p className="text-ash text-sm text-center py-10">No conversations match "{query.trim()}".</p>
+                <p className="text-ash text-sm text-center py-10">{t("messages.noMatches", { query: query.trim() })}</p>
             )}
 
             <ul className="divide-y divide-line border-y border-line">
@@ -127,9 +129,9 @@ export default function Messages() {
                                     )}
                                 </div>
                                 {c.product_name && (
-                                    <p className="text-xs text-azure-deep truncate">Re: {c.product_name}</p>
+                                    <p className="text-xs text-azure-deep truncate">{t("messages.reLabel", { product: c.product_name })}</p>
                                 )}
-                                <p className="text-xs text-ash truncate">{c.last_message || "No messages yet"}</p>
+                                <p className="text-xs text-ash truncate">{c.last_message || t("messages.noMessagePreview")}</p>
                             </div>
                         </Link>
 
@@ -137,28 +139,28 @@ export default function Messages() {
                             <button
                                 type="button"
                                 onClick={() => setConfirmingId(c.id)}
-                                aria-label="Delete conversation"
+                                aria-label={t("messages.deleteAria")}
                                 className="absolute right-1 top-1/2 -translate-y-1/2 text-xs text-ash hover:text-coral opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity px-2 py-1"
                             >
-                                Delete
+                                {t("messages.deleteButton")}
                             </button>
                         ) : (
                             <div className="absolute right-1 top-1/2 -translate-y-1/2 glass-strong rounded-md shadow-lg px-3 py-2 flex items-center gap-2 text-xs z-10 whitespace-nowrap">
-                                <span className="text-ash">Delete this chat?</span>
+                                <span className="text-ash">{t("chat.deleteConversationConfirm")}</span>
                                 <button
                                     type="button"
                                     onClick={() => handleDeleteConversation(c.id)}
                                     disabled={deletingId === c.id}
                                     className="text-coral font-medium hover:underline disabled:opacity-60"
                                 >
-                                    {deletingId === c.id ? "Deleting…" : "Yes, delete"}
+                                    {deletingId === c.id ? t("chat.deleting") : t("chat.confirmDelete")}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setConfirmingId(null)}
                                     className="text-ash hover:text-ink"
                                 >
-                                    Cancel
+                                    {t("common.cancel")}
                                 </button>
                             </div>
                         )}

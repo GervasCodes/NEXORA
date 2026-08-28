@@ -6,42 +6,46 @@ import PhoneInput from "../../components/PhoneInput";
 import { STORE_THEMES } from "../../utils/storeThemes";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import { useLanguage } from "../../context/LanguageContext";
 
-// (Merchant Type Switching) - reuses the same
+// Nexora Services Phase 3 (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
 // and SellerServices' MerchantTypeGate (in-dashboard upgrade prompt)
 // already call. No new backend logic: the route/validator/service/
 // repository already existed and had no restrictions on switching in
 // either direction, so this is purely the general-purpose (all three
 // options, either direction) UI for it living in Settings.
-const MERCHANT_TYPE_OPTIONS = [
-    {
-        value: "product",
-        label: "Products",
-        description: "List physical products for sale."
-    },
-    {
-        value: "service",
-        label: "Services",
-        description: "Offer bookable services - accommodation, transportation, tours, and more."
-    },
-    {
-        value: "hybrid",
-        label: "Products & Services",
-        description: "Sell products and offer bookable services from the same store."
-    }
-];
+function useMerchantTypeOptions(t) {
+    return [
+        {
+            value: "product",
+            label: t("seller.store.merchantProductLabel"),
+            description: t("seller.store.merchantProductDescription")
+        },
+        {
+            value: "service",
+            label: t("seller.store.merchantServiceLabel"),
+            description: t("seller.store.merchantServiceDescription")
+        },
+        {
+            value: "hybrid",
+            label: t("seller.store.merchantHybridLabel"),
+            description: t("seller.store.merchantHybridDescription")
+        }
+    ];
+}
 
-function MerchantTypeSection({ merchantType, onSwitch, switching, error, saved }) {
+function MerchantTypeSection({ merchantType, onSwitch, switching, error, saved, t }) {
+    const options = useMerchantTypeOptions(t);
     return (
         <div className="mb-8 pb-8 border-b border-line">
-            <h2 className="text-sm font-medium mb-1">What you sell</h2>
+            <h2 className="text-sm font-medium mb-1">{t("seller.store.whatYouSell")}</h2>
             <p className="text-xs text-ash mb-3">
-                Controls which dashboard tabs and pages your store sees - Products, Services, or both.
+                {t("seller.store.whatYouSellHint")}
             </p>
 
             <div className="grid gap-2">
-                {MERCHANT_TYPE_OPTIONS.map((option) => (
+                {options.map((option) => (
                     <button
                         key={option.value}
                         type="button"
@@ -59,12 +63,13 @@ function MerchantTypeSection({ merchantType, onSwitch, switching, error, saved }
             </div>
 
             {error && <p role="alert" className="text-coral text-sm mt-3">{error}</p>}
-            {saved && <p className="text-teal text-sm mt-3">Merchant type updated.</p>}
+            {saved && <p className="text-teal text-sm mt-3">{t("seller.store.merchantTypeUpdated")}</p>}
         </div>
     );
 }
 
 export default function SellerStore() {
+    const { t } = useLanguage();
     const { profile, refreshProfile } = useOutletContext();
 
     const [merchantSwitching, setMerchantSwitching] = useState(false);
@@ -180,7 +185,7 @@ export default function SellerStore() {
     return (
         <div className="max-w-lg">
             <PageMeta title="Store Settings" noIndex />
-            <h1 className="font-display text-2xl mb-6">Store settings</h1>
+            <h1 className="font-display text-2xl mb-6">{t("seller.store.title")}</h1>
 
             <MerchantTypeSection
                 merchantType={profile.merchant_type || "product"}
@@ -188,27 +193,28 @@ export default function SellerStore() {
                 switching={merchantSwitching}
                 error={merchantError}
                 saved={merchantSaved}
+                t={t}
             />
 
             <div className="grid grid-cols-2 gap-4 mb-8">
                 <div>
-                    <p className="text-sm mb-2">Logo</p>
+                    <p className="text-sm mb-2">{t("seller.store.logo")}</p>
                     <div className="w-24 h-24 rounded-md overflow-hidden border border-line bg-line/30 mb-2">
                         {profile.store_logo && <img src={profile.store_logo} alt="" className="w-full h-full object-cover" />}
                     </div>
                     <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploadingLogo ? "Uploading…" : "Change logo"}
+                        {uploadingLogo ? t("seller.store.uploading") : t("seller.store.changeLogo")}
                         <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
                     </label>
                 </div>
 
                 <div>
-                    <p className="text-sm mb-2">Banner</p>
+                    <p className="text-sm mb-2">{t("seller.store.banner")}</p>
                     <div className="w-full h-24 rounded-md overflow-hidden border border-line bg-line/30 mb-2">
                         {profile.store_banner && <img src={profile.store_banner} alt="" className="w-full h-full object-cover" />}
                     </div>
                     <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploadingBanner ? "Uploading…" : "Change banner"}
+                        {uploadingBanner ? t("seller.store.uploading") : t("seller.store.changeBanner")}
                         <input type="file" accept="image/*" onChange={handleBannerUpload} disabled={uploadingBanner} className="hidden" />
                     </label>
                 </div>
@@ -216,42 +222,42 @@ export default function SellerStore() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm mb-1">Store name</label>
+                    <label className="block text-sm mb-1">{t("seller.store.storeName")}</label>
                     <input minLength={3} maxLength={150} value={form.store_name} onChange={update("store_name")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Store tagline</label>
+                    <label className="block text-sm mb-1">{t("seller.store.storeTagline")}</label>
                     <p className="text-xs text-ash mb-2">
-                        A short line shown right under your store name — e.g. "Fresh flavors, delivered fast".
+                        {t("seller.store.storeTaglineHint")}
                     </p>
                     <input maxLength={150} value={form.store_tagline} onChange={update("store_tagline")}
-                        placeholder="Optional"
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        placeholder={t("seller.store.optional")}
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Store description</label>
+                    <label className="block text-sm mb-1">{t("seller.store.storeDescription")}</label>
                     <textarea rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Store type</label>
+                    <label className="block text-sm mb-1">{t("seller.store.storeType")}</label>
                     <select value={form.store_type_id} onChange={update("store_type_id")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper">
-                        <option value="">Select a store type…</option>
-                        {storeTypes.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
+                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
+                        <option value="">{t("seller.store.selectStoreType")}</option>
+                        {storeTypes.map((st) => (
+                            <option key={st.id} value={st.id}>{st.name}</option>
                         ))}
                     </select>
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Store theme</label>
+                    <label className="block text-sm mb-1">{t("seller.store.storeTheme")}</label>
                     <p className="text-xs text-ash mb-2">
-                        Sets the accent color on your public store page.
+                        {t("seller.store.storeThemeHint")}
                     </p>
                     <div className="flex flex-wrap gap-2.5">
                         {STORE_THEMES.map((theme) => (
@@ -277,31 +283,31 @@ export default function SellerStore() {
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Social links</label>
+                    <label className="block text-sm mb-1">{t("seller.store.socialLinks")}</label>
                     <p className="text-xs text-ash mb-2">
-                        Shown as icons on your public store page. Leave any blank to hide it.
+                        {t("seller.store.socialLinksHint")}
                     </p>
                     <div className="space-y-2">
                         <input value={form.social_instagram} onChange={update("social_instagram")}
-                            placeholder="Instagram (@handle or link)" maxLength={150}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            placeholder={t("seller.store.instagramPlaceholder")} maxLength={150}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                         <input value={form.social_facebook} onChange={update("social_facebook")}
-                            placeholder="Facebook (page name or link)" maxLength={150}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            placeholder={t("seller.store.facebookPlaceholder")} maxLength={150}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                         <input value={form.social_whatsapp} onChange={update("social_whatsapp")}
-                            placeholder="WhatsApp number" maxLength={20}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            placeholder={t("seller.store.whatsappPlaceholder")} maxLength={20}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">Business email</label>
+                        <label className="block text-sm mb-1">{t("seller.store.businessEmail")}</label>
                         <input type="email" value={form.business_email} onChange={update("business_email")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Business phone</label>
+                        <label className="block text-sm mb-1">{t("seller.store.businessPhone")}</label>
                         <PhoneInput
                             value={form.business_phone}
                             onChange={(business_phone) => setForm({ ...form, business_phone })}
@@ -311,27 +317,27 @@ export default function SellerStore() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">Country</label>
+                        <label className="block text-sm mb-1">{t("seller.store.country")}</label>
                         <input value={form.country} onChange={update("country")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Region</label>
+                        <label className="block text-sm mb-1">{t("seller.store.region")}</label>
                         <input value={form.region} onChange={update("region")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">City</label>
+                        <label className="block text-sm mb-1">{t("seller.store.city")}</label>
                         <input value={form.city} onChange={update("city")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Address</label>
+                        <label className="block text-sm mb-1">{t("seller.store.address")}</label>
                         <input value={form.address} onChange={update("address")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
                     </div>
                 </div>
 
@@ -339,17 +345,17 @@ export default function SellerStore() {
                     <LocationPicker
                         value={pickupPin}
                         onChange={setPickupPin}
-                        label="Pickup location (for delivery pricing)"
-                        placedHint="Pin placed — delivery fees for your orders will be priced by distance from here instead of the platform's flat rate."
-                        emptyHint="Tap the map to drop a pin at your store/warehouse. Without one, deliveries for your orders use the platform's flat rider fee instead of distance-based pricing."
+                        label={t("seller.store.pickupLocationLabel")}
+                        placedHint={t("seller.store.pickupPlacedHint")}
+                        emptyHint={t("seller.store.pickupEmptyHint")}
                     />
                 </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
-                {saved && <p className="text-teal text-sm">Store settings saved.</p>}
+                {saved && <p className="text-teal text-sm">{t("seller.store.settingsSaved")}</p>}
 
                 <Button type="submit" disabled={submitting}>
-                    {submitting ? "Saving…" : "Save changes"}
+                    {submitting ? t("seller.store.saving") : t("seller.store.saveChanges")}
                 </Button>
             </form>
         </div>

@@ -128,7 +128,7 @@ export default function KycStatus() {
                             value={documentType}
                             onChange={(e) => setDocumentType(e.target.value)}
                             placeholder="e.g. National ID, Passport"
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring"
                         />
                     </div>
 
@@ -144,7 +144,7 @@ export default function KycStatus() {
                             rows={3}
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring resize-none"
                         />
                     </div>
 

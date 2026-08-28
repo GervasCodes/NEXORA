@@ -10,7 +10,7 @@ const SORT_OPTIONS = [
     { value: "rating", label: "Highest rated" }
 ];
 
-// Customer Experience - same 4-and-up-through-1-and-up ladder
+// Phase 4 (Customer Experience) - same 4-and-up-through-1-and-up ladder
 // as ProductFilters.jsx's RATING_OPTIONS.
 const RATING_OPTIONS = [4, 3, 2, 1];
 
@@ -25,7 +25,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
     const [minRating, setMinRating] = useState("");
     const [sort, setSort] = useState("newest");
 
-    // feeds the Location dropdown, same shape as
+    // Phase 4 - feeds the Location dropdown, same shape as
     // ProductFilters.jsx's own regions effect.
     useEffect(() => {
         setRegionsError(false);
@@ -133,7 +133,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
                     value={region}
                     onChange={handleRegionChange}
                     disabled={regionsError || regions.length === 0}
-                    className="w-40 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
+                    className="w-40 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink disabled:opacity-50"
                 >
                     <option value="">All locations</option>
                     {regions.map((r) => (
@@ -150,7 +150,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
                     id="service-filter-rating"
                     value={minRating}
                     onChange={handleRatingChange}
-                    className="w-32 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink"
+                    className="w-32 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink"
                 >
                     <option value="">Any rating</option>
                     {RATING_OPTIONS.map((stars) => (
@@ -169,7 +169,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
                     id="service-filter-sort"
                     value={sort}
                     onChange={handleSortChange}
-                    className="w-44 border border-line rounded-md px-3 py-1.5 text-sm bg-paper focus:outline-none focus:border-ink"
+                    className="w-44 border border-line rounded-md px-3 py-1.5 text-base bg-paper focus:outline-none focus:border-ink"
                 >
                     {SORT_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>

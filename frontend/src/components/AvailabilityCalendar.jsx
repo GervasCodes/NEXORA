@@ -205,7 +205,7 @@ export default function AvailabilityCalendar({
                     type="button"
                     onClick={goToPrevMonth}
                     aria-label={t("calendar.previousMonth")}
-                    className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-line/50 transition-colors"
+                    className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-line/50 transition-colors"
                 >
                     ‹
                 </button>
@@ -214,7 +214,7 @@ export default function AvailabilityCalendar({
                     type="button"
                     onClick={goToNextMonth}
                     aria-label={t("calendar.nextMonth")}
-                    className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-line/50 transition-colors"
+                    className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-line/50 transition-colors"
                 >
                     ›
                 </button>

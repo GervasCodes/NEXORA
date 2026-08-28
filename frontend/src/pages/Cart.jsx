@@ -6,6 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { SkeletonList } from "../components/Skeleton";
 import Button from "../components/ui/Button";
+import QuantityStepper from "../components/ui/QuantityStepper";
 import PageMeta from "../components/PageMeta";
 
 // Same debounce interval as SearchBox.jsx's DEBOUNCE_MS - quantity edits
@@ -112,13 +113,11 @@ export default function Cart() {
                             <p className="price text-sm text-ash">{format(item.unit_price)} {t("common.each")}</p>
 
                             <div className="flex items-center gap-3 mt-2">
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max={item.stock}
+                                <QuantityStepper
                                     value={displayQuantity(item)}
-                                    onChange={(e) => handleQuantityChange(item.product_id, Math.max(1, Number(e.target.value) || 1))}
-                                    className="w-16 border border-line rounded-md px-2 py-1 text-sm focus-ring transition-colors focus:border-teal"
+                                    onChange={(quantity) => handleQuantityChange(item.product_id, quantity)}
+                                    min={1}
+                                    max={item.stock}
                                 />
                                 <button
                                     onClick={() => handleRemove(item.product_id)}

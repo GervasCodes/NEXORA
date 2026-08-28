@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useSocket } from "../context/SocketContext";
 import MessageBubble from "../components/chat/MessageBubble";
 import TypingIndicator from "../components/chat/TypingIndicator";
@@ -22,6 +23,7 @@ const MAX_ATTACHMENT_MB = 15;
 export default function ConversationThread() {
     const { id } = useParams();
     const { user } = useAuth();
+    const { t } = useLanguage();
     const { socket } = useSocket();
     const navigate = useNavigate();
 
@@ -51,7 +53,7 @@ export default function ConversationThread() {
         setLoading(true);
         api.get(`/chat/conversations/${id}/messages`)
             .then(({ data }) => setMessages(data.data))
-            .catch(() => setError("Couldn't load this conversation."))
+            .catch(() => setError(t("chat.loadError")))
             .finally(() => setLoading(false));
 
         api.put(`/chat/conversations/${id}/read`).catch(() => {});
@@ -176,7 +178,7 @@ export default function ConversationThread() {
         if (!file) return;
 
         if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
-            setError(`Attachments must be under ${MAX_ATTACHMENT_MB}MB`);
+            setError(t("chat.attachmentTooLarge", { size: MAX_ATTACHMENT_MB }));
             return;
         }
         setError("");
@@ -315,11 +317,11 @@ export default function ConversationThread() {
     if (loading) return <PageLoader />;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)]">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
             <PageMeta title="Conversation" noIndex />
             <div className="flex items-center justify-between mb-2 gap-2">
                 <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0">
-                    ← All messages
+                    ← {t("chat.allMessages")}
                 </Link>
 
                 {!confirmingClear && !confirmingDelete && (
@@ -328,57 +330,57 @@ export default function ConversationThread() {
                             type="button"
                             onClick={() => setSearchOpen((v) => !v)}
                             className="text-xs text-ash hover:text-ink transition-colors"
-                            aria-label="Search this conversation"
+                            aria-label={t("chat.searchAria")}
                         >
-                            Search
+                            {t("chat.search")}
                         </button>
                         <button
                             type="button"
                             onClick={() => setConfirmingClear(true)}
                             className="text-xs text-ash hover:text-coral transition-colors"
                         >
-                            Clear chat
+                            {t("chat.clearChat")}
                         </button>
                         <button
                             type="button"
                             onClick={() => setConfirmingDelete(true)}
                             className="text-xs text-ash hover:text-coral transition-colors"
                         >
-                            Delete chat
+                            {t("chat.deleteChat")}
                         </button>
                     </div>
                 )}
 
                 {confirmingClear && (
                     <div className="flex items-center gap-2 text-xs">
-                        <span className="text-ash">Clear for you?</span>
+                        <span className="text-ash">{t("chat.clearForYou")}</span>
                         <button
                             type="button"
                             onClick={handleClearChat}
                             disabled={clearing}
                             className="text-coral font-medium hover:underline disabled:opacity-60"
                         >
-                            {clearing ? "Clearing…" : "Yes, clear"}
+                            {clearing ? t("chat.clearing") : t("chat.confirmClear")}
                         </button>
                         <button type="button" onClick={() => setConfirmingClear(false)} className="text-ash hover:text-ink">
-                            Cancel
+                            {t("common.cancel")}
                         </button>
                     </div>
                 )}
 
                 {confirmingDelete && (
                     <div className="flex items-center gap-2 text-xs">
-                        <span className="text-ash">Delete this chat?</span>
+                        <span className="text-ash">{t("chat.deleteConversationConfirm")}</span>
                         <button
                             type="button"
                             onClick={handleDeleteChat}
                             disabled={deletingChat}
                             className="text-coral font-medium hover:underline disabled:opacity-60"
                         >
-                            {deletingChat ? "Deleting…" : "Yes, delete"}
+                            {deletingChat ? t("chat.deleting") : t("chat.confirmDelete")}
                         </button>
                         <button type="button" onClick={() => setConfirmingDelete(false)} className="text-ash hover:text-ink">
-                            Cancel
+                            {t("common.cancel")}
                         </button>
                     </div>
                 )}
@@ -390,7 +392,7 @@ export default function ConversationThread() {
 
             <div className="flex-1 overflow-y-auto space-y-3 pb-4">
                 {messages.length === 0 && (
-                    <p className="text-ash text-sm text-center py-10">No messages here yet.</p>
+                    <p className="text-ash text-sm text-center py-10">{t("chat.noMessages")}</p>
                 )}
 
                 {messages.map((m) => (
@@ -425,7 +427,7 @@ export default function ConversationThread() {
                         type="button"
                         onClick={() => setAttachmentFile(null)}
                         className="text-ash hover:text-coral text-xs px-1"
-                        aria-label="Remove attachment"
+                        aria-label={t("chat.removeAttachment")}
                     >
                         ✕
                     </button>
@@ -463,7 +465,7 @@ export default function ConversationThread() {
                     onChange={handleDraftChange}
                     onBlur={stopTypingNow}
                     placeholder="Write a message…"
-                    className="flex-1 min-w-0 border border-line rounded-full px-4 py-2 text-sm focus-ring"
+                    className="flex-1 min-w-0 border border-line rounded-full px-4 py-2 text-base focus-ring"
                 />
                 <Button
                     type="submit"

@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
+import DataTable from "../../components/ui/DataTable";
 import PageMeta from "../../components/PageMeta";
-import { useToast } from "../../context/ToastContext";
-import EmptyState from "../../components/ui/EmptyState";
 
 const PAGE_SIZE = 20;
 
@@ -15,7 +13,7 @@ export default function AdminServices() {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
-    const toast = useToast();
+    const [error, setError] = useState("");
 
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
@@ -37,6 +35,7 @@ export default function AdminServices() {
 
     const load = () => {
         setLoading(true);
+        setError("");
         const params = { page, limit: PAGE_SIZE };
         if (search.trim()) params.search = search.trim();
         if (categoryId) params.category_id = categoryId;
@@ -48,7 +47,7 @@ export default function AdminServices() {
                 setPagination(data.pagination || { page: 1, totalPages: 1, total: data.data.length });
                 setSelectedIds([]);
             })
-            .catch((err) => toast?.error(extractErrorMessage(err)))
+            .catch((err) => setError(extractErrorMessage(err)))
             .finally(() => setLoading(false));
     };
 
@@ -56,19 +55,19 @@ export default function AdminServices() {
 
     const toggleActive = async (service) => {
         setBusyId(service.id);
+        setError("");
         try {
             await api.put(`/admin/services/${service.id}/${service.is_active ? "deactivate" : "activate"}`);
             load();
         } catch (err) {
-            toast?.error(extractErrorMessage(err));
+            setError(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
     };
 
-    const allOnPageSelected = services.length > 0 && services.every((s) => selectedIds.includes(s.id));
-
     const toggleSelectAll = () => {
+        const allOnPageSelected = services.length > 0 && services.every((s) => selectedIds.includes(s.id));
         if (allOnPageSelected) {
             setSelectedIds((ids) => ids.filter((id) => !services.some((s) => s.id === id)));
         } else {
@@ -82,11 +81,12 @@ export default function AdminServices() {
 
     const bulkSetActive = async (isActive) => {
         setBulkBusy(true);
+        setError("");
         try {
             await api.put("/admin/services/bulk-status", { ids: selectedIds, is_active: isActive });
             load();
         } catch (err) {
-            toast?.error(extractErrorMessage(err));
+            setError(extractErrorMessage(err));
         } finally {
             setBulkBusy(false);
         }
@@ -112,7 +112,7 @@ export default function AdminServices() {
                         placeholder="Search service or store name…"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
-                        className="flex-1 min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
+                        className="flex-1 min-w-[180px] sm:min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
                     />
                     <select
                         value={categoryId}
@@ -142,115 +142,85 @@ export default function AdminServices() {
                 </div>
             </div>
 
+            {error && <p role="alert" className="text-coral text-sm mb-4">{error}</p>}
 
-            {selectedIds.length > 0 && (
-                <div className="flex flex-wrap items-center gap-3 border border-line bg-line/20 rounded-lg px-4 py-2.5 mb-4">
-                    <p className="text-xs font-medium">{selectedIds.length} selected</p>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => bulkSetActive(true)}
-                        disabled={bulkBusy}
-                        className="bg-paper"
-                    >
-                        Restore selected
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => bulkSetActive(false)}
-                        disabled={bulkBusy}
-                        className="bg-paper"
-                    >
-                        Remove selected
-                    </Button>
-                    <button
-                        onClick={() => setSelectedIds([])}
-                        disabled={bulkBusy}
-                        className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
-                    >
-                        Clear selection
-                    </button>
-                </div>
-            )}
-
-            {loading ? (
-                <PageLoader />
-            ) : services.length === 0 ? (
-                <EmptyState title="No services match these filters." />
-            ) : (
-                <>
-                    <div className="border-y border-line divide-y divide-line">
-                        <div className="py-2 flex items-center gap-3 text-xs text-ash">
-                            <input
-                                type="checkbox"
-                                checked={allOnPageSelected}
-                                onChange={toggleSelectAll}
-                                aria-label="Select all services on this page"
-                            />
-                            Select all on page
+            <DataTable
+                items={services}
+                loading={loading}
+                emptyTitle="No services match these filters."
+                selectable
+                selectedIds={selectedIds}
+                onToggleSelectAll={toggleSelectAll}
+                onToggleSelectOne={toggleSelectOne}
+                selectAllLabel="Select all services on this page"
+                getSelectLabel={(s) => `Select ${s.name}`}
+                bulkActions={selectedIds.length > 0 && (
+                    <>
+                        <p className="text-xs font-medium">{selectedIds.length} selected</p>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => bulkSetActive(true)}
+                            disabled={bulkBusy}
+                            className="bg-paper"
+                        >
+                            Restore selected
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => bulkSetActive(false)}
+                            disabled={bulkBusy}
+                            className="bg-paper"
+                        >
+                            Remove selected
+                        </Button>
+                        <button
+                            onClick={() => setSelectedIds([])}
+                            disabled={bulkBusy}
+                            className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
+                        >
+                            Clear selection
+                        </button>
+                    </>
+                )}
+                renderRow={(s) => (
+                    <>
+                        <div className="w-11 h-11 bg-line/40 rounded-md overflow-hidden shrink-0">
+                            {s.image_url && (
+                                <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                            )}
                         </div>
 
-                        {services.map((s) => (
-                            <div key={s.id} className="py-3 flex flex-wrap items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedIds.includes(s.id)}
-                                    onChange={() => toggleSelectOne(s.id)}
-                                    aria-label={`Select ${s.name}`}
-                                />
-
-                                <div className="w-11 h-11 bg-line/40 rounded-md overflow-hidden shrink-0">
-                                    {s.image_url && (
-                                        <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                                    )}
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium truncate">{s.name}</p>
-                                    <p className="text-xs text-ash truncate">{s.store_name}</p>
-                                </div>
-
-                                <p className="price text-sm">{formatMoney(s.price)}</p>
-
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
-                                    {s.is_active ? "Live" : "Removed"}
-                                </span>
-
-                                <Button
-                                    onClick={() => toggleActive(s)}
-                                    disabled={busyId === s.id}
-                                    variant="secondary"
-                                    size="sm"
-                                >
-                                    {s.is_active ? "Remove" : "Restore"}
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center justify-between mt-6 text-sm">
-                        <p className="text-ash text-xs">{pagination.total} total services</p>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={pagination.page <= 1}
-                                className="text-xs border border-line px-3 py-1.5 rounded-md disabled:opacity-40"
-                            >
-                                Previous
-                            </button>
-                            <span className="text-xs text-ash">Page {pagination.page} of {pagination.totalPages}</span>
-                            <button
-                                onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                                disabled={pagination.page >= pagination.totalPages}
-                                className="text-xs border border-line px-3 py-1.5 rounded-md disabled:opacity-40"
-                            >
-                                Next
-                            </button>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{s.name}</p>
+                            <p className="text-xs text-ash truncate">{s.store_name}</p>
                         </div>
-                    </div>
-                </>
-            )}
+
+                        <p className="price text-sm">{formatMoney(s.price)}</p>
+
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${s.is_active ? "bg-teal/10 text-teal" : "bg-coral/10 text-coral"}`}>
+                            {s.is_active ? "Live" : "Removed"}
+                        </span>
+
+                        <Button
+                            onClick={() => toggleActive(s)}
+                            disabled={busyId === s.id}
+                            variant="secondary"
+                            size="sm"
+                        >
+                            {s.is_active ? "Remove" : "Restore"}
+                        </Button>
+                    </>
+                )}
+                pagination={{
+                    page: pagination.page,
+                    totalPages: pagination.totalPages,
+                    total: pagination.total,
+                    itemLabel: "services",
+                    onPageChange: setPage
+                }}
+            />
         </div>
     );
 }

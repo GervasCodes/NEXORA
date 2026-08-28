@@ -56,7 +56,12 @@ const KNOWN_VARS = [
     // production - omitting CLAMAV_HOST just skips scanning with a
     // warning (see utils/malwareScan.js), same shape as BREVO_API_KEY
     // above. Required in production (enforced below).
-    "CLAMAV_HOST", "CLAMAV_PORT"
+    "CLAMAV_HOST", "CLAMAV_PORT",
+    // Phase RF4 (red-flag remediation): mysql2 pool size, read by
+    // config/db.js. Optional - falls back to 10 if unset. Was missing
+    // from this list since RF4 added it (found during Phase 2 of the
+    // NEXORA Fix Plan while cross-checking against .env.example).
+    "DB_POOL_CONNECTION_LIMIT"
 ];
 
 // Vars whose complete absence should be called out explicitly, not just

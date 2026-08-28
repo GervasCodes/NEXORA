@@ -1,105 +1,69 @@
 name: CI
 
-# Runs on every push and every PR so a broken test/lint/audit is caught
-# before merge, not after deploy.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
-
-# Cancel superseded runs on the same branch/PR so pushes don't queue up
-# stale CI runs.
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main]
 
 jobs:
   backend:
-    name: Backend (lint, audit, test)
+    name: Backend (lint, test, audit)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: backend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      # Backend's default `npm test` (jest.config.js) mocks the mysql2 pool
-      # entirely - see tests/setupEnv.js - so no database service is needed
-      # here. The separate real-database suite (test:db) is intentionally
-      # NOT run in this workflow; it needs docker-compose.test.yml's MySQL
-      # container and is meant for local/manual verification.
-      - name: Run tests
-        run: npm test
-
-      # Reports known vulnerabilities in dependencies without failing the
-      # build on low-severity/dev-only findings - moderate+ fails CI so an
-      # exploitable issue in a real dependency doesn't ship silently.
-      - name: npm audit (moderate and above)
-        run: npm audit --audit-level=moderate
+      - run: npm ci
+        working-directory: backend
+      - run: npm run lint
+        working-directory: backend
+      - run: npm run test:unit
+        working-directory: backend
+      - run: npm run test:integration
+        working-directory: backend
+      - run: npm audit --audit-level=moderate
+        working-directory: backend
 
   frontend:
-    name: Frontend (lint, audit, test, build)
+    name: Frontend (lint, test, build, audit)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
-      - name: npm audit (moderate and above)
-        run: npm audit --audit-level=moderate
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npm audit --audit-level=moderate
+        working-directory: frontend
 
   database:
-    name: Database package (audit)
+    name: Database (audit)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: database
     steps:
       - uses: actions/checkout@v4
-
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: database/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: npm audit (moderate and above)
-        run: npm audit --audit-level=moderate
+      - run: npm ci
+        working-directory: database
+      - run: npm run lint --if-present
+        working-directory: database
+      - run: npm test --if-present
+        working-directory: database
+      - run: npm audit --audit-level=moderate
+        working-directory: database

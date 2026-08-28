@@ -3,15 +3,13 @@ import { Helmet } from "react-helmet-async";
 const SITE_NAME = "NEXORA";
 const DEFAULT_DESCRIPTION =
     "NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners.";
-// No dedicated 1200x630 OG banner exists in the repo yet (public/ only has
-// square app icons) - icon-512.png is a reasonable, honest fallback rather
-// than fabricating a marketing image. Worth commissioning a proper OG
-// banner as a follow-up; swap the default here once one exists.
-const DEFAULT_IMAGE = "/icon-512.png";
+// Phase 6 (Branding): dedicated 1200x630 Open Graph banner - replaces the
+// icon-512.png fallback used while no banner existed.
+const DEFAULT_IMAGE = "/og-banner.png";
 
 /**
  * Page-level <title> + Open Graph / Twitter Card meta tags -
- * Metadata & Error Polish.
+ * Phase 2 Metadata & Error Polish.
  *
  * Usage: drop <PageMeta title="..." description="..." /> near the top of
  * any page component. `title` is automatically suffixed with "· NEXORA"
@@ -56,14 +54,14 @@ export default function PageMeta({
             <meta property="og:image" content={resolvedImage} />
             {!image && (
                 <>
-                    <meta property="og:image:width" content="512" />
-                    <meta property="og:image:height" content="512" />
+                    <meta property="og:image:width" content="1200" />
+                    <meta property="og:image:height" content="630" />
                 </>
             )}
             <meta property="og:url" content={url} />
 
             {/* Twitter Card */}
-            <meta name="twitter:card" content="summary" />
+            <meta name="twitter:card" content="summary_large_image" />
             <meta name="twitter:title" content={resolvedTitle} />
             <meta name="twitter:description" content={description} />
             <meta name="twitter:image" content={resolvedImage} />

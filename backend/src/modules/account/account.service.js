@@ -9,6 +9,7 @@ const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/
 const appError = require("../../utils/appError");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
+const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
 const REAUTH_TYP = "pwd_reauth";
 const REAUTH_EXPIRY = "10m";
@@ -41,6 +42,19 @@ exports.updateProfile = async (userId, data) => {
     await accountRepository.updateProfile(userId, data);
 
     return exports.getProfile(userId);
+};
+
+// Phase 4 (Real Imagery & Avatars): available to every account type
+// (buyer, seller, delivery agent alike) - there's nothing role-specific
+// about a profile photo, unlike the seller-only store logo/banner. Same
+// shape as sellerService.uploadStoreLogo: upload the buffer through the
+// shared Cloudinary helper, persist the resulting URL, return it.
+exports.uploadProfilePhoto = async (userId, file) => {
+    const result = await uploadToCloudinary(file.buffer, "users/photos");
+
+    await accountRepository.updatePhotoUrl(userId, result.secure_url);
+
+    return result.secure_url;
 };
 
 // Language / theme / currency - available to every account type.

@@ -20,13 +20,29 @@ const FALLBACK_GRADIENTS = [
 // no attribution required: https://unsplash.com/license), not a
 // fabricated URL - "Businessmen are shaking hands in a professional
 // gesture" by Ambre Estève (https://unsplash.com/photos/bGczI5fXbmo).
-// Only "services" has a sourced photo so far; every other department
-// (phones-electronics, fashion-beauty, home-living, groceries-food)
-// still falls back to the gradient below until a curated photo per
-// category is sourced - this is a partial rollout of that decision,
-// not a full curated set.
+//
+// Phase 4 (Real Imagery & Avatars) follow-up: the remaining four
+// departments now have a curated cover too, sourced the exact same
+// verified/freely-licensed way (all Unsplash License, all hotlinked
+// from images.unsplash.com - Unsplash's own CDN, not a re-hosted
+// copy):
+//  - phones-electronics: "black smartphone" by Balázs Kétyi
+//    (https://unsplash.com/photos/xIcr9ygfhIk)
+//  - fashion-beauty: "assorted-colored clothes on rack near brown
+//    wooden table" by S O C I A L . C U T
+//    (https://unsplash.com/photos/7KkDiSs5UdQ)
+//  - home-living: "a living room filled with furniture and a large
+//    window" by Minh Pham (https://unsplash.com/photos/OtXADkUh3-I)
+//  - groceries-food: "assorted vegetable lot" by Julian Hanslmaier
+//    (https://unsplash.com/photos/bWg-BeVJPG4)
+// Every department now has a sourced photo, so this is a full curated
+// set rather than the partial rollout it started as.
 const CURATED_COVER_IMAGES = {
-    services: "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop"
+    services: "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop",
+    "phones-electronics": "https://images.unsplash.com/photo-1545063328-c8e3faffa16f?q=80&w=1200&auto=format&fit=crop",
+    "fashion-beauty": "https://images.unsplash.com/photo-1573612664822-d7d347da7b80?q=80&w=1200&auto=format&fit=crop",
+    "home-living": "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=1200&auto=format&fit=crop",
+    "groceries-food": "https://images.unsplash.com/photo-1458917524587-d3236cc8c2c8?q=80&w=1200&auto=format&fit=crop"
 };
 
 export default function DepartmentCard({ department, index }) {

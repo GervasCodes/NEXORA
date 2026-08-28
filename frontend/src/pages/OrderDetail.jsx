@@ -12,6 +12,8 @@ import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
 import { useAIAssistant } from "../context/AIAssistantContext";
 import FiscalReceiptBadge from "../components/FiscalReceiptBadge";
+import PaymentStatusBanner, { PaymentConfirmedPill } from "../components/PaymentStatusBanner";
+import { ORDER_STATE, getOrderState } from "../utils/orderStatusModel";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -55,9 +57,21 @@ export default function OrderDetail() {
     );
     const [busy, setBusy] = useState(false);
 
+    // Phase 2 (Honest Status Transparency): not a persisted order field
+    // (orders.payment_status is only ever 'unpaid'/'paid' - see
+    // database/schema/orders.sql) - this is the transient "we just heard
+    // it failed/was cancelled" signal from a redirect or the
+    // payment:updated socket event below, kept distinct from
+    // actionError's free-text message so the PaymentStatusBanner can
+    // render its own dedicated failed-state visual instead of relying on
+    // string content. Cleared back to false the moment a fresh load
+    // shows the order paid.
+    const [paymentFailed, setPaymentFailed] = useState(Boolean(location.state?.paymentFailed));
+
     const load = () => {
         api.get(`/orders/${id}`).then(({ data }) => {
             setOrder(data.data);
+            if (data.data.payment_status === "paid") setPaymentFailed(false);
             if (!data.data.is_parent) {
                 api.get(`/delivery/${id}`).then(({ data: d }) => setDelivery(d.data)).catch(() => setDelivery(null));
             } else {
@@ -80,6 +94,7 @@ export default function OrderDetail() {
             if (fresh.payment_status === "paid") {
                 setOrder(fresh);
                 setActionMessage("Payment successful.");
+                setPaymentFailed(false);
                 return;
             }
             if (attempt < 6) {
@@ -107,11 +122,16 @@ export default function OrderDetail() {
                 .then(({ data }) => {
                     if (data.data?.success) {
                         setActionMessage("Payment successful.");
+                        setPaymentFailed(false);
                     } else {
                         setActionError("Payment was not completed. Please try again.");
+                        setPaymentFailed(true);
                     }
                 })
-                .catch((err) => setActionError(extractErrorMessage(err)))
+                .catch((err) => {
+                    setActionError(extractErrorMessage(err));
+                    setPaymentFailed(true);
+                })
                 .finally(() => {
                     load();
                     cleanUrl();
@@ -130,6 +150,7 @@ export default function OrderDetail() {
 
         } else if (payment === "cancelled") {
             setActionError("Payment was cancelled - your order is still saved, you can try paying again below.");
+            setPaymentFailed(true);
             cleanUrl();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,6 +170,7 @@ export default function OrderDetail() {
             load();
             setActionMessage(payload.success ? "Payment successful." : "");
             setActionError(payload.success ? "" : "Payment could not be confirmed. Please try again.");
+            setPaymentFailed(!payload.success);
         };
 
         socket.on("payment:updated", handlePaymentUpdated);
@@ -298,6 +320,20 @@ export default function OrderDetail() {
         );
     }
 
+    // Phase 2 (Honest Status Transparency): a single computed state
+    // drives both the payment banner below and the "Live tracking"
+    // section's searching-vs-assigned visual, so the two never disagree
+    // about what stage this order is actually in. Child orders (see
+    // order.parent_order_id below) don't own payment - it's handled on
+    // the parent - so the banner is scoped to non-child orders only.
+    const orderState = !order.parent_order_id
+        ? getOrderState(order, delivery, { paymentFailed })
+        : ORDER_STATE.OTHER;
+    const showTracking = !order.is_parent && (
+        orderState === ORDER_STATE.SEARCHING
+        || (delivery?.agent_id && !["delivered", "failed"].includes(delivery.status))
+    );
+
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title={`Order ${order.order_number}`} noIndex />
@@ -305,10 +341,14 @@ export default function OrderDetail() {
             <h1 className="price font-display text-2xl mb-1">{order.order_number}</h1>
             <p className="text-sm text-ash mb-6">Placed {formatDate(order.created_at)}</p>
 
+            <PaymentStatusBanner state={orderState} />
+
             {actionMessage && <p className="text-sm text-teal mb-4">{actionMessage}</p>}
             {actionError && <p className="text-sm text-coral mb-4">{actionError}</p>}
 
-            {!order.is_parent && <OrderTimeline status={order.status} />}
+            {!order.is_parent && (
+                <OrderTimeline status={order.status} searching={orderState === ORDER_STATE.SEARCHING} />
+            )}
 
             {/* Phase B1: order-status assistant - reads this same real
                 order via /ai/orders/:id/explain, AI only phrases it. */}
@@ -397,10 +437,11 @@ export default function OrderDetail() {
                 <span className="price text-xl font-medium">{format(order.total_amount)}</span>
             </div>
 
-            {!order.is_parent && delivery?.agent_id && !["delivered", "failed"].includes(delivery.status) && (
+            {showTracking && (
                 <div className="mb-8">
                     <p className="text-xs uppercase tracking-widest text-ash mb-2">Live tracking</p>
-                    {(delivery.agent_vehicle_type || delivery.agent_vehicle_plate_number) && (
+                    <PaymentConfirmedPill />
+                    {delivery?.agent_id && (delivery.agent_vehicle_type || delivery.agent_vehicle_plate_number) && (
                         <p className="text-sm text-ash mb-2">
                             {delivery.agent_first_name} is on a {VEHICLE_LABELS[delivery.agent_vehicle_type] || delivery.agent_vehicle_type}
                             {delivery.agent_vehicle_plate_number && ` · Plate ${delivery.agent_vehicle_plate_number}`}
@@ -409,6 +450,7 @@ export default function OrderDetail() {
                     <TrackingWidget
                         orderId={id}
                         delivery={delivery}
+                        searching={orderState === ORDER_STATE.SEARCHING}
                         destination={
                             order.delivery_lat && order.delivery_lng
                                 ? { lat: order.delivery_lat, lng: order.delivery_lng }

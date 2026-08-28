@@ -34,6 +34,8 @@ const Sentry = require("./src/config/sentry");
 const { startJobs } = require("./src/jobs");
 const logger = require("./src/utils/logger").child({ process: "worker" });
 const envCheck = require("./src/config/envCheck");
+const dispatchQueue = require("./src/queues/dispatchQueue");
+const deliveryService = require("./src/modules/delivery/delivery.service");
 
 process.on("unhandledRejection", (reason) => {
     logger.error({ err: reason }, "[unhandledRejection]");
@@ -49,6 +51,16 @@ process.on("uncaughtException", (error) => {
 envCheck.run(logger);
 
 startJobs();
+
+// Phase 1 (Durable Dispatch Foundation): also consume durable
+// offer-expiry timers from this process - see the matching call in
+// server.js for why it's safe/intended to run this Worker in more than
+// one process at once. Running it here too means dispatch timers keep
+// getting processed even in a deployment that's moved every cron job to
+// this dedicated worker process and scaled the web process(es) down.
+dispatchQueue.startDispatchWorker({
+    [dispatchQueue.JOB_NAMES.OFFER_EXPIRE]: deliveryService.handleOfferExpiryJob
+});
 
 logger.info("🕒 Worker process running (scheduled jobs only, no HTTP server)");
 

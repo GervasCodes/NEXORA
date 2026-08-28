@@ -29,6 +29,24 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
+exports.uploadProfilePhoto = async (req, res) => {
+    try {
+        const photoUrl = await accountService.uploadProfilePhoto(req.user.id, req.file);
+
+        return res.json({
+            success: true,
+            message: "Photo uploaded successfully.",
+            data: { photoUrl }
+        });
+
+    } catch (error) {
+        return res.status(error.status || 400).json({
+            success: false,
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+        });
+    }
+};
+
 exports.updateSettings = async (req, res) => {
     try {
         const profile = await accountService.updateSettings(req.user.id, req.body);

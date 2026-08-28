@@ -40,6 +40,12 @@ exports.orderIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid order")
 ];
 
+// Phase 3 (Admin Manual Override & Ops Visibility)
+exports.manualAssignDeliveryValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid order"),
+    body("agentId").isInt({ gt: 0 }).withMessage("Invalid agent")
+];
+
 exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
@@ -133,7 +139,23 @@ exports.updateSettingsValidation = [
     body("escrow_hold_days")
         .optional()
         .isInt({ min: 0 })
-        .withMessage("Escrow hold period must be zero or a positive whole number of days")
+        .withMessage("Escrow hold period must be zero or a positive whole number of days"),
+
+    // Phase 1 (Durable Dispatch Foundation) - see settingsService.getDeliveryOfferRadiusStepsKm.
+    body("delivery_offer_radius_steps_km")
+        .optional()
+        .isArray({ min: 1 }).withMessage("At least one radius step is required")
+        .custom((value) => {
+            if (!value.every((km) => typeof km === "number" && km > 0)) {
+                throw new Error("Each radius step must be a positive number of km");
+            }
+            return true;
+        }),
+
+    body("delivery_offer_timeout_ms")
+        .optional()
+        .isInt({ min: 1000 })
+        .withMessage("Offer timeout must be at least 1000ms")
 ];
 
 exports.createAdminValidation = [

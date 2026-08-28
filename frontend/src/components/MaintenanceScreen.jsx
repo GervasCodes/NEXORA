@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../utils/format";
+import { BackArrowIcon } from "./Icons";
 
 // Shown in place of a single page/section's content when the admin has
 // put that department, service, or module into maintenance mode (see
@@ -88,7 +89,7 @@ export default function MaintenanceScreen({
                         to="/"
                         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink/80 hover:text-ink transition-colors rounded-lg px-5 py-2.5 border border-line/60"
                     >
-                        ← Back to home
+                        <BackArrowIcon className="w-4 h-4" /> Back to home
                     </Link>
                 </div>
             </div>

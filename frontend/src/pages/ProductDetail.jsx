@@ -371,7 +371,7 @@ export default function ProductDetail() {
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
                             <div className="flex items-center gap-2 mb-1">
-                                <Avatar firstName={r.first_name} lastName={r.last_name} size="sm" />
+                                <Avatar firstName={r.first_name} lastName={r.last_name} src={r.photo_url} size="sm" />
                                 <div className="flex-1 flex justify-between items-baseline">
                                     <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
                                     <p className="text-xs text-ash">{formatDate(r.created_at)}</p>

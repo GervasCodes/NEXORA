@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Button from "./ui/Button";
 import api, { extractErrorMessage } from "../api/client";
+import { StarIcon } from "./Icons";
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -19,9 +20,14 @@ export default function DeliveryAgentRating({ orderId, existingRating, onRated }
         return (
             <div className="border border-line rounded-md px-4 py-3">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Your rating</p>
-                <p className="text-mango text-lg leading-none">
-                    {"★".repeat(existingRating.rating)}
-                    <span className="text-line">{"★".repeat(5 - existingRating.rating)}</span>
+                <p className="flex items-center gap-0.5">
+                    {STARS.map((n) => (
+                        <StarIcon
+                            key={n}
+                            filled={n <= existingRating.rating}
+                            className={`w-4 h-4 ${n <= existingRating.rating ? "text-mango" : "text-line"}`}
+                        />
+                    ))}
                 </p>
                 {existingRating.comment && (
                     <p className="text-sm text-ash mt-2">{existingRating.comment}</p>
@@ -63,11 +69,12 @@ export default function DeliveryAgentRating({ orderId, existingRating, onRated }
                         onMouseEnter={() => setHoverRating(n)}
                         onMouseLeave={() => setHoverRating(0)}
                         aria-label={`${n} star${n > 1 ? "s" : ""}`}
-                        className={`text-2xl leading-none transition-colors focus-ring rounded ${
-                            n <= (hoverRating || rating) ? "text-mango" : "text-line"
-                        }`}
+                        className="transition-colors focus-ring rounded"
                     >
-                        ★
+                        <StarIcon
+                            filled={n <= (hoverRating || rating)}
+                            className={`w-6 h-6 ${n <= (hoverRating || rating) ? "text-mango" : "text-line"}`}
+                        />
                     </button>
                 ))}
             </div>

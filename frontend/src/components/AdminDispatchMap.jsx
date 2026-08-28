@@ -1,7 +1,7 @@
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import { useEffect, useMemo } from "react";
 import "leaflet/dist/leaflet.css";
-import { DEFAULT_CENTER, agentIcon, destinationIcon, pickupIcon } from "../utils/mapConfig";
+import { DEFAULT_CENTER, agentIcon, destinationIcon, pickupIcon, stalledIcon } from "../utils/mapConfig";
 
 // Fits the map to every marker currently on it whenever the point set
 // changes (a delivery starting/finishing, or the very first load) -
@@ -32,7 +32,7 @@ function FitToPoints({ points }) {
 // `agents` change (AdminDispatch.jsx already keeps both current via the
 // dispatch:* socket events), so this component just re-renders with
 // whatever it's handed.
-export default function AdminDispatchMap({ deliveries, agents, height = 420 }) {
+export default function AdminDispatchMap({ deliveries, agents, unmatchedOrders = [], height = 420 }) {
     // Agents' live positions come from the `agents` list, which is kept
     // current by the dispatch:agent_position socket event in
     // AdminDispatch.jsx - not from each delivery's own
@@ -94,13 +94,36 @@ export default function AdminDispatchMap({ deliveries, agents, height = 420 }) {
         [agents]
     );
 
+    // Phase 3 (Admin Manual Override & Ops Visibility) - only orders
+    // that are actually flagged stalled get a pin here (the wider
+    // unmatchedOrders list can include ones only a few minutes old,
+    // which would just clutter the map with routine, non-actionable
+    // noise). Not every unmatched order has delivery coordinates
+    // (buyer didn't drop a map pin at checkout), same caveat the
+    // destination markers above already have.
+    const stalledMarkers = useMemo(
+        () =>
+            unmatchedOrders
+                .filter((o) => o.is_stalled && o.delivery_lat != null && o.delivery_lng != null)
+                .map((o) => ({
+                    key: `stalled-${o.order_id}`,
+                    orderNumber: o.order_number,
+                    city: o.shipping_city || o.shipping_region,
+                    minutesWaiting: o.minutes_waiting,
+                    lat: Number(o.delivery_lat),
+                    lng: Number(o.delivery_lng)
+                })),
+        [unmatchedOrders]
+    );
+
     const allPoints = useMemo(
         () => [
             ...shopMarkers.map((m) => [m.lat, m.lng]),
             ...destinationMarkers.map((m) => [m.lat, m.lng]),
-            ...agentMarkers.map((m) => [m.lat, m.lng])
+            ...agentMarkers.map((m) => [m.lat, m.lng]),
+            ...stalledMarkers.map((m) => [m.lat, m.lng])
         ],
-        [shopMarkers, destinationMarkers, agentMarkers]
+        [shopMarkers, destinationMarkers, agentMarkers, stalledMarkers]
     );
 
     const center = allPoints[0] || DEFAULT_CENTER;
@@ -148,6 +171,19 @@ export default function AdminDispatchMap({ deliveries, agents, height = 420 }) {
                             <strong>{m.name || "Delivery agent"}</strong>
                             <br />
                             {m.isBusy ? "On a delivery" : "Idle"}
+                        </Popup>
+                    </Marker>
+                ))}
+
+                {stalledMarkers.map((m) => (
+                    <Marker key={m.key} position={[m.lat, m.lng]} icon={stalledIcon}>
+                        <Popup>
+                            <strong>Stalled order</strong>
+                            <br />
+                            Order {m.orderNumber}
+                            {m.city ? ` · ${m.city}` : ""}
+                            <br />
+                            Waiting {m.minutesWaiting}m
                         </Popup>
                     </Marker>
                 ))}

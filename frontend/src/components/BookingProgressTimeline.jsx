@@ -1,4 +1,5 @@
 import { useLanguage } from "../context/LanguageContext";
+import { CheckIcon } from "./Icons";
 
 // Horizontal lifecycle tracker for a booking, matching the visual language
 // of OrderTimeline.jsx (checkout) and DeliveryStatusTimeline.jsx (delivery)
@@ -45,7 +46,7 @@ export default function BookingProgressTimeline({ status }) {
                                             done ? "bg-teal text-frost scale-100" : "bg-line text-ash scale-90"
                                         }`}
                                     >
-                                        {done ? "✓" : i + 1}
+                                        {done ? <CheckIcon className="w-3 h-3" /> : i + 1}
                                     </div>
                                 </div>
                                 <p className={`text-[11px] mt-1.5 whitespace-nowrap transition-colors duration-500 ${done ? "text-ink font-medium" : "text-ash"}`}>

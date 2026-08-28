@@ -150,20 +150,31 @@ export default function Home() {
                         </div>
 
                         {/*
-                          Phase 5 (Visual Polish & Metadata): real photo showcase
-                          replacing the gradient-only hero. No product/lifestyle
-                          photography has been supplied for this - these three
-                          paths are clearly-marked placeholders (not fabricated
-                          external URLs) and need real assets dropped in at
-                          /public/images/hero/ before this ships. The collage
-                          hides below `lg` rather than resizing awkwardly, so
-                          small screens fall back to the text-only hero that
-                          was already there.
+                          Phase 5 (Visual Polish & Metadata) introduced this photo
+                          showcase but shipped it pointing at three placeholder
+                          paths under /public/images/hero/ that were never filled
+                          in (404s hidden by the onError handlers below).
+                          Phase 4 (Real Imagery & Avatars) follow-up: replaced
+                          with real, verified, freely-licensed photos (Unsplash
+                          License - free for commercial use, no attribution
+                          required: https://unsplash.com/license), sourced the
+                          same way as DepartmentCard.jsx's curated covers -
+                          "Marketing Flatlay" by Campaign Creators
+                          (https://unsplash.com/photos/RSc6D7bO0fA), "Ships out
+                          today" by Bench Accounting
+                          (https://unsplash.com/photos/MGaFENpDCsw), and "GRAB
+                          courier makes delivery" by Kseniia Ilinykh
+                          (https://unsplash.com/photos/62JneRv7jW4). The onError
+                          fallback (hide the broken image) stays in place as a
+                          safety net rather than being removed, in case any of
+                          these ever go down. The collage still hides below `lg`
+                          rather than resizing awkwardly, so small screens fall
+                          back to the text-only hero that was already there.
                         */}
                         <div className="hidden lg:grid grid-cols-2 gap-3 h-[420px]">
                             <div className="relative rounded-2xl overflow-hidden row-span-2 border border-frost/10 bg-azure/10">
                                 <img
-                                    src="/images/hero/placeholder-1.jpg"
+                                    src="https://images.unsplash.com/photo-1533750516457-a7f992034fec?q=80&w=1200&auto=format&fit=crop"
                                     alt="Products available on NEXORA"
                                     className="w-full h-full object-cover"
                                     loading="eager"
@@ -173,7 +184,7 @@ export default function Home() {
                             </div>
                             <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
                                 <img
-                                    src="/images/hero/placeholder-2.jpg"
+                                    src="https://images.unsplash.com/photo-1449247666642-264389f5f5b1?q=80&w=1200&auto=format&fit=crop"
                                     alt="A NEXORA seller preparing an order"
                                     className="w-full h-full object-cover"
                                     loading="lazy"
@@ -182,7 +193,7 @@ export default function Home() {
                             </div>
                             <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
                                 <img
-                                    src="/images/hero/placeholder-3.jpg"
+                                    src="https://images.unsplash.com/photo-1587476351660-e9fa4bb8b26c?q=80&w=1200&auto=format&fit=crop"
                                     alt="A NEXORA delivery agent on a doorstep drop-off"
                                     className="w-full h-full object-cover"
                                     loading="lazy"

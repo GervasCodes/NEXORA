@@ -395,7 +395,7 @@ export default function DisputeDetail() {
                         <li key={m.id} className="border border-line rounded-lg p-3">
                             <div className="flex items-center justify-between gap-2 mb-1">
                                 <div className="flex items-center gap-2">
-                                    <Avatar firstName={m.first_name} lastName={m.last_name} size="xs" />
+                                    <Avatar firstName={m.first_name} lastName={m.last_name} src={m.photo_url} size="xs" />
                                     <p className="text-xs font-medium capitalize">
                                         {m.first_name} {m.last_name} <span className="text-ash">· {m.sender_role}</span>
                                     </p>

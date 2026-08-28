@@ -86,7 +86,7 @@ export default function SellerDeliveryTeam() {
                     {roster.map((agent) => (
                         <li key={agent.id} className="py-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                                <Avatar firstName={agent.first_name} lastName={agent.last_name} size="sm" />
+                                <Avatar firstName={agent.first_name} lastName={agent.last_name} src={agent.photo_url} size="sm" />
                                 <div>
                                     <p className="text-sm font-medium">{agent.first_name} {agent.last_name}</p>
                                     <p className="text-xs text-ash">{agent.email}</p>

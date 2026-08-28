@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { BackArrowIcon } from "./Icons";
 
 // Standalone "feature not live yet" screen. Currently only used for the
 // disabled Services department (Part of the Services/Dark-Mode/
@@ -40,7 +41,7 @@ export default function ComingSoon({
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-frost bg-teal hover:bg-teal/90 transition-colors rounded-lg px-5 py-2.5 animate-slide-up"
                     style={{ animationDelay: "140ms" }}
                 >
-                    ← Explore other departments
+                    <BackArrowIcon className="w-4 h-4" /> Explore other departments
                 </Link>
             </div>
         </div>

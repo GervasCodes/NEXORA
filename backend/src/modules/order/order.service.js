@@ -486,3 +486,51 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         withWhatsApp: true
     });
 };
+
+// Phase 6 (Checkout & Order Timeline UX): a pre-payment estimate of how
+// long delivery is likely to take, using the exact same distance/duration
+// calculation the platform already relies on for rider pay (see
+// deliveryPricingService.estimateDeliveryForRoute) - just run against the
+// buyer's current cart instead of an order row, since none exists yet at
+// checkout time.
+//
+// A cart can span multiple vendors (see checkout's own bySeller grouping
+// above), so this estimates each vendor's own pickup -> delivery leg
+// separately and surfaces the SLOWEST one - the buyer's parcel isn't
+// "delivered" for tracking purposes until every vendor's leg is, so
+// quoting the fastest leg would understate the wait. `method` reports
+// "distance" only when every vendor's leg had a real route; if even one
+// vendor has no pickup pin on file yet, the honest answer is "unknown",
+// not an average that quietly drops the missing one.
+exports.getDeliveryEstimate = async (buyerId, { deliveryLat, deliveryLng }) => {
+    const cart = await cartRepository.getCartByUser(buyerId);
+
+    if (!cart.length) {
+        throw new Error("Your cart is empty");
+    }
+
+    const sellerIds = [...new Set(cart.map((item) => item.seller_id))];
+
+    const estimates = await Promise.all(sellerIds.map(async (sellerId) => {
+        const seller = await sellerRepository.findByUserId(sellerId);
+        return deliveryPricingService.estimateDeliveryForRoute({
+            pickupLat: seller?.pickup_lat ?? null,
+            pickupLng: seller?.pickup_lng ?? null,
+            deliveryLat,
+            deliveryLng
+        });
+    }));
+
+    const allKnown = estimates.every((estimate) => estimate.durationMinutes != null);
+    const durationMinutes = allKnown
+        ? Math.max(...estimates.map((estimate) => estimate.durationMinutes))
+        : null;
+    const degraded = estimates.some((estimate) => estimate.degraded);
+
+    return {
+        durationMinutes,
+        method: allKnown ? "distance" : "flat",
+        degraded,
+        vendorCount: sellerIds.length
+    };
+};

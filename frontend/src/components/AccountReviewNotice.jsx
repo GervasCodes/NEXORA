@@ -1,9 +1,10 @@
+import { CloseIcon, HourglassIcon } from "./Icons";
 
 export default function AccountReviewNotice({ status, rejectionReason, roleLabel = "account" }) {
     if (status === "rejected") {
         return (
             <div className="glass-strong rounded-lg p-8 text-center animate-scale-in">
-                <p className="text-coral text-3xl mb-3">✕</p>
+                <p className="text-coral mb-3 flex justify-center"><CloseIcon className="w-9 h-9" /></p>
                 <p className="font-display text-xl mb-2">Verification not approved</p>
                 <p className="text-ash text-sm max-w-md mx-auto">
                     {rejectionReason
@@ -20,7 +21,7 @@ export default function AccountReviewNotice({ status, rejectionReason, roleLabel
     // back to the same pending copy rather than showing nothing.
     return (
         <div className="glass-strong rounded-lg p-8 text-center animate-scale-in">
-            <p className="text-mango text-3xl mb-3">⏳</p>
+            <p className="text-mango mb-3 flex justify-center"><HourglassIcon className="w-9 h-9" /></p>
             <p className="font-display text-xl mb-2">Your account is under review</p>
             <p className="text-ash text-sm max-w-md mx-auto">
                 Your account is currently under review. Our team is verifying your information.

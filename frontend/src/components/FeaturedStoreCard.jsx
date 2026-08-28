@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { StarIcon } from "./Icons";
 
 
 export default function FeaturedStoreCard({ store }) {
@@ -33,9 +34,11 @@ export default function FeaturedStoreCard({ store }) {
                         </span>
                     ) : null}
                 </div>
-                <p className="text-xs text-ash">
+                <p className="text-xs text-ash flex items-center gap-0.5">
                     {store.average_rating ? (
-                        <>★ {Number(store.average_rating).toFixed(1)} · </>
+                        <>
+                            <StarIcon className="w-3 h-3 text-mango shrink-0" /> {Number(store.average_rating).toFixed(1)} ·
+                        </>
                     ) : null}
                     {store.product_count} {store.product_count === 1 ? "product" : "products"} in this department
                 </p>

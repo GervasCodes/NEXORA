@@ -7,6 +7,11 @@ import Input from "./ui/Input";
 
 const RATING_OPTIONS = [4, 3, 2, 1];
 
+// Note (Phase 5: Icon & Empty-State Consistency): the ★ glyph below is
+// left as plain text on purpose - it's rendered inside a native
+// <option>, which can only ever show text, not an SVG icon like the
+// StarIcon used everywhere else star ratings appear.
+
 
 const SORT_OPTIONS = [
     { value: "newest", labelKey: "filters.sortNewest" },

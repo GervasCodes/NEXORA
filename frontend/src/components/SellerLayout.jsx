@@ -7,6 +7,7 @@ import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
 import MobileBottomNav from "./MobileBottomNav";
 import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon } from "./NavIcons";
+import { CheckIcon } from "./Icons";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like /admin's) instead of an 18-item horizontal-scroll
@@ -222,7 +223,9 @@ export default function SellerLayout() {
     }
 
     const verifiedBadge = profile.is_verified ? (
-        <span className="text-teal">✓ Verified Seller</span>
+        <span className="text-teal inline-flex items-center gap-1">
+            <CheckIcon className="w-3.5 h-3.5" /> Verified Seller
+        </span>
     ) : (
         <span className="text-ash">
             Badge available ·{" "}

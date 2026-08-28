@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { CheckIcon } from "../Icons";
 
 // Phase 6 (New UI/UX & Imagery Additions, item 21): the seller
 // onboarding checklist referenced in the original audit but deferred
@@ -82,8 +83,8 @@ export default function SellerOnboardingChecklist({ userId, profile, hasProducts
                             <span className={`text-sm flex-1 ${item.done ? "text-ash line-through" : "text-ink"}`}>
                                 {item.label}
                             </span>
-                            <span className={`text-xs ${item.done ? "text-teal" : "text-ash"}`}>
-                                {item.done ? "✓ Done" : "To do"}
+                            <span className={`text-xs inline-flex items-center gap-1 ${item.done ? "text-teal" : "text-ash"}`}>
+                                {item.done ? (<><CheckIcon className="w-3 h-3" /> Done</>) : "To do"}
                             </span>
                         </Link>
                     </li>

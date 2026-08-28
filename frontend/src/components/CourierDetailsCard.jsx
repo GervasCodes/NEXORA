@@ -1,4 +1,5 @@
 import { useLanguage } from "../context/LanguageContext";
+import { ChatIcon, PhoneIcon } from "./Icons";
 
 const VEHICLE_LABELS = {
     bicycle: "Bicycle",
@@ -40,16 +41,16 @@ export default function CourierDetailsCard({ delivery, onMessage }) {
                 <button
                     type="button"
                     onClick={onMessage}
-                    className="flex-1 border border-line rounded-md py-2 text-sm font-medium hover:border-abyss transition-colors focus-ring"
+                    className="flex-1 border border-line rounded-md py-2 text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center justify-center gap-1.5"
                 >
-                    💬 {t("delivery.tracking.messageCourier")}
+                    <ChatIcon className="w-4 h-4 shrink-0" /> {t("delivery.tracking.messageCourier")}
                 </button>
                 {delivery.agent_phone && (
                     <a
                         href={`tel:${delivery.agent_phone}`}
-                        className="flex-1 border border-line rounded-md py-2 text-sm font-medium text-center hover:border-abyss transition-colors focus-ring"
+                        className="flex-1 border border-line rounded-md py-2 text-sm font-medium text-center hover:border-abyss transition-colors focus-ring inline-flex items-center justify-center gap-1.5"
                     >
-                        📞 {t("delivery.tracking.callCourier")}
+                        <PhoneIcon className="w-4 h-4 shrink-0" /> {t("delivery.tracking.callCourier")}
                     </a>
                 )}
             </div>

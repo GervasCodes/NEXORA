@@ -250,6 +250,23 @@ exports.getDispatchOverview = async (req, res) => {
     }
 };
 
+// Phase 3 (Admin Manual Override & Ops Visibility) - counterpart to the
+// dispatch overview above: pushes one unmatched order onto one specific
+// online agent instead of just watching the board wait on auto-matching.
+exports.manualAssignDelivery = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { agentId } = req.body;
+
+        const result = await adminService.manualAssignDelivery(id, agentId, req.user.id);
+
+        return res.json({ success: true, data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.getDashboard = async (req, res) => {
     try {
         const stats = await adminService.getDashboard();

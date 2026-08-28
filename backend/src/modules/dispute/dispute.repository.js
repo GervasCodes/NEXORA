@@ -170,7 +170,7 @@ exports.addMessage = async (disputeId, senderId, senderRole, message) => {
 exports.findMessages = async (disputeId) => {
     const [rows] = await db.query(
         `SELECT m.id, m.sender_id, m.sender_role, m.message, m.created_at,
-                u.first_name, u.last_name
+                u.first_name, u.last_name, u.photo_url
         FROM dispute_messages m
         JOIN users u ON u.id = m.sender_id
         WHERE m.dispute_id = ?

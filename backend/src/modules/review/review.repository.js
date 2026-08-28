@@ -119,7 +119,7 @@ const resolveSortClause = (sortBy) => REVIEW_SORT_CLAUSES[sortBy] || REVIEW_SORT
 exports.findByProduct = async (productId, sortBy) => {
     const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
-                u.first_name, u.last_name
+                u.first_name, u.last_name, u.photo_url
         FROM reviews r
         JOIN users u ON u.id = r.buyer_id
         WHERE r.product_id = ?

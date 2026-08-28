@@ -8,6 +8,7 @@ import { SkeletonList } from "../components/Skeleton";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import PageMeta from "../components/PageMeta";
+import { OrdersIcon } from "../components/NavIcons";
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -57,6 +58,8 @@ export default function Orders() {
             <div className="max-w-3xl mx-auto px-6 py-10">
                 <EmptyState
                     title={t("orders.empty")}
+                    tone="mango"
+                    icon={<OrdersIcon className="w-7 h-7" />}
                     action={<Link to="/" className="text-teal hover:underline text-sm">{t("common.startShopping")}</Link>}
                 />
             </div>

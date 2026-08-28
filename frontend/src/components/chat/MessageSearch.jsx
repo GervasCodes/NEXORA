@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
+import { PaperclipIcon } from "../Icons";
 
 // Debounce so every keystroke doesn't fire a request.
 const DEBOUNCE_MS = 300;
@@ -75,8 +76,13 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
                                 onClick={() => onJumpTo(r.id)}
                                 className="block w-full text-left px-3 py-2 text-xs hover:bg-line/30 transition-colors border-b border-line last:border-0"
                             >
-                                <p className="truncate text-ink">
-                                    {r.message || (r.attachment_name ? `📎 ${r.attachment_name}` : "Attachment")}
+                                <p className="truncate text-ink flex items-center gap-1">
+                                    {r.message ? r.message : (
+                                        <>
+                                            <PaperclipIcon className="w-3 h-3 shrink-0 text-ash" />
+                                            {r.attachment_name || "Attachment"}
+                                        </>
+                                    )}
                                 </p>
                                 <p className="text-ash text-[10px] mt-0.5">
                                     {new Date(r.created_at).toLocaleString()}

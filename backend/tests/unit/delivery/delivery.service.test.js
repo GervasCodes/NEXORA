@@ -36,6 +36,13 @@ beforeEach(() => {
     earningsService.creditForDelivery.mockResolvedValue(undefined);
     orderRepository.findOrderSellerId.mockResolvedValue(7);
     sellerRepository.findByUserId.mockResolvedValue(SELLER_PICKUP_PIN);
+    // Escalating-radius dispatch matching (see delivery.service.js's
+    // offerToNextCandidate/declineOffer) always reads its radius steps
+    // and offer timeout from settingsService - default to real
+    // production defaults ([5, 15, 30] and 30s) here so every test gets
+    // a usable, non-empty array unless it specifically overrides one.
+    settingsService.getDeliveryOfferRadiusStepsKm.mockResolvedValue([5, 15, 30]);
+    settingsService.getDeliveryOfferTimeoutMs.mockResolvedValue(30000);
     socket.emitToOrder = jest.fn();
     socket.emitToUser = jest.fn();
     socket.emitToAdmins = jest.fn();

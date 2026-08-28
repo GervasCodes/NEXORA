@@ -10,6 +10,7 @@ import MaintenanceScreen from "../components/MaintenanceScreen";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import PageMeta from "../components/PageMeta";
+import { BookingsIcon } from "../components/NavIcons";
 
 export default function Bookings() {
     const { format } = useCurrency();
@@ -63,6 +64,8 @@ export default function Bookings() {
             <div className="max-w-3xl mx-auto px-6 py-10">
                 <EmptyState
                     title={t("booking.empty")}
+                    tone="teal"
+                    icon={<BookingsIcon className="w-7 h-7" />}
                     action={<Link to="/services" className="text-teal hover:underline text-sm">{t("booking.browseServices")}</Link>}
                 />
             </div>

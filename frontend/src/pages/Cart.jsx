@@ -7,7 +7,9 @@ import { useToast } from "../context/ToastContext";
 import { SkeletonList } from "../components/Skeleton";
 import Button from "../components/ui/Button";
 import QuantityStepper from "../components/ui/QuantityStepper";
+import EmptyState from "../components/ui/EmptyState";
 import PageMeta from "../components/PageMeta";
+import { CartIcon } from "../components/NavIcons";
 
 // Same debounce interval as SearchBox.jsx's DEBOUNCE_MS - quantity edits
 // were previously firing an API call on every keystroke/spinner click.
@@ -78,9 +80,13 @@ export default function Cart() {
 
     if (items.length === 0) {
         return (
-            <div className="max-w-3xl mx-auto px-6 py-24 text-center animate-slide-up">
-                <p className="font-display text-2xl mb-2">{t("cart.empty")}</p>
-                <Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>
+            <div className="max-w-3xl mx-auto px-6 py-10">
+                <EmptyState
+                    title={t("cart.empty")}
+                    tone="azure"
+                    icon={<CartIcon className="w-7 h-7" />}
+                    action={<Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>}
+                />
             </div>
         );
     }

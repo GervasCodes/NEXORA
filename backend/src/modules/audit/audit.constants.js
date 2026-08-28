@@ -21,7 +21,7 @@ const EVENT_TYPE_GROUPS = {
         "admin_account_deleted"
     ],
     auth: ["login_success", "login_failed"],
-    orders: ["order_created"],
+    orders: ["order_created", "order_delivery_manually_assigned"],
     payments: ["payment_processed"],
     refunds: [
         "refund.completed",

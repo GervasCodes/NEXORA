@@ -14,6 +14,7 @@ const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedul
 const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 const monetizationScheduleJob = require("./monetizationSchedule.job");
 const groupBuyExpiryJob = require("./groupBuyExpiry.job");
+const deliveryRematchJob = require("./deliveryRematch.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -104,7 +105,17 @@ exports.startJobs = () => {
     // are "a deadline quietly passed, go clean it up" jobs.
     cron.schedule("*/15 * * * *", safeRun("groupBuyExpiry", groupBuyExpiryJob));
 
+    // Every 5 minutes: re-attempt dispatch matching for orders stuck in
+    // the manual pool with nobody currently offered - see
+    // deliveryRematch.job.js. Tighter cadence than the other sweeps
+    // above (5min vs 15min/hourly) since a buyer waiting on a rider is
+    // far more time-sensitive than a stale-order/sponsorship-expiry
+    // sweep; this is a reasonable default, not a value the roadmap
+    // pinned down, so it's easy to retune here if 5 minutes turns out
+    // too tight/loose in practice.
+    cron.schedule("*/5 * * * *", safeRun("deliveryRematch", deliveryRematchJob));
+
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min)"
+        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min)"
     );
 };

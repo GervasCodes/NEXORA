@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { formatDate } from "../utils/format";
+import { ChatIcon, CloseIcon } from "./Icons";
 
 const CATEGORIES = [
     { value: "order", label: "Order" },
@@ -208,7 +209,7 @@ export default function SupportWidget() {
                 aria-label="Support"
                 className="w-12 h-12 rounded-full bg-ink text-paper shadow-lg flex items-center justify-center hover:opacity-90 transition-opacity"
             >
-                {open ? "✕" : "💬"}
+                {open ? <CloseIcon className="w-5 h-5" /> : <ChatIcon className="w-5 h-5" />}
             </button>
         </div>
     );

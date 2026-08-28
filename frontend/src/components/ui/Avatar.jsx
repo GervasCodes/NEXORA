@@ -4,11 +4,9 @@ import { useState } from "react";
 // wherever a person's name currently rendered as plain text (or, in
 // Messages.jsx's case, a hand-rolled initials circle). Renders a photo
 // when one is available; falls back to initials on a colored circle
-// otherwise. No `photo_url`/`avatar_url` column exists on users yet
-// anywhere in the schema, so in practice every call site today passes
-// no `src` and this always renders the initials fallback - the photo
-// path is here and ready for whenever that field is added, so call
-// sites don't need to change again later.
+// otherwise. `users.photo_url` (migration 091) now backs this - every
+// call site that has a user object in scope passes `src`, and still
+// falls back to initials for any account that hasn't uploaded a photo.
 //
 // Same rotating gradient palette as DepartmentCard.jsx/ServiceCategoryCard.jsx,
 // reused verbatim for visual consistency with the rest of the app's

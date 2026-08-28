@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import AttachmentBubble from "./AttachmentBubble";
 import EmojiPicker from "./EmojiPicker";
 import ReadReceipt from "./ReadReceipt";
+import { SmileyIcon } from "../Icons";
 
 const LONG_PRESS_MS = 400;
 
@@ -147,7 +148,7 @@ export default function MessageBubble({
                     className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-ash hover:text-ink transition-opacity px-1 self-center"
                     aria-label="React"
                 >
-                    ☺
+                    <SmileyIcon className="w-4 h-4" />
                 </button>
             )}
         </div>

@@ -5,6 +5,7 @@ import PageMeta from "../components/PageMeta";
 import PageLoader from "../components/PageLoader";
 import EmptyState from "../components/ui/EmptyState";
 import { useCurrency } from "../context/CurrencyContext";
+import { GroupBuysIcon } from "../components/NavIcons";
 
 export default function GroupBuys() {
     const { format } = useCurrency();
@@ -23,7 +24,12 @@ export default function GroupBuys() {
             <p className="text-ash text-sm mb-8">Join enough people before the deadline and everyone gets the discounted price.</p>
 
             {groups.length === 0 ? (
-                <EmptyState title="No open group buys right now" hint="Check back soon for new deals." />
+                <EmptyState
+                    title="No open group buys right now"
+                    hint="Check back soon for new deals."
+                    tone="coral"
+                    icon={<GroupBuysIcon className="w-7 h-7" />}
+                />
             ) : (
                 <ul className="space-y-3">
                     {groups.map((g) => (

@@ -12,6 +12,8 @@ const logger = require("./src/utils/logger");
 const paymentProviderRegistry = require("./src/modules/payment/providers/registry");
 const aiProviderRegistry = require("./src/modules/ai/providers/registry");
 const envCheck = require("./src/config/envCheck");
+const dispatchQueue = require("./src/queues/dispatchQueue");
+const deliveryService = require("./src/modules/delivery/delivery.service");
 
 // Without these, a single unhandled promise rejection or uncaught
 // exception ANYWHERE in the app - a socket event handler, a cron job
@@ -44,6 +46,18 @@ const PORT = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
 
 socket.init(httpServer);
+
+// Phase 1 (Durable Dispatch Foundation): consumes durable offer-expiry
+// timers created by delivery.service.js (see queues/dispatchQueue.js).
+// Started here unconditionally (not behind RUN_JOBS_IN_PROCESS like the
+// cron jobs below) because, unlike those, running this Worker in every
+// process is the intended scaling story, not something to dedupe -
+// BullMQ guarantees a given job is only ever processed once no matter
+// how many Workers are listening (see dispatchQueue.js's file comment).
+// No-ops with a warning if REDIS_URL isn't configured.
+dispatchQueue.startDispatchWorker({
+    [dispatchQueue.JOB_NAMES.OFFER_EXPIRE]: deliveryService.handleOfferExpiryJob
+});
 
 // Phase 4 (Engineering & Scalability): jobs can now run from a separate
 // process instead - see worker.js and docs/SCALABILITY_REPORT.md.

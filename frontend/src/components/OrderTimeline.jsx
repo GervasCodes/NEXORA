@@ -1,12 +1,21 @@
 import { useLanguage } from "../context/LanguageContext";
+import { CheckIcon } from "./Icons";
 
-export default function OrderTimeline({ status }) {
+// Phase 6 (Checkout & Order Timeline UX): `searching` (order.status ===
+// "shipped" but dispatch hasn't found a rider yet - see
+// utils/orderStatusModel.js's ORDER_STATE.SEARCHING) swaps the "Shipped"
+// label for "Finding a rider" instead. Before this, the timeline claimed
+// the order had shipped at the exact moment TrackingWidget/OrderDetail
+// were telling the same buyer dispatch was still searching for someone
+// to hand it to - two components on the same page contradicting each
+// other about whether anything had actually left the shop yet.
+export default function OrderTimeline({ status, searching = false }) {
     const { t } = useLanguage();
 
     const STEPS = [
         { key: "pending", label: t("orderTimeline.placed") },
         { key: "processing", label: t("orderTimeline.processing") },
-        { key: "shipped", label: t("orderTimeline.shipped") },
+        { key: "shipped", label: searching ? t("orderTimeline.searching") : t("orderTimeline.shipped") },
         { key: "delivered", label: t("orderTimeline.delivered") }
     ];
 
@@ -49,7 +58,7 @@ export default function OrderTimeline({ status }) {
                                         done ? "bg-teal text-frost scale-100" : "bg-line text-ash scale-90"
                                     }`}
                                 >
-                                    {done ? "✓" : i + 1}
+                                    {done ? <CheckIcon className="w-3 h-3" /> : i + 1}
                                 </div>
                             </div>
                             <p className={`text-[11px] mt-1.5 whitespace-nowrap transition-colors duration-500 ${done ? "text-ink font-medium" : "text-ash"}`}>

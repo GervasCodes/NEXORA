@@ -9,6 +9,7 @@ import { useDataSaver } from "../context/DataSaverContext";
 import { useToast } from "../context/ToastContext";
 import PhoneInput from "../components/PhoneInput";
 import PageMeta from "../components/PageMeta";
+import Avatar from "../components/ui/Avatar";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -31,6 +32,7 @@ export default function Account() {
     const [newPassword, setNewPassword] = useState("");
 
     const [busy, setBusy] = useState("");
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     const load = () => {
         api.get("/account").then(({ data }) => {
@@ -66,7 +68,29 @@ export default function Account() {
         }
     };
 
-    
+    // Phase 4 (Real Imagery & Avatars): same shape as
+    // SellerStore.jsx#handleLogoUpload, just for the shared
+    // buyer/seller/delivery-agent profile photo endpoint instead of the
+    // seller-only store logo one.
+    const handlePhotoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploadingPhoto(true);
+        try {
+            const body = new FormData();
+            body.append("photo", file);
+            const { data } = await api.post("/account/photo", body);
+            setProfile((prev) => ({ ...prev, photo_url: data.data.photoUrl }));
+            updateUser({ photo_url: data.data.photoUrl });
+            toast?.success("Photo updated.");
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setUploadingPhoto(false);
+            e.target.value = "";
+        }
+    };
+
     const persistSettings = async (patch) => {
         setBusy("settings");
         try {
@@ -181,6 +205,24 @@ export default function Account() {
             {/* Profile */}
             <section>
                 <h2 className="font-display text-lg mb-4">{t("account.profile")}</h2>
+
+                {/* Phase 4 (Real Imagery & Avatars): shared photo upload for
+                    every account type - Avatar.jsx already renders `src`
+                    when present and falls back to initials otherwise, so
+                    this is the only place a photo needs wiring in. */}
+                <div className="flex items-center gap-4 mb-6">
+                    <Avatar
+                        firstName={profile?.first_name}
+                        lastName={profile?.last_name}
+                        src={profile?.photo_url}
+                        size="lg"
+                    />
+                    <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
+                        {uploadingPhoto ? "Uploading…" : "Change photo"}
+                        <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                    </label>
+                </div>
+
                 <form onSubmit={saveProfile} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>

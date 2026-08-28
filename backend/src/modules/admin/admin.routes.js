@@ -22,13 +22,21 @@ const {
     bulkServiceStatusValidation,
     monetizationScheduleIdValidation,
     createAdminValidation,
-    updateAdminPermissionsValidation
+    updateAdminPermissionsValidation,
+    manualAssignDeliveryValidation
 } = require("./admin.validator");
-
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/dashboard", adminController.getDashboard);
 router.get("/dispatch", adminController.getDispatchOverview);
+
+// Phase 3 (Admin Manual Override & Ops Visibility)
+router.put(
+    "/dispatch/:id/assign",
+    manualAssignDeliveryValidation,
+    validationMiddleware,
+    adminController.manualAssignDelivery
+);
 router.get("/analytics", adminController.getAnalytics);
 router.get("/analytics/services", adminController.getServicesAnalytics);
 

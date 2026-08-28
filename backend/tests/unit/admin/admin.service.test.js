@@ -418,6 +418,11 @@ describe("admin.service.getDispatchOverview (Phase 6 dispatch dashboard)", () =>
             { id: 5, first_name: "Amina", active_delivery_count: 1 },
             { id: 6, first_name: "Juma", active_delivery_count: 0 }
         ]);
+        // Phase 3 (Admin Manual Override & Ops Visibility) - manual/unmatched pool
+        adminRepository.findUnmatchedOrders.mockResolvedValue([
+            { id: 20, order_number: "ORD-20", minutes_waiting: 25 },
+            { id: 21, order_number: "ORD-21", minutes_waiting: 5 }
+        ]);
 
         const result = await adminService.getDispatchOverview();
 
@@ -426,17 +431,24 @@ describe("admin.service.getDispatchOverview (Phase 6 dispatch dashboard)", () =>
         expect(result.deliveries[1].is_delayed).toBe(false);
         expect(result.delayed).toEqual([expect.objectContaining({ id: 1, is_delayed: true })]);
         expect(result.agents).toHaveLength(2);
+        expect(result.unmatchedOrders).toHaveLength(2);
+        expect(result.unmatchedOrders[0].is_stalled).toBe(true);
+        expect(result.unmatchedOrders[1].is_stalled).toBe(false);
+        expect(result.stalled).toEqual([expect.objectContaining({ id: 20, is_stalled: true })]);
         expect(result.summary).toEqual({
             active_deliveries: 2,
             delayed_deliveries: 1,
             online_agents: 2,
-            idle_agents: 1
+            idle_agents: 1,
+            unmatched_orders: 2,
+            stalled_orders: 1
         });
     });
 
     it("returns zeroed-out summary counts when nothing is active", async () => {
         adminRepository.findActiveDeliveries.mockResolvedValue([]);
         adminRepository.findOnlineAgents.mockResolvedValue([]);
+        adminRepository.findUnmatchedOrders.mockResolvedValue([]);
 
         const result = await adminService.getDispatchOverview();
 
@@ -444,11 +456,15 @@ describe("admin.service.getDispatchOverview (Phase 6 dispatch dashboard)", () =>
             deliveries: [],
             agents: [],
             delayed: [],
+            unmatchedOrders: [],
+            stalled: [],
             summary: {
                 active_deliveries: 0,
                 delayed_deliveries: 0,
                 online_agents: 0,
-                idle_agents: 0
+                idle_agents: 0,
+                unmatched_orders: 0,
+                stalled_orders: 0
             }
         });
     });

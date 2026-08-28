@@ -140,6 +140,12 @@ export const DICTIONARY = {
         "checkout.buyerProtection.title": "Buyer Protection",
         "checkout.buyerProtection.description": "Extends your return window to 14 days and guarantees a refund if something goes wrong",
 
+        "checkout.deliveryEstimate.title": "Estimated delivery",
+        "checkout.deliveryEstimate.calculating": "Estimating delivery time…",
+        "checkout.deliveryEstimate.window": "Usually arrives in {min}–{max} min after pickup",
+        "checkout.deliveryEstimate.unknown": "We'll share your delivery estimate once a rider is on the way",
+        "checkout.deliveryEstimate.multiVendor": "Includes pickup from {count} shops",
+
         "return.new.pageTitle": "Request a return",
         "return.new.eyebrow": "Buyer Protection",
         "return.new.intro": "Tell us what happened and we'll review your request.",
@@ -173,6 +179,7 @@ export const DICTIONARY = {
         "orderTimeline.placed": "Placed",
         "orderTimeline.processing": "Processing",
         "orderTimeline.shipped": "Shipped",
+        "orderTimeline.searching": "Finding a rider",
         "orderTimeline.delivered": "Delivered",
         "orderTimeline.cancelled": "This order was cancelled.",
 
@@ -201,6 +208,15 @@ export const DICTIONARY = {
         "delivery.tracking.timeline.in_transit": "On the way",
         "delivery.tracking.timeline.delivered": "Delivered",
         "delivery.tracking.timeline.failed": "Delivery failed",
+        "delivery.tracking.searching.looking": "Looking for a rider near the shop…",
+        "delivery.tracking.searching.widening": "Still searching — checking a wider area…",
+        "delivery.tracking.searching.takingLonger": "This is taking longer than usual — we're still on it",
+        "delivery.tracking.searching.subtitle": "We'll notify you the moment a rider is assigned.",
+        "order.status.paymentPending.title": "Waiting on payment confirmation",
+        "order.status.paymentPending.body": "Your order is saved. Once payment goes through, the seller will start preparing it.",
+        "order.status.paymentFailed.title": "Payment didn't go through",
+        "order.status.paymentFailed.body": "Your order is still saved — no charge was made. You can try paying again below.",
+        "order.status.paymentConfirmed": "Payment confirmed",
 
         "delivery.agent.available.empty": "No orders ready for pickup right now. Check back soon.",
         "delivery.agent.available.claimed": "Order claimed — find it under My deliveries.",
@@ -835,6 +851,12 @@ export const DICTIONARY = {
         "checkout.buyerProtection.title": "Ulinzi wa Mnunuzi",
         "checkout.buyerProtection.description": "Huongeza muda wa kurejesha bidhaa hadi siku 14 na kuhakikisha marejesho ya pesa endapo kuna tatizo",
 
+        "checkout.deliveryEstimate.title": "Muda wa makadirio ya kufika",
+        "checkout.deliveryEstimate.calculating": "Tunakadiria muda wa kufika…",
+        "checkout.deliveryEstimate.window": "Kwa kawaida hufika ndani ya dakika {min}–{max} baada ya kuchukuliwa",
+        "checkout.deliveryEstimate.unknown": "Tutakujulisha makadirio ya kufika mara wakala atakapopatikana",
+        "checkout.deliveryEstimate.multiVendor": "Inajumuisha uchukuaji kutoka maduka {count}",
+
         "return.new.pageTitle": "Omba kurejesha bidhaa",
         "return.new.eyebrow": "Ulinzi wa Mnunuzi",
         "return.new.intro": "Tuambie kilichotokea na tutapitia ombi lako.",
@@ -868,6 +890,7 @@ export const DICTIONARY = {
         "orderTimeline.placed": "Limewekwa",
         "orderTimeline.processing": "Linachakatwa",
         "orderTimeline.shipped": "Limesafirishwa",
+        "orderTimeline.searching": "Tunatafuta wakala",
         "orderTimeline.delivered": "Limefika",
         "orderTimeline.cancelled": "Agizo hili limeghairiwa.",
 
@@ -897,6 +920,15 @@ export const DICTIONARY = {
         "delivery.tracking.timeline.in_transit": "Yuko njiani",
         "delivery.tracking.timeline.delivered": "Limefika",
         "delivery.tracking.timeline.failed": "Usafirishaji umeshindwa",
+        "delivery.tracking.searching.looking": "Tunatafuta wakala wa usafirishaji karibu na duka…",
+        "delivery.tracking.searching.widening": "Bado tunatafuta — tunaangalia eneo pana zaidi…",
+        "delivery.tracking.searching.takingLonger": "Hii inachukua muda mrefu kuliko kawaida — bado tunaendelea kutafuta",
+        "delivery.tracking.searching.subtitle": "Tutakujulisha mara wakala atakapopatikana.",
+        "order.status.paymentPending.title": "Inasubiri uthibitisho wa malipo",
+        "order.status.paymentPending.body": "Agizo lako limehifadhiwa. Malipo yatakapokamilika, muuzaji ataanza kuliandaa.",
+        "order.status.paymentFailed.title": "Malipo hayakukamilika",
+        "order.status.paymentFailed.body": "Agizo lako bado limehifadhiwa - hakuna malipo yaliyotozwa. Unaweza kujaribu kulipa tena hapa chini.",
+        "order.status.paymentConfirmed": "Malipo yamethibitishwa",
 
         "delivery.agent.available.empty": "Hakuna maagizo tayari kuchukuliwa kwa sasa. Angalia tena baadaye.",
         "delivery.agent.available.claimed": "Agizo limechukuliwa — litapatikana chini ya Usafirishaji wangu.",

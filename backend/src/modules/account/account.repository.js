@@ -2,7 +2,7 @@ const db = require("../../config/db");
 
 exports.findById = async (userId) => {
     const [rows] = await db.query(
-        `SELECT id, first_name, last_name, email, phone, role, admin_level,
+        `SELECT id, first_name, last_name, email, phone, photo_url, role, admin_level,
                 account_verification_status, account_verification_rejection_reason,
                 account_verification_submitted_at, account_verification_reviewed_at,
                 language, theme, currency, is_active, created_at,
@@ -53,6 +53,19 @@ exports.updateProfile = async (userId, data) => {
     params.push(userId);
 
     await db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, params);
+};
+
+// Phase 4 (Real Imagery & Avatars): deliberately separate from
+// updateProfile's allowlist above - the photo is set from the dedicated
+// upload endpoint (see account.service.js#uploadProfilePhoto), never
+// from the free-text profile form, mirroring how
+// seller.repository.js#updateLogo/updateBanner stay separate from
+// updateSellerProfile.
+exports.updatePhotoUrl = async (userId, photoUrl) => {
+    await db.query(
+        "UPDATE users SET photo_url = ? WHERE id = ?",
+        [photoUrl, userId]
+    );
 };
 
 exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled }) => {

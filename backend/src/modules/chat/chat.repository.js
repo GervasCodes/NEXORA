@@ -70,9 +70,9 @@ exports.findConversationsByUser = async (userId) => {
         `SELECT c.*,
                 p.name AS product_name,
                 o.order_number,
-                buyer.first_name AS buyer_first_name, buyer.last_name AS buyer_last_name,
-                seller.first_name AS seller_first_name, seller.last_name AS seller_last_name,
-                agent.first_name AS agent_first_name, agent.last_name AS agent_last_name,
+                buyer.first_name AS buyer_first_name, buyer.last_name AS buyer_last_name, buyer.photo_url AS buyer_photo_url,
+                seller.first_name AS seller_first_name, seller.last_name AS seller_last_name, seller.photo_url AS seller_photo_url,
+                agent.first_name AS agent_first_name, agent.last_name AS agent_last_name, agent.photo_url AS agent_photo_url,
                 CASE
                     WHEN c.buyer_id = ? THEN c.buyer_cleared_at
                     WHEN c.seller_id = ? THEN c.seller_cleared_at

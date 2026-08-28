@@ -15,6 +15,26 @@ exports.findAvailableForPickup = async () => {
     return rows;
 };
 
+// Phase 1 (Durable Dispatch Foundation) - the periodic re-check job
+// (jobs/deliveryRematch.job.js) sweeps this to retry matching for orders
+// that landed in the manual pool with no active offer currently in
+// flight. Same base shape as findAvailableForPickup above, with one more
+// LEFT JOIN/NULL-check to exclude any order that already has a pending
+// 'offered' row - those are mid-flow (waiting on an agent to
+// accept/decline or on their offer to expire) and shouldn't have a
+// second, competing match attempt started for them.
+exports.findUnmatchedForRematch = async () => {
+    const [rows] = await db.query(
+        `SELECT o.id AS order_id
+        FROM orders o
+        LEFT JOIN deliveries d ON d.order_id = o.id
+        LEFT JOIN delivery_offers off ON off.order_id = o.id AND off.status = 'offered'
+        WHERE o.status = 'shipped' AND d.id IS NULL AND o.delivery_mode = 'platform' AND off.id IS NULL
+        ORDER BY o.created_at ASC`
+    );
+    return rows;
+};
+
 exports.findByOrderId = async (orderId) => {
     const [rows] = await db.query(
         "SELECT * FROM deliveries WHERE order_id = ?",
@@ -186,6 +206,18 @@ exports.findCandidateAgents = async (orderId) => {
         [orderId]
     );
     return rows;
+};
+
+// Phase 3 (Admin Manual Override) - lets delivery.service.js's
+// adminAssignDelivery verify the agent an admin picked from the dispatch
+// board dropdown is actually a delivery agent and currently online,
+// rather than trusting whatever id the request sent.
+exports.findOnlineAgentById = async (agentId) => {
+    const [rows] = await db.query(
+        "SELECT id, is_online FROM users WHERE id = ? AND role = 'delivery_agent'",
+        [agentId]
+    );
+    return rows[0];
 };
 
 // ---- Offer queue -----------------------------------------------------------

@@ -111,7 +111,7 @@ exports.findAgentByEmail = async (email) => {
 exports.findRoster = async (sellerId) => {
     const [rows] = await db.query(
         `SELECT sda.id, sda.agent_id, sda.created_at,
-                u.first_name, u.last_name, u.email
+                u.first_name, u.last_name, u.email, u.photo_url
         FROM seller_delivery_agents sda
         JOIN users u ON u.id = sda.agent_id
         WHERE sda.seller_id = ?

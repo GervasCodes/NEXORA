@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
+import { StarIcon } from "./Icons";
 import { useCurrency } from "../context/CurrencyContext";
 import { useDataSaver } from "../context/DataSaverContext";
 
@@ -88,7 +89,7 @@ function ServiceCard({ service, layout = "grid" }) {
 
             {service.average_rating ? (
                 <p className="text-xs text-ash shrink-0 flex items-center gap-0.5">
-                    <span className="text-mango">★</span> {Number(service.average_rating).toFixed(1)}
+                    <StarIcon className="w-3 h-3 text-mango" /> {Number(service.average_rating).toFixed(1)}
                     <span className="text-ash/70">({service.review_count})</span>
                 </p>
             ) : null}

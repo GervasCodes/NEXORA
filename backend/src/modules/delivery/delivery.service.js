@@ -10,11 +10,8 @@ const settingsService = require("../settings/settings.service");
 const earningsService = require("../earnings/earnings.service");
 const { haversineKm } = require("../../utils/geo");
 const routingService = require("../../services/routing/routing.service");
-const {
-    DELIVERY_STATUS_TRANSITIONS,
-    OFFER_RADIUS_KM,
-    OFFER_TIMEOUT_MS
-} = require("../../constants/orderStatus");
+const dispatchQueue = require("../../queues/dispatchQueue");
+const { DELIVERY_STATUS_TRANSITIONS } = require("../../constants/orderStatus");
 
 // Lazy require to dodge the circular dependency (socket.js also lazily
 // requires this file for the same reason).
@@ -71,6 +68,95 @@ exports.claimDelivery = async (orderId, agentId) => {
     socket().emitToAdmins("dispatch:delivery_assigned", { orderId, deliveryId, agentId });
 
     return { deliveryId, orderId };
+};
+
+// Phase 3 (Admin Manual Override & Ops Visibility) - staff picking a
+// specific online agent for a specific unmatched order from the dispatch
+// board, bypassing automatic radius-based matching (startMatching) and
+// the periodic rematch sweep (jobs/deliveryRematch.job.js) entirely.
+// Shares claimDelivery's guard clauses and delivery-row creation above
+// (same UNIQUE-constraint race handling), but unlike a self-claim the
+// agent didn't ask for this job, so - like an accepted offer (see
+// acceptOffer below) - they get told about it: a push + in-app
+// notification, reusing the exact same notification keys
+// order.service.js already uses when a seller assigns one of their own
+// roster agents (notifications.delivery.assigned.*), since the meaning
+// to the agent ("you've been given a delivery") is identical either way.
+// The buyer and admin board get the same events any other assignment
+// path already emits.
+exports.adminAssignDelivery = async (orderId, agentId) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order) {
+        throw new Error("Order not found");
+    }
+
+    if (order.status !== "shipped") {
+        throw new Error("Order is not ready for pickup");
+    }
+
+    const existing = await deliveryRepository.findByOrderId(orderId);
+    if (existing) {
+        throw new Error("This order already has a delivery assigned");
+    }
+
+    const agent = await deliveryRepository.findOnlineAgentById(agentId);
+    if (!agent) {
+        throw new Error("Agent not found");
+    }
+    if (!agent.is_online) {
+        throw new Error("That agent is currently offline");
+    }
+
+    const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
+        await deliveryPricingService.calculateDeliveryFee(order);
+
+    // Same check-then-act race as claimDelivery above - the UNIQUE
+    // constraint on deliveries.order_id is the real guard.
+    let deliveryId;
+    try {
+        deliveryId = await deliveryRepository.create(
+            orderId, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider
+        );
+    } catch (err) {
+        if (isDuplicateKeyError(err)) {
+            throw new Error("This order already has a delivery assigned");
+        }
+        throw err;
+    }
+
+    await notificationService.notify({
+        userId: agentId,
+        type: "delivery_assigned",
+        titleKey: "notifications.delivery.assigned.title",
+        messageKey: "notifications.delivery.assigned.message",
+        messageParams: { orderNumber: order.order_number },
+        relatedOrderId: orderId,
+        withEmail: true
+    });
+
+    pushService
+        .sendToUser(agentId, {
+            title: "New delivery assigned",
+            body: `${order.order_number} was assigned to you by an admin`,
+            orderId
+        })
+        .catch((err) => logger.warn({ err, orderId, agentId }, "push send error"));
+
+    await notificationService.notify({
+        userId: order.buyer_id,
+        type: "delivery_assigned",
+        titleKey: "notifications.delivery.pickedUp.title",
+        messageKey: "notifications.delivery.pickedUp.message",
+        messageParams: { orderNumber: order.order_number },
+        relatedOrderId: orderId,
+        withEmail: true
+    });
+
+    socket().emitToOrder(orderId, "delivery:assigned", { orderId, agentId });
+    socket().emitToAdmins("dispatch:delivery_assigned", { orderId, deliveryId, agentId });
+
+    return { deliveryId, orderId, agentId };
 };
 
 exports.getMyDeliveries = async (agentId) => {
@@ -388,9 +474,17 @@ const getSellerPickupPoint = async (order) => {
 const ETA_CANDIDATE_POOL_SIZE = 5;
 
 // Called when a seller ships an order into the open platform pool (no
-// specific roster agent chosen). Offers the order to whichever online
-// agent can reach the SELLER'S shop soonest, with a timeout that falls
-// through to the next-best candidate.
+// specific roster agent chosen), and by the periodic re-check job
+// (jobs/deliveryRematch.job.js) retrying an order that's been sitting in
+// the manual pool. Offers the order to whichever online agent can reach
+// the SELLER'S shop soonest, with a timeout that falls through to the
+// next-best candidate - widening the search radius (see
+// offerToNextCandidate) once a given radius runs out of candidates.
+// Always starts at the smallest configured radius step (radiusIndex 0),
+// even on a re-check retry - an agent that's come online since the last
+// attempt may now be in range of the tightest step, and re-widening from
+// there is cheap (empty radii are skipped instantly, see
+// offerToNextCandidate).
 exports.startMatching = async (orderId) => {
     const order = await orderRepository.findOrderById(orderId);
     if (!order) return;
@@ -402,7 +496,7 @@ exports.startMatching = async (orderId) => {
     // matching.
     if (!pickup) return;
 
-    await offerToNextCandidate(orderId, pickup);
+    await offerToNextCandidate(orderId, pickup, 0);
 };
 
 // Ranks candidates by straight-line distance to the shop first (cheap,
@@ -414,13 +508,13 @@ exports.startMatching = async (orderId) => {
 // Falls back to the haversine ranking untouched if a routing lookup fails
 // for some agent (the routing layer's own fallback provider means that's
 // effectively never, but this keeps dispatch working either way).
-const rankCandidatesBySellerEta = async (candidates, pickup) => {
+const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
     const inRange = candidates
         .map((agent) => ({
             ...agent,
             distanceKm: haversineKm(pickup.lat, pickup.lng, agent.current_lat, agent.current_lng)
         }))
-        .filter((agent) => agent.distanceKm <= OFFER_RADIUS_KM)
+        .filter((agent) => agent.distanceKm <= radiusKm)
         .sort((a, b) => a.distanceKm - b.distanceKm);
 
     if (inRange.length === 0) return [];
@@ -461,23 +555,114 @@ const rankCandidatesBySellerEta = async (candidates, pickup) => {
     return [...withEta, ...inRange.slice(ETA_CANDIDATE_POOL_SIZE)];
 };
 
-const offerToNextCandidate = async (orderId, pickup) => {
+// Schedules the "has this offer timed out?" check via the durable
+// BullMQ queue (see queues/dispatchQueue.js) when Redis is configured,
+// so it survives a restart and is only ever processed once even with
+// multiple server instances running. Falls back to the old bare
+// setTimeout only when Redis isn't configured at all (local dev/CI -
+// see config/redis.js) - that fallback has the same non-durability
+// limitation the pre-Phase-1 code always had (lost on restart, doesn't
+// coordinate across instances), which is acceptable for a dev/CI
+// environment that also has no persistent Redis, but is never expected
+// in a real deployment (which is expected to have REDIS_URL set, same
+// as the caching layer already needs for it to do anything).
+const scheduleOfferExpiry = async (offerId, orderId, pickup, radiusIndex, timeoutMs) => {
+    const queue = dispatchQueue.getQueue();
+
+    if (queue) {
+        await queue.add(
+            dispatchQueue.JOB_NAMES.OFFER_EXPIRE,
+            { offerId, orderId, pickup, radiusIndex },
+            {
+                delay: timeoutMs,
+                // Deterministic id (rather than an auto-generated one) -
+                // not load-bearing today since nothing ever needs to
+                // look this job back up or cancel it (an accepted offer
+                // just makes expireOffer's UPDATE a no-op below), but it
+                // keeps at most one expiry job per offer if this were
+                // ever called twice for the same offer.
+                jobId: `offer-expire:${offerId}`,
+                removeOnComplete: true,
+                removeOnFail: true
+            }
+        );
+        return;
+    }
+
+    setTimeout(() => {
+        handleOfferExpiryJob({ offerId, orderId, pickup, radiusIndex }).catch((err) => {
+            logger.error({ err, offerId, orderId }, "offer expiry error (non-durable fallback - Redis not configured)");
+            Sentry.captureException(err, {
+                tags: { area: "delivery", stage: "offer-expiry-fallback" },
+                extra: { offerId, orderId }
+            });
+        });
+    }, timeoutMs);
+};
+
+// Nearest-agent matching, one radius step at a time. `radiusIndex`
+// selects which configured radius step (see
+// settingsService.getDeliveryOfferRadiusStepsKm) to search within on
+// this attempt:
+//   - if an agent is found, they're offered the order and a durable
+//     expiry timer is scheduled (see scheduleOfferExpiry) carrying the
+//     SAME radiusIndex, so a timeout/decline tries the next candidate at
+//     this same radius before ever widening it;
+//   - if nobody is currently online within this radius at all, there's
+//     nothing to wait out a timeout for, so this widens to the next
+//     radius step immediately;
+//   - once every configured radius step has been tried with no luck,
+//     the order is left in the manual "available for pickup" pool -
+//     picked up either by a human claiming it, or by the periodic
+//     re-check job (jobs/deliveryRematch.job.js) retrying matching from
+//     radiusIndex 0 again on its next tick.
+const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
     // Someone may have manually claimed it while offers were in flight.
     const existingDelivery = await deliveryRepository.findByOrderId(orderId);
     if (existingDelivery) return;
 
+    const radiusSteps = await settingsService.getDeliveryOfferRadiusStepsKm();
+    const radiusKm = radiusSteps[Math.min(radiusIndex, radiusSteps.length - 1)];
+
     const candidates = await deliveryRepository.findCandidateAgents(orderId);
-    const ranked = await rankCandidatesBySellerEta(candidates, pickup);
+    const ranked = await rankCandidatesBySellerEta(candidates, pickup, radiusKm);
 
     if (ranked.length === 0) {
-        // Nobody in range of the shop right now — order just sits in the
-        // manual pool (findAvailableForPickup) until an agent claims it or
-        // comes online and a future order/retry triggers matching again.
+        const nextRadiusIndex = radiusIndex + 1;
+
+        if (nextRadiusIndex < radiusSteps.length) {
+            logger.info(
+                { orderId, radiusKm, nextRadiusKm: radiusSteps[nextRadiusIndex] },
+                "no dispatch candidates in range - widening search radius"
+            );
+            // Phase 2 (Honest Status Transparency): lets the buyer's
+            // tracking page/widget upgrade its "searching" copy the
+            // moment we actually widen, instead of only guessing off a
+            // client-side timer. Purely informational - nothing here
+            // reads this event back, so a missed delivery (buyer's
+            // socket briefly disconnected) never affects matching
+            // itself, only how promptly the copy updates.
+            socket().emitToOrder(orderId, "dispatch:still_searching", {
+                orderId,
+                phase: "widening",
+                radiusKm,
+                nextRadiusKm: radiusSteps[nextRadiusIndex]
+            });
+            return offerToNextCandidate(orderId, pickup, nextRadiusIndex);
+        }
+
+        logger.info({ orderId, radiusStepsKm: radiusSteps }, "no dispatch candidates at any configured radius - order left in manual pool");
+        socket().emitToOrder(orderId, "dispatch:still_searching", {
+            orderId,
+            phase: "exhausted",
+            radiusStepsKm: radiusSteps
+        });
         return;
     }
 
     const nearest = ranked[0];
-    const expiresAt = new Date(Date.now() + OFFER_TIMEOUT_MS);
+    const timeoutMs = await settingsService.getDeliveryOfferTimeoutMs();
+    const expiresAt = new Date(Date.now() + timeoutMs);
     const offerId = await deliveryRepository.createOffer(
         orderId,
         nearest.id,
@@ -497,7 +682,7 @@ const offerToNextCandidate = async (orderId, pickup) => {
         pickupAddress: pickup.address,
         distanceToSellerKm: Math.round(nearest.distanceKm * 10) / 10,
         etaToSellerMinutes: nearest.etaMinutesToSeller ?? null,
-        expiresInMs: OFFER_TIMEOUT_MS
+        expiresInMs: timeoutMs
     });
 
     pushService
@@ -511,19 +696,36 @@ const offerToNextCandidate = async (orderId, pickup) => {
         })
         .catch((err) => logger.warn({ err, offerId, orderId }, "push send error"));
 
-    setTimeout(() => {
-        expireAndAdvance(offerId, orderId, pickup).catch((err) => {
-            logger.error({ err, offerId, orderId }, "offer expiry error");
-            Sentry.captureException(err, { tags: { area: "delivery", stage: "offer-expiry" }, extra: { offerId, orderId } });
-        });
-    }, OFFER_TIMEOUT_MS);
+    await scheduleOfferExpiry(offerId, orderId, pickup, radiusIndex, timeoutMs);
 };
 
-const expireAndAdvance = async (offerId, orderId, pickup) => {
+// The actual expiry check, run either by the BullMQ worker (durable
+// path) or the setTimeout fallback (non-durable, Redis-unconfigured
+// path) - see scheduleOfferExpiry above. Exported as
+// exports.handleOfferExpiryJob so server.js/worker.js can register it
+// with queues/dispatchQueue.js#startDispatchWorker without that module
+// needing to require this one back (would be a pointless indirection
+// through the same layer that already owns getQueue()).
+const handleOfferExpiryJob = async ({ offerId, orderId, pickup, radiusIndex }) => {
     const stillPending = await deliveryRepository.expireOffer(offerId);
     if (!stillPending) return; // already accepted/declined
 
-    await offerToNextCandidate(orderId, pickup);
+    await offerToNextCandidate(orderId, pickup, radiusIndex);
+};
+exports.handleOfferExpiryJob = handleOfferExpiryJob;
+
+// Derives which radius step a given offer was made within, from its
+// recorded distance_km - candidates are always filtered to
+// distanceKm <= radiusSteps[radiusIndex] when offered (see
+// offerToNextCandidate), so the smallest step at or above that distance
+// is always the step it was offered at. Used by declineOffer below to
+// resume matching at the SAME radius the declined offer was made at,
+// without needing a dedicated radius_index column on delivery_offers
+// just to carry that one piece of state across a request.
+const resolveRadiusIndexForDistance = (distanceKm, radiusSteps) => {
+    const distance = Number(distanceKm);
+    const index = radiusSteps.findIndex((km) => distance <= km);
+    return index === -1 ? radiusSteps.length - 1 : index;
 };
 
 exports.acceptOffer = async (offerId, agentId) => {
@@ -644,7 +846,12 @@ exports.declineOffer = async (offerId, agentId) => {
     if (order) {
         const pickup = await getSellerPickupPoint(order);
         if (pickup) {
-            await offerToNextCandidate(offer.order_id, pickup);
+            // Resume at the same radius this offer was made within,
+            // rather than resetting to the smallest step - see
+            // resolveRadiusIndexForDistance.
+            const radiusSteps = await settingsService.getDeliveryOfferRadiusStepsKm();
+            const radiusIndex = resolveRadiusIndexForDistance(offer.distance_km, radiusSteps);
+            await offerToNextCandidate(offer.order_id, pickup, radiusIndex);
         }
     }
 };

@@ -34,28 +34,27 @@ const { computeBandedFee } = require("../../utils/deliveryPricing");
 // durationMinutes: null, method: "flat" }` - no routing call is made at
 // all when there's no pin pair to route between, so there's no
 // routingProvider/degraded to report either.
-exports.calculateDeliveryFee = async (order, vehicleType) => {
+//
+// Phase 6 (Checkout & Order Timeline UX): the actual pin-to-pin math is
+// pulled out into estimateDeliveryForRoute below so it can also be used
+// pre-order (Checkout.jsx's upfront estimate, via
+// order.service.js#getDeliveryEstimate) - at that point there's no order
+// row yet to look a seller id up from, just a cart's seller ids and
+// whatever pickup pins they already have on file. This function's job is
+// now just resolving "which order -> which seller's pickup pin" before
+// delegating to it; same flat-fee fallback shape/reasoning as before.
+exports.estimateDeliveryForRoute = async ({ pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType }) => {
     const flatFee = await settingsService.getRiderDeliveryFee();
 
-    if (order.delivery_lat == null || order.delivery_lng == null) {
-        return { fee: flatFee, distanceKm: null, durationMinutes: null, method: "flat" };
-    }
-
-    const sellerId = await orderRepository.findOrderSellerId(order.id);
-    if (!sellerId) {
-        return { fee: flatFee, distanceKm: null, durationMinutes: null, method: "flat" };
-    }
-
-    const seller = await sellerRepository.findByUserId(sellerId);
-    if (!seller || seller.pickup_lat == null || seller.pickup_lng == null) {
+    if (pickupLat == null || pickupLng == null || deliveryLat == null || deliveryLng == null) {
         return { fee: flatFee, distanceKm: null, durationMinutes: null, method: "flat" };
     }
 
     const route = await routingService.getRoute({
-        originLat: Number(seller.pickup_lat),
-        originLng: Number(seller.pickup_lng),
-        destLat: Number(order.delivery_lat),
-        destLng: Number(order.delivery_lng),
+        originLat: Number(pickupLat),
+        originLng: Number(pickupLng),
+        destLat: Number(deliveryLat),
+        destLng: Number(deliveryLng),
         vehicleType
     });
 
@@ -70,4 +69,25 @@ exports.calculateDeliveryFee = async (order, vehicleType) => {
         routingProvider: route.provider,
         degraded: route.degraded
     };
+};
+
+exports.calculateDeliveryFee = async (order, vehicleType) => {
+    if (order.delivery_lat == null || order.delivery_lng == null) {
+        return exports.estimateDeliveryForRoute({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null });
+    }
+
+    const sellerId = await orderRepository.findOrderSellerId(order.id);
+    if (!sellerId) {
+        return exports.estimateDeliveryForRoute({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null });
+    }
+
+    const seller = await sellerRepository.findByUserId(sellerId);
+
+    return exports.estimateDeliveryForRoute({
+        pickupLat: seller?.pickup_lat,
+        pickupLng: seller?.pickup_lng,
+        deliveryLat: order.delivery_lat,
+        deliveryLng: order.delivery_lng,
+        vehicleType
+    });
 };

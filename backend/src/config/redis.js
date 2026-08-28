@@ -29,7 +29,12 @@ let hasLoggedUnavailable = false;
 
 // Lazily built once per process, not per call - ioredis manages its own
 // reconnection internally, so callers just need a stable reference.
-const buildClient = () => {
+//
+// `overrides` lets a caller that needs different connection tuning than
+// the shared cache client (see createDedicatedClient below) reuse the
+// same REDIS_URL/TLS parsing without duplicating it - the cache client
+// itself is just buildClient() with no overrides.
+const buildClient = (overrides = {}) => {
     if (!REDIS_URL || REDIS_DISABLED) {
         return null;
     }
@@ -47,11 +52,15 @@ const buildClient = () => {
         // utils/cache.js) - failing fast beats a request hanging behind a
         // slow reconnect loop. A handful of quick retries handles a
         // momentary blip; anything longer and callers should already have
-        // fallen back to the DB well before this gives up.
+        // fallen back to the DB well before this gives up. A dedicated
+        // client (e.g. BullMQ - see createDedicatedClient) overrides this
+        // with its own tuning, since a job queue's correctness
+        // requirements are different from a best-effort cache's.
         maxRetriesPerRequest: 1,
         retryStrategy: (attempt) => (attempt > 5 ? null : Math.min(attempt * 200, 2000)),
         lazyConnect: true,
-        enableOfflineQueue: false
+        enableOfflineQueue: false,
+        ...overrides
     });
 
     instance.on("error", (error) => {
@@ -99,3 +108,15 @@ exports.getClient = () => {
 };
 
 exports.isConfigured = () => Boolean(REDIS_URL) && !REDIS_DISABLED;
+
+// A second, independent connection for callers that can't share the
+// cache client's tuning (see the maxRetriesPerRequest/enableOfflineQueue
+// comment above) - currently just BullMQ (queues/dispatchQueue.js),
+// which needs `maxRetriesPerRequest: null` and an enabled offline queue
+// per its own connection requirements. Same "returns null when
+// unconfigured" contract as getClient() - callers decide their own
+// degraded behavior (see dispatchQueue.js), this module doesn't.
+// Deliberately not memoized/shared like getClient()'s singleton: BullMQ
+// wants its own connection per Queue/Worker instance rather than one
+// shared client.
+exports.createDedicatedClient = (overrides = {}) => buildClient(overrides);

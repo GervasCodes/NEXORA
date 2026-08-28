@@ -9,6 +9,7 @@ const requireApprovedSeller = require("../../middleware/requireApprovedSeller.mi
 const orderController = require("./order.controller");
 const {
     checkoutValidation,
+    deliveryEstimateValidation,
     orderIdValidation,
     updateOrderStatusValidation
 } = require("./order.validator");
@@ -21,6 +22,20 @@ router.post(
     checkoutValidation,
     validationMiddleware,
     orderController.checkout
+);
+
+// Phase 6 (Checkout & Order Timeline UX): must be registered before
+// GET/PUT "/:id" below - otherwise "delivery-estimate" would be captured
+// as an :id param instead of reaching this handler. POST (not GET)
+// because it takes a body (the dropped pin) and validationMiddleware's
+// body() checks expect one; nothing is created or changed server-side.
+router.post(
+    "/delivery-estimate",
+    authMiddleware,
+    authorize("buyer"),
+    deliveryEstimateValidation,
+    validationMiddleware,
+    orderController.getDeliveryEstimate
 );
 
 router.get(

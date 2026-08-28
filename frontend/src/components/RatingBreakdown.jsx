@@ -1,3 +1,4 @@
+import { StarIcon } from "./Icons";
 
 export default function RatingBreakdown({ breakdown, reviewCount }) {
     if (!reviewCount) return null;
@@ -10,7 +11,9 @@ export default function RatingBreakdown({ breakdown, reviewCount }) {
 
                 return (
                     <div key={star} className="flex items-center gap-2 text-xs text-ash mb-1">
-                        <span className="w-8 shrink-0">{star} ★</span>
+                        <span className="w-8 shrink-0 flex items-center gap-0.5">
+                            {star} <StarIcon className="w-3 h-3 text-mango" />
+                        </span>
                         <div className="flex-1 h-1.5 bg-line rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-mango rounded-full transition-[width] duration-700 ease-out"

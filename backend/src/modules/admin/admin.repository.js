@@ -350,6 +350,29 @@ exports.findOnlineAgents = async () => {
     return rows;
 };
 
+// Phase 3 (Admin Manual Override & Ops Visibility) - the "manual pool"
+// counterpart to findActiveDeliveries above: orders that shipped but
+// never got a delivery record, and aren't currently mid-offer either
+// (same base shape as delivery.repository.js's findAvailableForPickup/
+// findUnmatchedForRematch), with the extra fields the dispatch board
+// needs to show and act on them - how long each has been waiting (the
+// "stalled" flag is applied from this in admin.service.js, not here) and
+// delivery coordinates for the map.
+exports.findUnmatchedOrders = async () => {
+    const [rows] = await db.query(
+        `SELECT o.id AS order_id, o.order_number, o.shipping_address,
+                o.shipping_city, o.shipping_region, o.total_amount,
+                o.delivery_lat, o.delivery_lng, o.created_at,
+                TIMESTAMPDIFF(MINUTE, o.created_at, NOW()) AS minutes_waiting
+        FROM orders o
+        LEFT JOIN deliveries d ON d.order_id = o.id
+        LEFT JOIN delivery_offers off ON off.order_id = o.id AND off.status = 'offered'
+        WHERE o.status = 'shipped' AND d.id IS NULL AND o.delivery_mode = 'platform' AND off.id IS NULL
+        ORDER BY o.created_at ASC`
+    );
+    return rows;
+};
+
 // --- Dashboard ---
 exports.getDashboardStats = async () => {
     const [[userCounts]] = await db.query(

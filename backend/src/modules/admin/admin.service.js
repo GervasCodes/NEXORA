@@ -12,6 +12,20 @@ const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const accountRepository = require("../account/account.repository");
 const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
+// Phase 3 (Admin Manual Override & Ops Visibility) - manualAssignDelivery
+// below delegates the actual delivery-row creation to delivery.service.js
+// so manual admin assignment goes through the same hardened path
+// (guard clauses, notifications, race handling) as every other way a
+// `deliveries` row gets created, instead of a second parallel one here.
+const deliveryService = require("../delivery/delivery.service");
+
+// How long an order can sit in the manual pool (see
+// adminRepository.findUnmatchedOrders) before the dispatch board flags
+// it as "stalled" rather than just "waiting". Set a bit past a few of
+// the periodic rematch job's cycles (every 5 min - see
+// jobs/deliveryRematch.job.js) so this surfaces genuinely stuck orders,
+// not ones simply between rematch sweeps.
+const STALLED_ORDER_MINUTES = 20;
 
 exports.listUsers = async () => {
     return adminRepository.findAllUsers();
@@ -484,9 +498,11 @@ exports.listAllOrders = async () => {
 // live updates into the "admins" room on top of this initial snapshot -
 // see docs/API.md for the event list.
 exports.getDispatchOverview = async () => {
-    const [deliveries, agents] = await Promise.all([
+    const [deliveries, agents, unmatchedOrders] = await Promise.all([
         adminRepository.findActiveDeliveries(),
-        adminRepository.findOnlineAgents()
+        adminRepository.findOnlineAgents(),
+        // Phase 3 (Admin Manual Override & Ops Visibility)
+        adminRepository.findUnmatchedOrders()
     ]);
 
     const normalizedDeliveries = deliveries.map((d) => ({
@@ -496,17 +512,49 @@ exports.getDispatchOverview = async () => {
 
     const delayed = normalizedDeliveries.filter((d) => d.is_delayed);
 
+    // Phase 3: same normalize-then-derive shape as is_delayed/delayed
+    // above, just for the manual pool instead of active deliveries.
+    const normalizedUnmatched = unmatchedOrders.map((o) => ({
+        ...o,
+        is_stalled: Number(o.minutes_waiting) >= STALLED_ORDER_MINUTES
+    }));
+
+    const stalled = normalizedUnmatched.filter((o) => o.is_stalled);
+
     return {
         deliveries: normalizedDeliveries,
         agents,
         delayed,
+        unmatchedOrders: normalizedUnmatched,
+        stalled,
         summary: {
             active_deliveries: normalizedDeliveries.length,
             delayed_deliveries: delayed.length,
             online_agents: agents.length,
-            idle_agents: agents.filter((a) => Number(a.active_delivery_count) === 0).length
+            idle_agents: agents.filter((a) => Number(a.active_delivery_count) === 0).length,
+            unmatched_orders: normalizedUnmatched.length,
+            stalled_orders: stalled.length
         }
     };
+};
+
+// Phase 3 (Admin Manual Override & Ops Visibility) - lets staff push a
+// specific unmatched order onto a specific online agent directly from the
+// dispatch board, instead of only waiting on automatic matching. See
+// deliveryService.adminAssignDelivery for the actual guard clauses/
+// creation/notifications; this just adds the audit trail every other
+// admin action here already gets.
+exports.manualAssignDelivery = async (orderId, agentId, adminId) => {
+    const result = await deliveryService.adminAssignDelivery(orderId, agentId);
+
+    auditService.log({
+        userId: adminId,
+        eventType: "order_delivery_manually_assigned",
+        description: `Admin manually assigned order #${orderId} to agent #${agentId}`,
+        metadata: { order_id: Number(orderId), agent_id: Number(agentId) }
+    });
+
+    return result;
 };
 
 exports.getDashboard = async () => {

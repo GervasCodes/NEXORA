@@ -42,6 +42,14 @@ export default function Messages() {
             : `${c.buyer_first_name} ${c.buyer_last_name}`;
     };
 
+    // Phase 4 (Real Imagery & Avatars): same buyer/seller branch
+    // otherPartyName uses above, just returning the photo column
+    // findConversationsByUser now selects instead of the name.
+    const otherPartyPhoto = (c) => {
+        const isMeBuyer = c.buyer_id === user.id;
+        return isMeBuyer ? c.seller_photo_url : c.buyer_photo_url;
+    };
+
     const filtered = conversations.filter((c) => {
         const q = query.trim().toLowerCase();
         if (!q) return true;
@@ -117,7 +125,7 @@ export default function Messages() {
                             to={`/messages/${c.id}`}
                             className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"
                         >
-                            <Avatar name={otherPartyName(c)} size="md" />
+                            <Avatar name={otherPartyName(c)} src={otherPartyPhoto(c)} size="md" />
 
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">

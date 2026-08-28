@@ -122,6 +122,33 @@ export default function Checkout() {
         api.get("/pickup-points").then(({ data }) => setPickupPoints(data.data)).catch(() => {});
     }, []);
 
+    // Phase 6 (Checkout & Order Timeline UX): upfront delivery-time
+    // estimate, fetched from the same distance/duration calculation the
+    // platform already uses for rider pay (see
+    // deliveryPricing.service.js#estimateDeliveryForRoute via
+    // order.service.js#getDeliveryEstimate) - only reachable once a pin is
+    // actually dropped (no pin = nothing to estimate a route against), and
+    // only for home delivery (pickup points are self-collect, so there's
+    // no delivery leg to estimate). Debounced slightly since dragging the
+    // map pin can fire onChange rapidly.
+    const [deliveryEstimate, setDeliveryEstimate] = useState(null);
+    const [estimateLoading, setEstimateLoading] = useState(false);
+    useEffect(() => {
+        if (deliveryType !== "home" || !pin) {
+            setDeliveryEstimate(null);
+            return;
+        }
+        let cancelled = false;
+        setEstimateLoading(true);
+        const timer = setTimeout(() => {
+            api.post("/orders/delivery-estimate", { delivery_lat: pin.lat, delivery_lng: pin.lng })
+                .then(({ data }) => { if (!cancelled) setDeliveryEstimate(data.data); })
+                .catch(() => { if (!cancelled) setDeliveryEstimate(null); })
+                .finally(() => { if (!cancelled) setEstimateLoading(false); });
+        }, 400);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [deliveryType, pin?.lat, pin?.lng]);
+
     const selectPickupPoint = (id) => {
         const point = pickupPoints.find((p) => String(p.id) === String(id));
         if (!point) {
@@ -399,6 +426,31 @@ export default function Checkout() {
                 </div>
 
                 <LocationPicker value={pin} onChange={setPin} />
+
+                {deliveryType === "home" && pin && (
+                    <div className="border border-line rounded-md px-3 py-2 text-sm animate-fade-in">
+                        <p className="font-medium text-ink">{t("checkout.deliveryEstimate.title")}</p>
+                        {estimateLoading && !deliveryEstimate ? (
+                            <p className="text-xs text-ash mt-0.5">{t("checkout.deliveryEstimate.calculating")}</p>
+                        ) : deliveryEstimate?.durationMinutes != null ? (
+                            <>
+                                <p className="text-xs text-ash mt-0.5">
+                                    {t("checkout.deliveryEstimate.window", {
+                                        min: deliveryEstimate.durationMinutes,
+                                        max: deliveryEstimate.durationMinutes + 20
+                                    })}
+                                </p>
+                                {deliveryEstimate.vendorCount > 1 && (
+                                    <p className="text-xs text-ash mt-0.5">
+                                        {t("checkout.deliveryEstimate.multiVendor", { count: deliveryEstimate.vendorCount })}
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <p className="text-xs text-ash mt-0.5">{t("checkout.deliveryEstimate.unknown")}</p>
+                        )}
+                    </div>
+                )}
 
                 <p className="text-xs font-semibold uppercase tracking-wide text-ash pt-2">Step 2 · Payment</p>
 

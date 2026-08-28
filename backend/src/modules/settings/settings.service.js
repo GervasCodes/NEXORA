@@ -1,5 +1,6 @@
 const settingsRepository = require("./settings.repository");
 const { DEFAULT_BANDS, parseBandsConfig } = require("../../utils/deliveryPricing");
+const { OFFER_RADIUS_KM, OFFER_TIMEOUT_MS } = require("../../constants/orderStatus");
 
 // Fallbacks used only if the row is somehow missing (e.g. migration ran
 // but the default INSERT was skipped) - keeps the platform functional
@@ -47,6 +48,28 @@ const DEFAULTS = {
     // read anywhere yet - Phase 9D's release job is the first caller of
     // getEscrowHoldDays() below.
     escrow_hold_days: "5",
+
+    // Escalating search radius for nearest-agent dispatch matching
+    // (Phase 1, Durable Dispatch Foundation - see
+    // delivery.service.js#offerToNextCandidate). Ascending km steps: an
+    // order first only offers to agents within the smallest radius, and
+    // automatically widens to the next step once nobody's left to offer
+    // at the current one, before finally falling back to the manual
+    // "available for pickup" pool. Kept in the same admin-editable
+    // key/value store as every other rate above (mirrors
+    // getDeliveryDistanceBands' JSON-in-a-setting-value shape) rather
+    // than a dedicated table, since - like the distance bands - this is
+    // a single small config blob, not per-row data. The old single
+    // OFFER_RADIUS_KM constant (still exported from constants/orderStatus.js
+    // for anything reading it directly) sits as the middle step by
+    // default, so a fresh install's matching behavior is unchanged until
+    // an admin actually edits this.
+    delivery_offer_radius_steps_km: JSON.stringify([5, OFFER_RADIUS_KM, 30]),
+    // How long a single offered agent has to accept before dispatch
+    // moves on to the next candidate (or the next radius step, once a
+    // radius is exhausted) - same value OFFER_TIMEOUT_MS always was,
+    // just now admin-editable instead of a fixed constant.
+    delivery_offer_timeout_ms: String(OFFER_TIMEOUT_MS),
 
     // Monetization Master Switch (migration 079). Each flag lets NEXORA
     // launch fully free and turn a specific monetization stream on later
@@ -140,6 +163,36 @@ exports.getUsdExchangeRate = async () => {
 exports.getDeliveryDistanceBands = async () => {
     const map = await getCachedAll();
     return parseBandsConfig(map.delivery_distance_bands);
+};
+
+// Ascending km steps for escalating-radius dispatch matching - see the
+// DEFAULTS comment above. Always returns a usable, ascending, non-empty
+// array (falling back to the default steps if the stored value is
+// missing/corrupt/malformed), same "callers never need their own
+// fallback" guarantee getDeliveryDistanceBands gives.
+exports.getDeliveryOfferRadiusStepsKm = async () => {
+    const map = await getCachedAll();
+
+    try {
+        const parsed = JSON.parse(map.delivery_offer_radius_steps_km);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((km) => typeof km === "number" && km > 0)) {
+            return [...parsed].sort((a, b) => a - b);
+        }
+    } catch {
+        // Falls through to the default below.
+    }
+
+    return JSON.parse(DEFAULTS.delivery_offer_radius_steps_km);
+};
+
+// How long (ms) a single offered dispatch candidate has to respond
+// before dispatch advances - see the DEFAULTS comment above. Falls back
+// to the OFFER_TIMEOUT_MS constant if the stored value is missing or not
+// a usable positive number.
+exports.getDeliveryOfferTimeoutMs = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.delivery_offer_timeout_ms);
+    return Number.isFinite(value) && value > 0 ? value : OFFER_TIMEOUT_MS;
 };
 
 // Flat cost (TZS) a seller currently pays per day to sponsor one product.
@@ -345,6 +398,15 @@ exports.updateSettings = async (data) => {
     }
     if (data.escrow_hold_days !== undefined) {
         await settingsRepository.upsert("escrow_hold_days", String(data.escrow_hold_days));
+    }
+    if (data.delivery_offer_radius_steps_km !== undefined) {
+        await settingsRepository.upsert(
+            "delivery_offer_radius_steps_km",
+            JSON.stringify(data.delivery_offer_radius_steps_km)
+        );
+    }
+    if (data.delivery_offer_timeout_ms !== undefined) {
+        await settingsRepository.upsert("delivery_offer_timeout_ms", String(data.delivery_offer_timeout_ms));
     }
     invalidateCache();
     return exports.getAll();

@@ -51,6 +51,22 @@ exports.checkoutValidation = [
         .isLength({ max: 40 })
 ];
 
+// Phase 6 (Checkout & Order Timeline UX): validates the pin the buyer has
+// currently dropped on LocationPicker so Checkout.jsx can ask for an
+// upfront delivery-time estimate before paying. Same lat/lng bounds as
+// checkoutValidation's delivery_lat/delivery_lng, but both are required
+// here (no pin yet just means "don't call this endpoint yet" on the
+// frontend, rather than something for the backend to fall back on).
+exports.deliveryEstimateValidation = [
+    body("delivery_lat")
+        .isFloat({ min: -90, max: 90 })
+        .withMessage("Invalid delivery latitude"),
+
+    body("delivery_lng")
+        .isFloat({ min: -180, max: 180 })
+        .withMessage("Invalid delivery longitude")
+];
+
 exports.orderIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid order")
 ];

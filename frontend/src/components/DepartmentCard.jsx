@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import CornerBadge from "./ui/CornerBadge";
+import ImageOverlayCaption from "./ui/ImageOverlayCaption";
 
 // Small rotating set of on-brand gradients used as a placeholder cover for
 // departments that don't have an admin-uploaded cover image yet, so the
@@ -69,22 +71,15 @@ export default function DepartmentCard({ department, index }) {
                         <span className="font-display text-3xl text-frost/90">{department.name.charAt(0)}</span>
                     </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
+                <ImageOverlayCaption
+                    title={department.name}
+                    subtitle={`${department.productCount} ${department.productCount === 1 ? "product" : "products"}`}
+                />
                 {department.is_sponsored ? (
-                    <span className="absolute top-2 right-2 bg-mango text-abyss text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full">
-                        Sponsored
-                    </span>
+                    <CornerBadge corner="top-right" shape="pill" tone="bg-mango text-abyss" label="Sponsored" />
                 ) : department.newCount > 0 && (
-                    <span className="absolute top-2 right-2 bg-teal text-frost text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full">
-                        {department.newCount} new
-                    </span>
+                    <CornerBadge corner="top-right" shape="pill" tone="bg-teal text-frost" label={`${department.newCount} new`} />
                 )}
-                <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5">{department.name}</h3>
-                    <p className="text-frost/75 text-xs">
-                        {department.productCount} {department.productCount === 1 ? "product" : "products"}
-                    </p>
-                </div>
             </div>
 
             {trending.length > 0 && (

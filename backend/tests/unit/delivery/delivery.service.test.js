@@ -8,6 +8,26 @@ jest.mock("../../../src/modules/settings/settings.service");
 jest.mock("../../../src/modules/earnings/earnings.service");
 jest.mock("../../../src/services/routing/routing.service");
 jest.mock("../../../src/socket/socket");
+// scheduleOfferExpiry's durable path (see delivery.service.js) talks to a
+// real BullMQ/Redis-backed queue via getQueue() - every other outbound
+// collaborator here is mocked at the module boundary the same way, but
+// this one was missing, so on any machine with REDIS_URL actually set,
+// queue.add() made a real network call to Redis and hung until Jest's
+// test timeout. Mocked getQueue() to return null by default so these
+// tests exercise the same non-durable setTimeout fallback path they were
+// already written against (see the fake-timer / runOnlyPendingTimersAsync
+// usage below) regardless of the machine's Redis configuration.
+jest.mock("../../../src/queues/dispatchQueue");
+// offerToNextCandidate's Roadmap Phase 1 WhatsApp/SMS mirror (see
+// delivery.service.js) picks its externalChannel by calling these
+// providers' real isConfigured(), which reads live env vars - so on any
+// machine with WhatsApp/SMS actually configured (WHATSAPP_*/gateway env
+// vars set), these tests would silently start asserting against
+// "whatsapp"/"sms" instead of null. Mocked both to isConfigured: false by
+// default so externalChannel is deterministically null here regardless
+// of the machine's .env, same reasoning as the dispatchQueue mock above.
+jest.mock("../../../src/modules/whatsapp/providers/whatsapp.provider");
+jest.mock("../../../src/modules/sms/providers/sms.provider");
 
 const deliveryRepository = require("../../../src/modules/delivery/delivery.repository");
 const deliveryPricingService = require("../../../src/modules/delivery/deliveryPricing.service");
@@ -19,6 +39,9 @@ const settingsService = require("../../../src/modules/settings/settings.service"
 const earningsService = require("../../../src/modules/earnings/earnings.service");
 const routingService = require("../../../src/services/routing/routing.service");
 const socket = require("../../../src/socket/socket");
+const dispatchQueue = require("../../../src/queues/dispatchQueue");
+const whatsappProvider = require("../../../src/modules/whatsapp/providers/whatsapp.provider");
+const smsProvider = require("../../../src/modules/sms/providers/sms.provider");
 
 const deliveryService = require("../../../src/modules/delivery/delivery.service");
 
@@ -43,6 +66,19 @@ beforeEach(() => {
     // a usable, non-empty array unless it specifically overrides one.
     settingsService.getDeliveryOfferRadiusStepsKm.mockResolvedValue([5, 15, 30]);
     settingsService.getDeliveryOfferTimeoutMs.mockResolvedValue(30000);
+    // Roadmap Phase 2 (agentScoring) - rankCandidatesBySellerEta always
+    // pulls this for whatever pool it just timed, so every test that goes
+    // through offerToNextCandidate needs a default here (an empty stats
+    // map, meaning "no history yet" for every candidate) unless it's
+    // specifically testing performance-based ranking.
+    deliveryRepository.findAgentPerformanceStats.mockResolvedValue({});
+    // See the jest.mock("dispatchQueue") comment above - null means "no
+    // durable queue available", the same as an unconfigured REDIS_URL,
+    // so offer-expiry goes through the setTimeout fallback these tests
+    // drive with fake timers.
+    dispatchQueue.getQueue.mockReturnValue(null);
+    whatsappProvider.isConfigured.mockReturnValue(false);
+    smsProvider.isConfigured.mockReturnValue(false);
     socket.emitToOrder = jest.fn();
     socket.emitToUser = jest.fn();
     socket.emitToAdmins = jest.fn();
@@ -541,7 +577,9 @@ describe("delivery.service.startMatching / offer flow", () => {
 
         await deliveryService.startMatching(1);
 
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 50, expect.any(Number), expect.any(Date));
+        // Roadmap Phase 1: createOffer also takes an externalChannel (WhatsApp/SMS)
+        // arg, null here since neither provider is configured in tests.
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 50, expect.any(Number), expect.any(Date), null);
         expect(socket.emitToUser).toHaveBeenCalledWith(50, "delivery:offer", expect.objectContaining({ offerId: 200, orderId: 1 }));
         expect(pushService.sendToUser).toHaveBeenCalledWith(50, expect.objectContaining({ offerId: 200, orderId: 1 }));
     });
@@ -566,7 +604,7 @@ describe("delivery.service.startMatching / offer flow", () => {
 
         await deliveryService.startMatching(1);
 
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date));
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null);
     });
 
     it("advances to the next candidate once an unaccepted offer expires", async () => {
@@ -756,7 +794,9 @@ describe("delivery.service.declineOffer", () => {
 
         await deliveryService.declineOffer(200, 50);
 
-        expect(deliveryRepository.declineOffer).toHaveBeenCalledWith(200, 50);
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date));
+        // responseChannel defaults to "app" (see delivery.service.js's
+        // declineOffer/acceptOffer comment on the default).
+        expect(deliveryRepository.declineOffer).toHaveBeenCalledWith(200, 50, "app");
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null);
     });
 });

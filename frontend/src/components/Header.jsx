@@ -156,7 +156,7 @@ export default function Header() {
         { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
         { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
         { to: "/messages", label: t("nav.messages"), icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
                 {unreadMessages > 9 ? "9+" : unreadMessages}
             </span>
         ) },
@@ -165,8 +165,8 @@ export default function Header() {
             label: t("nav.cart"),
             icon: CartIcon,
             badge: itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                    {itemCount}
+                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
+                    {itemCount > 9 ? "9+" : itemCount}
                 </span>
             )
         },
@@ -233,11 +233,11 @@ export default function Header() {
                             active={isActive(link.to)}
                             badge={
                                 link.to === "/cart" && itemCount > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center">
-                                        {itemCount}
+                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                        {itemCount > 9 ? "9+" : itemCount}
                                     </span>
                                 ) : link.to === "/messages" && unreadMessages > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center">
+                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                         {unreadMessages > 9 ? "9+" : unreadMessages}
                                     </span>
                                 ) : null
@@ -298,8 +298,8 @@ export default function Header() {
                         <Link to="/cart" className="relative text-frost/90 shrink-0 transition-transform duration-150 ease-out active:scale-90" aria-label={t("nav.cart")}>
                             <CartIcon className="w-6 h-6" />
                             {itemCount > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center">
-                                    {itemCount}
+                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                    {itemCount > 9 ? "9+" : itemCount}
                                 </span>
                             )}
                         </Link>

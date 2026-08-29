@@ -1234,3 +1234,49 @@ exports.getSellerLeaderboard = async (limit) => {
     );
     return rows;
 };
+
+// ---- Roadmap Phase 4: predictive coverage heatmap --------------------------
+//
+// Demand side: historical order volume grouped by shipping_region (the
+// existing free-text zone field orders are already collected against -
+// see migration 006 - reused here rather than inventing a new lat/lng
+// grid, per the roadmap's "reuse whatever geographic bucketing is
+// simplest" instruction) and hour-of-day bucket.
+//
+// Coverage side: there's no history table for online/offline status
+// over time (users.is_online, migration 015, is a live flag only) - so
+// this uses distinct agents who were actually OFFERED a delivery for an
+// order in that zone/hour bucket (delivery_offers.offered_at, joined to
+// the order's shipping_region) as a proxy for "agents were online and
+// reachable there at that time". This undercounts true idle online
+// capacity that never received an offer in that window - flagged as a
+// known limitation of reusing existing data rather than adding a new
+// online-status history table, which the roadmap scoped this phase to
+// avoid ("no new write logic beyond the aggregation query").
+//
+// Both queries return one row per (zone, hour) with a raw count; the
+// service layer (admin.service.js#getCoverageHeatmap) divides by the
+// window size to get a daily average and combines the two sides.
+exports.findHistoricalOrderVolumeByZoneHour = async (windowDays) => {
+    const [rows] = await db.query(
+        `SELECT shipping_region AS zone, HOUR(created_at) AS hour_bucket, COUNT(*) AS order_count
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL ? DAY
+        GROUP BY shipping_region, HOUR(created_at)`,
+        [windowDays]
+    );
+    return rows;
+};
+
+exports.findHistoricalOfferedAgentsByZoneHour = async (windowDays) => {
+    const [rows] = await db.query(
+        `SELECT o.shipping_region AS zone, HOUR(do.offered_at) AS hour_bucket,
+                COUNT(DISTINCT do.agent_id) AS agent_count
+        FROM delivery_offers do
+        JOIN orders o ON o.id = do.order_id
+        WHERE do.offered_at >= NOW() - INTERVAL ? DAY
+        GROUP BY o.shipping_region, HOUR(do.offered_at)`,
+        [windowDays]
+    );
+    return rows;
+};

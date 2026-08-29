@@ -80,6 +80,19 @@ const ORDER_STATUS_LABELS = {
 
 exports.handleIncomingMessage = async (fromPhone, text) => {
     const trimmed = (text || "").trim();
+
+    // Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel) - a
+    // delivery agent replying "YES <offerId>"/"NO <offerId>" to a pickup
+    // offer takes priority over the buyer-facing numbered menu below;
+    // handleOfferReplyByPhone returns null for anything that isn't that
+    // exact shape, so a buyer's "1"/"2"/etc. menu choice is never
+    // intercepted here. Lazy require: delivery.service.js is a large
+    // module with its own require graph, no need to load it for every
+    // ordinary buyer message.
+    const deliveryService = require("../delivery/delivery.service");
+    const offerReply = await deliveryService.handleOfferReplyByPhone(fromPhone, trimmed, "whatsapp");
+    if (offerReply) return offerReply;
+
     const session = await whatsappRepository.getSession(fromPhone);
 
     // "0"/"menu"/"hi" always resets to the main menu, regardless of

@@ -15,6 +15,7 @@ const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 const monetizationScheduleJob = require("./monetizationSchedule.job");
 const groupBuyExpiryJob = require("./groupBuyExpiry.job");
 const deliveryRematchJob = require("./deliveryRematch.job");
+const supplyNudgeJob = require("./supplyNudge.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -115,7 +116,18 @@ exports.startJobs = () => {
     // too tight/loose in practice.
     cron.schedule("*/5 * * * *", safeRun("deliveryRematch", deliveryRematchJob));
 
+    // Every 30 minutes: compare this hour's typical order volume against
+    // how many delivery agents are currently online and, if coverage
+    // looks thin, nudge offline-but-eligible agents to come online - see
+    // supplyNudge.job.js (Roadmap Phase 3, Supply-Side Incentive
+    // Nudges). Coarser cadence than deliveryRematch above since this is
+    // a proactive "get ahead of a coverage gap" signal, not a reactive
+    // per-order retry - re-nudging every 5 minutes would just spam
+    // agents who already saw the last notification and chose not to
+    // come online.
+    cron.schedule("*/30 * * * *", safeRun("supplyNudge", supplyNudgeJob));
+
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min)"
+        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min)"
     );
 };

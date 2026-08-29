@@ -48,14 +48,22 @@ const KNOWN_VARS = [
     // as MOBILE_MONEY_PROVIDER above).
     "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET",
     "FRONTEND_URL",
+    // Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel): SMS
+    // gateway fallback for delivery agents without WhatsApp. All
+    // optional - omitting SMS_GATEWAY_API_KEY/SECRET_KEY just means
+    // sms/providers/sms.provider.js falls back to its simulate provider
+    // outside production, same shape as WHATSAPP_PHONE_NUMBER_ID above.
+    "SMS_GATEWAY_BASE_URL", "SMS_GATEWAY_API_KEY", "SMS_GATEWAY_SECRET_KEY",
+    "SMS_GATEWAY_SENDER_ID", "SMS_GATEWAY_WEBHOOK_SECRET",
     // Phase Q4 (Tax Compliance): TRA VFD e-invoicing. Optional - omitting
     // these falls back to efd/providers/simulate.provider.js outside
     // production, same shape as the payment providers above.
     "TRA_VFD_BASE_URL", "TRA_VFD_API_KEY",
-    // Upload malware scanning (ClamAV via clamd). Optional outside
-    // production - omitting CLAMAV_HOST just skips scanning with a
-    // warning (see utils/malwareScan.js), same shape as BREVO_API_KEY
-    // above. Required in production (enforced below).
+    // Upload malware scanning (ClamAV via clamd). Optional in every
+    // environment, production included (Roadmap Phase 1 global rule 5's
+    // fail-open posture) - omitting CLAMAV_HOST just skips scanning
+    // with a warning (see utils/malwareScan.js), same shape as
+    // BREVO_API_KEY above.
     "CLAMAV_HOST", "CLAMAV_PORT",
     // Phase RF4 (red-flag remediation): mysql2 pool size, read by
     // config/db.js. Optional - falls back to 10 if unset. Was missing
@@ -126,9 +134,10 @@ exports.check = () => {
         problems.push("MOBILE_MONEY_PROVIDER is not set in production - mobile money payments will fail to resolve a provider (see mobileMoney.provider.js)");
     }
 
-    if (process.env.NODE_ENV === "production" && !process.env.CLAMAV_HOST) {
-        problems.push("CLAMAV_HOST is not set in production - uploads will be rejected until malware scanning is configured (see utils/malwareScan.js)");
-    }
+    // No production-required check for CLAMAV_HOST here (unlike
+    // MOBILE_MONEY_PROVIDER above) - as of Roadmap Phase 1, an unset
+    // CLAMAV_HOST fails open (uploads proceed unscanned) rather than
+    // rejecting uploads, so there's nothing broken to warn about.
 
     return problems;
 };

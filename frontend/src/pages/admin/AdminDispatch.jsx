@@ -4,6 +4,7 @@ import { useSocket } from "../../context/SocketContext";
 import { formatMoney } from "../../utils/format";
 import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
+import AdminCoverageHeatmap from "../../components/AdminCoverageHeatmap";
 import PageMeta from "../../components/PageMeta";
 
 const statusStyles = {
@@ -179,6 +180,9 @@ export default function AdminDispatch() {
                 <h2 className="font-display text-lg mb-3">Live map</h2>
                 <Skeleton className="w-full h-72 mb-10" />
 
+                <h2 className="font-display text-lg mb-3">Coverage forecast</h2>
+                <Skeleton className="w-full h-64 mb-10" />
+
                 <h2 className="font-display text-lg mb-3">Active deliveries</h2>
                 <SkeletonList rows={3} />
 
@@ -221,6 +225,14 @@ export default function AdminDispatch() {
             <h2 className="font-display text-lg mb-3">Live map</h2>
             <div className="mb-10">
                 <AdminDispatchMap deliveries={sortedDeliveries} agents={agents} unmatchedOrders={unmatchedOrders} />
+            </div>
+
+            {/* Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) -
+                separate read-only historical view; doesn't touch the
+                live map/socket state above it at all. */}
+            <h2 className="font-display text-lg mb-3">Coverage forecast</h2>
+            <div className="mb-10">
+                <AdminCoverageHeatmap />
             </div>
 
             <h2 className="font-display text-lg mb-3">Active deliveries</h2>

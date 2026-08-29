@@ -29,7 +29,7 @@ export default function InstallPrompt() {
     return (
         <div
             role="status"
-            className="fixed bottom-20 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-20 z-[1050] sm:w-80
+            className="fixed bottom-36 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-36 z-[1050] sm:w-80
                 glass-strong border border-teal/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

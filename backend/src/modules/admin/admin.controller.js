@@ -250,6 +250,19 @@ exports.getDispatchOverview = async (req, res) => {
     }
 };
 
+// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only,
+// no request body/params beyond an optional ?windowDays= override.
+exports.getCoverageHeatmap = async (req, res) => {
+    try {
+        const heatmap = await adminService.getCoverageHeatmap(req.query.windowDays);
+
+        return res.json({ success: true, data: heatmap });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // Phase 3 (Admin Manual Override & Ops Visibility) - counterpart to the
 // dispatch overview above: pushes one unmatched order onto one specific
 // online agent instead of just watching the board wait on auto-matching.

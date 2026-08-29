@@ -173,7 +173,7 @@ export default function SellerLayout() {
             ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
             : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
         { to: "/messages", label: "Messages", icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
                 {unreadMessages > 9 ? "9+" : unreadMessages}
             </span>
         ) },

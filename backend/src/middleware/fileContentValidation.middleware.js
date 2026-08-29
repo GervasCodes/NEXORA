@@ -66,8 +66,10 @@ exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {
         // Malware scan runs after the type check so an obviously-wrong
         // upload gets rejected on that cheaper check first, without ever
         // hitting the scanning service. See utils/malwareScan.js - fails
-        // closed in production if scanning isn't configured or the scan
-        // itself fails, rather than letting an unscanned file through.
+        // OPEN (upload proceeds unscanned) when CLAMAV_HOST isn't set at
+        // all, in every environment; once it IS set, a real scan runs
+        // and either an infected file or a scan failure rejects the
+        // upload below.
         try {
             const { infected } = await scanBuffer(buffer, file.originalname);
 

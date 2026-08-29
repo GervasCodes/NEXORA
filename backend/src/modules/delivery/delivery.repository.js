@@ -190,7 +190,7 @@ exports.findAgentLocation = async (agentId) => {
 // treating every vehicle as a generic driving route.
 exports.findCandidateAgents = async (orderId) => {
     const [rows] = await db.query(
-        `SELECT u.id, u.first_name, u.current_lat, u.current_lng, u.vehicle_type
+        `SELECT u.id, u.first_name, u.phone, u.current_lat, u.current_lng, u.vehicle_type
         FROM users u
         WHERE u.role = 'delivery_agent'
           AND u.is_online = TRUE
@@ -220,15 +220,130 @@ exports.findOnlineAgentById = async (agentId) => {
     return rows[0];
 };
 
+// Roadmap Phase 2: batched read of each candidate's historical
+// acceptance-rate (delivery_offers) and completion-rate (deliveries)
+// stats, for the weighted scoring step in
+// agentScoring.js#scoreCandidate. ONE query per stat (not one per
+// agent) - agentIds is always a small pool (see
+// ETA_CANDIDATE_POOL_SIZE in delivery.service.js), so this is cheap
+// even called on every dispatch attempt. Returns a plain object keyed
+// by agent id: { [agentId]: { acceptanceRate, completionRate } } -
+// either rate is null when that agent has no relevant history yet
+// (agentScoring.js falls back to a neutral default in that case, not
+// this layer - this layer only reports what's actually known).
+exports.findAgentPerformanceStats = async (agentIds) => {
+    if (!agentIds || agentIds.length === 0) return {};
+
+    const [[offerRows], [deliveryRows]] = await Promise.all([
+        db.query(
+            `SELECT agent_id,
+                    SUM(status = 'accepted') AS accepted_count,
+                    SUM(status IN ('accepted', 'declined', 'expired')) AS responded_count
+            FROM delivery_offers
+            WHERE agent_id IN (?)
+            GROUP BY agent_id`,
+            [agentIds]
+        ),
+        db.query(
+            `SELECT agent_id,
+                    SUM(status = 'delivered') AS delivered_count,
+                    SUM(status IN ('delivered', 'failed')) AS completed_count
+            FROM deliveries
+            WHERE agent_id IN (?)
+            GROUP BY agent_id`,
+            [agentIds]
+        )
+    ]);
+
+    const stats = {};
+    for (const id of agentIds) {
+        stats[id] = { acceptanceRate: null, completionRate: null };
+    }
+
+    for (const row of offerRows) {
+        if (row.responded_count > 0) {
+            stats[row.agent_id].acceptanceRate = row.accepted_count / row.responded_count;
+        }
+    }
+
+    for (const row of deliveryRows) {
+        if (row.completed_count > 0) {
+            stats[row.agent_id].completionRate = row.delivered_count / row.completed_count;
+        }
+    }
+
+    return stats;
+};
+
+// ---- Roadmap Phase 3: supply-side incentive nudges -------------------------
+
+// Historical order volume for the CURRENT hour-of-day bucket, over the
+// last `historyWindowDays` days - e.g. "how many orders typically land
+// between 6pm-7pm" if it's currently 6:xx pm. Divides by the full
+// window (not just days that happened to have an order) so a
+// consistently-quiet hour correctly averages low rather than being
+// skewed upward by ignoring its zero-order days - see
+// jobs/supplyNudge.job.js for how this is turned into a per-online-
+// agent ratio. HOUR(created_at) uses whatever timezone the DB
+// connection is in, same as every other server-time-bucketed job in
+// this codebase (see jobs/index.js's cron comments).
+exports.countOrdersInCurrentHourBucket = async (historyWindowDays) => {
+    const [rows] = await db.query(
+        `SELECT COUNT(*) AS order_count
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL ? DAY
+          AND HOUR(created_at) = HOUR(NOW())`,
+        [historyWindowDays]
+    );
+    return rows[0].order_count;
+};
+
+exports.countOnlineAgents = async () => {
+    const [rows] = await db.query(
+        "SELECT COUNT(*) AS agent_count FROM users WHERE role = 'delivery_agent' AND is_online = TRUE"
+    );
+    return rows[0].agent_count;
+};
+
+// "Eligible" mirrors the same account_verification_status gate every
+// other delivery-agent-facing feature in this codebase respects (see
+// migration 026) - an agent who hasn't been approved yet shouldn't be
+// nudged to go online for a role they can't actually use yet.
+exports.findOfflineEligibleAgents = async () => {
+    const [rows] = await db.query(
+        `SELECT id, phone FROM users
+        WHERE role = 'delivery_agent'
+          AND is_online = FALSE
+          AND account_verification_status = 'approved'`
+    );
+    return rows;
+};
+
 // ---- Offer queue -----------------------------------------------------------
 
-exports.createOffer = async (orderId, agentId, distanceKm, expiresAt) => {
+// Roadmap Phase 1: externalChannel records whether this offer was ALSO
+// pushed via WhatsApp/SMS (in addition to the always-sent in-app socket
+// event + push) - null when neither integration is configured. See
+// migration 092.
+exports.createOffer = async (orderId, agentId, distanceKm, expiresAt, externalChannel = null) => {
     const [result] = await db.query(
-        `INSERT INTO delivery_offers (order_id, agent_id, status, distance_km, expires_at)
-        VALUES (?, ?, 'offered', ?, ?)`,
-        [orderId, agentId, distanceKm, expiresAt]
+        `INSERT INTO delivery_offers (order_id, agent_id, status, distance_km, expires_at, external_channel)
+        VALUES (?, ?, 'offered', ?, ?, ?)`,
+        [orderId, agentId, distanceKm, expiresAt, externalChannel]
     );
     return result.insertId;
+};
+
+// Roadmap Phase 1: looks up a delivery agent by their phone number, for
+// routing an inbound WhatsApp/SMS reply ("YES <offerId>"/"NO <offerId>")
+// back to the account that offer actually belongs to - see
+// delivery.service.js#handleOfferReplyByPhone.
+exports.findAgentByPhone = async (phone) => {
+    const [rows] = await db.query(
+        "SELECT id, first_name, phone FROM users WHERE phone = ? AND role = 'delivery_agent'",
+        [phone]
+    );
+    return rows[0];
 };
 
 exports.findActiveOffer = async (orderId) => {
@@ -249,22 +364,25 @@ exports.findOfferById = async (offerId) => {
 // Marks the offer as accepted, but only if it's still the pending one for
 // that agent — guards against a stale/expired offer being accepted after
 // the fact (e.g. the agent's accept click lands just after the timeout).
-exports.acceptOffer = async (offerId, agentId) => {
+// responseChannel (migration 092) records how the agent responded -
+// 'app' (the pre-existing default, an in-app tap) or 'whatsapp'/'sms'
+// for a reply routed in via delivery.service.js#handleOfferReplyByPhone.
+exports.acceptOffer = async (offerId, agentId, responseChannel = "app") => {
     const [result] = await db.query(
         `UPDATE delivery_offers
-        SET status = 'accepted', responded_at = NOW()
+        SET status = 'accepted', responded_at = NOW(), response_channel = ?
         WHERE id = ? AND agent_id = ? AND status = 'offered'`,
-        [offerId, agentId]
+        [responseChannel, offerId, agentId]
     );
     return result.affectedRows > 0;
 };
 
-exports.declineOffer = async (offerId, agentId) => {
+exports.declineOffer = async (offerId, agentId, responseChannel = "app") => {
     await db.query(
         `UPDATE delivery_offers
-        SET status = 'declined', responded_at = NOW()
+        SET status = 'declined', responded_at = NOW(), response_channel = ?
         WHERE id = ? AND agent_id = ? AND status = 'offered'`,
-        [offerId, agentId]
+        [responseChannel, offerId, agentId]
     );
 };
 

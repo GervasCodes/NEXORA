@@ -71,7 +71,7 @@ export default function UpdateAvailableBanner() {
     return (
         <div
             role="status"
-            className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:left-4 sm:bottom-4 z-[1100] sm:w-80
+            className="fixed bottom-20 inset-x-4 sm:inset-x-auto sm:left-4 sm:bottom-20 z-[1100] sm:w-80
                 glass-strong border border-azure/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

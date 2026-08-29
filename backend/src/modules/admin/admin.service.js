@@ -1241,3 +1241,68 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
         relatedUserId: userId
     });
 };
+
+// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only
+// reporting view: combines historical order-volume and historical
+// offered-agent data (see the repository functions' header comment for
+// why the latter is a proxy, not a true online-status history) into one
+// zone x hour grid the frontend can render as a heatmap. windowDays
+// controls how far back both averages look; kept as a query param
+// rather than hardcoded so ops can compare a wider (28-day) or tighter
+// (7-day, more responsive to a recent shift in patterns) lookback
+// without a redeploy.
+const DEFAULT_HEATMAP_WINDOW_DAYS = 28;
+
+exports.getCoverageHeatmap = async (windowDays = DEFAULT_HEATMAP_WINDOW_DAYS) => {
+    const days = Number.isFinite(Number(windowDays)) && Number(windowDays) > 0
+        ? Number(windowDays)
+        : DEFAULT_HEATMAP_WINDOW_DAYS;
+
+    const [orderRows, agentRows] = await Promise.all([
+        adminRepository.findHistoricalOrderVolumeByZoneHour(days),
+        adminRepository.findHistoricalOfferedAgentsByZoneHour(days)
+    ]);
+
+    // Keyed by "zone|hour" so both sides merge into one row per cell
+    // even when a zone/hour combination only has data on one side (e.g.
+    // orders came in somewhere no agent was ever offered a delivery).
+    const cells = new Map();
+    const cellKey = (zone, hour) => `${zone}|${hour}`;
+
+    for (const row of orderRows) {
+        cells.set(cellKey(row.zone, row.hour_bucket), {
+            zone: row.zone,
+            hourBucket: row.hour_bucket,
+            avgOrders: row.order_count / days,
+            avgAgentsOffered: 0
+        });
+    }
+
+    for (const row of agentRows) {
+        const key = cellKey(row.zone, row.hour_bucket);
+        const existing = cells.get(key);
+        if (existing) {
+            existing.avgAgentsOffered = row.agent_count / days;
+        } else {
+            cells.set(key, {
+                zone: row.zone,
+                hourBucket: row.hour_bucket,
+                avgOrders: 0,
+                avgAgentsOffered: row.agent_count / days
+            });
+        }
+    }
+
+    // gap > 0 means historical demand outpaced the agents this zone/hour
+    // combination has actually seen offered to it - the "staffing gap"
+    // signal the roadmap asks for. Rounded to 2dp purely for a readable
+    // payload; the frontend heatmap shades by this value.
+    const grid = [...cells.values()].map((cell) => ({
+        ...cell,
+        avgOrders: Math.round(cell.avgOrders * 100) / 100,
+        avgAgentsOffered: Math.round(cell.avgAgentsOffered * 100) / 100,
+        gap: Math.round((cell.avgOrders - cell.avgAgentsOffered) * 100) / 100
+    }));
+
+    return { windowDays: days, grid };
+};

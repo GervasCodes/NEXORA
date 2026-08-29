@@ -187,6 +187,50 @@ const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
 
 exports.verifySharedSecretHeader = verifyWebhookSecret;
 
+// --- SMS gateway (Roadmap Phase 1: offer-accept-by-reply) ---------------
+// Most SMS gateways (Beem Africa included) don't document a per-request
+// body signature for inbound callbacks the way MalipoPay/WhatsApp do -
+// only a custom header/token you configure on their dashboard's callback
+// URL settings. This is the same shape as verifySelcomWebhook above (a
+// static shared secret, not a computed signature), plus the same
+// payload-hash replay dedup every other webhook in this file gets - see
+// webhookReplayGuard.js. There's no provider-supplied timestamp/nonce to
+// check freshness against here either, same as Selcom, so the hash dedup
+// is (as with Selcom) this route's only guard against a captured,
+// validly-authenticated request being replayed later.
+exports.verifySmsWebhook = async (req, res, next) => {
+    const configuredSecret = process.env.SMS_GATEWAY_WEBHOOK_SECRET;
+    const providedSecret = req.headers["x-webhook-secret"];
+
+    if (!configuredSecret) {
+        if (process.env.NODE_ENV === "production") {
+            logger.error({ provider: "sms", reqId: req.id }, "[webhook auth] SMS_GATEWAY_WEBHOOK_SECRET not configured - rejecting webhook in production (fail closed)");
+            return res.status(200).json({ success: false });
+        }
+        return next();
+    }
+
+    const expected = Buffer.from(configuredSecret, "utf8");
+    const provided = Buffer.from(String(providedSecret || ""), "utf8");
+
+    if (!providedSecret || expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
+        logger.warn({ provider: "sms", reqId: req.id, ip: req.ip }, "[webhook auth] rejected sms webhook with invalid/missing x-webhook-secret header");
+        return res.status(200).json({ success: false });
+    }
+
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery("sms", JSON.stringify(req.body || {}));
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: false });
+        }
+    } catch (error) {
+        logger.error({ err: error, provider: "sms", reqId: req.id }, "[webhook auth] replay-guard check failed");
+        return res.status(200).json({ success: false });
+    }
+
+    next();
+};
+
 // --- WhatsApp Cloud API ---------------------------------------------------
 // Per developers.facebook.com/docs/graph-api/webhooks/getting-started:
 // every webhook delivery includes an X-Hub-Signature-256 header, computed

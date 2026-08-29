@@ -131,8 +131,8 @@ export default function Messages() {
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-sm font-medium truncate">{otherPartyName(c)}</p>
                                     {c.unread_count > 0 && (
-                                        <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-4 h-4 flex items-center justify-center shrink-0">
-                                            {c.unread_count}
+                                        <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shrink-0">
+                                            {c.unread_count > 9 ? "9+" : c.unread_count}
                                         </span>
                                     )}
                                 </div>

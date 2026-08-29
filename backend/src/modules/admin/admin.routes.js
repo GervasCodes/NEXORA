@@ -30,6 +30,11 @@ router.use(authMiddleware, authorize("admin"));
 router.get("/dashboard", adminController.getDashboard);
 router.get("/dispatch", adminController.getDispatchOverview);
 
+// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only
+// historical demand-vs-coverage heatmap, separate from the live
+// dispatch overview above.
+router.get("/dispatch/coverage-heatmap", adminController.getCoverageHeatmap);
+
 // Phase 3 (Admin Manual Override & Ops Visibility)
 router.put(
     "/dispatch/:id/assign",

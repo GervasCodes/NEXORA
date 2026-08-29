@@ -188,7 +188,7 @@ export default function StorePage() {
                             )}
                         </div>
                         {store.store_tagline && (
-                            <p className="text-sm text-ink/80 mt-0.5">{store.store_tagline}</p>
+                            <p className="text-sm text-ink/80 mt-0.5 line-clamp-2">{store.store_tagline}</p>
                         )}
                         <p className="text-xs text-ash uppercase tracking-wide mt-1">
                             {[store.store_type_name, location].filter(Boolean).join(" · ")}

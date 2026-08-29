@@ -10,8 +10,12 @@ const settingsService = require("../settings/settings.service");
 const earningsService = require("../earnings/earnings.service");
 const { haversineKm } = require("../../utils/geo");
 const routingService = require("../../services/routing/routing.service");
+const agentScoring = require("./agentScoring");
 const dispatchQueue = require("../../queues/dispatchQueue");
 const { DELIVERY_STATUS_TRANSITIONS } = require("../../constants/orderStatus");
+// Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel).
+const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
+const smsProvider = require("../sms/providers/sms.provider");
 
 // Lazy require to dodge the circular dependency (socket.js also lazily
 // requires this file for the same reason).
@@ -501,13 +505,16 @@ exports.startMatching = async (orderId) => {
 
 // Ranks candidates by straight-line distance to the shop first (cheap,
 // no network calls), then asks the routing layer for a real travel-time
-// ETA on just the closest few (see ETA_CANDIDATE_POOL_SIZE) and picks
-// whoever can actually reach the shop soonest by road — a nearer agent
-// stuck the wrong side of a river can lose out to a slightly-further one
-// with a faster route, which straight-line distance alone would miss.
-// Falls back to the haversine ranking untouched if a routing lookup fails
-// for some agent (the routing layer's own fallback provider means that's
-// effectively never, but this keeps dispatch working either way).
+// ETA on just the closest few (see ETA_CANDIDATE_POOL_SIZE) and, within
+// that same small pool, scores each candidate on ETA plus historical
+// reliability (Roadmap Phase 2 - see agentScoring.js) rather than ETA
+// alone. A nearer/faster agent with a poor accept/completion track
+// record can lose out to a slightly-slower one who's more likely to
+// actually show up and finish the job - which pure ETA ranking would
+// miss. Falls back to the haversine ranking untouched if a routing
+// lookup fails for some agent (the routing layer's own fallback
+// provider means that's effectively never, but this keeps dispatch
+// working either way).
 const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
     const inRange = candidates
         .map((agent) => ({
@@ -540,19 +547,27 @@ const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
         })
     );
 
-    withEta.sort((a, b) => {
-        if (a.etaMinutesToSeller == null && b.etaMinutesToSeller == null) {
-            return a.distanceKm - b.distanceKm;
-        }
-        if (a.etaMinutesToSeller == null) return 1;
-        if (b.etaMinutesToSeller == null) return -1;
-        return a.etaMinutesToSeller - b.etaMinutesToSeller;
+    // Roadmap Phase 2: pull acceptance/completion history for just this
+    // small pool (one batched query each, not one per agent - see
+    // delivery.repository.js#findAgentPerformanceStats) and fold it
+    // into a single weighted score per candidate, instead of sorting by
+    // etaMinutesToSeller alone.
+    const performanceStats = await deliveryRepository.findAgentPerformanceStats(
+        withEta.map((agent) => agent.id)
+    );
+
+    const scored = withEta.map((agent) => {
+        const stats = performanceStats[agent.id] || { acceptanceRate: null, completionRate: null };
+        const withStats = { ...agent, ...stats };
+        return { ...withStats, score: agentScoring.scoreCandidate(withStats) };
     });
 
+    scored.sort((a, b) => b.score - a.score);
+
     // Anyone outside the ETA pool was already further away by straight-
-    // line distance than every agent we actually timed, so they stay
-    // ranked behind the timed group.
-    return [...withEta, ...inRange.slice(ETA_CANDIDATE_POOL_SIZE)];
+    // line distance than every agent we actually timed/scored, so they
+    // stay ranked behind the scored group.
+    return [...scored, ...inRange.slice(ETA_CANDIDATE_POOL_SIZE)];
 };
 
 // Schedules the "has this offer timed out?" check via the durable
@@ -580,8 +595,10 @@ const scheduleOfferExpiry = async (offerId, orderId, pickup, radiusIndex, timeou
                 // look this job back up or cancel it (an accepted offer
                 // just makes expireOffer's UPDATE a no-op below), but it
                 // keeps at most one expiry job per offer if this were
-                // ever called twice for the same offer.
-                jobId: `offer-expire:${offerId}`,
+                // ever called twice for the same offer. BullMQ custom
+                // job ids can't contain ":" (it's used as an internal
+                // Redis-key delimiter), so this uses "-" instead.
+                jobId: `offer-expire-${offerId}`,
                 removeOnComplete: true,
                 removeOnFail: true
             }
@@ -663,11 +680,26 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
     const nearest = ranked[0];
     const timeoutMs = await settingsService.getDeliveryOfferTimeoutMs();
     const expiresAt = new Date(Date.now() + timeoutMs);
+
+    // Roadmap Phase 1: WhatsApp is preferred when configured (agents in
+    // low-connectivity conditions may see a WhatsApp message land well
+    // before/instead of an in-app push); SMS is the fallback for a
+    // deployment with no WhatsApp integration active. Never both -
+    // there's no per-agent "which channel do they actually have"
+    // signal in the schema, so this is a deployment-level choice, not a
+    // per-agent one. Either way this is purely additive: the in-app
+    // socket event + web push below are unconditional, same as before
+    // this phase.
+    const externalChannel = whatsappProvider.isConfigured()
+        ? "whatsapp"
+        : (smsProvider.isConfigured() ? "sms" : null);
+
     const offerId = await deliveryRepository.createOffer(
         orderId,
         nearest.id,
         nearest.distanceKm,
-        expiresAt
+        expiresAt,
+        externalChannel
     );
 
     const order = await orderRepository.findOrderById(orderId);
@@ -695,6 +727,28 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
             orderId
         })
         .catch((err) => logger.warn({ err, offerId, orderId }, "push send error"));
+
+    // Roadmap Phase 1: mirror the same offer as a WhatsApp/SMS text the
+    // agent can reply to directly, for low-connectivity conditions where
+    // the in-app push/socket event may not reach them promptly. Best
+    // effort, fire-and-forget - same failure posture as the push send
+    // just above, never blocks/breaks dispatch if it fails.
+    if (nearest.phone && externalChannel) {
+        const etaLine = nearest.etaMinutesToSeller != null
+            ? `~${Math.round(nearest.etaMinutesToSeller)} min`
+            : `${Math.round(nearest.distanceKm * 10) / 10} km`;
+        const offerText =
+            `New pickup offer - ${order.order_number}\n` +
+            `Shop: ${pickup.storeName || "NEXORA seller"}\n` +
+            `${etaLine} to the shop\n\n` +
+            `Reply YES ${offerId} to accept, or NO ${offerId} to decline. ` +
+            `Expires in ${Math.round(timeoutMs / 60000)} min.`;
+
+        const provider = externalChannel === "whatsapp" ? whatsappProvider : smsProvider;
+        provider
+            .sendText(nearest.phone, offerText)
+            .catch((err) => logger.warn({ err, offerId, orderId, externalChannel }, `${externalChannel} offer send error`));
+    }
 
     await scheduleOfferExpiry(offerId, orderId, pickup, radiusIndex, timeoutMs);
 };
@@ -728,7 +782,11 @@ const resolveRadiusIndexForDistance = (distanceKm, radiusSteps) => {
     return index === -1 ? radiusSteps.length - 1 : index;
 };
 
-exports.acceptOffer = async (offerId, agentId) => {
+// responseChannel defaults to "app" (an in-app tap/socket event, the
+// pre-existing behavior) - Roadmap Phase 1's WhatsApp/SMS reply handler
+// (handleOfferReplyByPhone below) is the only other caller that passes
+// "whatsapp"/"sms" explicitly. See migration 092.
+exports.acceptOffer = async (offerId, agentId, responseChannel = "app") => {
     const offer = await deliveryRepository.findOfferById(offerId);
     if (!offer || offer.agent_id !== agentId) {
         throw new Error("Offer not found");
@@ -739,7 +797,7 @@ exports.acceptOffer = async (offerId, agentId) => {
         throw new Error("This order has already been claimed");
     }
 
-    const accepted = await deliveryRepository.acceptOffer(offerId, agentId);
+    const accepted = await deliveryRepository.acceptOffer(offerId, agentId, responseChannel);
     if (!accepted) {
         throw new Error("This offer has expired");
     }
@@ -834,13 +892,13 @@ exports.getMyRatingSummary = async (agentId) => {
     };
 };
 
-exports.declineOffer = async (offerId, agentId) => {
+exports.declineOffer = async (offerId, agentId, responseChannel = "app") => {
     const offer = await deliveryRepository.findOfferById(offerId);
     if (!offer || offer.agent_id !== agentId) {
         throw new Error("Offer not found");
     }
 
-    await deliveryRepository.declineOffer(offerId, agentId);
+    await deliveryRepository.declineOffer(offerId, agentId, responseChannel);
 
     const order = await orderRepository.findOrderById(offer.order_id);
     if (order) {
@@ -853,5 +911,51 @@ exports.declineOffer = async (offerId, agentId) => {
             const radiusIndex = resolveRadiusIndexForDistance(offer.distance_km, radiusSteps);
             await offerToNextCandidate(offer.order_id, pickup, radiusIndex);
         }
+    }
+};
+
+// ---- Roadmap Phase 1: offer accept/decline by WhatsApp/SMS reply ---------
+//
+// Called by both whatsapp.service.js (inbound Cloud API message) and
+// sms.controller.js (inbound gateway webhook) with whatever raw text the
+// agent sent. Returns:
+//   - null when the text doesn't match the expected "YES <id>"/"NO <id>"
+//     shape at all - callers treat this as "not an offer reply", e.g.
+//     whatsapp.service.js falls through to its normal numbered-menu bot.
+//   - a reply string otherwise (success confirmation, or a friendly
+//     error - offer not found/already claimed/expired) - callers send
+//     this back to the agent on whichever channel it arrived on.
+//
+// Deliberately channel-agnostic: it doesn't know or care whether it was
+// reached over WhatsApp or SMS beyond the `channel` string it's asked to
+// record as the offer's response_channel (migration 092).
+const OFFER_REPLY_PATTERN = /^\s*(YES|NO)\s+(\d+)\s*$/i;
+
+exports.handleOfferReplyByPhone = async (phone, rawText, channel) => {
+    const match = OFFER_REPLY_PATTERN.exec(rawText || "");
+    if (!match) return null;
+
+    const accept = match[1].toUpperCase() === "YES";
+    const offerId = Number(match[2]);
+
+    const agent = await deliveryRepository.findAgentByPhone(phone);
+    if (!agent) {
+        return "This phone number isn't linked to a NEXORA delivery agent account.";
+    }
+
+    try {
+        if (accept) {
+            const { orderId } = await exports.acceptOffer(offerId, agent.id, channel);
+            const order = await orderRepository.findOrderById(orderId);
+            return `You're assigned! Head to collect ${order ? order.order_number : `order #${orderId}`}. Check the app for pickup details.`;
+        }
+
+        await exports.declineOffer(offerId, agent.id, channel);
+        return "Got it - offer declined.";
+    } catch (error) {
+        // acceptOffer/declineOffer throw friendly, already-user-facing
+        // messages ("Offer not found", "This offer has expired", "This
+        // order has already been claimed") - safe to relay as-is.
+        return error.message;
     }
 };

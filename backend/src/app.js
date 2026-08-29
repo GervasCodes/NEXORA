@@ -380,6 +380,10 @@ app.use("/api/v1/buyer-wallet", buyerWalletRoutes);
 app.use("/api/v1/loans", loanRoutes);
 app.use("/api/v1/support", supportRoutes);
 app.use("/api/v1/whatsapp", whatsappRoutes);
+// Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel) - SMS
+// fallback inbound webhook. See sms.routes.js's header comment for why
+// this doesn't need the raw-body wiring the routes above it do.
+app.use("/api/v1/sms", require("./modules/sms/sms.routes"));
 app.use("/api/v1/efd", efdRoutes);
 app.use("/api/v1/pickup-points", pickupPointRoutes);
 app.use("/api/v1/content", contentRoutes);

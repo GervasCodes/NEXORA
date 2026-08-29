@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import ImageOverlayCaption from "./ui/ImageOverlayCaption";
 
 // Same rotating gradient fallback as DepartmentCard.jsx, reused verbatim
 // so a category without an admin-uploaded cover (AdminServiceCategories)
@@ -67,13 +68,7 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
                         <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
                     </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
-                <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="font-display text-lg text-frost leading-tight mb-0.5 truncate">{name}</h3>
-                    <p className="text-frost/75 text-xs">
-                        {count} {count === 1 ? "service" : "services"}
-                    </p>
-                </div>
+                <ImageOverlayCaption title={name} subtitle={`${count} ${count === 1 ? "service" : "services"}`} />
             </div>
         </Link>
     );

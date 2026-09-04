@@ -29,6 +29,14 @@ exports.bulkProductStatusValidation = [
     body("is_active").isBoolean().withMessage("is_active must be true or false").toBoolean()
 ];
 
+// Phase 11 (UI/UX remediation) - bulk price adjustment.
+exports.bulkProductPriceValidation = [
+    body("ids").isArray({ min: 1 }).withMessage("At least one product must be selected"),
+    body("ids.*").isInt({ gt: 0 }).withMessage("Invalid product id"),
+    body("adjust_type").isIn(["percent", "flat"]).withMessage("adjust_type must be percent or flat"),
+    body("adjust_value").isFloat({ min: -1000000, max: 1000000 }).withMessage("Invalid adjustment value").toFloat()
+];
+
 // Shared by the photo/video/audio reorder routes - `ids` is the full set
 // of that media type's row ids in the seller's desired top-to-bottom
 // order.

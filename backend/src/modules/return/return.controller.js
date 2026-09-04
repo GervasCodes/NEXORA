@@ -29,7 +29,7 @@ exports.markShippedBack = async (req, res) => {
 
 exports.getMyReturns = async (req, res) => {
     try {
-        const data = await returnService.getMyReturns(req.user.id);
+        const data = await returnService.getMyReturns(req.user.id, req.query);
         return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

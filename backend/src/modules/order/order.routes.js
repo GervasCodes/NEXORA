@@ -54,6 +54,20 @@ router.get(
     orderController.getOrderDetail
 );
 
+// Phase 4 (UI/UX remediation) - downloadable invoice PDF. An extra path
+// segment past "/:id" so there's no ordering ambiguity with the route
+// above (Express matches by segment count, not registration order, for
+// two routes that aren't actually the same shape - but keeping it
+// directly after "/:id" here is just for readability).
+router.get(
+    "/:id/invoice",
+    authMiddleware,
+    authorize("buyer"),
+    orderIdValidation,
+    validationMiddleware,
+    orderController.downloadInvoice
+);
+
 router.put(
     "/:id/cancel",
     authMiddleware,

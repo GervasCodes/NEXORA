@@ -1,4 +1,4 @@
-// Phase 2 (Honest Status Transparency): a single source of truth for
+// (Honest Status Transparency): a single source of truth for
 // "which of the 4 states is this order in" - payment pending, payment
 // failed, paid + searching for a rider, paid + rider assigned/en route.
 // Before this, each screen (TrackingWidget, OrderDetail, OrderTrackingPage)

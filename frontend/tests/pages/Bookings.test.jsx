@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { MemoryRouter } from "react-router-dom";
 
@@ -43,20 +43,20 @@ beforeEach(() => {
 
 describe("Bookings page", () => {
     it("shows an empty state when the buyer has no bookings", async () => {
-        api.get.mockResolvedValueOnce({ data: { data: [] } });
+        api.get.mockResolvedValueOnce({ data: { data: { bookings: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 } } } });
         renderPage();
 
         await waitFor(() => expect(screen.getByText("No bookings yet")).toBeInTheDocument());
-        expect(api.get).toHaveBeenCalledWith("/bookings/mine");
+        expect(api.get).toHaveBeenCalledWith("/bookings/mine", { params: { page: 1 } });
     });
 
     it("lists bookings with their status, dates, and amount", async () => {
-        api.get.mockResolvedValueOnce({ data: { data: [booking] } });
+        api.get.mockResolvedValueOnce({ data: { data: { bookings: [booking], pagination: { page: 1, limit: 10, total: 1, totalPages: 1 } } } });
         renderPage();
 
         await waitFor(() => expect(screen.getByText("Serengeti Safari Lodge")).toBeInTheDocument());
         expect(screen.getByText("BKG-ABC123-4567")).toBeInTheDocument();
-        expect(screen.getByText("confirmed")).toBeInTheDocument();
+        expect(within(screen.getByRole("listitem")).getByText("confirmed")).toBeInTheDocument();
         expect(screen.getByText("TZS 450000.00")).toBeInTheDocument();
     });
 
@@ -65,7 +65,7 @@ describe("Bookings page", () => {
     // matching note in Checkout.test.jsx on what this automated check
     // does and doesn't cover.
     it("has no detectable accessibility violations on the bookings list", async () => {
-        api.get.mockResolvedValueOnce({ data: { data: [booking] } });
+        api.get.mockResolvedValueOnce({ data: { data: { bookings: [booking], pagination: { page: 1, limit: 10, total: 1, totalPages: 1 } } } });
         const { container } = renderPage();
 
         await waitFor(() => expect(screen.getByText("Serengeti Safari Lodge")).toBeInTheDocument());

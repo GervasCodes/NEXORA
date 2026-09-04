@@ -307,6 +307,23 @@ exports.bulkProductStatus = async (req, res) => {
     }
 };
 
+// Phase 11 (UI/UX remediation) - bulk price adjustment.
+exports.bulkProductPrice = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    try {
+        const result = await productService.bulkAdjustPriceBySeller(
+            req.user.id, req.body.ids, req.body.adjust_type, req.body.adjust_value
+        );
+        return res.json({ success: true, message: "Prices updated", data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.getMyProductById = async (req, res) => {
     try {
         const product = await productService.getMyProductById(req.user.id, req.params.id);

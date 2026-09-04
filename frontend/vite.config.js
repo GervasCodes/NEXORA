@@ -83,17 +83,21 @@ export default defineConfig({
         // process launch with no thread-handshake step to stall on, which
         // is the actual point of failure here - so this is a different
         // *mechanism*, not just "try singleThread again but for forks".
-        // `singleFork: true` keeps the "only one worker ever needs to
+        // `maxWorkers: 1` keeps the "only one worker ever needs to
         // start" property from before (still serial, not parallel) so
         // there's nothing left to contend over either way. On a beefier
-        // or CI box, raise poolOptions.forks.maxForks (or drop
-        // singleFork) to get parallelism back.
+        // or CI box, raise this to get parallelism back.
+        //
+        // This used to be poolOptions.forks.singleFork - Vitest 4 removed
+        // `poolOptions` outright (it's silently ignored now, only a
+        // deprecation warning at startup, not a hard error), which meant
+        // that setting had stopped doing anything and Vitest was quietly
+        // back to its default multi-fork concurrency - exactly
+        // reproducing the worker-timeout symptom above. maxWorkers is the
+        // documented top-level replacement; see
+        // https://vitest.dev/guide/migration#pool-rework.
         pool: "forks",
-        poolOptions: {
-            forks: {
-                singleFork: true
-            }
-        },
+        maxWorkers: 1,
         testTimeout: 20000,
         hookTimeout: 20000,
         coverage: {

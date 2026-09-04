@@ -24,3 +24,14 @@ exports.createBookingValidation = [
 exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
+
+// Phase 7 (UI/UX remediation) - reschedule.
+exports.rescheduleBookingValidation = [
+    body("start_date")
+        .matches(DATE_REGEX)
+        .withMessage("start_date must be in YYYY-MM-DD format"),
+
+    body("end_date")
+        .matches(DATE_REGEX)
+        .withMessage("end_date must be in YYYY-MM-DD format")
+];

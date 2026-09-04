@@ -11,7 +11,7 @@ function readStoredView() {
     return stored === "list" ? "list" : "grid";
 }
 
-function ServiceCardSkeleton({ layout }) {
+export function ServiceCardSkeleton({ layout }) {
     if (layout === "list") {
         return (
             <div className="animate-pulse flex gap-4 border border-line rounded-lg p-3">

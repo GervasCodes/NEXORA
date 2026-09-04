@@ -4,15 +4,20 @@ import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useWishlist } from "../context/WishlistContext";
+import { useToast } from "../context/ToastContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
 import Button from "../components/ui/Button";
 import QuantityStepper from "../components/ui/QuantityStepper";
 import RecommendedProducts from "../components/RecommendedProducts";
+import ProductQA from "../components/ProductQA";
 import PageMeta from "../components/PageMeta";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import Avatar from "../components/ui/Avatar";
+import Breadcrumbs from "../components/ui/Breadcrumbs";
+import Skeleton from "../components/Skeleton";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -20,6 +25,8 @@ export default function ProductDetail() {
     const { slug } = useParams();
     const { user } = useAuth();
     const { addToCart } = useCart();
+    const wishlist = useWishlist();
+    const toast = useToast();
     const navigate = useNavigate();
 
     const [product, setProduct] = useState(null);
@@ -28,6 +35,24 @@ export default function ProductDetail() {
     const [activeImage, setActiveImage] = useState(0);
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const [quantity, setQuantity] = useState(1);
+
+    // Variant selection (Phase 2 continuation, UI/UX remediation) -
+    // { "Size": "M", "Color": "Red" }, built up as the buyer taps each
+    // option axis's buttons. A product with no variants (product.options
+    // is empty) never touches this - selectedVariant stays null and
+    // Add to Cart behaves exactly as it did before variants existed.
+    const [selectedOptions, setSelectedOptions] = useState({});
+
+    // Back-in-stock / price-drop alerts (Phase 5, UI/UX remediation).
+    // Scoped to the base product only, not per-variant - product_alerts
+    // has no variant_id (see migration 096's comment: "which variant"
+    // is ambiguous for a product with several, so the back-in-stock
+    // toggle below only ever shows for products with no variants at
+    // all; the price-drop toggle tracks the base product price
+    // regardless of variants, since a variant's price_delta is always
+    // an adjustment on top of that base price, not a separate price).
+    const [alertSubs, setAlertSubs] = useState([]);
+    const [alertBusy, setAlertBusy] = useState(null);
     const [status, setStatus] = useState("");
     const [loading, setLoading] = useState(true);
 
@@ -59,6 +84,34 @@ export default function ProductDetail() {
     };
 
     useEffect(loadReviews, [product, reviewSort]);
+
+    useEffect(() => {
+        if (!product || user?.role !== "buyer") {
+            setAlertSubs([]);
+            return;
+        }
+        api.get(`/products/${product.id}/alerts`)
+            .then(({ data }) => setAlertSubs(data.data || []))
+            .catch(() => {});
+    }, [product, user]);
+
+    const toggleAlert = async (type) => {
+        setAlertBusy(type);
+        const subscribed = alertSubs.includes(type);
+        try {
+            if (subscribed) {
+                await api.delete(`/products/${product.id}/alerts/${type}`);
+                setAlertSubs((prev) => prev.filter((t) => t !== type));
+            } else {
+                await api.post(`/products/${product.id}/alerts`, { type });
+                setAlertSubs((prev) => [...prev, type]);
+            }
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setAlertBusy(null);
+        }
+    };
 
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
@@ -108,9 +161,12 @@ export default function ProductDetail() {
             setStatus(t("product.buyerOnlyCart"));
             return;
         }
+        if (hasVariants && (!allOptionsSelected || !selectedVariant)) {
+            return;
+        }
 
         setStatus("");
-        const result = await addToCart(product.id, quantity);
+        const result = await addToCart(product.id, quantity, selectedVariant?.id || null);
         setStatus(result.success ? t("product.addedToCart") : result.message);
     };
 
@@ -136,8 +192,54 @@ export default function ProductDetail() {
         }
     };
 
+    // Share (Phase 2, UI/UX remediation) - native share sheet where
+    // available (mobile), falling back to copy-link + toast confirmation,
+    // the same pattern Loyalty.jsx's referral link already established.
+    const handleShare = async () => {
+        const url = window.location.href;
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: product.name, url });
+            } catch {
+                // Cancelling the native share sheet throws - not an error
+                // worth surfacing to the user.
+            }
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+            toast?.success(t("product.linkCopied"));
+        } catch {
+            // Clipboard access can be denied by the browser - rare enough
+            // (and low-stakes enough - the URL is still visible in the
+            // address bar) not to warrant its own translated error copy.
+        }
+    };
+
     if (loading) {
-        return <div className="max-w-6xl mx-auto px-6 py-16 text-ash">{t("common.loading")}</div>;
+        return (
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+                <div className="grid md:grid-cols-2 gap-10">
+                    <div>
+                        <Skeleton className="aspect-square w-full mb-3" />
+                        <div className="flex gap-2">
+                            <Skeleton className="w-16 h-16" />
+                            <Skeleton className="w-16 h-16" />
+                            <Skeleton className="w-16 h-16" />
+                        </div>
+                    </div>
+                    <div>
+                        <Skeleton className="h-3 w-24 mb-3" />
+                        <Skeleton className="h-8 w-3/4 mb-4" />
+                        <Skeleton className="h-4 w-32 mb-6" />
+                        <Skeleton className="h-7 w-28 mb-6" />
+                        <Skeleton className="h-4 w-full mb-2" />
+                        <Skeleton className="h-4 w-5/6 mb-6" />
+                        <Skeleton className="h-11 w-40" />
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (!product) {
@@ -152,6 +254,25 @@ export default function ProductDetail() {
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const images = product.images?.length ? product.images : [{ image_url: null }];
 
+    // Variants (Phase 2 continuation, UI/UX remediation).
+    const variantOptions = product.options || [];
+    const hasVariants = variantOptions.length > 0;
+    const allOptionsSelected = hasVariants && variantOptions.every((opt) => selectedOptions[opt.name]);
+    const selectedVariant = allOptionsSelected
+        ? (product.variants || []).find((v) =>
+            variantOptions.every((opt) => v.options[opt.name] === selectedOptions[opt.name])
+        )
+        : null;
+    // Effective price/stock for the selector state: before every axis is
+    // picked there's nothing purchasable yet, so Add to Cart stays
+    // disabled (see the button below) rather than falling back to the
+    // parent product's own price/stock, which would be misleading for a
+    // product that has variants configured.
+    const effectivePrice = hasVariants
+        ? (selectedVariant ? Number(product.price) + Number(selectedVariant.price_delta || 0) : null)
+        : (hasDiscount ? product.discount_price : product.price);
+    const effectiveStock = hasVariants ? (selectedVariant?.stock ?? 0) : product.stock;
+
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta
@@ -159,6 +280,15 @@ export default function ProductDetail() {
                 description={product.description ? product.description.slice(0, 160) : `${product.name} on NEXORA — ${format(hasDiscount ? product.discount_price : product.price)}`}
                 image={images[0]?.image_url}
                 type="product"
+            />
+            <Breadcrumbs
+                items={[
+                    { label: t("nav.home"), href: "/" },
+                    ...(product.category_slug
+                        ? [{ label: product.category_name, href: `/departments/${product.category_slug}` }]
+                        : []),
+                    { label: product.name }
+                ]}
             />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
@@ -221,7 +351,44 @@ export default function ProductDetail() {
                         </Link>
                         {product.is_verified ? ` · ✓ ${t("product.verifiedStore")}` : ""}
                     </p>
-                    <h1 className="font-display text-3xl mb-3">{product.name}</h1>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                        <h1 className="font-display text-3xl">{product.name}</h1>
+                        <div className="flex items-center gap-1 shrink-0 pt-1">
+                            {user?.role === "buyer" && (
+                                <button
+                                    type="button"
+                                    onClick={() => wishlist?.toggle(product.id)}
+                                    aria-label={wishlist?.isSaved(product.id) ? t("product.removeFromWishlist") : t("product.saveToWishlist")}
+                                    aria-pressed={wishlist?.isSaved(product.id)}
+                                    className="w-9 h-9 rounded-full border border-line flex items-center justify-center hover:border-ink transition-colors focus-ring"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill={wishlist?.isSaved(product.id) ? "#e4572e" : "none"}
+                                        stroke={wishlist?.isSaved(product.id) ? "#e4572e" : "currentColor"}
+                                        strokeWidth="2"
+                                        className="w-4 h-4"
+                                    >
+                                        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                                    </svg>
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleShare}
+                                aria-label={t("product.share")}
+                                className="w-9 h-9 rounded-full border border-line flex items-center justify-center hover:border-ink transition-colors focus-ring"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                    <circle cx="18" cy="5" r="3" />
+                                    <circle cx="6" cy="12" r="3" />
+                                    <circle cx="18" cy="19" r="3" />
+                                    <path d="M8.6 10.5 15.4 6.5M8.6 13.5l6.8 4" strokeLinecap="round" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
 
                     {reviews?.average_rating && (
                         <p className="text-sm text-ash mb-4">
@@ -231,14 +398,29 @@ export default function ProductDetail() {
                         </p>
                     )}
 
-                    <div className="flex items-baseline gap-3 mb-6">
-                        <span className="price text-2xl font-medium">
-                            {format(hasDiscount ? product.discount_price : product.price)}
-                        </span>
-                        {hasDiscount && (
+                    <div className="flex items-baseline gap-3 mb-2">
+                        {effectivePrice !== null ? (
+                            <span className="price text-2xl font-medium">{format(effectivePrice)}</span>
+                        ) : (
+                            <span className="text-ash text-sm">{t("product.selectOptionForPrice")}</span>
+                        )}
+                        {!hasVariants && hasDiscount && (
                             <span className="price text-ash line-through">{format(product.price)}</span>
                         )}
                     </div>
+
+                    {/* Delivery estimate / return policy summary (Phase 2,
+                        UI/UX remediation) - previously this only appeared
+                        at checkout, after the buyer had already committed
+                        to buying. Falls back to a generic platform default
+                        when the seller hasn't set a product-specific value
+                        (see migration 094's comment on why these are
+                        nullable). */}
+                    <p className="text-xs text-ash mb-6">
+                        {t("product.shipsWithin", { days: product.ships_within_days || 3 })}
+                        {" · "}
+                        {t("product.returnWindow", { days: product.return_window_days || 7 })}
+                    </p>
 
                     <p className="text-sm text-ink/80 leading-relaxed mb-6 whitespace-pre-line">
                         {product.description || t("product.noDescription")}
@@ -251,22 +433,86 @@ export default function ProductDetail() {
                         <dt>{t("product.inStock")}</dt><dd className="text-ink">{product.stock}</dd>
                     </dl>
 
-                    {Number(product.stock) > 0 ? (
-                        <div className="flex items-center gap-3 mb-3">
-                            <QuantityStepper
-                                value={quantity}
-                                onChange={setQuantity}
-                                min={1}
-                                max={product.stock}
-                            />
-                            <Button
-                                onClick={handleAddToCart}
-                            >
-                                {t("product.addToCart")}
-                            </Button>
+                    {hasVariants && (
+                        <div className="mb-4 space-y-3">
+                            {variantOptions.map((opt) => (
+                                <div key={opt.id}>
+                                    <p className="text-xs font-medium text-ink mb-1.5">{opt.name}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {opt.values.map((val) => {
+                                            const active = selectedOptions[opt.name] === val.value;
+                                            return (
+                                                <button
+                                                    key={val.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedOptions((prev) => ({ ...prev, [opt.name]: val.value }))}
+                                                    aria-pressed={active}
+                                                    className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                                                        active ? "border-ink bg-ink text-paper" : "border-line hover:border-ash"
+                                                    }`}
+                                                >
+                                                    {val.value}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {(hasVariants ? effectiveStock > 0 || !allOptionsSelected : Number(product.stock) > 0) ? (
+                        <div className="mb-3">
+                            {allOptionsSelected && effectiveStock > 0 && effectiveStock <= 5 && (
+                                <p className="text-xs text-mango-dark font-medium mb-2">
+                                    {t("product.onlyLeftInStock", { count: effectiveStock })}
+                                </p>
+                            )}
+                            {allOptionsSelected && effectiveStock === 0 && (
+                                <p className="text-coral font-medium mb-2">{t("product.outOfStock")}</p>
+                            )}
+                            <div className="flex items-center gap-3">
+                                <QuantityStepper
+                                    value={quantity}
+                                    onChange={setQuantity}
+                                    min={1}
+                                    max={Math.max(effectiveStock, 1)}
+                                />
+                                <Button
+                                    onClick={handleAddToCart}
+                                    disabled={hasVariants && (!allOptionsSelected || effectiveStock === 0)}
+                                >
+                                    {t("product.addToCart")}
+                                </Button>
+                            </div>
                         </div>
                     ) : (
-                        <p className="text-coral font-medium mb-3">{t("product.outOfStock")}</p>
+                        <div className="mb-3">
+                            <p className="text-coral font-medium mb-2">{t("product.outOfStock")}</p>
+                            {!hasVariants && user?.role === "buyer" && (
+                                <button
+                                    type="button"
+                                    onClick={() => toggleAlert("back_in_stock")}
+                                    disabled={alertBusy === "back_in_stock"}
+                                    className={`text-sm px-3 py-1.5 rounded-md border transition-colors disabled:opacity-60 ${
+                                        alertSubs.includes("back_in_stock") ? "border-teal text-teal bg-teal/5" : "border-line hover:border-ink"
+                                    }`}
+                                >
+                                    {alertSubs.includes("back_in_stock") ? `🔔 ${t("product.alertBackInStockOn")}` : `🔔 ${t("product.alertBackInStock")}`}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {user?.role === "buyer" && (
+                        <button
+                            type="button"
+                            onClick={() => toggleAlert("price_drop")}
+                            disabled={alertBusy === "price_drop"}
+                            className={`text-xs mb-3 block ${alertSubs.includes("price_drop") ? "text-teal" : "text-ash hover:text-ink"} disabled:opacity-60`}
+                        >
+                            {alertSubs.includes("price_drop") ? `🔔 ${t("product.alertPriceDropOn")}` : `🔔 ${t("product.alertPriceDrop")}`}
+                        </button>
                     )}
 
                     {status && <p className="text-sm text-teal">{status}</p>}
@@ -402,6 +648,8 @@ export default function ProductDetail() {
                     ))}
                 </ul>
             </section>
+
+            <ProductQA productId={product.id} />
 
             <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title={t("product.youMayAlsoLike")} />
 

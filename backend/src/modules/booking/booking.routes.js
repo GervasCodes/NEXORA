@@ -9,7 +9,7 @@ const requireServiceProvider = require("../../middleware/requireServiceProvider.
 const maintenanceCheck = require("../../middleware/maintenance.middleware");
 
 const bookingController = require("./booking.controller");
-const { createBookingValidation, bookingIdValidation } = require("./booking.validator");
+const { createBookingValidation, bookingIdValidation, rescheduleBookingValidation } = require("./booking.validator");
 
 // Buyer-side (gated: new booking activity is what the admin's
 // Maintenance toggle turns off; providers below keep managing bookings
@@ -84,6 +84,22 @@ router.put(
     bookingIdValidation,
     validationMiddleware,
     bookingController.cancelBooking
+);
+
+// Phase 7 (UI/UX remediation) - reschedule. Buyer-only (unlike
+// /:id/cancel and /:id above, which are shared between customer and
+// provider) since rescheduleBooking's own ownership check in
+// booking.service.js only ever validates against booking.customer_id -
+// a provider changing their own calendar availability is a different,
+// separate concern this endpoint doesn't cover.
+router.put(
+    "/:id/reschedule",
+    authMiddleware,
+    authorize("buyer"),
+    bookingIdValidation,
+    rescheduleBookingValidation,
+    validationMiddleware,
+    bookingController.rescheduleBooking
 );
 
 module.exports = router;

@@ -133,7 +133,7 @@ describe("StorePage (Phase 5A)", () => {
         mockEmptyCatalog();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
 
         expect(api.get).toHaveBeenCalledWith("/stores/mama-ntilies-kitchen");
         expect(screen.getByText("Home-cooked meals delivered fresh.")).toBeInTheDocument();
@@ -149,7 +149,7 @@ describe("StorePage (Phase 5A)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("Home-cooked meals delivered fresh.")).not.toBeInTheDocument();
     });
 
@@ -167,7 +167,7 @@ describe("StorePage trust info (Phase 5B)", () => {
         mockEmptyCatalog();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
 
         expect(screen.getByText("Verified")).toBeInTheDocument();
         expect(screen.getByText("4.6")).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe("StorePage trust info (Phase 5B)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("Verified")).not.toBeInTheDocument();
     });
 
@@ -197,7 +197,7 @@ describe("StorePage trust info (Phase 5B)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("(18)")).not.toBeInTheDocument();
         expect(screen.getByText("Member since Mar 2024")).toBeInTheDocument();
     });
@@ -225,7 +225,7 @@ describe("StorePage catalog (Phase 5C)", () => {
         mockEmptyCatalog();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByLabelText("Store")).not.toBeInTheDocument();
         expect(screen.queryByLabelText("Location")).not.toBeInTheDocument();
         expect(api.get).not.toHaveBeenCalledWith("/products/filters/sellers", expect.anything());
@@ -283,7 +283,7 @@ describe("StorePage about & delivery (Phase 5D)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("About")).not.toBeInTheDocument();
     });
 
@@ -435,7 +435,7 @@ describe("StorePage branding (Phase 7B)", () => {
         mockEmptyCatalog();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByTitle("Instagram")).not.toBeInTheDocument();
         expect(screen.queryByTitle("Facebook")).not.toBeInTheDocument();
         expect(screen.queryByTitle("WhatsApp")).not.toBeInTheDocument();
@@ -488,7 +488,7 @@ describe("StorePage trust & safety (Phase 7D)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("Trust & safety")).not.toBeInTheDocument();
     });
 });
@@ -523,7 +523,7 @@ describe("StorePage collections (Phase 7C)", () => {
         mockEmptyCatalog();
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Mama Ntilie's Kitchen")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("New Arrivals")).not.toBeInTheDocument();
     });
 });

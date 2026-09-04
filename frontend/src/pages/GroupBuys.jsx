@@ -5,6 +5,7 @@ import PageMeta from "../components/PageMeta";
 import PageLoader from "../components/PageLoader";
 import EmptyState from "../components/ui/EmptyState";
 import { useCurrency } from "../context/CurrencyContext";
+import { formatTimeRemaining } from "../utils/format";
 import { GroupBuysIcon } from "../components/NavIcons";
 
 export default function GroupBuys() {
@@ -32,24 +33,36 @@ export default function GroupBuys() {
                 />
             ) : (
                 <ul className="space-y-3">
-                    {groups.map((g) => (
-                        <li key={g.id}>
-                            <Link to={`/group-buys/${g.id}`} className="block border border-line rounded-lg p-4 hover:border-abyss transition-colors">
-                                <div className="flex items-start justify-between gap-3 flex-wrap">
-                                    <div>
+                    {groups.map((g) => {
+                        // Phase 9 (UI/UX remediation) - progress bar +
+                        // countdown, matching the treatment
+                        // GroupBuyDetail.jsx's page already had, so the
+                        // list itself communicates momentum instead of
+                        // just a plain "3/10 joined" fraction.
+                        const progress = Math.min(100, Math.round((g.participant_count / g.min_participants) * 100));
+                        const timeLeft = formatTimeRemaining(g.deadline);
+
+                        return (
+                            <li key={g.id}>
+                                <Link to={`/group-buys/${g.id}`} className="block border border-line rounded-lg p-4 hover:border-abyss transition-colors">
+                                    <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                                         <p className="font-medium text-sm">{g.product_name}</p>
-                                        <p className="text-xs text-ash mt-0.5">
-                                            {g.participant_count}/{g.min_participants} joined · ends {new Date(g.deadline).toLocaleDateString()}
-                                        </p>
+                                        <div className="text-right">
+                                            <p className="price font-medium">{format(g.group_price)}</p>
+                                            <p className="text-xs text-ash line-through">{format(g.product_price)}</p>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="price font-medium">{format(g.group_price)}</p>
-                                        <p className="text-xs text-ash line-through">{format(g.product_price)}</p>
+                                    <div className="h-1.5 bg-line rounded-full overflow-hidden mb-1.5">
+                                        <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
                                     </div>
-                                </div>
-                            </Link>
-                        </li>
-                    ))}
+                                    <p className="text-xs text-ash">
+                                        {g.participant_count}/{g.min_participants} joined
+                                        {timeLeft ? ` · ${timeLeft}` : ""}
+                                    </p>
+                                </Link>
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
         </div>

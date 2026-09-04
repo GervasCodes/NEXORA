@@ -177,6 +177,21 @@ export default function Header() {
 
     return (
         <header className="glass-dark text-frost sticky top-0 z-40">
+            {/* Phase 0 (UI/UX remediation): the cart/messages/notification
+                badge counts above only ever updated visually - a
+                screen-reader user had no way to learn a new item landed
+                in their cart or a new message arrived unless they
+                happened to refocus the icon. These two sr-only regions
+                announce count changes without duplicating what's already
+                visually shown, and stay outside every layout's
+                conditional rendering so they're always present exactly
+                once regardless of viewport. */}
+            <span className="sr-only" role="status" aria-live="polite">
+                {itemCount > 0 ? `Cart: ${itemCount} item${itemCount === 1 ? "" : "s"}` : ""}
+            </span>
+            <span className="sr-only" role="status" aria-live="polite">
+                {unreadMessages > 0 ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : ""}
+            </span>
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-4 sm:gap-6">
                 <Link
                     to="/"

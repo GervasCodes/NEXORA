@@ -1,5 +1,7 @@
 const productRepository = require("./product.repository");
 const categoryRepository = require("../category/category.repository");
+const productVariantService = require("../productVariant/productVariant.service");
+const productAlertService = require("../productAlert/productAlert.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = require("../../utils/productFilters");
 const { parseSort } = require("../../utils/productSort");
@@ -81,6 +83,12 @@ exports.createProduct = async (sellerId, data) => {
         cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
     ]);
 
+    // Follow-store notifications (Phase 6, UI/UX remediation) -
+    // fire-and-forget, deliberately not awaited (same reasoning as
+    // every other "notify someone" call in this codebase).
+    const storeService = require("../store/store.service");
+    storeService.notifyFollowersOfNewListing(sellerId, { name: data.name, slug }).catch(() => {});
+
     return {
         productId,
         slug
@@ -159,7 +167,15 @@ exports.getProductBySlug = async (slug) => {
         productRepository.findAudioByProductId(product.id)
     ]);
 
-    return { ...product, images, videos, audio };
+    // Variants (Phase 2, UI/UX remediation) - only queried for products
+    // that actually have them (has_variants flag, see migration 095),
+    // so the common single-SKU product page doesn't pay for three extra
+    // empty-result queries.
+    const variantData = product.has_variants
+        ? await productVariantService.getForProduct(product.id)
+        : { options: [], variants: [] };
+
+    return { ...product, images, videos, audio, ...variantData };
 };
 
 exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
@@ -359,6 +375,32 @@ exports.bulkSetProductActiveBySeller = async (sellerId, productIds, isActive) =>
     return { updated: ids.length };
 };
 
+// Phase 11 (UI/UX remediation) - bulk price adjustment, same
+// ids-dedup-and-validate shape as bulkSetProductActiveBySeller above.
+exports.bulkAdjustPriceBySeller = async (sellerId, productIds, adjustType, adjustValue) => {
+    const ids = [...new Set((productIds || []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!ids.length) {
+        throw new Error("No products selected");
+    }
+    if (!["percent", "flat"].includes(adjustType)) {
+        throw new Error("Invalid adjustment type");
+    }
+    const value = Number(adjustValue);
+    if (!Number.isFinite(value) || value === 0) {
+        throw new Error("Enter a non-zero adjustment");
+    }
+
+    await productRepository.adjustPriceBulkBySeller(sellerId, ids, adjustType, value);
+
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
+
+    return { updated: ids.length };
+};
+
 exports.getMyProductById = async (sellerId, productId) => {
     const product = await productRepository.findById(productId);
 
@@ -400,7 +442,23 @@ exports.updateProduct = async (sellerId, productId, data) => {
     }
     await Promise.all(cacheBumps);
 
-    return productRepository.findById(productId);
+    const updated = await productRepository.findById(productId);
+
+    // Back-in-stock / price-drop alerts (Phase 5, UI/UX remediation) -
+    // fire-and-forget, deliberately not awaited (same reasoning as
+    // every other "notify someone" call in this codebase - see
+    // productAlert.service.js's own comment). Compares this edit's old
+    // vs new values, not just the new value, so these only fire on an
+    // actual 0->positive stock transition or a genuine price decrease,
+    // never re-fire on an unrelated edit of an already-in-stock/
+    // already-cheap product.
+    productAlertService.checkAndNotifyStockChange(updated, Number(product.stock)).catch(() => {});
+    productAlertService.checkAndNotifyPriceChange(
+        updated,
+        Number(product.discount_price ?? product.price)
+    ).catch(() => {});
+
+    return updated;
 };
 
 exports.setProductActiveBySeller = async (sellerId, productId, isActive) => {

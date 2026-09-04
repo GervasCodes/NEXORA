@@ -4,6 +4,8 @@ import api, { extractErrorMessage } from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useSocket } from "../context/SocketContext";
+import { useCart } from "../context/CartContext";
+import { useToast } from "../context/ToastContext";
 import DeliveryAgentRating from "../components/DeliveryAgentRating";
 import OrderTimeline from "../components/OrderTimeline";
 import TrackingWidget from "../components/TrackingWidget";
@@ -40,6 +42,8 @@ export default function OrderDetail() {
     const location = useLocation();
     const navigate = useNavigate();
     const assistant = useAIAssistant();
+    const cart = useCart();
+    const toast = useToast();
     const [order, setOrder] = useState(null);
     const [delivery, setDelivery] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -221,6 +225,76 @@ export default function OrderDetail() {
         } finally {
             setBusy(false);
         }
+    };
+
+    // Buy again (Phase 4, UI/UX remediation) - re-adds every line item
+    // from this order to the cart in one action. Deliberately best-
+    // effort per item rather than all-or-nothing: an order placed months
+    // ago may have items that are now out of stock, discontinued, or
+    // (for a variant) no longer offered in that combination - those are
+    // skipped and reported, rather than the whole reorder failing
+    // because of one unavailable item. Reuses CartContext.addToCart,
+    // the exact same call ProductDetail.jsx's Add to Cart button makes,
+    // so stock/variant validation is identical to adding it fresh.
+    const [reordering, setReordering] = useState(false);
+    const handleBuyAgain = async () => {
+        const allItems = order.is_parent
+            ? order.children.flatMap((child) => child.items || [])
+            : (order.items || []);
+
+        if (!allItems.length) return;
+
+        setReordering(true);
+        let addedCount = 0;
+        const failed = [];
+
+        for (const item of allItems) {
+            const result = await cart?.addToCart(item.product_id, item.quantity, item.variant_id || null);
+            if (result?.success) {
+                addedCount += 1;
+            } else {
+                failed.push(item.name);
+            }
+        }
+
+        setReordering(false);
+
+        if (addedCount > 0) {
+            toast?.success(
+                failed.length
+                    ? `Added ${addedCount} item(s) to cart. ${failed.length} item(s) couldn't be added.`
+                    : `Added ${addedCount} item(s) to cart.`
+            );
+            navigate("/cart");
+        } else {
+            toast?.error("None of these items are available to reorder right now.");
+        }
+    };
+
+    // Download invoice (Phase 4, UI/UX remediation) - same blob-download
+    // pattern already used for CSV export in AdminDashboard.jsx (fetch
+    // as a blob, then trigger the download via a synthetic <a>, rather
+    // than a plain <a href> to the API URL - keeps this working
+    // regardless of how the session is authenticated). Only offered for
+    // a single-vendor order right now, matching orderInvoice.service.js's
+    // backend scope (a split/multi-vendor order has one fiscal receipt
+    // per vendor order, not one for the whole parent order).
+    const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+    const handleDownloadInvoice = () => {
+        setDownloadingInvoice(true);
+        api.get(`/orders/${id}/invoice`, { responseType: "blob" })
+            .then((response) => {
+                const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `invoice-${order.order_number}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(() => toast?.error("Couldn't download the invoice."))
+            .finally(() => setDownloadingInvoice(false));
     };
 
     const handleConfirmReceipt = async () => {
@@ -526,6 +600,18 @@ export default function OrderDetail() {
                         className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring">
                         ↩️ Request a return
                     </Link>
+                )}
+                {order.status !== "cancelled" && (
+                    <button onClick={handleBuyAgain} disabled={reordering}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        {reordering ? "Adding to cart…" : "🔁 Buy again"}
+                    </button>
+                )}
+                {!order.is_parent && (
+                    <button onClick={handleDownloadInvoice} disabled={downloadingInvoice}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        {downloadingInvoice ? "Preparing…" : "🧾 Download invoice"}
+                    </button>
                 )}
             </div>
         </div>

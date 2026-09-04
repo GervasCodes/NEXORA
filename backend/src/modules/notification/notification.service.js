@@ -33,6 +33,42 @@ const resolveParams = (locale, params) => {
     return resolved;
 };
 
+// Notification preferences (Phase 10, UI/UX remediation) - which
+// notify() `type` values fall under each of the four buyer-toggleable
+// categories (see migration 100's comment on why these four and no
+// others). Any type NOT listed here is never gated by preference at
+// all - account/security/financial/fraud/KYC/admin/compliance
+// notifications always fire, on purpose.
+const CATEGORY_BY_TYPE = {
+    notify_order_updates: [
+        "order_placed", "order_cancelled", "order_status_update",
+        "delivery_assigned", "delivery_update",
+        "return_requested", "return_status", "return", "dispute",
+        "booking_created", "booking_confirmed", "booking_cancelled",
+        "booking_rejected", "booking_rescheduled", "booking_payment",
+        "group_buy_resolved"
+    ],
+    notify_messages: ["message"],
+    notify_price_stock_alerts: ["product_back_in_stock", "product_price_drop"],
+    notify_store_updates: ["store_new_listing", "live_selling_started"]
+};
+
+const TYPE_TO_PREFERENCE_COLUMN = Object.entries(CATEGORY_BY_TYPE).reduce((map, [column, types]) => {
+    types.forEach((type) => { map[type] = column; });
+    return map;
+}, {});
+
+// Returns false only when the type is one of the four gated categories
+// AND the user has explicitly turned that category off - every other
+// type (including any not yet added to CATEGORY_BY_TYPE above) is
+// allowed through, so this fails open rather than silently swallowing
+// a notification type nobody thought to categorize.
+const isAllowedByPreference = (type, contact) => {
+    const column = TYPE_TO_PREFERENCE_COLUMN[type];
+    if (!column) return true;
+    return contact?.[column] !== 0;
+};
+
 exports.notify = async ({
     userId,
     type,
@@ -48,6 +84,11 @@ exports.notify = async ({
     url
 }) => {
     const contact = await notificationRepository.getUserContact(userId);
+
+    if (!isAllowedByPreference(type, contact)) {
+        return;
+    }
+
     const locale = resolveLocale(contact?.language);
 
     const resolvedTitle = titleKey ? t(locale, titleKey, resolveParams(locale, titleParams)) : title;

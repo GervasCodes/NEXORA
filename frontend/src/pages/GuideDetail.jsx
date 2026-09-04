@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api/client";
 import PageMeta from "../components/PageMeta";
 import PageLoader from "../components/PageLoader";
+import Breadcrumbs from "../components/ui/Breadcrumbs";
 
 // Phase 1 (Remediation, A5): still no markdown-rendering dependency in
 // this project, so this stays a hand-rolled renderer rather than
@@ -65,11 +66,33 @@ export default function GuideDetail() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title={article.title} description={article.seo_meta_description || article.excerpt} />
+            <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Guides", href: "/guides" }, { label: article.title }]} />
             {article.cover_image_url && (
                 <img src={article.cover_image_url} alt="" className="w-full aspect-video object-cover rounded-lg mb-6" />
             )}
             <h1 className="font-display text-3xl mb-6">{article.title}</h1>
             <div className="text-ink/90 text-[15px]">{renderBody(article.body_markdown)}</div>
+
+            {/* Related guides (Phase 9, UI/UX remediation) - already
+                included in the /content/:slug response (see
+                content.controller.js#getBySlug), no second request. */}
+            {article.related?.length > 0 && (
+                <div className="mt-12 pt-8 border-t border-line">
+                    <p className="font-display text-lg mb-4">More guides</p>
+                    <ul className="grid sm:grid-cols-3 gap-4">
+                        {article.related.map((r) => (
+                            <li key={r.id}>
+                                <Link to={`/guides/${r.slug}`} className="group block">
+                                    {r.cover_image_url && (
+                                        <img src={r.cover_image_url} alt="" className="w-full aspect-video object-cover rounded-md mb-2" />
+                                    )}
+                                    <p className="text-sm font-medium group-hover:underline line-clamp-2">{r.title}</p>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 }

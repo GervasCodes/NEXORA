@@ -241,7 +241,7 @@ exports.findBySlug = async (slug) => {
         `SELECT
             p.*,
             sp.store_name, sp.store_slug, sp.is_verified,
-            c.name AS category_name,
+            c.name AS category_name, c.slug AS category_slug,
             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
         FROM products p
@@ -508,6 +508,25 @@ exports.setActiveBulkBySeller = async (sellerId, ids, isActive) => {
     await db.query(
         "UPDATE products SET is_active = ? WHERE seller_id = ? AND id IN (?)",
         [isActive, sellerId, ids]
+    );
+};
+
+// Phase 11 (UI/UX remediation) - bulk price adjustment. Applies to the
+// base `price` column only (discount_price is left alone - a seller
+// managing markdowns separately from a base-price update is the more
+// common intent, and silently scaling an active discount alongside the
+// base price could produce a discount that no longer makes sense).
+// GREATEST(0.01, ...) guards against a large percentage decrease or
+// flat subtraction producing a zero or negative price - same kind of
+// floor other price-touching code in this codebase already applies.
+exports.adjustPriceBulkBySeller = async (sellerId, ids, adjustType, adjustValue) => {
+    if (!ids.length) return;
+    const expression = adjustType === "percent"
+        ? "GREATEST(0.01, price * (1 + ? / 100))"
+        : "GREATEST(0.01, price + ?)";
+    await db.query(
+        `UPDATE products SET price = ${expression} WHERE seller_id = ? AND id IN (?)`,
+        [adjustValue, sellerId, ids]
     );
 };
 

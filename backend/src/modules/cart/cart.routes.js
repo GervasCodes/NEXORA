@@ -29,7 +29,7 @@ router.get(
 );
 
 router.put(
-    "/:productId",
+    "/:productId{/:variantId}",
     authMiddleware,
     authorize("buyer"),
     updateCartValidation,
@@ -38,7 +38,7 @@ router.put(
 );
 
 router.delete(
-    "/:productId",
+    "/:productId{/:variantId}",
     authMiddleware,
     authorize("buyer"),
     removeFromCartValidation,

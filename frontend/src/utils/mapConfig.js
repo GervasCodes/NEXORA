@@ -32,7 +32,7 @@ export const pickupIcon = new L.DivIcon({
     iconAnchor: [10, 10]
 });
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - unmatched orders
+// (Admin Manual Override & Ops Visibility) - unmatched orders
 // sitting in the manual pool past the stalled threshold (see
 // admin.service.js's STALLED_ORDER_MINUTES), shown on the dispatch map
 // so staff can see where they are, not just read them in a list.

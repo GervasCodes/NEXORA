@@ -76,3 +76,14 @@ exports.searchValidation = [
         .isLength({ min: 1, max: 200 })
         .withMessage("Invalid search query")
 ];
+
+// Phase 8 (UI/UX remediation) - cross-conversation search has no
+// conversation id in its path (unlike searchValidation above), only
+// the query string.
+exports.searchAllValidation = [
+    query("q")
+        .notEmpty()
+        .withMessage("Search query is required")
+        .isLength({ min: 1, max: 200 })
+        .withMessage("Invalid search query")
+];

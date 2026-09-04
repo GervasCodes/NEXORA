@@ -2,9 +2,10 @@ const contentService = require("./content.service");
 
 exports.listPublished = async (req, res) => {
     try {
-        const { category_id, page = 1, limit = 20 } = req.query;
+        const { category_id, search, page = 1, limit = 20 } = req.query;
         const data = await contentService.listPublished({
             categoryId: category_id,
+            search,
             limit: Number(limit),
             offset: (Number(page) - 1) * Number(limit)
         });
@@ -18,6 +19,22 @@ exports.getBySlug = async (req, res) => {
     try {
         const data = await contentService.getBySlug(req.params.slug);
         if (!data) return res.status(404).json({ success: false, message: "Article not found" });
+
+        // Related guides (Phase 9, UI/UX remediation) - folded into the
+        // same response rather than a second endpoint, since
+        // GuideDetail.jsx always wants both together on first render.
+        const related = await contentService.getRelated(data);
+
+        return res.json({ success: true, data: { ...data, related } });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase 9 (UI/UX remediation) - category filter chips for Guides.jsx.
+exports.listCategoriesInUse = async (req, res) => {
+    try {
+        const data = await contentService.listCategoriesInUse();
         return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

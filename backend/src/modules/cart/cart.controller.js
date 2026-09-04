@@ -2,12 +2,13 @@ const cartService = require("./cart.service");
 
 exports.addToCart = async (req, res) => {
     try {
-        const { product_id, quantity } = req.body;
+        const { product_id, quantity, variant_id } = req.body;
 
         const result = await cartService.addToCart(
             req.user.id,
             product_id,
-            quantity || 1
+            quantity || 1,
+            variant_id || null
         );
 
         return res.status(201).json({
@@ -43,13 +44,14 @@ exports.getCart = async (req, res) => {
 
 exports.updateCartItem = async (req, res) => {
     try {
-        const { productId } = req.params;
+        const { productId, variantId } = req.params;
         const { quantity } = req.body;
 
         const result = await cartService.updateCartItem(
             req.user.id,
             productId,
-            quantity
+            quantity,
+            variantId || null
         );
 
         return res.json({
@@ -68,9 +70,9 @@ exports.updateCartItem = async (req, res) => {
 
 exports.removeFromCart = async (req, res) => {
     try {
-        const { productId } = req.params;
+        const { productId, variantId } = req.params;
 
-        await cartService.removeFromCart(req.user.id, productId);
+        await cartService.removeFromCart(req.user.id, productId, variantId || null);
 
         return res.json({
             success: true,

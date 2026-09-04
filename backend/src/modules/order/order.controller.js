@@ -1,4 +1,24 @@
 const orderService = require("./order.service");
+const orderInvoiceService = require("./orderInvoice.service");
+
+exports.downloadInvoice = async (req, res) => {
+    try {
+        // streamInvoice re-fetches the order via getOrderDetail, which
+        // already throws "Order not found" for an order that isn't this
+        // buyer's - same ownership check every other order-detail read
+        // in this file relies on, not a separate check here.
+        await orderInvoiceService.streamInvoice(res, req.params.id, req.user.id);
+    } catch (error) {
+        // A PDF response can't carry a JSON error body once headers are
+        // already sent (pdfkit may have started streaming) - only send
+        // the JSON error if nothing has gone out yet.
+        if (!res.headersSent) {
+            res.status(400).json({ success: false, message: error.message });
+        } else {
+            res.end();
+        }
+    }
+};
 
 exports.checkout = async (req, res) => {
     try {
@@ -43,7 +63,7 @@ exports.getDeliveryEstimate = async (req, res) => {
 
 exports.getMyOrders = async (req, res) => {
     try {
-        const orders = await orderService.getMyOrders(req.user.id);
+        const orders = await orderService.getMyOrders(req.user.id, req.query);
 
         return res.json({
             success: true,
@@ -97,7 +117,7 @@ exports.cancelOrder = async (req, res) => {
 
 exports.getSellerOrders = async (req, res) => {
     try {
-        const orders = await orderService.getSellerOrders(req.user.id);
+        const orders = await orderService.getSellerOrders(req.user.id, req.query);
 
         return res.json({
             success: true,

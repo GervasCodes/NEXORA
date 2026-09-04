@@ -123,7 +123,9 @@ describe("product.service.getProductBySlug", () => {
             name: "Widget",
             images: [{ id: 1, image_url: "img" }],
             videos: [{ id: 2, video_url: "vid" }],
-            audio: [{ id: 3, audio_url: "aud" }]
+            audio: [{ id: 3, audio_url: "aud" }],
+            options: [],
+            variants: []
         });
     });
 

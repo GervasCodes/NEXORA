@@ -42,7 +42,8 @@ exports.startConversation = async (req, res) => {
 
 exports.getMyConversations = async (req, res) => {
     try {
-        const conversations = await chatService.getMyConversations(req.user.id);
+        const archived = req.query.archived === "true";
+        const conversations = await chatService.getMyConversations(req.user.id, { archived });
 
         return res.json({
             success: true,
@@ -261,5 +262,52 @@ exports.deleteConversation = async (req, res) => {
             success: false,
             message: error.message
         });
+    }
+};
+
+// Mute / archive (Phase 8, UI/UX remediation).
+exports.muteConversation = async (req, res) => {
+    try {
+        await chatService.muteConversation(req.params.id, req.user.id);
+        return res.json({ success: true, message: "Muted." });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.unmuteConversation = async (req, res) => {
+    try {
+        await chatService.unmuteConversation(req.params.id, req.user.id);
+        return res.json({ success: true, message: "Unmuted." });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.archiveConversation = async (req, res) => {
+    try {
+        await chatService.archiveConversation(req.params.id, req.user.id);
+        return res.json({ success: true, message: "Archived." });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.unarchiveConversation = async (req, res) => {
+    try {
+        await chatService.unarchiveConversation(req.params.id, req.user.id);
+        return res.json({ success: true, message: "Unarchived." });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Cross-conversation search (Phase 8, UI/UX remediation).
+exports.searchAllConversations = async (req, res) => {
+    try {
+        const results = await chatService.searchAllConversations(req.user.id, req.query.q);
+        return res.json({ success: true, data: results });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
     }
 };

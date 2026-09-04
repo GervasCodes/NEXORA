@@ -11,6 +11,8 @@ const kycService = require("../kyc/kyc.service");
 const pickupPointService = require("../pickupPoint/pickupPoint.service");
 const referralService = require("../referral/referral.service");
 const businessService = require("../business/business.service");
+const buyerAddressService = require("../buyerAddress/buyerAddress.service");
+const couponService = require("../coupon/coupon.service");
 const logger = require("../../utils/logger").child({ module: "order" });
 const Sentry = require("../../config/sentry");
 const {
@@ -60,6 +62,14 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const products = await cartRepository.findProductsByIds(productIds);
     const productsById = new Map(products.map((p) => [p.id, p]));
 
+    // Variants (Phase 2 continuation, UI/UX remediation) - same batched
+    // fetch shape as products above, only for the line items that
+    // actually have one (variant_id is the 0 sentinel otherwise - see
+    // cart.repository.js's comment).
+    const variantIds = [...new Set(cart.filter((item) => item.variant_id).map((item) => item.variant_id))];
+    const variants = variantIds.length ? await cartRepository.findVariantsByIds(variantIds) : [];
+    const variantsById = new Map(variants.map((v) => [v.id, v]));
+
     for (const item of cart) {
         const product = productsById.get(item.product_id);
 
@@ -71,8 +81,14 @@ exports.checkout = async (buyerId, shippingInfo) => {
             throw new Error(`"${item.name}" is no longer available`);
         }
 
-        if (item.quantity > product.stock) {
-            throw new Error(`Only ${product.stock} of "${item.name}" left in stock`);
+        const variant = item.variant_id ? variantsById.get(item.variant_id) : null;
+        if (item.variant_id && !variant) {
+            throw new Error(`"${item.name}" - the selected option is no longer available`);
+        }
+
+        const availableStock = variant ? variant.stock : product.stock;
+        if (item.quantity > availableStock) {
+            throw new Error(`Only ${availableStock} of "${item.name}"${variant ? " (selected option)" : ""} left in stock`);
         }
 
         // B2B / bulk ordering (Phase Q7) - the best bulk tier this line
@@ -82,13 +98,19 @@ exports.checkout = async (buyerId, shippingInfo) => {
         // behind business-account verification), computed fresh at
         // checkout rather than trusting whatever price the cart itself
         // was showing (cart quantities can change after a product was
-        // first added).
+        // first added). A variant's price_delta always applies on top,
+        // whether the base price came from a bulk tier or the regular/
+        // discount price - it's an adjustment for the specific
+        // combination selected, not an alternative to bulk pricing.
         const bulkUnitPrice = await businessService.getBulkUnitPrice(item.product_id, item.quantity);
-        const unitPrice = bulkUnitPrice ?? (item.discount_price ?? item.price);
+        const basePrice = bulkUnitPrice ?? (item.discount_price ?? item.price);
+        const unitPrice = variant ? Number((basePrice + Number(variant.price_delta || 0)).toFixed(2)) : basePrice;
         const subtotal = Number((unitPrice * item.quantity).toFixed(2));
 
         const cartItem = {
             product_id: item.product_id,
+            variant_id: variant ? variant.id : null,
+            variant_label: variant ? Object.entries(variant.options).map(([k, v]) => `${k}: ${v}`).join(", ") : null,
             seller_id: item.seller_id,
             name: item.name,
             quantity: item.quantity,
@@ -129,6 +151,29 @@ exports.checkout = async (buyerId, shippingInfo) => {
         };
     }
 
+    // Saved address book (Phase 1, UI/UX remediation) - same idea as the
+    // pickup-point substitution just above: re-fetch the authoritative
+    // saved address server-side (rather than trusting whatever text the
+    // client copied into shipping_address) so an address the buyer no
+    // longer owns, or already deleted, can't be used. Only applies when
+    // no pickup point was chosen - pickup point and saved home address
+    // are mutually exclusive delivery destinations, and pickup already
+    // won above if both were somehow submitted.
+    let buyerAddressId = null;
+    if (!pickupPointId && shippingInfo.address_id) {
+        const savedAddress = await buyerAddressService.assertOwnedAndGet(shippingInfo.address_id, buyerId);
+        buyerAddressId = savedAddress.id;
+        shippingInfo = {
+            ...shippingInfo,
+            shipping_address: savedAddress.address,
+            shipping_city: savedAddress.city,
+            shipping_region: savedAddress.region,
+            shipping_phone: savedAddress.phone,
+            delivery_lat: savedAddress.latitude,
+            delivery_lng: savedAddress.longitude
+        };
+    }
+
     const wantsBuyerProtection = Boolean(shippingInfo.buyer_protection_addon);
     const buyerProtectionFee = wantsBuyerProtection ? calculateBuyerProtectionFee(totalAmount) : 0;
 
@@ -140,7 +185,20 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const pointsToRedeem = Number(shippingInfo.loyalty_points_redeemed) || 0;
     const { pointsRedeemed, discountAmount: loyaltyDiscount } = await referralService.quoteRedemption(buyerId, pointsToRedeem);
 
-    const roundedTotal = Number((totalAmount + buyerProtectionFee - loyaltyDiscount).toFixed(2));
+    // Coupon code (Phase 1, UI/UX remediation) - same quote-then-commit
+    // sequencing as loyalty points above, for the same reason: a
+    // checkout that fails after this point should never burn the code's
+    // one-per-buyer redemption. Quoted against the pre-discount cart
+    // subtotal (totalAmount), not the buyer-protection-inclusive total,
+    // so a coupon's min_order_amount reflects what's actually in the
+    // cart rather than an add-on the buyer may not even have selected.
+    const { coupon, discountAmount: couponDiscount } = await couponService.quote(
+        shippingInfo.coupon_code,
+        buyerId,
+        totalAmount
+    );
+
+    const roundedTotal = Number((totalAmount + buyerProtectionFee - loyaltyDiscount - couponDiscount).toFixed(2));
 
     // Progressive KYC (Phase Q1): a buyer's tier caps how large a single
     // order can be - see kyc.service.js#enforceOrderLimit. Checked here,
@@ -151,6 +209,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
 
     const buyerProtection = { addon: wantsBuyerProtection, fee: buyerProtectionFee };
     const loyalty = { pointsRedeemed, discountAmount: loyaltyDiscount };
+    const couponInfo = { couponId: coupon?.id ?? null, discountAmount: couponDiscount };
 
     let orderId;
     let vendorCount = 1;
@@ -164,7 +223,9 @@ exports.checkout = async (buyerId, shippingInfo) => {
             roundedTotal,
             buyerProtection,
             pickupPointId,
-            loyalty
+            loyalty,
+            buyerAddressId,
+            couponInfo
         );
         orderId = parentOrderId;
         vendorCount = bySeller.size;
@@ -177,7 +238,9 @@ exports.checkout = async (buyerId, shippingInfo) => {
             roundedTotal,
             buyerProtection,
             pickupPointId,
-            loyalty
+            loyalty,
+            buyerAddressId,
+            couponInfo
         );
     }
 
@@ -186,6 +249,11 @@ exports.checkout = async (buyerId, shippingInfo) => {
     // and-forget is NOT appropriate here (unlike most other post-order
     // side effects in this file), so this is awaited before continuing.
     await referralService.commitRedemption(buyerId, pointsRedeemed);
+
+    // Same quote-then-commit reasoning as loyalty points above - the
+    // code's one-per-buyer redemption is only recorded once the order
+    // genuinely exists.
+    await couponService.commitRedemption(coupon?.id, buyerId, orderId, couponDiscount);
 
     // Affiliate attribution (Phase Q7) - fire-and-forget, resolves to a
     // no-op if no click_token was submitted or it doesn't check out (see
@@ -231,12 +299,33 @@ exports.checkout = async (buyerId, shippingInfo) => {
         orderNumber,
         totalAmount: roundedTotal,
         isMultiVendor,
-        vendorCount
+        vendorCount,
+        couponDiscount
     };
 };
 
-exports.getMyOrders = async (buyerId) => {
-    return orderRepository.findOrdersByBuyer(buyerId);
+exports.getMyOrders = async (buyerId, query = {}) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 10));
+
+    const { orders, total } = await orderRepository.findOrdersByBuyer(buyerId, {
+        status: query.status || null,
+        from: query.from || null,
+        to: query.to || null,
+        q: query.q || null,
+        page,
+        limit
+    });
+
+    return {
+        orders,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit))
+        }
+    };
 };
 
 exports.getOrderDetail = async (orderId, buyerId) => {
@@ -341,8 +430,11 @@ exports.autoCancelStaleOrder = async (order) => {
     });
 };
 
-exports.getSellerOrders = async (sellerId) => {
-    return orderRepository.findOrdersBySeller(sellerId);
+exports.getSellerOrders = async (sellerId, query = {}) => {
+    return orderRepository.findOrdersBySeller(sellerId, {
+        status: query.status || null,
+        q: query.q || null
+    });
 };
 
 exports.getSellerOrderDetail = async (orderId, sellerId) => {

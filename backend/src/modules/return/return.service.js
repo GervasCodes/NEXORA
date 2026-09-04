@@ -296,7 +296,29 @@ exports.getDetail = async (returnId, userId, role) => {
     return getFullReturn(returnId);
 };
 
-exports.getMyReturns = async (buyerId) => returnRepository.findByBuyer(buyerId);
+exports.getMyReturns = async (buyerId, query = {}) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 10));
+
+    const { returns, total } = await returnRepository.findByBuyer(buyerId, {
+        status: query.status || null,
+        from: query.from || null,
+        to: query.to || null,
+        q: query.q || null,
+        page,
+        limit
+    });
+
+    return {
+        returns,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit))
+        }
+    };
+};
 exports.getSellerReturns = async (sellerId) => returnRepository.findBySeller(sellerId);
 exports.getAllReturns = async (filter) => returnRepository.findAll(filter);
 

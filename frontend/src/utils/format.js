@@ -1,5 +1,5 @@
 
-// Phase 2 (Remediation, E3): this always renders the raw settlement amount
+// (Remediation, E3): this always renders the raw settlement amount
 // in TZS, regardless of the buyer's chosen display currency. It's the right
 // choice for seller/admin/finance surfaces where the number needs to match
 // what actually settles (wallets, payouts, order totals seen by ops) - but
@@ -15,7 +15,7 @@ export const formatMoney = (amount) => {
     return `TZS ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 };
 
-// Phase 1 (Remediation, E4): the four date formatters below used to
+// (Remediation, E4): the four date formatters below used to
 // hardcode "en-GB" regardless of the language the user has chosen in
 // LanguageContext, so Kiswahili speakers still got English-formatted
 // dates everywhere. Rather than adding a `language` argument to all
@@ -68,4 +68,24 @@ export const formatMonthYear = (dateString) => {
         month: "short",
         year: "numeric"
     });
+};
+
+// Phase 9 (UI/UX remediation) - "2 days left" / "5 hours left" style
+// countdown for GroupBuys, where a deadline is the whole point (a
+// buyer deciding whether to join cares how much time is left far more
+// than the exact deadline timestamp). Returns null once the deadline
+// has passed, so callers can fall back to a plain status label instead
+// of ever showing "-3 hours left".
+export const formatTimeRemaining = (dateString) => {
+    const diffMs = new Date(dateString).getTime() - Date.now();
+    if (diffMs <= 0) return null;
+
+    const minutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days >= 1) return `${days} day${days === 1 ? "" : "s"} left`;
+    if (hours >= 1) return `${hours} hour${hours === 1 ? "" : "s"} left`;
+    if (minutes >= 1) return `${minutes} minute${minutes === 1 ? "" : "s"} left`;
+    return "Ending soon";
 };

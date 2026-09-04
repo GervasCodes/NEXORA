@@ -23,6 +23,11 @@ const uniqueSlug = async (title) => {
 
 exports.listPublished = async (filter) => contentRepository.findPublished(filter);
 
+// Phase 9 (UI/UX remediation) - category filter chips + related guides.
+exports.listCategoriesInUse = async () => contentRepository.findCategoriesInUse();
+
+exports.getRelated = async (article) => contentRepository.findRelated(article.id, article.category_id);
+
 exports.getBySlug = async (slug) => contentRepository.findBySlug(slug);
 
 exports.listAllAdmin = async () => contentRepository.findAllAdmin();

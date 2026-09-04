@@ -9,7 +9,9 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
+import Breadcrumbs from "../components/ui/Breadcrumbs";
 
 
 // Exported so Footer.jsx (Phase 5, Visual Polish & Metadata) can reuse it
@@ -63,11 +65,45 @@ function IdentityIcon({ className = "" }) {
 export default function StorePage() {
     const { slug } = useParams();
     const { t } = useLanguage();
+    const { user } = useAuth();
     const [store, setStore] = useState(null);
     const [loading, setLoading] = useState(true);
     const [catalogFilters, setCatalogFilters] = useState({});
     const [productCount, setProductCount] = useState(null);
     const [collections, setCollections] = useState([]);
+
+    // Follow store (Phase 6, UI/UX remediation).
+    const [followStatus, setFollowStatus] = useState(null);
+    const [followBusy, setFollowBusy] = useState(false);
+
+    useEffect(() => {
+        if (user?.role !== "buyer") {
+            setFollowStatus(null);
+            return;
+        }
+        api.get(`/stores/${slug}/follow-status`)
+            .then(({ data }) => setFollowStatus(data.data))
+            .catch(() => {});
+    }, [slug, user]);
+
+    const handleToggleFollow = async () => {
+        setFollowBusy(true);
+        try {
+            if (followStatus?.following) {
+                await api.delete(`/stores/${slug}/follow`);
+                setFollowStatus((prev) => ({ following: false, followerCount: Math.max(0, (prev?.followerCount || 1) - 1) }));
+            } else {
+                await api.post(`/stores/${slug}/follow`);
+                setFollowStatus((prev) => ({ following: true, followerCount: (prev?.followerCount || 0) + 1 }));
+            }
+        } catch {
+            // A failed follow/unfollow just leaves the button in its
+            // current state - the click simply didn't take effect,
+            // which is self-evident without a dedicated error message.
+        } finally {
+            setFollowBusy(false);
+        }
+    };
 
     const [reviews, setReviews] = useState([]);
     const [reviewSummary, setReviewSummary] = useState({ average_rating: null, review_count: 0 });
@@ -157,6 +193,9 @@ export default function StorePage() {
                 image={store.store_banner || store.store_logo}
                 type="website"
             />
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
+                <Breadcrumbs items={[{ label: t("nav.home"), href: "/" }, { label: store.store_name }]} />
+            </div>
             <div className="h-40 sm:h-56 bg-line/40 overflow-hidden">
                 {store.store_banner ? (
                     <img src={store.store_banner} alt="" className="w-full h-full object-cover" />
@@ -221,6 +260,21 @@ export default function StorePage() {
                             </div>
                         )}
                     </div>
+
+                    {user?.role === "buyer" && (
+                        <button
+                            type="button"
+                            onClick={handleToggleFollow}
+                            disabled={followBusy}
+                            className={`ml-auto shrink-0 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 ${
+                                followStatus?.following
+                                    ? "border border-line text-ink hover:border-coral hover:text-coral"
+                                    : "bg-ink text-paper hover:bg-abyss"
+                            }`}
+                        >
+                            {followStatus?.following ? t("store.following") : t("store.follow")}
+                        </button>
+                    )}
                 </div>
 
                 {store.store_description && (

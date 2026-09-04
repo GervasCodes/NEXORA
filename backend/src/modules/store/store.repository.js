@@ -5,6 +5,11 @@
 // primary-pool write function left in this file to justify also
 // importing ../../config/db - dbRead alone covers everything here.
 const dbRead = require("../../config/dbRead");
+// Phase 6 (UI/UX remediation) - store follows are this file's first
+// actual writes (everything above was read-only, see the file's own
+// top comment on why only dbRead was imported before). Reads stay on
+// dbRead; only the follow/unfollow writes below use the primary pool.
+const db = require("../../config/db");
 
 // Public store profile - Phase 5A (basics) + Phase 5B (trust info).
 //
@@ -171,4 +176,66 @@ exports.findCollectionsBySlug = async (slug) => {
     }
 
     return collections;
+};
+
+// Store follows (Phase 6, UI/UX remediation).
+exports.follow = async (followerId, storeUserId) => {
+    await db.query(
+        "INSERT IGNORE INTO store_follows (follower_id, store_user_id) VALUES (?, ?)",
+        [followerId, storeUserId]
+    );
+};
+
+exports.unfollow = async (followerId, storeUserId) => {
+    await db.query(
+        "DELETE FROM store_follows WHERE follower_id = ? AND store_user_id = ?",
+        [followerId, storeUserId]
+    );
+};
+
+exports.isFollowing = async (followerId, storeUserId) => {
+    const [rows] = await dbRead.query(
+        "SELECT id FROM store_follows WHERE follower_id = ? AND store_user_id = ? LIMIT 1",
+        [followerId, storeUserId]
+    );
+    return rows.length > 0;
+};
+
+exports.countFollowers = async (storeUserId) => {
+    const [rows] = await dbRead.query(
+        "SELECT COUNT(*) AS count FROM store_follows WHERE store_user_id = ?",
+        [storeUserId]
+    );
+    return rows[0].count;
+};
+
+// Every buyer following this store - used to fan out a "new listing"
+// notification through the existing notificationService pipeline (see
+// store.service.js#notifyFollowersOfNewListing), not a second dispatch
+// mechanism.
+exports.findFollowerIds = async (storeUserId) => {
+    const [rows] = await dbRead.query(
+        "SELECT follower_id FROM store_follows WHERE store_user_id = ?",
+        [storeUserId]
+    );
+    return rows.map((r) => r.follower_id);
+};
+
+// Phase 3 (UI/UX remediation) - lightweight store search for the global
+// search box's suggestions dropdown, not a full store directory/browse
+// page (there isn't one yet - see this file's own comment above
+// findPublicBySlug anticipating exactly this kind of addition). Plain
+// LIKE on store_name only, same "small curated set, no fulltext needed"
+// reasoning as content.repository.js's guide search.
+exports.search = async ({ search, limit = 5 }) => {
+    const [rows] = await dbRead.query(
+        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified
+         FROM seller_profiles sp
+         JOIN users u ON u.id = sp.user_id AND u.is_active = 1
+         WHERE sp.store_name LIKE ?
+         ORDER BY sp.is_verified DESC, sp.store_name ASC
+         LIMIT ?`,
+        [`%${search}%`, limit]
+    );
+    return rows;
 };

@@ -139,7 +139,8 @@ describe("order.service.checkout", () => {
             orderNumber,
             totalAmount: 2500,
             isMultiVendor: false,
-            vendorCount: 1
+            vendorCount: 1,
+            couponDiscount: 0
         });
     });
 
@@ -179,7 +180,8 @@ describe("order.service.checkout", () => {
             orderNumber: expect.any(String),
             totalAmount: 1800,
             isMultiVendor: true,
-            vendorCount: 2
+            vendorCount: 2,
+            couponDiscount: 0
         });
     });
 
@@ -256,12 +258,22 @@ describe("order.service.checkout", () => {
 
 describe("order.service.getMyOrders", () => {
     it("delegates to the repository for the given buyer", async () => {
-        orderRepository.findOrdersByBuyer.mockResolvedValue([{ id: 1 }]);
+        orderRepository.findOrdersByBuyer.mockResolvedValue({ orders: [{ id: 1 }], total: 1 });
 
         const result = await orderService.getMyOrders(7);
 
-        expect(orderRepository.findOrdersByBuyer).toHaveBeenCalledWith(7);
-        expect(result).toEqual([{ id: 1 }]);
+        expect(orderRepository.findOrdersByBuyer).toHaveBeenCalledWith(7, {
+            status: null,
+            from: null,
+            to: null,
+            q: null,
+            page: 1,
+            limit: 10
+        });
+        expect(result).toEqual({
+            orders: [{ id: 1 }],
+            pagination: { page: 1, limit: 10, total: 1, totalPages: 1 }
+        });
     });
 });
 
@@ -432,7 +444,10 @@ describe("order.service.getSellerOrders", () => {
 
         const result = await orderService.getSellerOrders(10);
 
-        expect(orderRepository.findOrdersBySeller).toHaveBeenCalledWith(10);
+        expect(orderRepository.findOrdersBySeller).toHaveBeenCalledWith(10, {
+            status: null,
+            q: null
+        });
         expect(result).toEqual([{ id: 1 }]);
     });
 });

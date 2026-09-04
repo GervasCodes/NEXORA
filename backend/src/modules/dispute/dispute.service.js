@@ -206,7 +206,29 @@ exports.getDisputeDetail = async (disputeId, userId, role) => {
     return getFullDispute(disputeId);
 };
 
-exports.getMyDisputes = async (buyerId) => disputeRepository.findByBuyer(buyerId);
+exports.getMyDisputes = async (buyerId, query = {}) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 10));
+
+    const { disputes, total } = await disputeRepository.findByBuyer(buyerId, {
+        status: query.status || null,
+        from: query.from || null,
+        to: query.to || null,
+        q: query.q || null,
+        page,
+        limit
+    });
+
+    return {
+        disputes,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit))
+        }
+    };
+};
 
 exports.getSellerDisputes = async (sellerId) => disputeRepository.findBySeller(sellerId);
 

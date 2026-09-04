@@ -27,7 +27,13 @@ exports.updateSettingsValidation = [
     body("dataSaverEnabled")
         .optional()
         .isBoolean()
-        .withMessage("dataSaverEnabled must be a boolean")
+        .withMessage("dataSaverEnabled must be a boolean"),
+
+    // Phase 10 (UI/UX remediation) - notification preferences.
+    body("notifyOrderUpdates").optional().isBoolean().withMessage("notifyOrderUpdates must be a boolean"),
+    body("notifyMessages").optional().isBoolean().withMessage("notifyMessages must be a boolean"),
+    body("notifyPriceStockAlerts").optional().isBoolean().withMessage("notifyPriceStockAlerts must be a boolean"),
+    body("notifyStoreUpdates").optional().isBoolean().withMessage("notifyStoreUpdates must be a boolean")
 ];
 
 exports.verifyPasswordChangeOtpValidation = [

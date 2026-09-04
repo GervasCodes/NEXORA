@@ -5,6 +5,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import PasswordStrengthMeter from "../components/ui/PasswordStrengthMeter";
 import PageMeta from "../components/PageMeta";
 
 const initialForm = {
@@ -322,15 +323,27 @@ export default function Register() {
                     </p>
                 </div>
 
-                <Input
-                    label={t("auth.passwordLabel")}
-                    type="password"
-                    required
-                    minLength={8}
-                    value={form.password}
-                    onChange={update("password")}
-                    hint={t("auth.passwordHint")}
-                />
+                <div>
+                    <Input
+                        label={t("auth.passwordLabel")}
+                        type="password"
+                        required
+                        minLength={8}
+                        value={form.password}
+                        onChange={update("password")}
+                        hint={t("auth.passwordHint")}
+                        showPasswordLabel={t("auth.showPassword")}
+                        hidePasswordLabel={t("auth.hidePassword")}
+                    />
+                    <PasswordStrengthMeter
+                        password={form.password}
+                        labels={{
+                            weak: t("auth.passwordStrengthWeak"),
+                            fair: t("auth.passwordStrengthFair"),
+                            strong: t("auth.passwordStrengthStrong")
+                        }}
+                    />
+                </div>
 
                 <div>
                     <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>

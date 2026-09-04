@@ -3,11 +3,13 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
+import { useWishlist } from "../context/WishlistContext";
 import { useLanguage } from "../context/LanguageContext";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { formatDate } from "../utils/format";
 import Button from "../components/ui/Button";
+import Breadcrumbs from "../components/ui/Breadcrumbs";
 import PageMeta from "../components/PageMeta";
 
 const PRICING_LABELS = {
@@ -202,6 +204,7 @@ export default function ServiceDetail() {
     const { format } = useCurrency();
     const { slug } = useParams();
     const { user } = useAuth();
+    const wishlist = useWishlist();
     const navigate = useNavigate();
 
     const [service, setService] = useState(null);
@@ -286,6 +289,16 @@ export default function ServiceDetail() {
                 image={current.media_type === "image" ? current.media_url : undefined}
                 type="product"
             />
+            <Breadcrumbs
+                items={[
+                    { label: t("nav.home"), href: "/" },
+                    { label: t("nav.services"), href: "/services" },
+                    ...(service.category_slug
+                        ? [{ label: service.category_name, href: `/services/category/${service.category_slug}` }]
+                        : []),
+                    { label: service.title }
+                ]}
+            />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
@@ -336,7 +349,29 @@ export default function ServiceDetail() {
                         )
                     )}
 
-                    <h1 className="font-display text-2xl sm:text-3xl mb-2">{service.title}</h1>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                        <h1 className="font-display text-2xl sm:text-3xl">{service.title}</h1>
+                        {user?.role === "buyer" && (
+                            <button
+                                type="button"
+                                onClick={() => wishlist?.toggle(service.id, "service")}
+                                aria-label={wishlist?.isSaved(service.id, "service") ? "Remove from wishlist" : "Save to wishlist"}
+                                aria-pressed={wishlist?.isSaved(service.id, "service")}
+                                className="w-9 h-9 rounded-full border border-line flex items-center justify-center hover:border-ink transition-colors focus-ring shrink-0"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill={wishlist?.isSaved(service.id, "service") ? "#e4572e" : "none"}
+                                    stroke={wishlist?.isSaved(service.id, "service") ? "#e4572e" : "currentColor"}
+                                    strokeWidth="2"
+                                    className="w-4 h-4"
+                                >
+                                    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
 
                     <Link to={`/stores/${service.store_slug}`} className="text-sm text-teal hover:underline">
                         {service.store_name}

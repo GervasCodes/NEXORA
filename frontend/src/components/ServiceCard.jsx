@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { StarIcon } from "./Icons";
 import { useCurrency } from "../context/CurrencyContext";
 import { useDataSaver } from "../context/DataSaverContext";
+import { useWishlist } from "../context/WishlistContext";
+import { useAuth } from "../context/AuthContext";
 
 // Human-readable label per pricing_model (migration 062). Kept here
 // rather than duplicated across ServiceCard/ServiceDetail.
@@ -17,9 +19,18 @@ const PRICING_LABELS = {
 function ServiceCard({ service, layout = "grid" }) {
     const { format } = useCurrency();
     const dataSaver = useDataSaver();
+    const wishlist = useWishlist();
+    const { user } = useAuth();
     const hasDiscount = service.discount_price && Number(service.discount_price) < Number(service.base_price);
     const isList = layout === "list";
     const priceSuffix = PRICING_LABELS[service.pricing_model] || "";
+    const saved = wishlist?.isSaved(service.id, "service");
+
+    const handleToggleSave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        wishlist?.toggle(service.id, "service");
+    };
 
     const media = (
         <div className={`bg-line/40 rounded-md overflow-hidden relative ${isList ? "w-24 h-24 sm:w-32 sm:h-32 shrink-0" : "aspect-square mb-3"}`}>
@@ -45,6 +56,31 @@ function ServiceCard({ service, layout = "grid" }) {
                     Verified
                 </span>
             ) : null}
+
+            {/* Save for later (Phase 5, UI/UX remediation) - same
+                affordance and styling ProductCard.jsx already has, so
+                products and services feel like equal citizens of the
+                marketplace instead of only products being saveable. */}
+            {user?.role === "buyer" && (
+                <button
+                    type="button"
+                    onClick={handleToggleSave}
+                    aria-label={saved ? "Remove from saved" : "Save for later"}
+                    aria-pressed={saved}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full glass-strong flex items-center justify-center hover:scale-110 transition-transform"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill={saved ? "#e4572e" : "none"}
+                        stroke={saved ? "#e4572e" : "currentColor"}
+                        strokeWidth="2"
+                        className="w-3.5 h-3.5"
+                    >
+                        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 

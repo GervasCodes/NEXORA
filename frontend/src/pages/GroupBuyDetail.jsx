@@ -6,6 +6,7 @@ import PageLoader from "../components/PageLoader";
 import PhoneInput from "../components/PhoneInput";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
+import { formatTimeRemaining } from "../utils/format";
 
 export default function GroupBuyDetail() {
     const { id } = useParams();
@@ -27,6 +28,27 @@ export default function GroupBuyDetail() {
     };
 
     useEffect(load, [id]);
+
+    // Share (Phase 9, UI/UX remediation) - a group buy inherently
+    // depends on the buyer recruiting others to hit the threshold, so
+    // "share this" is core to the feature, not a nice-to-have - reuses
+    // the exact native-share/WhatsApp pattern Loyalty.jsx's referral
+    // link already established in Phase 6.
+    const shareUrl = window.location.href;
+    const shareMessage = group
+        ? `Join this group buy for ${group.product_name} on NEXORA - the more of us that join, the cheaper it gets: ${shareUrl}`
+        : "";
+
+    const handleNativeShare = async () => {
+        if (!navigator.share) return;
+        try {
+            await navigator.share({ title: group?.product_name, text: shareMessage, url: shareUrl });
+        } catch {
+            // Cancelling the native share sheet throws - not an error.
+        }
+    };
+
+    const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
 
     const join = async () => {
         setBusy(true);
@@ -80,12 +102,38 @@ export default function GroupBuyDetail() {
                     <p className="text-ash line-through">{format(group.product_price)}</p>
                 </div>
                 <div className="h-2 bg-line rounded-full overflow-hidden mb-2">
-                    <div className="h-full bg-teal" style={{ width: `${progress}%` }} />
+                    <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
                 </div>
                 <p className="text-sm text-ash">{group.participant_count}/{group.min_participants} joined</p>
                 <p className="text-sm text-ash mt-1">
-                    {group.status === "open" ? `Ends ${new Date(group.deadline).toLocaleString()}` : `Status: ${group.status}`}
+                    {group.status === "open"
+                        ? (formatTimeRemaining(group.deadline) || `Ends ${new Date(group.deadline).toLocaleString()}`)
+                        : `Status: ${group.status}`}
                 </p>
+
+                {group.status === "open" && (
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-line">
+                        <a
+                            href={whatsappShareUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 bg-[#25D366] text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:opacity-90 transition-opacity"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.4.7-.4h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.2 2.4 1.5 2.7 1.7.3.2.5.1.6-.1l1-1.1c.2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.1 1.3Z" />
+                            </svg>
+                            Share on WhatsApp
+                        </a>
+                        {navigator.share && (
+                            <button
+                                onClick={handleNativeShare}
+                                className="border border-line px-3 py-1.5 rounded-md text-xs font-semibold hover:border-ink transition-colors"
+                            >
+                                Share…
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {error && <p className="text-sm text-coral mb-4">{error}</p>}

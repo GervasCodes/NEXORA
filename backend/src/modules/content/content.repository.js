@@ -1,23 +1,82 @@
 const db = require("../../config/db");
 
-exports.findPublished = async ({ categoryId, limit = 20, offset = 0 } = {}) => {
-    const conditions = ["status = 'published'"];
+exports.findPublished = async ({ categoryId, search, limit = 20, offset = 0 } = {}) => {
+    const conditions = ["a.status = 'published'"];
     const params = [];
     if (categoryId) {
-        conditions.push("category_id = ?");
+        conditions.push("a.category_id = ?");
         params.push(categoryId);
+    }
+    // Phase 3 (UI/UX remediation) - plain LIKE, not full-text: guides are
+    // a small, editorially-curated set (unlike products/services), so
+    // the fulltext-index machinery buildProductSearchPlan wraps around
+    // for large catalogs would be overkill here.
+    if (search) {
+        conditions.push("(a.title LIKE ? OR a.excerpt LIKE ?)");
+        params.push(`%${search}%`, `%${search}%`);
     }
     params.push(limit, offset);
 
     const [rows] = await db.query(
-        `SELECT id, title, slug, excerpt, cover_image_url, category_id, published_at
-        FROM content_articles
+        `SELECT a.id, a.title, a.slug, a.excerpt, a.cover_image_url, a.category_id, a.published_at,
+                c.name AS category_name, c.slug AS category_slug
+        FROM content_articles a
+        LEFT JOIN categories c ON c.id = a.category_id
         WHERE ${conditions.join(" AND ")}
-        ORDER BY published_at DESC
+        ORDER BY a.published_at DESC
         LIMIT ? OFFSET ?`,
         params
     );
     return rows;
+};
+
+// Phase 9 (UI/UX remediation) - the distinct set of categories that
+// actually have at least one published guide, for Guides.jsx's filter
+// chips - scoped this way (not the full product categories list) so a
+// buyer is never shown a filter that would return zero guides.
+exports.findCategoriesInUse = async () => {
+    const [rows] = await db.query(
+        `SELECT DISTINCT c.id, c.name, c.slug
+        FROM content_articles a
+        JOIN categories c ON c.id = a.category_id
+        WHERE a.status = 'published'
+        ORDER BY c.name ASC`
+    );
+    return rows;
+};
+
+// Related guides (Phase 9, UI/UX remediation) - other published guides
+// in the same category, excluding the current one. Falls back to
+// "most recent other guides" when the current article has no category
+// (category_id is nullable) or is the only one in its category, so
+// GuideDetail.jsx's related section is never empty just because of
+// categorization, only when there are genuinely no other guides at all.
+exports.findRelated = async (articleId, categoryId, limit = 3) => {
+    const [sameCategory] = categoryId
+        ? await db.query(
+            `SELECT id, title, slug, excerpt, cover_image_url
+            FROM content_articles
+            WHERE status = 'published' AND category_id = ? AND id != ?
+            ORDER BY published_at DESC
+            LIMIT ?`,
+            [categoryId, articleId, limit]
+        )
+        : [[]];
+
+    if (sameCategory.length >= limit) {
+        return sameCategory;
+    }
+
+    const [fallback] = await db.query(
+        `SELECT id, title, slug, excerpt, cover_image_url
+        FROM content_articles
+        WHERE status = 'published' AND id != ? AND id NOT IN (?)
+        ORDER BY published_at DESC
+        LIMIT ?`,
+        [articleId, sameCategory.length ? sameCategory.map((a) => a.id) : [0], limit - sameCategory.length]
+    );
+
+    return [...sameCategory, ...fallback];
 };
 
 exports.findBySlug = async (slug) => {

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
+import { useCompare } from "../context/CompareContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
 import { useDataSaver } from "../context/DataSaverContext";
@@ -14,12 +15,14 @@ function ProductCard({ product, layout = "grid" }) {
     const { format } = useCurrency();
     const { user } = useAuth();
     const wishlist = useWishlist();
+    const compare = useCompare();
     const cart = useCart();
     const toast = useToast();
     const dataSaver = useDataSaver();
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const stock = Number(product.stock);
     const saved = wishlist?.isSaved(product.id);
+    const comparing = compare?.isComparing(product.id);
     const isList = layout === "list";
     const [adding, setAdding] = useState(false);
 
@@ -27,6 +30,12 @@ function ProductCard({ product, layout = "grid" }) {
         e.preventDefault();
         e.stopPropagation();
         wishlist?.toggle(product.id);
+    };
+
+    const handleToggleCompare = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        compare?.toggle(product);
     };
 
    
@@ -146,6 +155,22 @@ function ProductCard({ product, layout = "grid" }) {
         </div>
     );
 
+    const compareToggle = (
+        <label
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 text-xs text-ash mt-1.5 cursor-pointer w-fit"
+        >
+            <input
+                type="checkbox"
+                checked={comparing || false}
+                onChange={handleToggleCompare}
+                disabled={!comparing && compare?.count >= compare?.maxCompare}
+                className="accent-teal"
+            />
+            Compare
+        </label>
+    );
+
    
     
     const addToCartButton = user?.role === "buyer" && (isList ? stock > 0 : true) && (
@@ -173,6 +198,7 @@ function ProductCard({ product, layout = "grid" }) {
                     <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
                     {priceRow}
                     {ratingAndStock}
+                    {compareToggle}
                 </div>
 
                 {addToCartButton}
@@ -192,6 +218,7 @@ function ProductCard({ product, layout = "grid" }) {
 
             {priceRow}
             {ratingAndStock}
+            {compareToggle}
             {addToCartButton}
         </Link>
     );

@@ -7,6 +7,7 @@ exports.findById = async (userId) => {
                 account_verification_submitted_at, account_verification_reviewed_at,
                 language, theme, currency, is_active, created_at,
                 vehicle_type, vehicle_plate_number, whatsapp_order_updates, data_saver_enabled,
+                notify_order_updates, notify_messages, notify_price_stock_alerts, notify_store_updates,
                 referral_code, loyalty_points, business_account_status
         FROM users WHERE id = ?`,
         [userId]
@@ -68,7 +69,7 @@ exports.updatePhotoUrl = async (userId, photoUrl) => {
     );
 };
 
-exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled }) => {
+exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled, notifyOrderUpdates, notifyMessages, notifyPriceStockAlerts, notifyStoreUpdates }) => {
     const fields = [];
     const params = [];
 
@@ -76,6 +77,13 @@ exports.updateSettings = async (userId, { language, theme, currency, dataSaverEn
     if (theme !== undefined) { fields.push("theme = ?"); params.push(theme); }
     if (currency !== undefined) { fields.push("currency = ?"); params.push(currency); }
     if (dataSaverEnabled !== undefined) { fields.push("data_saver_enabled = ?"); params.push(dataSaverEnabled ? 1 : 0); }
+    // Phase 10 (UI/UX remediation) - notification preferences, same
+    // "field present in the payload -> included in the UPDATE, absent
+    // -> left untouched" pattern the fields above already use.
+    if (notifyOrderUpdates !== undefined) { fields.push("notify_order_updates = ?"); params.push(notifyOrderUpdates ? 1 : 0); }
+    if (notifyMessages !== undefined) { fields.push("notify_messages = ?"); params.push(notifyMessages ? 1 : 0); }
+    if (notifyPriceStockAlerts !== undefined) { fields.push("notify_price_stock_alerts = ?"); params.push(notifyPriceStockAlerts ? 1 : 0); }
+    if (notifyStoreUpdates !== undefined) { fields.push("notify_store_updates = ?"); params.push(notifyStoreUpdates ? 1 : 0); }
 
     if (fields.length === 0) return;
 

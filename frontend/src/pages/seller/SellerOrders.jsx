@@ -7,6 +7,9 @@ import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
+import SavedFilters from "../../components/seller/SavedFilters";
+
+const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
 
 export default function SellerOrders() {
     const { t } = useLanguage();
@@ -17,12 +20,33 @@ export default function SellerOrders() {
     const toast = useToast();
     const [shipChoice, setShipChoice] = useState({}); // orderId -> agentId or "" for platform
 
+    // Filters + saved filter views (Phase 11, UI/UX remediation) - this
+    // page previously fetched every order with no filtering at all.
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("");
+
+    useEffect(() => {
+        const handle = setTimeout(() => setSearch(searchInput), 400);
+        return () => clearTimeout(handle);
+    }, [searchInput]);
+
     const load = () => {
-        api.get("/orders/seller/list").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
+        setLoading(true);
+        const params = {};
+        if (search.trim()) params.q = search.trim();
+        if (status) params.status = status;
+        api.get("/orders/seller/list", { params }).then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
         api.get("/seller/delivery-agents").then(({ data }) => setRoster(data.data)).catch(() => {});
     };
 
-    useEffect(load, []);
+    useEffect(load, [search, status]);
+
+    const applySavedFilters = (filters) => {
+        setSearchInput(filters.search || "");
+        setSearch(filters.search || "");
+        setStatus(filters.status || "");
+    };
 
     const updateStatus = async (orderId, status, agentId) => {
         setBusyId(orderId);
@@ -46,8 +70,44 @@ export default function SellerOrders() {
             <PageMeta title="Orders" noIndex />
             <h1 className="font-display text-2xl mb-6">{t("seller.orders.title")}</h1>
 
+            <SavedFilters
+                pageKey="seller_orders"
+                currentFilters={{ search, status }}
+                onApply={applySavedFilters}
+            />
 
-            {orders.length === 0 && <EmptyState title={t("seller.orders.empty")} />}
+            <div className="flex flex-wrap gap-3 mb-6">
+                <input
+                    type="text"
+                    placeholder="Search order number or product…"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="flex-1 min-w-[180px] sm:min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
+                />
+                <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
+                >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s} className="capitalize">{s}</option>
+                    ))}
+                </select>
+                {(search || status) && (
+                    <button
+                        onClick={() => { setSearchInput(""); setSearch(""); setStatus(""); }}
+                        className="text-xs text-ash underline hover:text-ink transition-colors"
+                    >
+                        {t("filters.clear")}
+                    </button>
+                )}
+            </div>
+
+
+            {orders.length === 0 && (
+                <EmptyState title={(search || status) ? "No orders match these filters" : t("seller.orders.empty")} />
+            )}
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((order) => (

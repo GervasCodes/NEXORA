@@ -263,8 +263,19 @@ describe("dispute.service read operations", () => {
     });
 
     it("getMyDisputes / getSellerDisputes / getAllDisputes delegate to the repository", async () => {
-        disputeRepository.findByBuyer.mockResolvedValue([{ id: 1 }]);
-        await expect(disputeService.getMyDisputes(5)).resolves.toEqual([{ id: 1 }]);
+        disputeRepository.findByBuyer.mockResolvedValue({ disputes: [{ id: 1 }], total: 1 });
+        await expect(disputeService.getMyDisputes(5)).resolves.toEqual({
+            disputes: [{ id: 1 }],
+            pagination: { page: 1, limit: 10, total: 1, totalPages: 1 }
+        });
+        expect(disputeRepository.findByBuyer).toHaveBeenCalledWith(5, {
+            status: null,
+            from: null,
+            to: null,
+            q: null,
+            page: 1,
+            limit: 10
+        });
 
         disputeRepository.findBySeller.mockResolvedValue([{ id: 2 }]);
         await expect(disputeService.getSellerDisputes(10)).resolves.toEqual([{ id: 2 }]);

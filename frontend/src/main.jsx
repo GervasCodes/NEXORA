@@ -13,6 +13,7 @@ import { CurrencyProvider } from "./context/CurrencyContext.jsx";
 import { DataSaverProvider } from "./context/DataSaverContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
+import { CompareProvider } from "./context/CompareContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { AIAssistantProvider } from "./context/AIAssistantContext.jsx";
 import "./index.css";
@@ -72,6 +73,7 @@ createRoot(document.getElementById("root")).render(
                                 <SocketProvider>
                                     <CartProvider>
                                         <WishlistProvider>
+                                            <CompareProvider>
                                             <ToastProvider>
                                                 <AIAssistantProvider>
                                                     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
@@ -79,6 +81,7 @@ createRoot(document.getElementById("root")).render(
                                                     </Sentry.ErrorBoundary>
                                                 </AIAssistantProvider>
                                             </ToastProvider>
+                                            </CompareProvider>
                                         </WishlistProvider>
                                     </CartProvider>
                                 </SocketProvider>

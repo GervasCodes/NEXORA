@@ -37,7 +37,7 @@ exports.getBookingById = async (req, res) => {
 
 exports.getMyBookings = async (req, res) => {
     try {
-        const bookings = await bookingService.getMyBookingsAsCustomer(req.user.id);
+        const bookings = await bookingService.getMyBookingsAsCustomer(req.user.id, req.query);
 
         return res.json({
             success: true,
@@ -96,6 +96,20 @@ exports.cancelBooking = async (req, res) => {
         await bookingService.cancelBooking(req.params.id, req.user.id);
 
         return res.json({ success: true, message: "Booking cancelled" });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase 7 (UI/UX remediation) - reschedule.
+exports.rescheduleBooking = async (req, res) => {
+    try {
+        const result = await bookingService.rescheduleBooking(
+            req.params.id, req.user.id, req.body.start_date, req.body.end_date
+        );
+
+        return res.json({ success: true, message: "Booking rescheduled", data: result });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

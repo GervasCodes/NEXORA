@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import CompareTray from "./components/CompareTray";
 import SplashScreen from "./components/SplashScreen";
 import SuspendedScreen from "./components/SuspendedScreen";
 import PageLoader from "./components/PageLoader";
@@ -50,6 +51,7 @@ const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
 const Saved = lazy(() => import("./pages/Saved"));
+const ComparePage = lazy(() => import("./pages/ComparePage"));
 const Disputes = lazy(() => import("./pages/Disputes"));
 const NewDispute = lazy(() => import("./pages/NewDispute"));
 const DisputeDetail = lazy(() => import("./pages/DisputeDetail"));
@@ -263,6 +265,7 @@ export default function App() {
                         <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/status" element={<StatusPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
+                        <Route path="/compare" element={<ComparePage />} />
                         <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
                         <Route path="/disputes/new" element={<RequireBuyer><NewDispute /></RequireBuyer>} />
                         {/* Shared: buyer, seller, or admin - dispute.service.js enforces per-dispute access */}
@@ -372,6 +375,8 @@ export default function App() {
             </main>
 
             <Footer />
+
+            <CompareTray />
 
             {showNexoraAI && (
                 <>

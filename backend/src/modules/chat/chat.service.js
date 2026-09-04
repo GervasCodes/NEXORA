@@ -41,8 +41,8 @@ exports.startConversation = async (buyerId, otherUserId, otherRole, contextId) =
     return chatRepository.findConversationById(conversationId);
 };
 
-exports.getMyConversations = async (userId) => {
-    return chatRepository.findConversationsByUser(userId);
+exports.getMyConversations = async (userId, { archived = false } = {}) => {
+    return chatRepository.findConversationsByUser(userId, { archived });
 };
 
 exports.getUnreadCount = async (userId) => {
@@ -168,6 +168,16 @@ exports.sendMessage = async (conversationId, senderId, message, attachment) => {
         ? (text.length > 120 ? `${text.slice(0, 117)}...` : text)
         : (attachmentLabel || "New message");
     recipientIds.forEach((recipientId) => {
+        // Muted conversations (Phase 8, UI/UX remediation) - the socket
+        // emit above already reached an open tab regardless (mute stops
+        // notifications, not delivery to a thread someone has open);
+        // this only gates the notificationService call, which is what
+        // produces the push/notification-bell entry.
+        const mutedColumn = chatRepository.mutedColumnFor(conversation, recipientId);
+        if (mutedColumn && conversation[mutedColumn]) {
+            return;
+        }
+
         notificationService
             .notify({
                 userId: recipientId,
@@ -352,4 +362,45 @@ exports.deleteConversation = async (conversationId, userId) => {
 
     await chatRepository.setDeletedAt(conversationId, deletedColumn);
     await chatRepository.setClearedAt(conversationId, clearedColumn);
+};
+
+// Mute / archive a conversation (Phase 8, UI/UX remediation) - same
+// "resolve which per-participant column applies, then toggle it"
+// shape as clearConversation above.
+const toggleConversationFlag = async (conversationId, userId, columnResolver, active) => {
+    const conversation = await exports.assertParticipant(conversationId, userId);
+    const column = columnResolver(conversation, userId);
+
+    if (!column) {
+        throw new Error("Conversation not found");
+    }
+
+    await chatRepository.setColumnTimestamp(conversationId, column, active);
+};
+
+exports.muteConversation = (conversationId, userId) =>
+    toggleConversationFlag(conversationId, userId, chatRepository.mutedColumnFor, true);
+
+exports.unmuteConversation = (conversationId, userId) =>
+    toggleConversationFlag(conversationId, userId, chatRepository.mutedColumnFor, false);
+
+exports.archiveConversation = (conversationId, userId) =>
+    toggleConversationFlag(conversationId, userId, chatRepository.archivedColumnFor, true);
+
+exports.unarchiveConversation = (conversationId, userId) =>
+    toggleConversationFlag(conversationId, userId, chatRepository.archivedColumnFor, false);
+
+// Search across every conversation the user participates in (Phase 8,
+// UI/UX remediation) - MessageSearch.jsx's existing search only ever
+// covered one open thread at a time (see exports.searchMessages above,
+// which takes a single conversationId). This is the cross-thread
+// counterpart: same LIKE-based search chat.repository.js#searchMessages
+// already uses per-conversation, just run across every conversation
+// this user is a participant in and returned with enough context
+// (conversation id, the other participant's name) to deep-link into
+// the right thread.
+exports.searchAllConversations = async (userId, query) => {
+    const trimmed = (query || "").trim();
+    if (!trimmed) return [];
+    return chatRepository.searchMessagesAcrossConversations(userId, trimmed);
 };

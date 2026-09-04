@@ -123,6 +123,13 @@ export default function NotificationBell() {
 
     return (
         <div className="relative" ref={rootRef}>
+            {/* Phase 0 (UI/UX remediation): announce unread-count changes to
+                screen readers, matching the cart/messages announcers added
+                to Header.jsx - the visual badge below already told sighted
+                users a new notification arrived. */}
+            <span className="sr-only" role="status" aria-live="polite">
+                {unread > 0 ? t("notifications.unreadAnnouncement", { count: unread }) : ""}
+            </span>
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}

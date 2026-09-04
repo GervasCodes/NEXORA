@@ -114,18 +114,57 @@ exports.findItemsByBookingId = async (bookingId) => {
     return rows;
 };
 
-exports.findByCustomer = async (customerId) => {
+// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// as order.repository.js#findOrdersByBuyer. Date filters apply to
+// start_date (the actual appointment date) rather than created_at -
+// "bookings in March" means the appointment was in March, not that the
+// booking was made in March.
+exports.findByCustomer = async (customerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
+    const offset = (page - 1) * limit;
+    const conditions = ["b.customer_id = ?"];
+    const params = [customerId];
+
+    if (status) {
+        conditions.push("b.status = ?");
+        params.push(status);
+    }
+    if (from) {
+        conditions.push("b.start_date >= ?");
+        params.push(from);
+    }
+    if (to) {
+        conditions.push("b.start_date <= ?");
+        params.push(to);
+    }
+    if (q) {
+        conditions.push("(s.title LIKE ? OR sp.store_name LIKE ?)");
+        params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const whereClause = conditions.join(" AND ");
+
     const [rows] = await db.query(
         `SELECT b.*, s.title AS service_title, s.slug AS service_slug,
             sp.store_name
         FROM bookings b
         JOIN services s ON s.id = b.service_id
         JOIN seller_profiles sp ON sp.user_id = b.provider_id
-        WHERE b.customer_id = ?
-        ORDER BY b.created_at DESC`,
-        [customerId]
+        WHERE ${whereClause}
+        ORDER BY b.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total
+        FROM bookings b
+        JOIN services s ON s.id = b.service_id
+        JOIN seller_profiles sp ON sp.user_id = b.provider_id
+        WHERE ${whereClause}`,
+        params
+    );
+
+    return { bookings: rows, total };
 };
 
 exports.findByProvider = async (providerId) => {
@@ -216,6 +255,86 @@ exports.cancelBooking = async (bookingId, serviceId, dateItems, finalStatus = "c
         // Phase RF3: was one restoreUnits UPDATE per date; now one
         // batched UPDATE covers every date in the booking's range.
         await availabilityRepository.restoreUnitsForDates(connection, serviceId, dateItems);
+
+        await connection.commit();
+
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+
+    } finally {
+        connection.release();
+    }
+};
+
+// Phase 7 (UI/UX remediation) - reschedule. Same booking row and id
+// throughout (booking history, messages, and payment stay attached to
+// it - see this phase's own plan for why that matters over
+// cancel-and-rebook), but its dates/quantity/amount/items all change.
+// Structured as: release the old dates' held units (mirrors
+// cancelBooking's restore step exactly), then check+hold the new dates
+// (mirrors createBooking's pre-check + guarded decrement exactly), then
+// swap booking_items for the new date list and update the bookings row
+// itself - all inside one transaction so a failure at any step leaves
+// neither the old nor the new dates permanently held.
+exports.rescheduleBooking = async (bookingId, serviceId, oldItems, newStartDate, newEndDate, quantity, newDateItems, newAmount) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Release the old dates first - if the new dates turn out to be
+        // unavailable below, the transaction rolls back and these are
+        // restored right along with everything else, so this is safe
+        // even though it happens before the new dates are confirmed.
+        await availabilityRepository.restoreUnitsForDates(connection, serviceId, oldItems);
+
+        const newDates = newDateItems.map((item) => item.date);
+
+        const availabilityRows = await availabilityRepository.findAvailabilityForDates(
+            connection, serviceId, newDates
+        );
+        const availabilityByDate = new Map(availabilityRows.map((row) => [
+            row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date,
+            row
+        ]));
+
+        for (const item of newDateItems) {
+            const row = availabilityByDate.get(item.date);
+            if (!row || row.status !== "open" || row.available_units < quantity) {
+                throw Object.assign(
+                    new Error(`No longer enough availability on ${item.date}`),
+                    { code: "AVAILABILITY_UNAVAILABLE" }
+                );
+            }
+        }
+
+        const affectedRows = await availabilityRepository.decrementUnitsForDates(
+            connection, serviceId, newDates, quantity
+        );
+
+        if (affectedRows < newDateItems.length) {
+            throw Object.assign(
+                new Error("No longer enough availability for the selected dates"),
+                { code: "AVAILABILITY_UNAVAILABLE" }
+            );
+        }
+
+        await connection.query("DELETE FROM booking_items WHERE booking_id = ?", [bookingId]);
+
+        const insertValues = newDateItems.map((item) => [
+            bookingId, item.date, quantity, item.unitPrice, item.subtotal
+        ]);
+        await connection.query(
+            `INSERT INTO booking_items (booking_id, service_date, quantity, unit_price, subtotal)
+            VALUES ?`,
+            [insertValues]
+        );
+
+        await connection.query(
+            "UPDATE bookings SET start_date = ?, end_date = ?, quantity = ?, amount = ? WHERE id = ?",
+            [newStartDate, newEndDate, quantity, newAmount, bookingId]
+        );
 
         await connection.commit();
 

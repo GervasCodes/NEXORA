@@ -98,6 +98,8 @@ export default function ForgotPassword() {
                         minLength={8}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
+                        showPasswordLabel="Show password"
+                        hidePasswordLabel="Hide password"
                     />
 
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}

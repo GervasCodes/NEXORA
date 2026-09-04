@@ -29,17 +29,52 @@ exports.findOpenByOrderAndItem = async (orderId, orderItemId) => {
     return rows[0];
 };
 
-exports.findByBuyer = async (buyerId) => {
+// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// as order.repository.js#findOrdersByBuyer.
+exports.findByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
+    const offset = (page - 1) * limit;
+    const conditions = ["r.buyer_id = ?"];
+    const params = [buyerId];
+
+    if (status) {
+        conditions.push("r.status = ?");
+        params.push(status);
+    }
+    if (from) {
+        conditions.push("r.created_at >= ?");
+        params.push(from);
+    }
+    if (to) {
+        conditions.push("r.created_at <= ?");
+        params.push(to);
+    }
+    if (q) {
+        conditions.push("o.order_number LIKE ?");
+        params.push(`%${q}%`);
+    }
+
+    const whereClause = conditions.join(" AND ");
+
     const [rows] = await db.query(
         `SELECT r.id, r.order_id, r.order_item_id, r.reason, r.status, r.refund_amount,
                 r.created_at, r.updated_at, o.order_number
         FROM order_returns r
         JOIN orders o ON o.id = r.order_id
-        WHERE r.buyer_id = ?
-        ORDER BY r.created_at DESC`,
-        [buyerId]
+        WHERE ${whereClause}
+        ORDER BY r.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total
+        FROM order_returns r
+        JOIN orders o ON o.id = r.order_id
+        WHERE ${whereClause}`,
+        params
+    );
+
+    return { returns: rows, total };
 };
 
 exports.findBySeller = async (sellerId) => {

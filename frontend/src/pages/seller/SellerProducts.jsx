@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
 import Button from "../../components/ui/Button";
 import DataTable from "../../components/ui/DataTable";
+import SavedFilters from "../../components/seller/SavedFilters";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
@@ -27,6 +28,11 @@ export default function SellerProducts() {
 
     const [selectedIds, setSelectedIds] = useState([]);
     const [bulkBusy, setBulkBusy] = useState(false);
+
+    // Bulk price adjustment (Phase 11, UI/UX remediation).
+    const [showBulkPrice, setShowBulkPrice] = useState(false);
+    const [bulkPriceType, setBulkPriceType] = useState("percent");
+    const [bulkPriceValue, setBulkPriceValue] = useState("");
 
     // True only when this seller has never listed anything at all (no
     // filters active, first page, zero results) - distinct from "no
@@ -98,6 +104,39 @@ export default function SellerProducts() {
         }
     };
 
+    // Phase 11 (UI/UX remediation) - bulk price adjustment.
+    const bulkAdjustPrice = async (e) => {
+        e.preventDefault();
+        const value = Number(bulkPriceValue);
+        if (!value) return;
+        setBulkBusy(true);
+        try {
+            const { data } = await api.put("/products/bulk/price", {
+                ids: selectedIds,
+                adjust_type: bulkPriceType,
+                adjust_value: value
+            });
+            toast?.success(`Updated pricing on ${data.data.updated} product(s).`);
+            setShowBulkPrice(false);
+            setBulkPriceValue("");
+            load();
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setBulkBusy(false);
+        }
+    };
+
+    // Saved filter views (Phase 11, UI/UX remediation) - applies a
+    // saved combination back into this page's existing filter state.
+    const applySavedFilters = (filters) => {
+        setSearchInput(filters.search || "");
+        setSearch(filters.search || "");
+        setCategoryId(filters.categoryId || "");
+        setStatus(filters.status || "");
+        setPage(1);
+    };
+
     const resetFilters = () => {
         setSearchInput("");
         setSearch("");
@@ -115,6 +154,12 @@ export default function SellerProducts() {
                     {t("seller.products.newProduct")}
                 </Button>
             </div>
+
+            <SavedFilters
+                pageKey="seller_products"
+                currentFilters={{ search, categoryId, status }}
+                onApply={applySavedFilters}
+            />
 
             <div className="border border-line rounded-lg p-4 mb-6">
                 <div className="flex flex-wrap gap-3">
@@ -185,6 +230,38 @@ export default function SellerProducts() {
                         >
                             {t("seller.products.deactivateSelected")}
                         </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowBulkPrice((v) => !v)}
+                            disabled={bulkBusy}
+                            className="bg-paper"
+                        >
+                            Adjust price
+                        </Button>
+                        {showBulkPrice && (
+                            <form onSubmit={bulkAdjustPrice} className="flex items-center gap-1.5">
+                                <select
+                                    value={bulkPriceType}
+                                    onChange={(e) => setBulkPriceType(e.target.value)}
+                                    className="border border-line rounded-md px-2 py-1 text-xs"
+                                >
+                                    <option value="percent">%</option>
+                                    <option value="flat">TZS</option>
+                                </select>
+                                <input
+                                    type="number"
+                                    step="any"
+                                    value={bulkPriceValue}
+                                    onChange={(e) => setBulkPriceValue(e.target.value)}
+                                    placeholder={bulkPriceType === "percent" ? "e.g. -10 or 5" : "e.g. -500 or 500"}
+                                    className="border border-line rounded-md px-2 py-1 text-xs w-32"
+                                />
+                                <button type="submit" disabled={bulkBusy || !bulkPriceValue} className="text-xs text-teal hover:underline disabled:opacity-50">
+                                    Apply
+                                </button>
+                            </form>
+                        )}
                         <button
                             onClick={() => setSelectedIds([])}
                             disabled={bulkBusy}

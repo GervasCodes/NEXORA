@@ -53,12 +53,39 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
         }
 
         debounceRef.current = setTimeout(() => {
-            api.get("/products", { params: { search: value.trim(), limit: 5 } })
-                .then(({ data }) => {
-                    setSuggestions(data.data || []);
-                    setOpen(true);
-                })
-                .catch(() => {});
+            const term = value.trim();
+            // Phase 3 (UI/UX remediation) - previously only ever searched
+            // /products, even though the app has three other browsable
+            // content types (services, stores, guides) with no way to
+            // reach them from the one search box every page shares.
+            // Fired in parallel and merged client-side rather than a
+            // single combined-search endpoint, since each type already
+            // has its own working search-capable list endpoint with its
+            // own filters/pagination - a merge endpoint would just be
+            // this same work moved server-side for no real benefit at
+            // this result count (5 each, capped total below).
+            Promise.allSettled([
+                api.get("/products", { params: { search: term, limit: 5 } }),
+                api.get("/services", { params: { search: term, limit: 3 } }),
+                api.get("/stores", { params: { search: term, limit: 3 } }),
+                api.get("/content", { params: { search: term, limit: 3 } })
+            ]).then(([productsRes, servicesRes, storesRes, guidesRes]) => {
+                const products = productsRes.status === "fulfilled"
+                    ? (productsRes.value.data.data || []).map((p) => ({ type: "product", id: `product-${p.id}`, name: p.name, slug: p.slug, image_url: p.image_url, subtitle: p.store_name, price: p.discount_price || p.price }))
+                    : [];
+                const services = servicesRes.status === "fulfilled"
+                    ? (servicesRes.value.data.data?.services || []).map((s) => ({ type: "service", id: `service-${s.id}`, name: s.title, slug: s.slug, image_url: s.image_url, subtitle: s.store_name, price: s.discount_price || s.base_price }))
+                    : [];
+                const stores = storesRes.status === "fulfilled"
+                    ? (storesRes.value.data.data || []).map((st) => ({ type: "store", id: `store-${st.user_id}`, name: st.store_name, slug: st.store_slug, image_url: st.store_logo, subtitle: st.is_verified ? t("product.verifiedStore") : null }))
+                    : [];
+                const guides = guidesRes.status === "fulfilled"
+                    ? (guidesRes.value.data.data || []).map((g) => ({ type: "guide", id: `guide-${g.id}`, name: g.title, slug: g.slug, image_url: g.cover_image_url, subtitle: null }))
+                    : [];
+
+                setSuggestions([...products, ...services, ...stores, ...guides]);
+                setOpen(true);
+            }).catch(() => {});
         }, DEBOUNCE_MS);
 
         return () => clearTimeout(debounceRef.current);
@@ -82,11 +109,18 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
         navigate(trimmed ? `/?search=${encodeURIComponent(trimmed)}` : "/");
     };
 
-    const goToProduct = (slug, matchedTerm) => {
+    const ROUTE_BY_TYPE = {
+        product: "/products",
+        service: "/services",
+        store: "/stores",
+        guide: "/guides"
+    };
+
+    const goToResult = (result) => {
         setOpen(false);
         onNavigate?.();
-        if (matchedTerm?.trim()) setRecent(addRecentSearch(matchedTerm.trim()));
-        navigate(`/products/${slug}`);
+        if (value.trim()) setRecent(addRecentSearch(value.trim()));
+        navigate(`${ROUTE_BY_TYPE[result.type]}/${result.slug}`);
     };
 
     const handleClearRecent = (e) => {
@@ -99,7 +133,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
     const handleSubmit = (e) => {
         e.preventDefault();
         if (activeIndex >= 0 && suggestions[activeIndex]) {
-            goToProduct(suggestions[activeIndex].slug, value);
+            goToResult(suggestions[activeIndex]);
         } else {
             goToResults(value);
         }
@@ -206,24 +240,31 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
             )}
 
             {open && suggestions.length > 0 && value.trim().length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
-                    {suggestions.map((p, i) => (
+                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50 max-h-96 overflow-y-auto">
+                    {suggestions.map((result, i) => (
                         <button
-                            key={p.id}
+                            key={result.id}
                             type="button"
-                            onMouseDown={() => goToProduct(p.slug, value)}
+                            onMouseDown={() => goToResult(result)}
                             className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 i === activeIndex ? "bg-line/60" : "hover:bg-line/40"
                             }`}
                         >
                             <div className="w-9 h-9 rounded bg-line/40 shrink-0 overflow-hidden">
-                                {p.image_url && <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
+                                {result.image_url && <img src={result.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm text-ink truncate"><HighlightMatch text={p.name} query={value} /></p>
-                                <p className="text-xs text-ash truncate">{p.store_name}</p>
+                                <p className="text-sm text-ink truncate flex items-center gap-1.5">
+                                    <HighlightMatch text={result.name} query={value} />
+                                    <span className="text-[10px] uppercase tracking-wide text-ash shrink-0">
+                                        {t(`search.type.${result.type}`)}
+                                    </span>
+                                </p>
+                                {result.subtitle && <p className="text-xs text-ash truncate">{result.subtitle}</p>}
                             </div>
-                            <span className="price text-xs text-ink shrink-0">{format(p.discount_price || p.price)}</span>
+                            {result.price !== undefined && (
+                                <span className="price text-xs text-ink shrink-0">{format(result.price)}</span>
+                            )}
                         </button>
                     ))}
                     <button

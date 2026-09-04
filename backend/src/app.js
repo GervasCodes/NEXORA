@@ -40,6 +40,12 @@ const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
 const wishlistRoutes = require("./modules/wishlist/wishlist.routes");
+const buyerAddressRoutes = require("./modules/buyerAddress/buyerAddress.routes");
+const couponRoutes = require("./modules/coupon/coupon.routes");
+const productQuestionRoutes = require("./modules/productQuestion/productQuestion.routes");
+const productVariantRoutes = require("./modules/productVariant/productVariant.routes");
+const productAlertRoutes = require("./modules/productAlert/productAlert.routes");
+const sellerSavedFilterRoutes = require("./modules/sellerSavedFilter/sellerSavedFilter.routes");
 const disputeRoutes = require("./modules/dispute/dispute.routes");
 const returnRoutes = require("./modules/return/return.routes");
 const kycRoutes = require("./modules/kyc/kyc.routes");
@@ -368,6 +374,17 @@ app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);
 app.use("/api/v1/account", accountRoutes);
 app.use("/api/v1/wishlist", wishlistRoutes);
+app.use("/api/v1/addresses", buyerAddressRoutes);
+app.use("/api/v1/coupons", couponRoutes);
+// Mounted at the bare /api/v1 prefix (not /api/v1/product-questions)
+// because this router's own paths already spell out
+// /products/:productId/questions and /questions/:id/answer - keeps the
+// public API shape RESTful (questions nested under the product they
+// belong to) without a redundant extra path segment.
+app.use("/api/v1", productQuestionRoutes);
+app.use("/api/v1", productVariantRoutes);
+app.use("/api/v1", productAlertRoutes);
+app.use("/api/v1/seller-filters", sellerSavedFilterRoutes);
 app.use("/api/v1/disputes", disputeRoutes);
 app.use("/api/v1/returns", returnRoutes);
 app.use("/api/v1/kyc", kycRoutes);

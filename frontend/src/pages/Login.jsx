@@ -148,6 +148,8 @@ export default function Login() {
                         required
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        showPasswordLabel={t("auth.showPassword")}
+                        hidePasswordLabel={t("auth.hidePassword")}
                     />
                 </div>
 

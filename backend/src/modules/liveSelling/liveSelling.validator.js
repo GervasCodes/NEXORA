@@ -11,3 +11,8 @@ exports.setStatusValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid session"),
     body("status").isIn(["live", "ended", "cancelled"]).withMessage("Invalid status")
 ];
+
+// Phase 9 (UI/UX remediation) - reminders.
+exports.sessionIdValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid session")
+];

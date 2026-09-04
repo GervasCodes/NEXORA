@@ -42,3 +42,44 @@ exports.findBySeller = async (sellerId) => {
 exports.setStatus = async (id, status) => {
     await db.query("UPDATE live_selling_sessions SET status = ? WHERE id = ?", [status, id]);
 };
+
+// Reminders (Phase 9, UI/UX remediation) - "notify me" for a scheduled
+// session, fired when its status flips to 'live' (see
+// liveSelling.service.js#setStatus).
+exports.subscribeReminder = async (userId, sessionId) => {
+    await db.query(
+        "INSERT IGNORE INTO live_selling_reminders (user_id, session_id) VALUES (?, ?)",
+        [userId, sessionId]
+    );
+};
+
+exports.unsubscribeReminder = async (userId, sessionId) => {
+    await db.query(
+        "DELETE FROM live_selling_reminders WHERE user_id = ? AND session_id = ?",
+        [userId, sessionId]
+    );
+};
+
+exports.isReminderSubscribed = async (userId, sessionId) => {
+    const [rows] = await db.query(
+        "SELECT id FROM live_selling_reminders WHERE user_id = ? AND session_id = ? LIMIT 1",
+        [userId, sessionId]
+    );
+    return rows.length > 0;
+};
+
+exports.findPendingReminders = async (sessionId) => {
+    const [rows] = await db.query(
+        "SELECT * FROM live_selling_reminders WHERE session_id = ? AND notified_at IS NULL",
+        [sessionId]
+    );
+    return rows;
+};
+
+exports.markRemindersNotified = async (ids) => {
+    if (!ids.length) return;
+    await db.query(
+        "UPDATE live_selling_reminders SET notified_at = NOW() WHERE id IN (?)",
+        [ids]
+    );
+};

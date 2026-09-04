@@ -1,0 +1,107 @@
+const PDFDocument = require("pdfkit");
+const orderService = require("./order.service");
+const accountRepository = require("../account/account.repository");
+const efdRepository = require("../efd/efd.repository");
+
+// Phase 4 (UI/UX remediation) - downloadable order invoice.
+//
+// No PDF library existed anywhere in this codebase before this (checked
+// both package.json files), so pdfkit is a genuinely new dependency -
+// chosen because it streams directly to an HTTP response with no
+// intermediate temp file or headless-browser dependency (unlike e.g.
+// puppeteer), which fits a request-scoped "generate this one buyer's
+// invoice on demand" endpoint better than a heavier tool built for
+// batch/templated document generation.
+//
+// This intentionally reuses order.service.js#getOrderDetail (the exact
+// same data OrderDetail.jsx's page already fetches) rather than a
+// second parallel order-loading path, so the invoice can never show
+// different totals/items than what the buyer is looking at on screen.
+
+const money = (amount) => `TZS ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const flattenItems = (order) =>
+    order.is_parent
+        ? order.children.flatMap((child) => child.items || [])
+        : (order.items || []);
+
+// Streams the PDF directly to `res` rather than returning a Buffer - an
+// invoice is generated once per download click and never stored, so
+// there's nothing to gain from buffering the whole document in memory
+// first (and a multi-page invoice with many line items is exactly the
+// case where that would matter).
+exports.streamInvoice = async (res, orderId, buyerId) => {
+    const order = await orderService.getOrderDetail(orderId, buyerId);
+    const buyer = await accountRepository.findById(buyerId);
+    const fiscalReceipt = order.is_parent
+        ? null // a split order has one fiscal receipt per vendor order, not one for the parent - out of scope for this invoice's single-document format
+        : await efdRepository.findByOrderId(order.id);
+
+    const items = flattenItems(order);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="invoice-${order.order_number}.pdf"`);
+
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    doc.pipe(res);
+
+    doc.fontSize(20).font("Helvetica-Bold").text("NEXORA");
+    doc.fontSize(9).font("Helvetica").fillColor("#666666").text("Order invoice");
+    doc.moveDown(1.5);
+
+    doc.fillColor("#000000").fontSize(14).font("Helvetica-Bold").text(`Invoice — ${order.order_number}`);
+    doc.fontSize(9).font("Helvetica").fillColor("#444444");
+    doc.text(`Order date: ${new Date(order.created_at).toLocaleDateString("en-GB")}`);
+    doc.text(`Status: ${order.status}`);
+    if (fiscalReceipt?.fiscal_receipt_number) {
+        doc.text(`Fiscal receipt: ${fiscalReceipt.fiscal_receipt_number} (verification: ${fiscalReceipt.verification_code})`);
+    }
+    doc.moveDown();
+
+    doc.fillColor("#000000").fontSize(10).font("Helvetica-Bold").text("Billed to");
+    doc.font("Helvetica").fontSize(9).fillColor("#444444");
+    doc.text(`${buyer.first_name} ${buyer.last_name}`);
+    doc.text(buyer.email);
+    if (order.shipping_address) {
+        doc.text(`${order.shipping_address}, ${order.shipping_city}, ${order.shipping_region}`);
+    }
+    doc.moveDown(1.5);
+
+    // Line items table - a fixed-column layout (not pdfkit's table
+    // plugin, which isn't in core) since the columns here never need to
+    // wrap/resize dynamically.
+    const tableTop = doc.y;
+    const col = { name: 50, qty: 330, price: 400, total: 470 };
+
+    doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold");
+    doc.text("Item", col.name, tableTop, { width: 270 });
+    doc.text("Qty", col.qty, tableTop, { width: 50 });
+    doc.text("Price", col.price, tableTop, { width: 60 });
+    doc.text("Total", col.total, tableTop, { width: 80 });
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.5);
+
+    doc.font("Helvetica").fillColor("#333333");
+    for (const item of items) {
+        const rowY = doc.y;
+        const label = item.variant_label ? `${item.name} (${item.variant_label})` : item.name;
+        doc.text(label, col.name, rowY, { width: 270 });
+        doc.text(String(item.quantity), col.qty, rowY, { width: 50 });
+        doc.text(money(item.unit_price), col.price, rowY, { width: 60 });
+        doc.text(money(item.subtotal), col.total, rowY, { width: 80 });
+        doc.moveDown(0.6);
+    }
+
+    doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.5);
+
+    doc.font("Helvetica-Bold").fontSize(11);
+    doc.text(`Total: ${money(order.total_amount)}`, col.price, doc.y, { width: 150, align: "left" });
+
+    doc.moveDown(2);
+    doc.font("Helvetica").fontSize(8).fillColor("#888888")
+        .text("This invoice was generated by NEXORA for the buyer's own records.", 50, doc.y, { width: 500 });
+
+    doc.end();
+};

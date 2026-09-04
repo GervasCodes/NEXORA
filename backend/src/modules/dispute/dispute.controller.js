@@ -52,7 +52,7 @@ exports.getDetail = async (req, res) => {
 
 exports.getMyDisputes = async (req, res) => {
     try {
-        const data = await disputeService.getMyDisputes(req.user.id);
+        const data = await disputeService.getMyDisputes(req.user.id, req.query);
         return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

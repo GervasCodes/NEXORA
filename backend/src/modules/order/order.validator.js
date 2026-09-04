@@ -41,6 +41,22 @@ exports.checkoutValidation = [
         .isInt({ gt: 0 })
         .withMessage("Invalid pickup point"),
 
+    // Phase 1 (UI/UX remediation): when set, order.service.js substitutes
+    // this saved address's fields in for the free-text shipping_address/
+    // city/region/phone above, the same way pickup_point_id already
+    // substitutes a pickup point's address - shipping_address etc. stay
+    // required at the schema level so older clients that haven't added
+    // the address picker yet keep working unchanged.
+    body("address_id")
+        .optional({ nullable: true })
+        .isInt({ gt: 0 })
+        .withMessage("Invalid address"),
+
+    body("coupon_code")
+        .optional({ nullable: true, checkFalsy: true })
+        .isLength({ max: 40 })
+        .withMessage("Invalid code"),
+
     body("loyalty_points_redeemed")
         .optional({ nullable: true })
         .isInt({ min: 0 })

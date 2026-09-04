@@ -11,6 +11,11 @@ const { createValidation, idValidation, setStatusValidation } = require("./conte
 // --- Public ---
 router.get("/", contentController.listPublished);
 
+// Phase 9 (UI/UX remediation) - mounted before "/:slug" for the same
+// reason the admin routes below already are: "categories" would
+// otherwise be swallowed as a slug by the catch-all route.
+router.get("/categories", contentController.listCategoriesInUse);
+
 // --- Admin --- (mounted before "/:slug" so "admin" is never matched
 // as a slug - same reasoning as every other admin-list-vs-shared-id
 // route split in this codebase)

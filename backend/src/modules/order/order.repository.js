@@ -6,14 +6,14 @@ const db = require("../../config/db");
 // buyer actually pays for (standalone order, or the parent of a split
 // cart) - child orders default to 0/false since the guarantee covers the
 // whole cart, not a single vendor's slice of it.
-const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0 }) => {
+const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, buyerAddressId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0, couponId = null, couponDiscountAmount = 0 }) => {
     const [orderResult] = await connection.query(
         `INSERT INTO orders
         (order_number, buyer_id, parent_order_id, is_parent, status, payment_status, payment_method,
-         shipping_address, shipping_city, shipping_region, shipping_phone, pickup_point_id,
+         shipping_address, shipping_city, shipping_region, shipping_phone, pickup_point_id, buyer_address_id,
          delivery_lat, delivery_lng, total_amount, buyer_protection_addon, buyer_protection_fee,
-         loyalty_points_redeemed, loyalty_discount_amount)
-        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         loyalty_points_redeemed, loyalty_discount_amount, coupon_id, coupon_discount_amount)
+        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             orderNumber,
             buyerId,
@@ -25,13 +25,16 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
             shippingInfo.shipping_region,
             shippingInfo.shipping_phone,
             pickupPointId,
+            buyerAddressId,
             shippingInfo.delivery_lat ?? null,
             shippingInfo.delivery_lng ?? null,
             totalAmount,
             buyerProtectionAddon ? 1 : 0,
             buyerProtectionFee,
             loyaltyPointsRedeemed,
-            loyaltyDiscountAmount
+            loyaltyDiscountAmount,
+            couponId,
+            couponDiscountAmount
         ]
     );
 
@@ -50,47 +53,93 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
 // SELECT below only runs on the (rare) insufficient-stock path, to work
 // out which item's error message to raise - same message the old
 // per-item loop gave.
+//
+// Phase 2 continuation (UI/UX remediation) - variant-aware. A cart can
+// mix plain-product line items (variant_id falsy) and variant line items
+// in the same checkout, so stock is decremented against two different
+// tables (products vs product_variants) using the exact same atomic
+// "CASE WHEN id THEN stock - qty ... guarded by stock >= qty" pattern
+// for each - see the plain-product path's own long-standing comment
+// below for why this shape (a single bulk UPDATE, not one UPDATE per
+// item) matters under concurrent checkouts.
 const insertOrderItems = async (connection, orderId, cartItems) => {
     if (!cartItems.length) {
         return;
     }
 
     const insertValues = cartItems.map((item) => [
-        orderId, item.product_id, item.seller_id, item.quantity, item.unit_price, item.subtotal
+        orderId, item.product_id, item.variant_id || 0, item.variant_label || null,
+        item.seller_id, item.quantity, item.unit_price, item.subtotal
     ]);
 
     await connection.query(
         `INSERT INTO order_items
-        (order_id, product_id, seller_id, quantity, unit_price, subtotal)
+        (order_id, product_id, variant_id, variant_label, seller_id, quantity, unit_price, subtotal)
         VALUES ?`,
         [insertValues]
     );
 
-    const productIds = cartItems.map((item) => item.product_id);
-    const caseClauses = cartItems.map(() => "WHEN ? THEN stock - ?").join(" ");
-    const caseParams = cartItems.flatMap((item) => [item.product_id, item.quantity]);
-    const guardClauses = cartItems.map(() => "(id = ? AND stock >= ?)").join(" OR ");
-    const guardParams = cartItems.flatMap((item) => [item.product_id, item.quantity]);
+    const plainItems = cartItems.filter((item) => !item.variant_id);
+    const variantItems = cartItems.filter((item) => item.variant_id);
 
-    const [stockResult] = await connection.query(
-        `UPDATE products
-        SET stock = CASE id ${caseClauses} END
-        WHERE id IN (?) AND (${guardClauses})`,
-        [...caseParams, productIds, ...guardParams]
-    );
+    if (plainItems.length) {
+        const productIds = plainItems.map((item) => item.product_id);
+        const caseClauses = plainItems.map(() => "WHEN ? THEN stock - ?").join(" ");
+        const caseParams = plainItems.flatMap((item) => [item.product_id, item.quantity]);
+        const guardClauses = plainItems.map(() => "(id = ? AND stock >= ?)").join(" OR ");
+        const guardParams = plainItems.flatMap((item) => [item.product_id, item.quantity]);
 
-    if (stockResult.affectedRows < cartItems.length) {
-        const [rows] = await connection.query(
-            "SELECT id, stock FROM products WHERE id IN (?)",
-            [productIds]
+        const [stockResult] = await connection.query(
+            `UPDATE products
+            SET stock = CASE id ${caseClauses} END
+            WHERE id IN (?) AND (${guardClauses})`,
+            [...caseParams, productIds, ...guardParams]
         );
-        const stockById = new Map(rows.map((row) => [row.id, row.stock]));
 
-        for (const item of cartItems) {
-            const currentStock = stockById.get(item.product_id) ?? 0;
+        if (stockResult.affectedRows < plainItems.length) {
+            const [rows] = await connection.query(
+                "SELECT id, stock FROM products WHERE id IN (?)",
+                [productIds]
+            );
+            const stockById = new Map(rows.map((row) => [row.id, row.stock]));
 
-            if (currentStock < item.quantity) {
-                throw new Error(`"${item.name}" no longer has enough stock`);
+            for (const item of plainItems) {
+                const currentStock = stockById.get(item.product_id) ?? 0;
+
+                if (currentStock < item.quantity) {
+                    throw new Error(`"${item.name}" no longer has enough stock`);
+                }
+            }
+        }
+    }
+
+    if (variantItems.length) {
+        const variantIds = variantItems.map((item) => item.variant_id);
+        const caseClauses = variantItems.map(() => "WHEN ? THEN stock - ?").join(" ");
+        const caseParams = variantItems.flatMap((item) => [item.variant_id, item.quantity]);
+        const guardClauses = variantItems.map(() => "(id = ? AND stock >= ?)").join(" OR ");
+        const guardParams = variantItems.flatMap((item) => [item.variant_id, item.quantity]);
+
+        const [stockResult] = await connection.query(
+            `UPDATE product_variants
+            SET stock = CASE id ${caseClauses} END
+            WHERE id IN (?) AND (${guardClauses})`,
+            [...caseParams, variantIds, ...guardParams]
+        );
+
+        if (stockResult.affectedRows < variantItems.length) {
+            const [rows] = await connection.query(
+                "SELECT id, stock FROM product_variants WHERE id IN (?)",
+                [variantIds]
+            );
+            const stockById = new Map(rows.map((row) => [row.id, row.stock]));
+
+            for (const item of variantItems) {
+                const currentStock = stockById.get(item.variant_id) ?? 0;
+
+                if (currentStock < item.quantity) {
+                    throw new Error(`"${item.name}" (${item.variant_label || "selected option"}) no longer has enough stock`);
+                }
             }
         }
     }
@@ -99,7 +148,7 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
 // Create a single (non-split) order + its items + decrement stock, all in
 // one transaction. cartItems: rows from cart_items joined with product
 // price/stock (see order.service.js). Used for single-vendor checkouts.
-exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}) => {
+exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}, buyerAddressId = null, coupon = {}) => {
     const connection = await db.getConnection();
 
     try {
@@ -108,7 +157,9 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
         const orderId = await insertOrderRow(connection, {
             buyerId, parentOrderId: null, isParent: false, orderNumber, shippingInfo, totalAmount,
             buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
-            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount
+            buyerAddressId,
+            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount,
+            couponId: coupon.couponId, couponDiscountAmount: coupon.discountAmount
         });
 
         await insertOrderItems(connection, orderId, cartItems);
@@ -139,7 +190,7 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
 // sellerGroups: array of { sellerId, items, subtotal } - `items` in the
 // same shape createOrder expects, `subtotal` is that seller's slice of
 // the cart total.
-exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sellerGroups, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}) => {
+exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sellerGroups, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}, buyerAddressId = null, coupon = {}) => {
     const connection = await db.getConnection();
 
     try {
@@ -148,7 +199,9 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
         const parentOrderId = await insertOrderRow(connection, {
             buyerId, parentOrderId: null, isParent: true, orderNumber: parentOrderNumber, shippingInfo, totalAmount,
             buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
-            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount
+            buyerAddressId,
+            loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount,
+            couponId: coupon.couponId, couponDiscountAmount: coupon.discountAmount
         });
 
         const childOrders = [];
@@ -218,17 +271,59 @@ exports.findStalePendingMobileMoneyOrders = async (olderThanMinutes) => {
 // Only top-level orders: standalone orders and parent orders. Child
 // orders (parent_order_id set) are reached via a parent's detail view,
 // not listed separately here, so a split cart shows as one row.
-exports.findOrdersByBuyer = async (buyerId) => {
+// Phase 4 (UI/UX remediation) - filtering + pagination. Previously this
+// fetched every order a buyer had ever placed in one unfiltered,
+// unpaginated call - fine for a new buyer, a real problem a year in.
+// `q` matches either the order number or any product name within the
+// order (via EXISTS, not a JOIN, so an order with many line items still
+// only ever produces one row).
+exports.findOrdersByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
+    const offset = (page - 1) * limit;
+    const conditions = ["o.buyer_id = ?", "o.parent_order_id IS NULL"];
+    const params = [buyerId];
+
+    if (status) {
+        conditions.push("o.status = ?");
+        params.push(status);
+    }
+    if (from) {
+        conditions.push("o.created_at >= ?");
+        params.push(from);
+    }
+    if (to) {
+        conditions.push("o.created_at <= ?");
+        params.push(to);
+    }
+    if (q) {
+        conditions.push(
+            `(o.order_number LIKE ? OR EXISTS (
+                SELECT 1 FROM order_items oi
+                JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id = o.id AND p.name LIKE ?
+            ))`
+        );
+        params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const whereClause = conditions.join(" AND ");
+
     const [rows] = await db.query(
         `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at, o.is_parent,
                 (SELECT COUNT(*) FROM orders c WHERE c.parent_order_id = o.id) AS vendor_count
         FROM orders o
-        WHERE o.buyer_id = ? AND o.parent_order_id IS NULL
-        ORDER BY o.created_at DESC`,
-        [buyerId]
+        WHERE ${whereClause}
+        ORDER BY o.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total FROM orders o WHERE ${whereClause}`,
+        params
+    );
+
+    return { orders: rows, total };
 };
 
 // Every vendor child order under a parent order, in the order they were
@@ -338,7 +433,30 @@ exports.updateOrderStatusForChildren = async (parentOrderId, status) => {
 // in-flight credit would have finished - this avoids flashing "pending"
 // for the split-second window between payment confirmation and the
 // async credit call actually completing.
-exports.findOrdersBySeller = async (sellerId) => {
+// Phase 11 (UI/UX remediation) - status/search filtering, same
+// treatment order.repository.js#findOrdersByBuyer already got in
+// Phase 4. `q` matches the order number or any of this seller's own
+// product names within the order (not another seller's items in a
+// split order - oi.seller_id scopes that).
+exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
+    const conditions = ["oi.seller_id = ?", "(o.payment_method = 'cash_on_delivery' OR o.payment_status = 'paid')"];
+    const params = [sellerId];
+
+    if (status) {
+        conditions.push("o.status = ?");
+        params.push(status);
+    }
+    if (q) {
+        conditions.push(
+            `(o.order_number LIKE ? OR EXISTS (
+                SELECT 1 FROM order_items oi3
+                JOIN products p ON p.id = oi3.product_id
+                WHERE oi3.order_id = o.id AND oi3.seller_id = ? AND p.name LIKE ?
+            ))`
+        );
+        params.push(`%${q}%`, sellerId, `%${q}%`);
+    }
+
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at,
@@ -350,10 +468,9 @@ exports.findOrdersBySeller = async (sellerId) => {
                   AND o.updated_at < (NOW() - INTERVAL 10 MINUTE) AS wallet_credit_pending
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
-        WHERE oi.seller_id = ?
-            AND (o.payment_method = 'cash_on_delivery' OR o.payment_status = 'paid')
+        WHERE ${conditions.join(" AND ")}
         ORDER BY o.created_at DESC`,
-        [sellerId, sellerId]
+        [sellerId, ...params]
     );
     return rows.map((row) => ({ ...row, wallet_credit_pending: !!row.wallet_credit_pending }));
 };

@@ -12,6 +12,7 @@ import Button from "../components/ui/Button";
 import PhoneInput from "../components/PhoneInput";
 import Skeleton from "../components/Skeleton";
 import PageMeta from "../components/PageMeta";
+import RescheduleModal from "../components/RescheduleModal";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
 // allows either side to cancel a pending or confirmed booking. A
@@ -40,6 +41,7 @@ export default function BookingDetail() {
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
     const [phone, setPhone] = useState("");
+    const [showReschedule, setShowReschedule] = useState(false);
 
     // "Improved customer booking journey":
     // a completed booking now carries can_review/review from the API
@@ -178,6 +180,10 @@ export default function BookingDetail() {
     const canPay = !isProvider && booking.payment_status === "unpaid"
         && !["cancelled", "refunded", "rejected"].includes(booking.status);
     const canCancel = CANCELLABLE.includes(booking.status) && !(isProvider && booking.status === "pending");
+    // Phase 7 (UI/UX remediation) - reschedule is buyer-only (see
+    // booking.service.js#rescheduleBooking's ownership check), under the
+    // same status gate as cancel.
+    const canReschedule = !isProvider && CANCELLABLE.includes(booking.status);
 
     const handleConfirm = async () => {
         setBusy(true);
@@ -445,6 +451,12 @@ export default function BookingDetail() {
                         </button>
                     </>
                 )}
+                {canReschedule && (
+                    <button onClick={() => setShowReschedule(true)} disabled={busy}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        📅 Reschedule
+                    </button>
+                )}
                 {canCancel && (
                     <button onClick={handleCancel} disabled={busy}
                         className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
@@ -452,6 +464,18 @@ export default function BookingDetail() {
                     </button>
                 )}
             </div>
+
+            {showReschedule && (
+                <RescheduleModal
+                    booking={booking}
+                    onClose={() => setShowReschedule(false)}
+                    onRescheduled={() => {
+                        setShowReschedule(false);
+                        setMessage("Booking rescheduled.");
+                        load();
+                    }}
+                />
+            )}
 
             {!isProvider && (booking.can_review || booking.review) && (
                 <div className="mt-8 border-t border-line pt-6">

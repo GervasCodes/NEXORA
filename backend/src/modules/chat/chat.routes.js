@@ -15,7 +15,8 @@ const {
     sendAttachmentValidation,
     reactionValidation,
     removeReactionValidation,
-    searchValidation
+    searchValidation,
+    searchAllValidation
 } = require("./chat.validator");
 
 router.use(authMiddleware);
@@ -32,6 +33,12 @@ router.post(
 );
 
 router.get("/conversations", chatController.getMyConversations);
+
+// Phase 8 (UI/UX remediation) - cross-conversation search. Placed here
+// (a literal "search" suffix, not a param) so there's no ambiguity with
+// any /conversations/:id/... route below - same reasoning the existing
+// comment above /conversations/:id/search already gives for that one.
+router.get("/conversations/search", searchAllValidation, validationMiddleware, chatController.searchAllConversations);
 
 router.get("/unread-count", chatController.getUnreadCount);
 
@@ -100,6 +107,35 @@ router.post(
     conversationIdValidation,
     validationMiddleware,
     chatController.clearConversation
+);
+
+// Mute / archive (Phase 8, UI/UX remediation).
+router.put(
+    "/conversations/:id/mute",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.muteConversation
+);
+
+router.delete(
+    "/conversations/:id/mute",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.unmuteConversation
+);
+
+router.put(
+    "/conversations/:id/archive",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.archiveConversation
+);
+
+router.delete(
+    "/conversations/:id/archive",
+    conversationIdValidation,
+    validationMiddleware,
+    chatController.unarchiveConversation
 );
 
 router.delete(

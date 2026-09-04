@@ -22,9 +22,9 @@ describe("cart.service.addToCart", () => {
 
         const result = await cartService.addToCart(1, 5, 3);
 
-        expect(cartRepository.addItem).toHaveBeenCalledWith(1, 5, 3);
+        expect(cartRepository.addItem).toHaveBeenCalledWith(1, 5, 3, null);
         expect(cartRepository.updateQuantity).not.toHaveBeenCalled();
-        expect(result).toEqual({ productId: 5, quantity: 3 });
+        expect(result).toEqual({ productId: 5, variantId: null, quantity: 3 });
     });
 
     it("adds to the existing quantity rather than overwriting it", async () => {
@@ -33,9 +33,9 @@ describe("cart.service.addToCart", () => {
 
         const result = await cartService.addToCart(1, 5, 3);
 
-        expect(cartRepository.updateQuantity).toHaveBeenCalledWith(1, 5, 5);
+        expect(cartRepository.updateQuantity).toHaveBeenCalledWith(1, 5, 5, null);
         expect(cartRepository.addItem).not.toHaveBeenCalled();
-        expect(result).toEqual({ productId: 5, quantity: 5 });
+        expect(result).toEqual({ productId: 5, variantId: null, quantity: 5 });
     });
 
     it("rejects when the combined quantity exceeds stock", async () => {
@@ -70,8 +70,8 @@ describe("cart.service.updateCartItem", () => {
 
         const result = await cartService.updateCartItem(1, 5, 4);
 
-        expect(cartRepository.updateQuantity).toHaveBeenCalledWith(1, 5, 4);
-        expect(result).toEqual({ productId: 5, quantity: 4 });
+        expect(cartRepository.updateQuantity).toHaveBeenCalledWith(1, 5, 4, null);
+        expect(result).toEqual({ productId: 5, variantId: null, quantity: 4 });
     });
 });
 

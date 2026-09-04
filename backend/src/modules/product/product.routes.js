@@ -8,7 +8,7 @@ const requireProductProvider = require("../../middleware/requireProductProvider.
 const upload = require("../../middleware/upload.middleware");
 const uploadVideo = require("../../middleware/uploadVideo.middleware");
 const uploadAudio = require("../../middleware/uploadAudio.middleware");
-const { createProductValidation, bulkProductStatusValidation, reorderMediaValidation } = require("./product.validator");
+const { createProductValidation, bulkProductStatusValidation, bulkProductPriceValidation, reorderMediaValidation } = require("./product.validator");
 
 const productController = require("./product.controller");
 
@@ -143,6 +143,16 @@ router.put(
     requireProductProvider,
     bulkProductStatusValidation,
     productController.bulkProductStatus
+);
+
+// Phase 11 (UI/UX remediation) - bulk price adjustment.
+router.put(
+    "/bulk/price",
+    authMiddleware,
+    authorize("seller"),
+    requireProductProvider,
+    bulkProductPriceValidation,
+    productController.bulkProductPrice
 );
 
 router.get(

@@ -229,7 +229,7 @@ describe("chat.service.getMyConversations", () => {
 
         const result = await chatService.getMyConversations(7);
 
-        expect(chatRepository.findConversationsByUser).toHaveBeenCalledWith(7);
+        expect(chatRepository.findConversationsByUser).toHaveBeenCalledWith(7, { archived: false });
         expect(result).toEqual([{ id: 1 }, { id: 2 }]);
     });
 });

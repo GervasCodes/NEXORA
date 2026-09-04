@@ -10,6 +10,8 @@ import { useToast } from "../context/ToastContext";
 import PhoneInput from "../components/PhoneInput";
 import PageMeta from "../components/PageMeta";
 import Avatar from "../components/ui/Avatar";
+import Input from "../components/ui/Input";
+import AddressBook from "../components/AddressBook";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -259,6 +261,8 @@ export default function Account() {
                 </form>
             </section>
 
+            <AddressBook />
+
             {/* Settings - applied instantly via context, persisted in the background */}
             <section>
                 <h2 className="font-display text-lg mb-1">{t("account.settings")}</h2>
@@ -334,6 +338,42 @@ export default function Account() {
                 </div>
             </section>
 
+            {/* Notification preferences (Phase 10, UI/UX remediation) -
+                each toggle governs one category of notify() call across
+                the whole app (see notification.service.js's
+                CATEGORY_BY_TYPE) - order/booking/dispute updates, chat
+                messages, price/stock alerts, and store/live-selling
+                updates. Account, security, financial, and admin
+                notifications are never affected by these and always
+                fire - there's no toggle for them here on purpose. */}
+            <section>
+                <h2 className="font-display text-lg mb-1">Notifications</h2>
+                <p className="text-ash text-sm mb-4">Choose what you want to be notified about. Turning something off stops it everywhere - app, email, and push.</p>
+
+                <div className="space-y-4">
+                    {[
+                        { key: "notifyOrderUpdates", field: "notify_order_updates", label: "Order & booking updates", hint: "Status changes on your orders, bookings, returns, and disputes" },
+                        { key: "notifyMessages", field: "notify_messages", label: "Chat messages", hint: "New messages from sellers, buyers, or delivery agents" },
+                        { key: "notifyPriceStockAlerts", field: "notify_price_stock_alerts", label: "Price & stock alerts", hint: "Back-in-stock and price-drop alerts you've opted into" },
+                        { key: "notifyStoreUpdates", field: "notify_store_updates", label: "Store updates", hint: "New listings and live selling sessions from stores you follow" }
+                    ].map((pref) => (
+                        <div key={pref.key}>
+                            <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                <span className="text-sm">
+                                    {pref.label}
+                                    <span className="block text-ash text-xs mt-0.5">{pref.hint}</span>
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    defaultChecked={profile?.[pref.field] === undefined ? true : Boolean(profile[pref.field])}
+                                    onChange={(e) => persistSettings({ [pref.key]: e.target.checked })}
+                                />
+                            </label>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* Password - OTP-gated, no current-password field anymore */}
             <section>
                 <h2 className="font-display text-lg mb-1">{t("account.changePassword")}</h2>
@@ -372,12 +412,16 @@ export default function Account() {
 
                 {pwdStep === "form" && (
                     <form onSubmit={submitNewPassword} className="space-y-3 max-w-xs">
-                        <div>
-                            <label className="block text-sm mb-1">New password</label>
-                            <input type="password" required minLength={8} value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                        </div>
+                        <Input
+                            label="New password"
+                            type="password"
+                            required
+                            minLength={8}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            showPasswordLabel="Show password"
+                            hidePasswordLabel="Hide password"
+                        />
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "password"}
@@ -408,12 +452,15 @@ export default function Account() {
                     </button>
                 ) : (
                     <form onSubmit={deleteAccount} className="space-y-3">
-                        <div>
-                            <label className="block text-sm mb-1">Confirm your password</label>
-                            <input type="password" required value={deletePassword}
-                                onChange={(e) => setDeletePassword(e.target.value)}
-                                className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                        </div>
+                        <Input
+                            label="Confirm your password"
+                            type="password"
+                            required
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            showPasswordLabel="Show password"
+                            hidePasswordLabel="Hide password"
+                        />
 
                         <div className="flex gap-2">
                             <button type="submit" disabled={busy === "delete"}

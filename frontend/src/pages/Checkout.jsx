@@ -9,6 +9,7 @@ import LocationPicker from "../components/LocationPicker";
 import PhoneInput from "../components/PhoneInput";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import CheckoutSteps from "../components/ui/CheckoutSteps";
 import PageMeta from "../components/PageMeta";
 import { getStoredAffiliateClickToken } from "../components/AffiliateClickTracker";
 
@@ -19,7 +20,9 @@ const initialForm = {
     shipping_phone: "",
     payment_method: "mobile_money",
     buyer_protection_addon: false,
-    pickup_point_id: ""
+    pickup_point_id: "",
+    address_id: "",
+    coupon_code: ""
 };
 
 // Mirrors order.service.js#calculateBuyerProtectionFee - client-side
@@ -110,6 +113,43 @@ export default function Checkout() {
         api.get("/loyalty/me").then(({ data }) => setLoyaltyBalance(data.data.balance)).catch(() => {});
     }, []);
 
+    // Coupon / promo code (Phase 1, UI/UX remediation) - "Apply" hits a
+    // read-only validation endpoint (coupon.controller.js#validate) that
+    // recomputes the subtotal from the buyer's actual server-side cart,
+    // so this preview can't be spoofed into showing a discount that
+    // checkout itself would then reject. The authoritative discount is
+    // still re-quoted and re-applied by order.service.js#checkout at
+    // submit time regardless - this is purely a "does this code work"
+    // preview plus the discount line shown in the summary below.
+    const [couponInput, setCouponInput] = useState("");
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [couponBusy, setCouponBusy] = useState(false);
+    const [couponError, setCouponError] = useState("");
+
+    const applyCoupon = async () => {
+        if (!couponInput.trim()) return;
+        setCouponBusy(true);
+        setCouponError("");
+        try {
+            const { data } = await api.post("/coupons/validate", { code: couponInput.trim() });
+            setAppliedCoupon(data.data);
+            setForm((f) => ({ ...f, coupon_code: data.data.code }));
+        } catch (err) {
+            setAppliedCoupon(null);
+            setForm((f) => ({ ...f, coupon_code: "" }));
+            setCouponError(extractErrorMessage(err));
+        } finally {
+            setCouponBusy(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponInput("");
+        setCouponError("");
+        setForm((f) => ({ ...f, coupon_code: "" }));
+    };
+
     // Agent/kiosk pickup points (Phase Q5) - fetched once; selecting one
     // auto-fills the address fields the checkout payload already sends
     // (server re-validates and re-substitutes the pickup point's own
@@ -121,6 +161,54 @@ export default function Checkout() {
     useEffect(() => {
         api.get("/pickup-points").then(({ data }) => setPickupPoints(data.data)).catch(() => {});
     }, []);
+
+    // Saved address book (Phase 1, UI/UX remediation) - fetched once;
+    // same auto-fill-then-server-re-validates relationship as pickup
+    // points above (see order.service.js#checkout's address_id
+    // handling). Pre-selects the buyer's default address (if any) so
+    // returning buyers land on checkout with delivery info already
+    // filled in, instead of an empty form every time.
+    const [savedAddresses, setSavedAddresses] = useState([]);
+    const [addingNewAddress, setAddingNewAddress] = useState(false);
+    const [saveNewAddress, setSaveNewAddress] = useState(false);
+    useEffect(() => {
+        api.get("/addresses").then(({ data }) => {
+            setSavedAddresses(data.data);
+            const defaultAddress = data.data.find((a) => a.is_default) || data.data[0];
+            if (defaultAddress) {
+                selectSavedAddress(defaultAddress.id, data.data);
+            } else {
+                setAddingNewAddress(true);
+            }
+        }).catch(() => setAddingNewAddress(true));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const selectSavedAddress = (id, list = savedAddresses) => {
+        const addr = list.find((a) => String(a.id) === String(id));
+        if (!addr) return;
+        setAddingNewAddress(false);
+        setForm((f) => ({
+            ...f,
+            address_id: addr.id,
+            shipping_address: addr.address,
+            shipping_city: addr.city,
+            shipping_region: addr.region,
+            shipping_phone: addr.phone
+        }));
+    };
+
+    const startNewAddress = () => {
+        setAddingNewAddress(true);
+        setForm((f) => ({
+            ...f,
+            address_id: "",
+            shipping_address: "",
+            shipping_city: "",
+            shipping_region: "",
+            shipping_phone: ""
+        }));
+    };
 
     // Phase 6 (Checkout & Order Timeline UX): upfront delivery-time
     // estimate, fetched from the same distance/duration calculation the
@@ -264,6 +352,8 @@ export default function Checkout() {
             const payload = {
                 ...form,
                 pickup_point_id: form.pickup_point_id || undefined,
+                address_id: form.address_id || undefined,
+                coupon_code: appliedCoupon?.code || undefined,
                 loyalty_points_redeemed: pointsToRedeem || undefined,
                 affiliate_click_token: getStoredAffiliateClickToken() || undefined,
                 delivery_lat: pin?.lat ?? null,
@@ -271,6 +361,20 @@ export default function Checkout() {
             };
             const { data } = await api.post("/orders", payload);
             orderId = data.data.orderId;
+
+            // Save-new-address checkbox (Phase 1, UI/UX remediation) -
+            // fire-and-forget, deliberately not awaited: this is a
+            // convenience for next time, not something that should ever
+            // block or fail an order that already succeeded.
+            if (saveNewAddress && !form.address_id && deliveryType === "home") {
+                api.post("/addresses", {
+                    label: "Address",
+                    address: form.shipping_address,
+                    city: form.shipping_city,
+                    region: form.shipping_region,
+                    phone: form.shipping_phone
+                }).catch(() => {});
+            }
 
             const selectedCardMethod = cardPaymentMethods.find((method) => method.value === form.payment_method);
 
@@ -343,7 +447,21 @@ export default function Checkout() {
     const busy = submitting || redirecting;
     const buyerProtectionFee = form.buyer_protection_addon ? estimateBuyerProtectionFee(total) : 0;
     const loyaltyDiscount = pointsToRedeem * 10; // mirrors referral.service.js's POINT_VALUE_TZS
-    const grandTotal = Number((total + buyerProtectionFee - loyaltyDiscount).toFixed(2));
+    const couponDiscount = appliedCoupon?.discountAmount || 0;
+    const grandTotal = Number((total + buyerProtectionFee - loyaltyDiscount - couponDiscount).toFixed(2));
+
+    // Feeds the CheckoutSteps stepper below. This is a single-page (not
+    // gated/wizard) checkout, so "current step" is a best-effort read of
+    // how far the buyer's inputs are, not a hard navigational state:
+    // delivery info (a home address or a chosen pickup point) is the one
+    // required field with no default, so once it's filled the payment
+    // method (which already has a sensible default) and the always-visible
+    // order summary are effectively what's left to check before placing
+    // the order.
+    const deliveryInfoComplete = deliveryType === "pickup"
+        ? Boolean(form.pickup_point_id)
+        : Boolean(form.shipping_address?.trim());
+    const checkoutStepIndex = deliveryInfoComplete ? 2 : 0;
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-5 gap-10 animate-fade-in">
@@ -351,7 +469,7 @@ export default function Checkout() {
             <form onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
-                <p className="text-xs font-semibold uppercase tracking-wide text-ash">Step 1 · Delivery</p>
+                <CheckoutSteps steps={["Delivery", "Payment", "Review"]} currentIndex={checkoutStepIndex} />
 
                 <div className="flex gap-2 mb-2">
                     <button
@@ -391,27 +509,78 @@ export default function Checkout() {
                     </div>
                 ) : (
                     <>
-                        <Input
-                            label={t("checkout.streetAddress")}
-                            required
-                            value={form.shipping_address}
-                            onChange={update("shipping_address")}
-                        />
+                        {savedAddresses.length > 0 && (
+                            <div className="space-y-2 mb-1">
+                                {savedAddresses.map((addr) => {
+                                    const selected = !addingNewAddress && String(form.address_id) === String(addr.id);
+                                    return (
+                                        <label
+                                            key={addr.id}
+                                            className={`flex items-start gap-2 border rounded-md px-3 py-2 text-sm cursor-pointer transition-all duration-200 ${
+                                                selected ? "border-teal bg-teal/5 shadow-sm" : "border-line hover:border-ash"
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="checkout_saved_address"
+                                                checked={selected}
+                                                onChange={() => selectSavedAddress(addr.id)}
+                                                className="mt-1 accent-teal"
+                                            />
+                                            <span>
+                                                <span className="font-medium">{addr.label || "Address"}</span>
+                                                {addr.is_default && <span className="text-xs text-ash"> · Default</span>}
+                                                <span className="block text-ash text-xs mt-0.5">{addr.address}, {addr.city}</span>
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                                <button
+                                    type="button"
+                                    onClick={startNewAddress}
+                                    className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm w-full text-left transition-all duration-200 ${
+                                        addingNewAddress ? "border-teal bg-teal/5 shadow-sm" : "border-line hover:border-ash"
+                                    }`}
+                                >
+                                    + Enter a new address
+                                </button>
+                            </div>
+                        )}
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <Input
-                                label={t("checkout.city")}
-                                required
-                                value={form.shipping_city}
-                                onChange={update("shipping_city")}
-                            />
-                            <Input
-                                label={t("checkout.region")}
-                                required
-                                value={form.shipping_region}
-                                onChange={update("shipping_region")}
-                            />
-                        </div>
+                        {(addingNewAddress || savedAddresses.length === 0) && (
+                            <>
+                                <Input
+                                    label={t("checkout.streetAddress")}
+                                    required
+                                    value={form.shipping_address}
+                                    onChange={update("shipping_address")}
+                                />
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                        label={t("checkout.city")}
+                                        required
+                                        value={form.shipping_city}
+                                        onChange={update("shipping_city")}
+                                    />
+                                    <Input
+                                        label={t("checkout.region")}
+                                        required
+                                        value={form.shipping_region}
+                                        onChange={update("shipping_region")}
+                                    />
+                                </div>
+
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={saveNewAddress}
+                                        onChange={(e) => setSaveNewAddress(e.target.checked)}
+                                    />
+                                    Save this address for next time
+                                </label>
+                            </>
+                        )}
                     </>
                 )}
 
@@ -451,8 +620,6 @@ export default function Checkout() {
                         )}
                     </div>
                 )}
-
-                <p className="text-xs font-semibold uppercase tracking-wide text-ash pt-2">Step 2 · Payment</p>
 
                 <fieldset className="border-0 p-0 m-0 min-w-0">
                     <legend className="block text-sm mb-2">{t("checkout.paymentMethod")}</legend>
@@ -522,7 +689,7 @@ export default function Checkout() {
             </form>
 
             <div className="md:col-span-2 animate-slide-up" style={{ animationDelay: "80ms" }}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ash">Step 3 · Review</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ash">Review</p>
                 <h2 className="font-display text-lg mb-3">{t("checkout.orderSummary")}</h2>
                 <ul className="space-y-3 mb-4">
                     {items.map((item) => (
@@ -532,6 +699,32 @@ export default function Checkout() {
                         </li>
                     ))}
                 </ul>
+
+                <div className="mb-4">
+                    {!appliedCoupon ? (
+                        <div className="flex gap-2">
+                            <Input
+                                aria-label="Coupon code"
+                                placeholder="Have a code?"
+                                value={couponInput}
+                                onChange={(e) => setCouponInput(e.target.value)}
+                                className="flex-1"
+                            />
+                            <Button type="button" variant="secondary" size="md" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()}>
+                                {couponBusy ? "Checking…" : "Apply"}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between text-sm border border-teal/30 bg-teal/5 rounded-md px-3 py-2">
+                            <span className="text-teal font-medium">"{appliedCoupon.code}" applied</span>
+                            <button type="button" onClick={removeCoupon} className="text-ash hover:text-ink text-xs underline">
+                                Remove
+                            </button>
+                        </div>
+                    )}
+                    {couponError && <p role="alert" className="text-coral text-xs mt-1">{couponError}</p>}
+                </div>
+
                 {form.buyer_protection_addon && (
                     <div className="flex justify-between text-sm text-ash mb-2">
                         <span>{t("checkout.buyerProtection.title")}</span>
@@ -542,6 +735,12 @@ export default function Checkout() {
                     <div className="flex justify-between text-sm text-teal mb-2">
                         <span>Loyalty points redeemed</span>
                         <span>-{format(loyaltyDiscount)}</span>
+                    </div>
+                )}
+                {appliedCoupon && (
+                    <div className="flex justify-between text-sm text-teal mb-2">
+                        <span>Code "{appliedCoupon.code}"</span>
+                        <span>-{format(appliedCoupon.discountAmount)}</span>
                     </div>
                 )}
                 <div className="flex justify-between border-t border-line pt-3">

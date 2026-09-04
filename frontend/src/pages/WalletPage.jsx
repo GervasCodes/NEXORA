@@ -8,6 +8,11 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 
+// Common round TZS mobile-money top-up amounts (Phase 6, UI/UX
+// remediation) - see the preset chips' own comment below for why these
+// exist as one-tap shortcuts rather than a second input.
+const TOPUP_PRESETS = [5000, 10000, 20000, 50000];
+
 export default function WalletPage() {
     const { format } = useCurrency();
     const { t } = useLanguage();
@@ -63,6 +68,27 @@ export default function WalletPage() {
                 </div>
                 <div>
                     <label htmlFor="topup-amount" className="block text-sm mb-1">{t("wallet.amount")}</label>
+                    {/* Quick-amount presets ( UI/UX remediation) -
+                        common round TZS amounts as one-tap chips, since
+                        this is a mobile-money top-up flow where typing a
+                        round number by hand is exactly the kind of small
+                        friction a preset removes. Purely a convenience
+                        fill of the same field below, not a separate
+                        input - the buyer can still type any amount. */}
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {TOPUP_PRESETS.map((preset) => (
+                            <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setAmount(String(preset))}
+                                className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                                    String(preset) === amount ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
+                                }`}
+                            >
+                                {format(preset)}
+                            </button>
+                        ))}
+                    </div>
                     <input
                         id="topup-amount"
                         type="number"

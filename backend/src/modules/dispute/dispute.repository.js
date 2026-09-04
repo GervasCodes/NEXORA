@@ -42,18 +42,54 @@ exports.findByOrderId = async (orderId) => {
     return rows;
 };
 
-exports.findByBuyer = async (buyerId) => {
+// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// as order.repository.js#findOrdersByBuyer. `q` matches the dispute
+// number, subject, or the order number it's against.
+exports.findByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
+    const offset = (page - 1) * limit;
+    const conditions = ["d.buyer_id = ?"];
+    const params = [buyerId];
+
+    if (status) {
+        conditions.push("d.status = ?");
+        params.push(status);
+    }
+    if (from) {
+        conditions.push("d.created_at >= ?");
+        params.push(from);
+    }
+    if (to) {
+        conditions.push("d.created_at <= ?");
+        params.push(to);
+    }
+    if (q) {
+        conditions.push("(d.dispute_number LIKE ? OR d.subject LIKE ? OR o.order_number LIKE ?)");
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    const whereClause = conditions.join(" AND ");
+
     const [rows] = await db.query(
         `SELECT d.id, d.dispute_number, d.order_id, d.type, d.status, d.subject,
                 d.resolution, d.refund_amount, d.created_at, d.updated_at,
                 o.order_number
         FROM disputes d
         JOIN orders o ON o.id = d.order_id
-        WHERE d.buyer_id = ?
-        ORDER BY d.created_at DESC`,
-        [buyerId]
+        WHERE ${whereClause}
+        ORDER BY d.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
     );
-    return rows;
+
+    const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total
+        FROM disputes d
+        JOIN orders o ON o.id = d.order_id
+        WHERE ${whereClause}`,
+        params
+    );
+
+    return { disputes: rows, total };
 };
 
 exports.findBySeller = async (sellerId) => {

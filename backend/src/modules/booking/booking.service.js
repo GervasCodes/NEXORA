@@ -174,6 +174,15 @@ exports.getBookingById = async (bookingId, userId) => {
     const booking = await loadBookingWithAccessCheck(bookingId, userId);
     const items = await bookingRepository.findItemsByBookingId(bookingId);
 
+    // Phase 7 (UI/UX remediation) - the reschedule UI needs to know the
+    // service's pricing_model to pick the right date-selection mode
+    // (single date vs. check-in/check-out range), the same distinction
+    // ServiceDetail.jsx's own booking widget already makes. Also fills a
+    // gap that predates this phase: this response previously carried no
+    // service title/slug at all, so BookingDetail.jsx had no way to
+    // display which service a booking was even for.
+    const service = await serviceRepository.findById(booking.service_id);
+
     let review = null;
     if (booking.status === "completed" && booking.customer_id === userId) {
         const reviewRow = await reviewRepository.findByBuyerAndBooking(userId, bookingId);
@@ -188,14 +197,37 @@ exports.getBookingById = async (bookingId, userId) => {
 
     return {
         ...booking,
+        service_title: service?.title || null,
+        service_slug: service?.slug || null,
+        pricing_model: service?.pricing_model || null,
         items,
         review,
         can_review: booking.status === "completed" && booking.customer_id === userId && !review
     };
 };
 
-exports.getMyBookingsAsCustomer = async (customerId) => {
-    return bookingRepository.findByCustomer(customerId);
+exports.getMyBookingsAsCustomer = async (customerId, query = {}) => {
+    const page = Math.max(1, parseInt(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 10));
+
+    const { bookings, total } = await bookingRepository.findByCustomer(customerId, {
+        status: query.status || null,
+        from: query.from || null,
+        to: query.to || null,
+        q: query.q || null,
+        page,
+        limit
+    });
+
+    return {
+        bookings,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit))
+        }
+    };
 };
 
 exports.getMyBookingsAsProvider = async (providerId) => {
@@ -369,4 +401,73 @@ exports.cancelBooking = async (bookingId, userId) => {
             : `Booking ${booking.booking_reference} has been cancelled.`,
         url: `/bookings/${bookingId}`
     });
+};
+
+// Phase 7 (UI/UX remediation) - reschedule. Buyer-only (a provider
+// changing their own availability is a different concern, handled
+// elsewhere), available under the exact same CANCELLABLE_STATUSES gate
+// cancel already uses - if a booking can no longer be cancelled, it
+// can no longer be moved either. Re-runs the same date-list/pricing/
+// availability validation createBooking does for the new dates
+// (buildDateList, priceDateItems) so a rescheduled booking is priced
+// and validated identically to a fresh one, just without losing the
+// booking's own id/history/payment record in the process.
+exports.rescheduleBooking = async (bookingId, customerId, newStartDate, newEndDate) => {
+    const booking = await bookingRepository.findById(bookingId);
+
+    if (!booking || booking.customer_id !== customerId) {
+        throw new Error("Booking not found");
+    }
+
+    if (!CANCELLABLE_STATUSES.includes(booking.status)) {
+        throw new Error(`Booking can no longer be rescheduled (status: "${booking.status}")`);
+    }
+
+    const service = await serviceRepository.findById(booking.service_id);
+    if (!service) {
+        throw new Error("Service not found");
+    }
+
+    if (service.pricing_model !== "per_night" && newStartDate !== newEndDate) {
+        throw new Error("This service is booked for a single date");
+    }
+    if (new Date(newStartDate) > new Date(newEndDate)) {
+        throw new Error("Start date must be on or before the end date");
+    }
+
+    const newDates = buildDateList(service.pricing_model, newStartDate, newEndDate);
+    if (newDates.length === 0) {
+        throw new Error("A per-night booking needs at least one night");
+    }
+
+    const oldItems = await bookingRepository.findItemsByBookingId(bookingId);
+    const newDateItems = await priceDateItems(service, newDates, booking.quantity);
+    const newAmount = newDateItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+    // A paid booking's amount is already settled (charged, and reflected
+    // in the provider's escrowed earnings) - silently changing it here
+    // would desync the booking record from money that's already moved.
+    // Rather than attempt a partial-charge/refund reconciliation (out of
+    // scope for this feature), a price-changing reschedule on a paid
+    // booking is simply not allowed; the buyer can cancel (which does
+    // already have full refund handling, see cancelBooking above) and
+    // rebook instead.
+    if (booking.payment_status === "paid" && Number(newAmount) !== Number(booking.amount)) {
+        throw new Error("These dates have a different price - cancel and rebook instead, or choose dates priced the same as your current booking");
+    }
+
+    await bookingRepository.rescheduleBooking(
+        bookingId, booking.service_id, oldItems,
+        newStartDate, newEndDate, booking.quantity, newDateItems, newAmount
+    );
+
+    await notificationService.notify({
+        userId: booking.provider_id,
+        type: "booking_rescheduled",
+        title: "Booking rescheduled",
+        message: `Booking ${booking.booking_reference} was moved to ${newStartDate}${newEndDate !== newStartDate ? ` – ${newEndDate}` : ""}.`,
+        url: `/seller/bookings/${bookingId}`
+    });
+
+    return { bookingId, amount: newAmount };
 };

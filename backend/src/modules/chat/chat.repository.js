@@ -27,6 +27,35 @@ const deletedColumnFor = (conversation, userId) => {
 };
 exports.deletedColumnFor = deletedColumnFor;
 
+// Phase 8 (UI/UX remediation) - same per-participant column pattern as
+// clearedColumnFor/deletedColumnFor above (see migration 098's comment).
+const mutedColumnFor = (conversation, userId) => {
+    if (conversation.buyer_id === userId) return "buyer_muted_at";
+    if (conversation.seller_id === userId) return "seller_muted_at";
+    if (conversation.delivery_agent_id === userId) return "agent_muted_at";
+    return null;
+};
+exports.mutedColumnFor = mutedColumnFor;
+
+const archivedColumnFor = (conversation, userId) => {
+    if (conversation.buyer_id === userId) return "buyer_archived_at";
+    if (conversation.seller_id === userId) return "seller_archived_at";
+    if (conversation.delivery_agent_id === userId) return "agent_archived_at";
+    return null;
+};
+exports.archivedColumnFor = archivedColumnFor;
+
+exports.setColumnTimestamp = async (conversationId, column, active) => {
+    // Column name is only ever one of the fixed set returned by
+    // mutedColumnFor/archivedColumnFor above (never user input), so
+    // interpolating it directly is safe - same approach
+    // clearedColumnFor's own callers already use elsewhere in this file.
+    await db.query(
+        `UPDATE conversations SET ${column} = ? WHERE id = ?`,
+        [active ? new Date() : null, conversationId]
+    );
+};
+
 exports.findUserRole = async (userId) => {
     const [rows] = await db.query("SELECT role FROM users WHERE id = ?", [userId]);
     return rows[0]?.role;
@@ -65,9 +94,19 @@ exports.findConversationById = async (conversationId) => {
     return rows[0];
 };
 
-exports.findConversationsByUser = async (userId) => {
-    const [rows] = await db.query(
-        `SELECT c.*,
+// Phase 8 (UI/UX remediation) - added my_muted_at/my_archived_at
+// columns (same CASE-per-participant shape as my_cleared_at already
+// has) and an `archived` filter: false (default) excludes archived
+// conversations from the normal Messages list, true returns only the
+// archived ones for the "Archived" view. Params are built as an array
+// rather than counted by hand, since this query is long enough that a
+// manual positional count would be an easy place to introduce a
+// mismatch bug.
+exports.findConversationsByUser = async (userId, { archived = false } = {}) => {
+    const params = [];
+    const push3 = () => params.push(userId, userId, userId);
+
+    let sql = `SELECT c.*,
                 p.name AS product_name,
                 o.order_number,
                 buyer.first_name AS buyer_first_name, buyer.last_name AS buyer_last_name, buyer.photo_url AS buyer_photo_url,
@@ -78,6 +117,16 @@ exports.findConversationsByUser = async (userId) => {
                     WHEN c.seller_id = ? THEN c.seller_cleared_at
                     WHEN c.delivery_agent_id = ? THEN c.agent_cleared_at
                 END AS my_cleared_at,
+                CASE
+                    WHEN c.buyer_id = ? THEN c.buyer_muted_at
+                    WHEN c.seller_id = ? THEN c.seller_muted_at
+                    WHEN c.delivery_agent_id = ? THEN c.agent_muted_at
+                END AS my_muted_at,
+                CASE
+                    WHEN c.buyer_id = ? THEN c.buyer_archived_at
+                    WHEN c.seller_id = ? THEN c.seller_archived_at
+                    WHEN c.delivery_agent_id = ? THEN c.agent_archived_at
+                END AS my_archived_at,
                 (
                     SELECT CASE
                         WHEN m.is_deleted THEN 'Message deleted'
@@ -119,9 +168,25 @@ exports.findConversationsByUser = async (userId) => {
             (c.seller_id = ? AND c.seller_deleted_at IS NOT NULL AND c.updated_at <= c.seller_deleted_at) OR
             (c.delivery_agent_id = ? AND c.agent_deleted_at IS NOT NULL AND c.updated_at <= c.agent_deleted_at)
         )
-        ORDER BY c.updated_at DESC`,
-        [userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId]
-    );
+        AND ${archived ? "" : "NOT"} (
+            (c.buyer_id = ? AND c.buyer_archived_at IS NOT NULL) OR
+            (c.seller_id = ? AND c.seller_archived_at IS NOT NULL) OR
+            (c.delivery_agent_id = ? AND c.agent_archived_at IS NOT NULL)
+        )
+        ORDER BY c.updated_at DESC`;
+
+    // my_cleared_at, my_muted_at, my_archived_at (3x3), last_message
+    // subquery (3), unread_count subquery (1+3), main WHERE (3), NOT
+    // deleted (3), archived filter (3) - in that exact order, matching
+    // the ? placeholders above top to bottom.
+    push3(); push3(); push3();
+    push3();
+    params.push(userId); push3();
+    push3();
+    push3();
+    push3();
+
+    const [rows] = await db.query(sql, params);
     return rows;
 };
 
@@ -284,6 +349,47 @@ exports.searchMessages = async (conversationId, query, clearedAt) => {
         ORDER BY created_at DESC
         LIMIT 50`,
         clearedAt ? [conversationId, likePattern, clearedAt] : [conversationId, likePattern]
+    );
+    return rows;
+};
+
+// Cross-conversation search (Phase 8, UI/UX remediation) - same
+// escaping and "respect each conversation's own clear point" logic as
+// searchMessages above, run across every conversation this user
+// participates in (deleted-for-them conversations excluded, same as
+// findConversationsByUser's own NOT (...) clause). Each result carries
+// which conversation it's in and the other participant's name, so the
+// UI can deep-link straight into the right thread without a second
+// round trip.
+exports.searchMessagesAcrossConversations = async (userId, query) => {
+    const likePattern = `%${escapeLikePattern(query)}%`;
+    const [rows] = await db.query(
+        `SELECT
+            m.id, m.conversation_id, m.sender_id, m.message,
+            m.attachment_url, m.attachment_type, m.attachment_name, m.created_at,
+            CASE
+                WHEN c.buyer_id = ? THEN COALESCE(seller.first_name, agent.first_name)
+                ELSE buyer.first_name
+            END AS other_first_name,
+            CASE
+                WHEN c.buyer_id = ? THEN COALESCE(seller.last_name, agent.last_name)
+                ELSE buyer.last_name
+            END AS other_last_name
+        FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id
+        JOIN users buyer ON buyer.id = c.buyer_id
+        LEFT JOIN users seller ON seller.id = c.seller_id
+        LEFT JOIN users agent ON agent.id = c.delivery_agent_id
+        WHERE (c.buyer_id = ? OR c.seller_id = ? OR c.delivery_agent_id = ?)
+        AND m.is_deleted = 0 AND m.message LIKE ?
+        AND NOT (
+            (c.buyer_id = ? AND c.buyer_deleted_at IS NOT NULL AND m.created_at <= c.buyer_deleted_at) OR
+            (c.seller_id = ? AND c.seller_deleted_at IS NOT NULL AND m.created_at <= c.seller_deleted_at) OR
+            (c.delivery_agent_id = ? AND c.agent_deleted_at IS NOT NULL AND m.created_at <= c.agent_deleted_at)
+        )
+        ORDER BY m.created_at DESC
+        LIMIT 50`,
+        [userId, userId, userId, userId, userId, likePattern, userId, userId, userId]
     );
     return rows;
 };

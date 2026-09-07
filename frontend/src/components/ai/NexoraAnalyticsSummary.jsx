@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { summarizeSellerAnalytics } from "../../api/ai";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // feature #7. seller.service.js#getAnalytics stays the single
 // source of truth for every number shown elsewhere on this page - this
@@ -25,9 +26,16 @@ export default function NexoraAnalyticsSummary() {
     if (!summary) return null;
 
     return (
-        <div className="flex items-start gap-2 rounded-lg glass-strong p-3 mb-6">
-            <span className="h-4 w-4 mt-0.5 rounded-full bg-gradient-to-br from-azure-light to-azure-deep shrink-0" aria-hidden="true" />
-            <p className="text-sm text-abyss">{summary}</p>
+        <div className="flex items-start gap-3 rounded-xl border border-azure/20 bg-gradient-to-r from-azure/6 to-transparent px-4 py-3.5 mb-6">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <AssistantSparkleIcon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-azure mb-1">
+                    Nexora Assistant · Analytics
+                </p>
+                <p className="text-sm text-abyss">{summary}</p>
+            </div>
         </div>
     );
 }

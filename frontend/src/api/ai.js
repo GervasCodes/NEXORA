@@ -4,8 +4,12 @@ import api from "./client";
 // so the UI can show a "no AI available right now" state without that
 // ever meaning the feature itself stops working (backend always returns
 // a template/fallback value too - see ai.service.js).
-export const sendChatMessage = (message) =>
-    api.post("/ai/chat", { message }).then((res) => res.data.data);
+export const sendChatMessage = (message, { history, priorReply } = {}) =>
+    api.post("/ai/chat", {
+        message,
+        ...(history && history.length ? { history } : {}),
+        ...(priorReply ? { priorReply } : {})
+    }).then((res) => res.data.data);
 
 export const parseSearchQuery = (text) =>
     api.post("/ai/search/parse", { text }).then((res) => res.data.data);
@@ -15,6 +19,12 @@ export const explainRecommendations = (context) =>
 
 export const explainOrderStatus = (orderId) =>
     api.post(`/ai/orders/${orderId}/explain`).then((res) => res.data.data);
+
+export const explainProduct = (slug) =>
+    api.post(`/ai/products/${encodeURIComponent(slug)}/explain`).then((res) => res.data.data);
+
+export const explainBooking = (bookingId) =>
+    api.post(`/ai/bookings/${bookingId}/explain`).then((res) => res.data.data);
 
 // --- seller/provider AI (draft-generation, no auto-execute) ---
 // Every response here is a draft the seller/provider must review before

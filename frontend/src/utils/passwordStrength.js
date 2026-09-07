@@ -1,6 +1,6 @@
 /**
  * Lightweight, dependency-free password strength scoring.
- * (UI/UX remediation) - Register.jsx previously only showed a
+ * Phase 0 (UI/UX remediation) - Register.jsx previously only showed a
  * static "At least 8 characters" hint with no live feedback while typing.
  *
  * This intentionally stays simple (length + character variety) rather than

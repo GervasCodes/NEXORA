@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { explainForecast, explainPersonalizationHealth } from "../../api/ai";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // features #13 (predictive analytics) and #14 (personalization).
 // admin.service.js#getAnalytics's linear-regression forecast and
@@ -31,23 +32,27 @@ export default function NexoraAdminInsights() {
     if (!forecast && !personalization) return null;
 
     return (
-        <div className="rounded-lg glass-strong p-4 mb-10 space-y-3">
-            <p className="text-xs font-medium text-azure flex items-center gap-2">
-                <span className="h-4 w-4 rounded-full bg-gradient-to-br from-azure-light to-azure-deep shrink-0" aria-hidden="true" />
-                Nexora AI Copilot
-            </p>
-            {forecast && (
-                <div className="flex items-start gap-2">
-                    <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Forecast</span>
-                    <p className="text-sm text-abyss">{forecast.explanation}</p>
-                </div>
-            )}
-            {personalization && (
-                <div className="flex items-start gap-2">
-                    <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Personalization</span>
-                    <p className="text-sm text-abyss">{personalization.explanation}</p>
-                </div>
-            )}
+        <div className="flex items-start gap-3 rounded-xl border border-azure/20 bg-gradient-to-r from-azure/6 to-transparent px-4 py-3.5 mb-10">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <AssistantSparkleIcon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-azure">
+                    Nexora Assistant · Copilot
+                </p>
+                {forecast && (
+                    <div className="flex items-start gap-2">
+                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Forecast</span>
+                        <p className="text-sm text-abyss">{forecast.explanation}</p>
+                    </div>
+                )}
+                {personalization && (
+                    <div className="flex items-start gap-2">
+                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Personalization</span>
+                        <p className="text-sm text-abyss">{personalization.explanation}</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

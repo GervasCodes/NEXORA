@@ -138,7 +138,7 @@ export default function App() {
     const [showSplash, setShowSplash] = useState(
         () => !sessionStorage.getItem("nexora_splash_shown")
     );
-    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired } = useAuth();
+    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired, sessionReady } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
 
@@ -185,7 +185,7 @@ export default function App() {
     }, [navigate]);
 
     if (showSplash) {
-        return <SplashScreen onDone={() => setShowSplash(false)} />;
+        return <SplashScreen appReady={sessionReady} onDone={() => setShowSplash(false)} />;
     }
 
     // CSRF cookie expired while the session cookie was still alive. The

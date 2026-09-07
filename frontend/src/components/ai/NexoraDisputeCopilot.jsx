@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { summarizeDispute, suggestDisputeResolution } from "../../api/ai";
-import { SparkleIcon } from "./NexoraFraudExplain";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // Spinner for inline loading states
 function Spinner() {
@@ -38,7 +38,7 @@ export default function NexoraDisputeCopilot({ disputeId, onApply }) {
             const result = await suggestDisputeResolution(disputeId);
             setSuggestion(result);
         } catch {
-            setSuggestError("Nexora AI is temporarily unavailable — please try again in a moment.");
+            setSuggestError("Nexora Assistant is temporarily unavailable — please try again in a moment.");
         } finally {
             setSuggestLoading(false);
         }
@@ -59,10 +59,10 @@ export default function NexoraDisputeCopilot({ disputeId, onApply }) {
             {/* Header bar */}
             <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-azure/15">
                 <div className="w-6 h-6 rounded-md bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0">
-                    <SparkleIcon className="w-3 h-3 text-white" />
+                    <AssistantSparkleIcon className="w-3 h-3 text-white" />
                 </div>
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-azure">
-                    Nexora AI Copilot
+                    Nexora Assistant Copilot
                 </span>
             </div>
 
@@ -90,7 +90,7 @@ export default function NexoraDisputeCopilot({ disputeId, onApply }) {
                         onClick={handleSuggest}
                         className="flex items-center gap-2 text-xs font-medium text-azure hover:text-azure-deep transition-colors py-0.5"
                     >
-                        <SparkleIcon className="w-3.5 h-3.5" />
+                        <AssistantSparkleIcon className="w-3.5 h-3.5" />
                         Suggest a resolution
                     </button>
                 ) : (
@@ -144,7 +144,7 @@ export default function NexoraDisputeCopilot({ disputeId, onApply }) {
                                 )}
 
                                 <p className="text-[11px] text-ash/80 pt-1 border-t border-azure/10">
-                                    Draft only — Nexora AI never resolves a dispute on its own.
+                                    Draft only — Nexora Assistant never resolves a dispute on its own.
                                 </p>
                             </div>
                         )}

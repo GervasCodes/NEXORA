@@ -49,7 +49,8 @@ exports.complete = async ({ system, messages, maxTokens = 500 }) => {
         return {
             text: data.choices?.[0]?.message?.content || "",
             inputTokens: data.usage?.prompt_tokens || 0,
-            outputTokens: data.usage?.completion_tokens || 0
+            outputTokens: data.usage?.completion_tokens || 0,
+            truncated: data.choices?.[0]?.finish_reason === "length"
         };
     } finally {
         clearTimeout(timeout);

@@ -6,6 +6,7 @@ import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
+import { useAIAssistant } from "../context/AIAssistantContext";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import RatingBreakdown from "../components/RatingBreakdown";
@@ -28,6 +29,7 @@ export default function ProductDetail() {
     const wishlist = useWishlist();
     const toast = useToast();
     const navigate = useNavigate();
+    const assistant = useAIAssistant();
 
     const [product, setProduct] = useState(null);
     const [reviews, setReviews] = useState(null);
@@ -432,6 +434,18 @@ export default function ProductDetail() {
                         <dt>{t("product.category")}</dt><dd className="text-ink">{product.category_name || "—"}</dd>
                         <dt>{t("product.inStock")}</dt><dd className="text-ink">{product.stock}</dd>
                     </dl>
+
+                    {/* Phase 9: product-status assistant - reads this same real
+                        product via /ai/products/:slug/explain, AI only phrases it. */}
+                    {assistant && (
+                        <button
+                            type="button"
+                            onClick={() => assistant.open({ type: "product", slug })}
+                            className="text-sm text-azure hover:underline mb-6 -mt-2 block"
+                        >
+                            Ask Nexora Assistant about this product
+                        </button>
+                    )}
 
                     {hasVariants && (
                         <div className="mb-4 space-y-3">

@@ -15,6 +15,8 @@ const {
     searchParseValidation,
     recommendationContextValidation,
     orderIdValidation,
+    productSlugValidation,
+    bookingIdValidation,
     listingDraftValidation,
     marketingCopyValidation,
     serviceIdParamValidation,
@@ -47,6 +49,30 @@ router.post(
     orderIdValidation,
     validationMiddleware,
     aiController.explainOrderStatus
+);
+
+// Phase 9: public/optional-auth, same shape as chat/search/recommendations
+// above - a product page is public, so this personalizes for a signed-in
+// buyer without requiring one.
+router.post(
+    "/products/:slug/explain",
+    aiLimiter,
+    productSlugValidation,
+    validationMiddleware,
+    aiController.explainProductForBuyer
+);
+
+// Requires auth (any role) - booking.service.js#getBookingById itself
+// enforces the caller is that booking's customer or provider, same as
+// BookingDetail.jsx's own page-level RequireAuth (not a role-specific
+// gate, since either party can view/ask about a booking).
+router.post(
+    "/bookings/:id/explain",
+    authMiddleware,
+    aiLimiter,
+    bookingIdValidation,
+    validationMiddleware,
+    aiController.explainBookingForBuyer
 );
 
 // --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---

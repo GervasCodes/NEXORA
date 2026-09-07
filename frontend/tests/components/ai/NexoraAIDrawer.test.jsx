@@ -10,9 +10,13 @@ vi.mock("../../../src/context/AIAssistantContext", () => ({
 
 const mockSendChatMessage = vi.fn();
 const mockExplainOrderStatus = vi.fn();
+const mockExplainProduct = vi.fn();
+const mockExplainBooking = vi.fn();
 vi.mock("../../../src/api/ai", () => ({
     sendChatMessage: (...args) => mockSendChatMessage(...args),
-    explainOrderStatus: (...args) => mockExplainOrderStatus(...args)
+    explainOrderStatus: (...args) => mockExplainOrderStatus(...args),
+    explainProduct: (...args) => mockExplainProduct(...args),
+    explainBooking: (...args) => mockExplainBooking(...args)
 }));
 
 import NexoraAIDrawer from "../../../src/components/ai/NexoraAIDrawer";
@@ -20,6 +24,8 @@ import NexoraAIDrawer from "../../../src/components/ai/NexoraAIDrawer";
 beforeEach(() => {
     mockSendChatMessage.mockReset();
     mockExplainOrderStatus.mockReset();
+    mockExplainProduct.mockReset();
+    mockExplainBooking.mockReset();
     mockClose.mockReset();
 });
 
@@ -61,10 +67,12 @@ describe("NexoraAIDrawer", () => {
 
         render(<NexoraAIDrawer />);
 
-        await userEvent.type(screen.getByPlaceholderText(/ask nexora ai/i), "where is my order");
+        await userEvent.type(screen.getByPlaceholderText(/ask nexora assistant/i), "where is my order");
         await userEvent.click(screen.getByRole("button", { name: /send/i }));
 
-        expect(mockSendChatMessage).toHaveBeenCalledWith("where is my order");
+        expect(mockSendChatMessage).toHaveBeenCalledWith("where is my order", {
+            history: [{ role: "assistant", content: "Hi! I'm Nexora Assistant. Ask me about orders, delivery, refunds, or finding a product." }]
+        });
         expect(await screen.findByText("You can track it from Orders.")).toBeInTheDocument();
         expect(screen.getByText("where is my order")).toBeInTheDocument();
     });
@@ -75,7 +83,7 @@ describe("NexoraAIDrawer", () => {
 
         render(<NexoraAIDrawer />);
 
-        await userEvent.type(screen.getByPlaceholderText(/ask nexora ai/i), "hello");
+        await userEvent.type(screen.getByPlaceholderText(/ask nexora assistant/i), "hello");
         await userEvent.click(screen.getByRole("button", { name: /send/i }));
 
         expect(await screen.findByText(/temporarily unavailable/i)).toBeInTheDocument();
@@ -85,7 +93,7 @@ describe("NexoraAIDrawer", () => {
         mockAssistantState = { isOpen: true, pendingContext: null, open: vi.fn(), close: mockClose };
         render(<NexoraAIDrawer />);
 
-        await userEvent.click(screen.getByRole("button", { name: /close nexora ai/i }));
+        await userEvent.click(screen.getByRole("button", { name: /close nexora assistant/i }));
         expect(mockClose).toHaveBeenCalled();
     });
 

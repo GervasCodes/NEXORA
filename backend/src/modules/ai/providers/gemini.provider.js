@@ -48,7 +48,8 @@ exports.complete = async ({ system, messages, maxTokens = 500 }) => {
         return {
             text,
             inputTokens: data.usageMetadata?.promptTokenCount || 0,
-            outputTokens: data.usageMetadata?.candidatesTokenCount || 0
+            outputTokens: data.usageMetadata?.candidatesTokenCount || 0,
+            truncated: data.candidates?.[0]?.finishReason === "MAX_TOKENS"
         };
     } finally {
         clearTimeout(timeout);

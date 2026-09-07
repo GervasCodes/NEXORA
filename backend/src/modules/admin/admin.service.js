@@ -1010,6 +1010,15 @@ exports.updateSettings = async (data) => {
     return settingsService.updateSettings(data);
 };
 
+// Read-only Nexora Assistant token usage (today/this month, global) for
+// the Admin Settings page's usage panel (Phase 7). Lazily required
+// since ai.service.js already requires admin.service.js at module load
+// (mirrors the lazy audit.service require in settings.service.js above).
+exports.getAiUsageSummary = async () => {
+    const aiService = require("../ai/ai.service");
+    return aiService.getUsageOverview();
+};
+
 // --- Monetization Master Switch (Admin Billing Control Center) ---
 
 exports.getMonetizationStatus = async () => {

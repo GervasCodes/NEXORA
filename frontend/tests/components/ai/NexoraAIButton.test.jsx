@@ -11,14 +11,14 @@ vi.mock("../../../src/context/AIAssistantContext", () => ({
 import NexoraAIButton from "../../../src/components/ai/NexoraAIButton";
 
 describe("NexoraAIButton", () => {
-    it("renders a clearly-labeled Nexora AI button", () => {
+    it("renders a clearly-labeled Nexora Assistant button", () => {
         render(<NexoraAIButton />);
-        expect(screen.getByRole("button", { name: /nexora ai/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /nexora assistant/i })).toBeInTheDocument();
     });
 
     it("opens the assistant with no preset context when clicked", async () => {
         render(<NexoraAIButton />);
-        await userEvent.click(screen.getByRole("button", { name: /nexora ai/i }));
+        await userEvent.click(screen.getByRole("button", { name: /nexora assistant/i }));
         expect(mockOpen).toHaveBeenCalledWith();
     });
 

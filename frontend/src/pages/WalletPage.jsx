@@ -68,7 +68,7 @@ export default function WalletPage() {
                 </div>
                 <div>
                     <label htmlFor="topup-amount" className="block text-sm mb-1">{t("wallet.amount")}</label>
-                    {/* Quick-amount presets ( UI/UX remediation) -
+                    {/* Quick-amount presets (Phase 6, UI/UX remediation) -
                         common round TZS amounts as one-tap chips, since
                         this is a mobile-money top-up flow where typing a
                         round number by hand is exactly the kind of small

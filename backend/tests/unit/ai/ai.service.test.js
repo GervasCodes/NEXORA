@@ -96,7 +96,7 @@ describe("ai.service.chat", () => {
 
         const result = await aiService.chat({ userId: 5, message: "where is my order" });
 
-        expect(result).toEqual({ reply: "Track it from Orders.", aiGenerated: true });
+        expect(result).toEqual({ reply: "Track it from Orders.", aiGenerated: true, truncated: false });
         expect(aiRepository.recordUsage).toHaveBeenCalledWith({ userId: 5, feature: "chat", tokensUsed: 120 });
     });
 
@@ -139,7 +139,7 @@ describe("ai.service.parseSearchQuery", () => {
 
         const result = await aiService.parseSearchQuery({ userId: null, text: "  cheap running shoes  " });
 
-        expect(result).toEqual({ search: "cheap running shoes", min_price: null, max_price: null, sort: null, aiGenerated: false });
+        expect(result).toEqual({ search: "cheap running shoes", min_price: null, max_price: null, sort: null, aiGenerated: false, truncated: false });
     });
 
     it("parses structured filters from a valid JSON provider reply", async () => {
@@ -153,7 +153,7 @@ describe("ai.service.parseSearchQuery", () => {
 
         const result = await aiService.parseSearchQuery({ userId: 5, text: "running shoes under 50000, cheapest first" });
 
-        expect(result).toEqual({ search: "running shoes", min_price: null, max_price: 50000, sort: "price_low", aiGenerated: true });
+        expect(result).toEqual({ search: "running shoes", min_price: null, max_price: 50000, sort: "price_low", aiGenerated: true, truncated: false });
     });
 
     it("falls back when the provider reply isn't valid JSON", async () => {

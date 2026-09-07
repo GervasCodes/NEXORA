@@ -14,6 +14,7 @@ const initialForm = {
     email: "",
     phone: "",
     password: "",
+    confirm_password: "",
     role: "buyer",
     vehicle_type: "motorcycle",
     vehicle_plate_number: "",
@@ -57,6 +58,7 @@ export default function Register() {
 
     const needsDocuments = form.role === "seller" || form.role === "delivery_agent";
     const requiredDocs = REQUIRED_DOCS[form.role] || [];
+    const passwordsMismatch = form.confirm_password.length > 0 && form.password !== form.confirm_password;
 
     
     const handleAccountStepSubmit = (e) => {
@@ -66,6 +68,11 @@ export default function Register() {
         const digitsOnly = form.phone.trim().replace(/[^\d]/g, "");
         if (digitsOnly.length < 7) {
             setError(t("auth.invalidPhoneError"));
+            return;
+        }
+
+        if (form.password !== form.confirm_password) {
+            setError(t("auth.passwordMismatchError"));
             return;
         }
 
@@ -115,6 +122,7 @@ export default function Register() {
 
         const fullPhone = buildFullPhone();
         const formWithPhone = { ...form, phone: fullPhone };
+        delete formWithPhone.confirm_password;
         let payload = formWithPhone;
 
         if (needsDocuments) {
@@ -345,6 +353,18 @@ export default function Register() {
                     />
                 </div>
 
+                <Input
+                    label={t("auth.confirmPasswordLabel")}
+                    type="password"
+                    required
+                    minLength={8}
+                    value={form.confirm_password}
+                    onChange={update("confirm_password")}
+                    error={passwordsMismatch ? t("auth.passwordMismatchError") : undefined}
+                    showPasswordLabel={t("auth.showPassword")}
+                    hidePasswordLabel={t("auth.hidePassword")}
+                />
+
                 <div>
                     <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
                     <select value={form.role} onChange={update("role")}
@@ -382,7 +402,7 @@ export default function Register() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button type="submit" disabled={submitting} fullWidth className="gap-2">
+                <Button type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
                     {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </Button>

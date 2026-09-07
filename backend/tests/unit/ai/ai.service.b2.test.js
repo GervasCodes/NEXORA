@@ -178,7 +178,7 @@ describe("ai.service.explainDeliveryRoute", () => {
 
         const result = await aiService.explainDeliveryRoute({ userId: 3 });
 
-        expect(result).toEqual({ deliveries: [], suggestion: "You have no active deliveries right now.", aiGenerated: false });
+        expect(result).toEqual({ deliveries: [], suggestion: "You have no active deliveries right now.", aiGenerated: false, truncated: false });
     });
 
     it("orders active deliveries by nearest-neighbor distance, not by input order", async () => {

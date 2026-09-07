@@ -1,5 +1,5 @@
 /**
- * (UI/UX remediation) - minimal .ics (iCalendar) file builder for
+ * Phase 9 (UI/UX remediation) - minimal .ics (iCalendar) file builder for
  * "Add to calendar" on a scheduled Live Selling session. Purely
  * client-side, no library needed - a single VEVENT is a handful of
  * required lines.

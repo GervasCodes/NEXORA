@@ -12,6 +12,7 @@ import Button from "../components/ui/Button";
 import PhoneInput from "../components/PhoneInput";
 import Skeleton from "../components/Skeleton";
 import PageMeta from "../components/PageMeta";
+import { useAIAssistant } from "../context/AIAssistantContext";
 import RescheduleModal from "../components/RescheduleModal";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
@@ -32,6 +33,7 @@ export default function BookingDetail() {
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
+    const assistant = useAIAssistant();
 
     const justBooked = !!location.state?.justBooked;
 
@@ -363,6 +365,18 @@ export default function BookingDetail() {
             {error && <p role="alert" className="text-sm text-coral mb-4">{error}</p>}
 
             <BookingProgressTimeline status={booking.status} />
+
+            {/* Phase 9: booking-status assistant - reads this same real
+                booking via /ai/bookings/:id/explain, AI only phrases it. */}
+            {assistant && (
+                <button
+                    type="button"
+                    onClick={() => assistant.open({ type: "booking", bookingId: booking.id })}
+                    className="text-sm text-azure hover:underline mb-6 -mt-3 block"
+                >
+                    Ask Nexora Assistant about this booking
+                </button>
+            )}
 
             <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
                 <div>

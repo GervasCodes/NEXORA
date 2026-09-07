@@ -1,5 +1,5 @@
 /**
- * (UI/UX remediation) - Live Selling in-app viewing.
+ * Phase 9 (UI/UX remediation) - Live Selling in-app viewing.
  *
  * live_selling_sessions only ever stores a plain external_link (see
  * migration 089/099's comments - this is a scheduling/announcement

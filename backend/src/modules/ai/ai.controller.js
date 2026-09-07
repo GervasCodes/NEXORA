@@ -19,14 +19,14 @@ const getOptionalUserId = (req) => {
 exports.chat = async (req, res) => {
     try {
         const userId = getOptionalUserId(req);
-        const result = await aiService.chat({ userId, message: req.body.message });
+        const result = await aiService.chat({ userId, message: req.body.message, history: req.body.history, priorReply: req.body.priorReply });
         res.json({ success: true, data: result });
     } catch (error) {
         // A genuinely broken request path shouldn't happen here (the
         // service itself never throws for "AI unavailable" - only a
         // real bug would reach this branch), but this still must not
         // leave the buyer with nothing to look at.
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -36,7 +36,7 @@ exports.parseSearch = async (req, res) => {
         const result = await aiService.parseSearchQuery({ userId, text: req.body.text });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -51,7 +51,7 @@ exports.explainRecommendations = async (req, res) => {
         const result = await aiService.explainRecommendations({ userId, forProductSlug });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -73,6 +73,34 @@ exports.explainOrderStatus = async (req, res) => {
     }
 };
 
+// Phase 9: public/optional-auth like chat/search/recommendations above -
+// a product page is public, so this personalizes for a signed-in buyer
+// but doesn't require one. product.service.js#getProductBySlug throws a
+// plain "Product not found" for a bad slug, same 404-passthrough as
+// explainOrderStatus above.
+exports.explainProductForBuyer = async (req, res) => {
+    try {
+        const userId = getOptionalUserId(req);
+        const result = await aiService.explainProductForBuyer({ userId, slug: req.params.slug });
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(404).json({ success: false, message: error.message });
+    }
+};
+
+// Booking detail is buyer/provider-specific data (like an order), so
+// this requires a real signed-in user - booking.service.js#getBookingById
+// enforces the caller is that booking's customer or provider and throws
+// a plain "Booking not found" otherwise, same 404-passthrough pattern.
+exports.explainBookingForBuyer = async (req, res) => {
+    try {
+        const result = await aiService.explainBookingForBuyer({ userId: req.user.id, bookingId: req.params.id });
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(404).json({ success: false, message: error.message });
+    }
+};
+
 // --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---
 // Every route these sit behind requires auth (see ai.routes.js) - none
 // of these personalize for an anonymous caller the way B1's public
@@ -84,7 +112,7 @@ exports.generateListingDraft = async (req, res) => {
         const result = await aiService.generateListingDraft({ userId: req.user.id, type, name, category, keyFeatures });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -94,7 +122,7 @@ exports.generateMarketingCopy = async (req, res) => {
         const result = await aiService.generateMarketingCopy({ userId: req.user.id, name, audience, tone, keyPoints });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -103,7 +131,7 @@ exports.summarizeSellerAnalytics = async (req, res) => {
         const result = await aiService.summarizeSellerAnalytics({ userId: req.user.id });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -112,7 +140,7 @@ exports.suggestRestockAndPricing = async (req, res) => {
         const result = await aiService.suggestRestockAndPricing({ userId: req.user.id });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -132,7 +160,7 @@ exports.explainDeliveryRoute = async (req, res) => {
         const result = await aiService.explainDeliveryRoute({ userId: req.user.id });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -159,7 +187,7 @@ exports.explainFraudQueue = async (req, res) => {
         const result = await aiService.explainFraudQueue({ userId: req.user.id });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -168,7 +196,7 @@ exports.explainForecast = async (req, res) => {
         const result = await aiService.explainForecast({ userId: req.user.id, vertical: req.query.vertical });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 
@@ -177,7 +205,7 @@ exports.explainPersonalizationHealth = async (req, res) => {
         const result = await aiService.explainPersonalizationHealth({ userId: req.user.id });
         res.json({ success: true, data: result });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Nexora AI is temporarily unavailable." });
+        res.status(500).json({ success: false, message: "Nexora Assistant is temporarily unavailable." });
     }
 };
 

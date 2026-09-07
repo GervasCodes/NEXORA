@@ -55,7 +55,7 @@ export default function Footer() {
 
     return (
         <footer className="glass-dark text-frost/70 mt-24">
-            <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col gap-6 text-sm">
+            <div className="max-w-6xl mx-auto px-6 pt-10 pb-28 sm:pb-10 flex flex-col gap-6 text-sm">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                         <span className="font-display italic text-frost text-lg">NEXORA</span>

@@ -19,7 +19,7 @@ describe("NexoraSmartSearch", () => {
         const onApply = vi.fn();
 
         render(<NexoraSmartSearch onApply={onApply} />);
-        await userEvent.type(screen.getByPlaceholderText(/ask nexora ai/i), "running shoes under 50000");
+        await userEvent.type(screen.getByPlaceholderText(/ask nexora assistant/i), "running shoes under 50000");
         await userEvent.click(screen.getByRole("button", { name: /search/i }));
 
         expect(onApply).toHaveBeenCalledWith({ search: "running shoes", max_price: 50000, sort: "price_low" });
@@ -30,7 +30,7 @@ describe("NexoraSmartSearch", () => {
         const onApply = vi.fn();
 
         render(<NexoraSmartSearch onApply={onApply} />);
-        await userEvent.type(screen.getByPlaceholderText(/ask nexora ai/i), "cheap shoes");
+        await userEvent.type(screen.getByPlaceholderText(/ask nexora assistant/i), "cheap shoes");
         await userEvent.click(screen.getByRole("button", { name: /search/i }));
 
         expect(onApply).toHaveBeenCalledWith({ search: "cheap shoes" });

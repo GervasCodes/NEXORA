@@ -20,7 +20,7 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
 
     const handleGenerate = async () => {
         if (!name?.trim()) {
-            setError("Add a name first so Nexora AI has something to work with.");
+            setError("Add a name first so Nexora Assistant has something to work with.");
             return;
         }
         setLoading(true);
@@ -31,7 +31,7 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
                 : await generateListingDraft({ type: mode === "service" ? "service" : "product", name, category, keyFeatures: keyPoints });
             setDraft(isMarketing ? result.copy : result.description);
         } catch {
-            setError("Nexora AI is temporarily unavailable - please try again in a moment.");
+            setError("Nexora Assistant is temporarily unavailable - please try again in a moment.");
         } finally {
             setLoading(false);
         }
@@ -62,7 +62,7 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
                 className="text-xs font-medium text-azure hover:underline flex items-center gap-1"
             >
                 <span className="h-3.5 w-3.5 rounded-full bg-gradient-to-br from-azure-light to-azure-deep inline-block" />
-                {isMarketing ? "Draft marketing copy with Nexora AI" : "Draft with Nexora AI"}
+                {isMarketing ? "Draft marketing copy with Nexora Assistant" : "Draft with Nexora Assistant"}
             </button>
         );
     }
@@ -70,7 +70,7 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
     return (
         <div className="mt-2 rounded-lg glass-strong p-3 space-y-2">
             <p className="text-xs text-ash">
-                {isMarketing ? "A few key points to promote, and Nexora AI will draft a short blurb." : "A few key features, and Nexora AI will draft a description."}
+                {isMarketing ? "A few key points to promote, and Nexora Assistant will draft a short blurb." : "A few key features, and Nexora Assistant will draft a description."}
             </p>
             {isMarketing && (
                 <input
@@ -114,8 +114,8 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
                     </div>
                     <p className="text-[11px] text-ash mt-1">
                         {isMarketing
-                            ? "Review before posting anywhere - Nexora AI drafts never publish on their own."
-                            : "Review and edit before saving - Nexora AI drafts never publish on their own."}
+                            ? "Review before posting anywhere - Nexora Assistant drafts never publish on their own."
+                            : "Review and edit before saving - Nexora Assistant drafts never publish on their own."}
                     </p>
                 </div>
             )}

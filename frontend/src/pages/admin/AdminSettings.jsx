@@ -16,6 +16,12 @@ export default function AdminSettings() {
     const [departmentSponsorshipRate, setDepartmentSponsorshipRate] = useState("");
     const [bands, setBands] = useState([]);
     const [perKmBeyond, setPerKmBeyond] = useState("");
+    const [aiEnabled, setAiEnabled] = useState(false);
+    const [aiDailyCapUser, setAiDailyCapUser] = useState("");
+    const [aiMonthlyCapUser, setAiMonthlyCapUser] = useState("");
+    const [aiDailyCapGlobal, setAiDailyCapGlobal] = useState("");
+    const [aiMonthlyCapGlobal, setAiMonthlyCapGlobal] = useState("");
+    const [aiUsage, setAiUsage] = useState(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
@@ -31,6 +37,12 @@ export default function AdminSettings() {
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
                 setDepartmentSponsorshipRate(data.data.department_sponsorship_daily_rate);
+                setAiEnabled(data.data.ai_enabled === "true" || data.data.ai_enabled === true);
+                setAiDailyCapUser(data.data.ai_daily_token_cap_per_user);
+                setAiMonthlyCapUser(data.data.ai_monthly_token_cap_per_user);
+                setAiDailyCapGlobal(data.data.ai_daily_token_cap_global);
+                setAiMonthlyCapGlobal(data.data.ai_monthly_token_cap_global);
+                setAiUsage(data.data.aiUsage || null);
 
                 const parsed = typeof data.data.delivery_distance_bands === "string"
                     ? JSON.parse(data.data.delivery_distance_bands)
@@ -71,6 +83,11 @@ export default function AdminSettings() {
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
                 department_sponsorship_daily_rate: Number(departmentSponsorshipRate),
+                ai_enabled: aiEnabled,
+                ai_daily_token_cap_per_user: Number(aiDailyCapUser),
+                ai_monthly_token_cap_per_user: Number(aiMonthlyCapUser),
+                ai_daily_token_cap_global: Number(aiDailyCapGlobal),
+                ai_monthly_token_cap_global: Number(aiMonthlyCapGlobal),
                 delivery_distance_bands: {
                     bands: bands
                         .map((b) => ({ up_to_km: Number(b.up_to_km), fee: Number(b.fee) }))
@@ -281,6 +298,111 @@ export default function AdminSettings() {
                         keeps the rate it was purchased at even if you change this later.
                     </p>
                 </div>
+
+                <div className="border-t border-line pt-5">
+                    <div className="flex items-start justify-between gap-4 mb-1">
+                        <div>
+                            <label className="text-xs text-ash block mb-1">Nexora Assistant</label>
+                            <p className="text-xs text-ash">
+                                Master switch for the AI assistant across the app. Still requires a provider to be
+                                configured server-side - turning this off disables AI features immediately even if one is.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setAiEnabled(!aiEnabled)}
+                            className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                                aiEnabled
+                                    ? "bg-teal/10 border-teal text-teal"
+                                    : "bg-paper border-line text-ash"
+                            }`}
+                        >
+                            {aiEnabled ? "Enabled" : "Disabled"}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs text-ash block mb-1">Daily token cap per user</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            required
+                            value={aiDailyCapUser}
+                            onChange={(e) => setAiDailyCapUser(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-ash block mb-1">Monthly token cap per user</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            required
+                            value={aiMonthlyCapUser}
+                            onChange={(e) => setAiMonthlyCapUser(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-ash block mb-1">Daily token cap (global)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            required
+                            value={aiDailyCapGlobal}
+                            onChange={(e) => setAiDailyCapGlobal(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-ash block mb-1">Monthly token cap (global)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            required
+                            value={aiMonthlyCapGlobal}
+                            onChange={(e) => setAiMonthlyCapGlobal(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                        />
+                    </div>
+                </div>
+                <p className="text-xs text-ash -mt-3">
+                    Once either the daily or monthly cap is reached, Nexora Assistant falls back to its non-AI
+                    behavior platform-wide (or for that user, for the per-user caps) until the window resets.
+                </p>
+
+                {aiUsage && (
+                    <div className="border border-line rounded-md p-3 bg-paper">
+                        <p className="text-xs text-ash font-medium mb-2">Current usage (global)</p>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                                <p className="text-ash">Today</p>
+                                <p className="font-medium">
+                                    {Number(aiUsage.dailyTokensUsedGlobal).toLocaleString()}
+                                    {" / "}
+                                    {Number(aiDailyCapGlobal || 0).toLocaleString()} tokens
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-ash">This month</p>
+                                <p className="font-medium">
+                                    {Number(aiUsage.monthlyTokensUsedGlobal).toLocaleString()}
+                                    {" / "}
+                                    {Number(aiMonthlyCapGlobal || 0).toLocaleString()} tokens
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <Button
                     type="submit"

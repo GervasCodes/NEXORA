@@ -408,6 +408,23 @@ exports.updateSettings = async (data) => {
     if (data.delivery_offer_timeout_ms !== undefined) {
         await settingsRepository.upsert("delivery_offer_timeout_ms", String(data.delivery_offer_timeout_ms));
     }
+    // Nexora Assistant admin controls (Phase 7) - see the DEFAULTS comment
+    // above and exports.getAiSettings, the only reader of these five keys.
+    if (data.ai_enabled !== undefined) {
+        await settingsRepository.upsert("ai_enabled", Boolean(data.ai_enabled) ? "true" : "false");
+    }
+    if (data.ai_daily_token_cap_per_user !== undefined) {
+        await settingsRepository.upsert("ai_daily_token_cap_per_user", String(data.ai_daily_token_cap_per_user));
+    }
+    if (data.ai_monthly_token_cap_per_user !== undefined) {
+        await settingsRepository.upsert("ai_monthly_token_cap_per_user", String(data.ai_monthly_token_cap_per_user));
+    }
+    if (data.ai_daily_token_cap_global !== undefined) {
+        await settingsRepository.upsert("ai_daily_token_cap_global", String(data.ai_daily_token_cap_global));
+    }
+    if (data.ai_monthly_token_cap_global !== undefined) {
+        await settingsRepository.upsert("ai_monthly_token_cap_global", String(data.ai_monthly_token_cap_global));
+    }
     invalidateCache();
     return exports.getAll();
 };

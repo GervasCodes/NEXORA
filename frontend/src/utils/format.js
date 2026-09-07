@@ -1,5 +1,5 @@
 
-// (Remediation, E3): this always renders the raw settlement amount
+// Phase 2 (Remediation, E3): this always renders the raw settlement amount
 // in TZS, regardless of the buyer's chosen display currency. It's the right
 // choice for seller/admin/finance surfaces where the number needs to match
 // what actually settles (wallets, payouts, order totals seen by ops) - but
@@ -15,7 +15,7 @@ export const formatMoney = (amount) => {
     return `TZS ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 };
 
-// (Remediation, E4): the four date formatters below used to
+// Phase 1 (Remediation, E4): the four date formatters below used to
 // hardcode "en-GB" regardless of the language the user has chosen in
 // LanguageContext, so Kiswahili speakers still got English-formatted
 // dates everywhere. Rather than adding a `language` argument to all

@@ -15,5 +15,5 @@ exports.aiLimiter = rateLimit({
     // the limit by rotating networks); anonymous requests fall back to
     // IP, same as apiLimiter.
     keyGenerator: (req, res) => req.user?.id?.toString() || ipKeyGenerator(req, res),
-    message: { success: false, message: "Nexora AI is getting a lot of requests right now - please wait a moment and try again." }
+    message: { success: false, message: "Nexora Assistant is getting a lot of requests right now - please wait a moment and try again." }
 });

@@ -43,7 +43,7 @@ describe("ai/providers/openrouter.provider", () => {
         expect(requestInit.headers.Authorization).toBe("Bearer or-test");
         expect(requestInit.headers["HTTP-Referer"]).toBeUndefined();
         expect(requestInit.headers["X-Title"]).toBeUndefined();
-        expect(result).toEqual({ text: "hello from openrouter", inputTokens: 8, outputTokens: 4 });
+        expect(result).toEqual({ text: "hello from openrouter", inputTokens: 8, outputTokens: 4, truncated: false });
     });
 
     it("includes HTTP-Referer/X-Title when the optional site env vars are set", async () => {

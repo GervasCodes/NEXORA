@@ -432,7 +432,7 @@ export default function OrderDetail() {
                     onClick={() => assistant.open({ type: "order", orderId: order.id })}
                     className="text-sm text-azure hover:underline mb-6 -mt-3 block"
                 >
-                    Ask Nexora AI about this order
+                    Ask Nexora Assistant about this order
                 </button>
             )}
 

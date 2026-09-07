@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { suggestAvailability } from "../../api/ai";
-import { SparkleIcon } from "./NexoraFraudExplain";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // seller availability AI suggestion. Rule-based on the backend;
 // purely advisory, never sets availability itself.
@@ -26,11 +26,11 @@ export default function NexoraAvailabilitySuggestion({ serviceId, refreshToken }
     return (
         <div className="flex items-start gap-3 rounded-xl border border-azure/20 bg-gradient-to-r from-azure/6 to-transparent px-4 py-3.5 mb-6">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                <SparkleIcon className="w-3.5 h-3.5 text-white" />
+                <AssistantSparkleIcon className="w-3.5 h-3.5 text-white" />
             </div>
             <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-azure mb-1">
-                    Nexora AI · Availability tip
+                    Nexora Assistant · Availability tip
                 </p>
                 <p className="text-sm text-ink leading-relaxed">{suggestion.suggestion}</p>
             </div>

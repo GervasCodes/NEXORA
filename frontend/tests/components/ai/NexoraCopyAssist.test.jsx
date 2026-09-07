@@ -20,7 +20,7 @@ beforeEach(() => {
 describe("NexoraCopyAssist - listing mode", () => {
     it("requires a name before generating", async () => {
         render(<NexoraCopyAssist mode="product" name="" onApply={vi.fn()} />);
-        await userEvent.click(screen.getByText(/draft with nexora ai/i));
+        await userEvent.click(screen.getByText(/draft with nexora assistant/i));
         await userEvent.click(screen.getByRole("button", { name: /generate draft/i }));
 
         expect(await screen.findByText(/add a name first/i)).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe("NexoraCopyAssist - listing mode", () => {
         const onApply = vi.fn();
 
         render(<NexoraCopyAssist mode="product" name="Blue Sneakers" category="Shoes" onApply={onApply} />);
-        await userEvent.click(screen.getByText(/draft with nexora ai/i));
+        await userEvent.click(screen.getByText(/draft with nexora assistant/i));
         await userEvent.click(screen.getByRole("button", { name: /generate draft/i }));
 
         expect(await screen.findByText("A comfortable pair of sneakers.")).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("NexoraCopyAssist - listing mode", () => {
         mockGenerateListingDraft.mockRejectedValue(new Error("down"));
 
         render(<NexoraCopyAssist mode="product" name="Blue Sneakers" onApply={vi.fn()} />);
-        await userEvent.click(screen.getByText(/draft with nexora ai/i));
+        await userEvent.click(screen.getByText(/draft with nexora assistant/i));
         await userEvent.click(screen.getByRole("button", { name: /generate draft/i }));
 
         expect(await screen.findByText(/temporarily unavailable/i)).toBeInTheDocument();

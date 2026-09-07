@@ -155,7 +155,29 @@ exports.updateSettingsValidation = [
     body("delivery_offer_timeout_ms")
         .optional()
         .isInt({ min: 1000 })
-        .withMessage("Offer timeout must be at least 1000ms")
+        .withMessage("Offer timeout must be at least 1000ms"),
+
+    // Nexora Assistant (migration 081, Phase B1/Phase 7 admin controls) -
+    // see settingsService.getAiSettings/ai.service.js#checkSpendGuard.
+    body("ai_enabled")
+        .optional()
+        .isBoolean().withMessage("ai_enabled must be true or false"),
+
+    body("ai_daily_token_cap_per_user")
+        .optional()
+        .isInt({ min: 0 }).withMessage("Daily per-user token cap must be zero or a positive whole number"),
+
+    body("ai_monthly_token_cap_per_user")
+        .optional()
+        .isInt({ min: 0 }).withMessage("Monthly per-user token cap must be zero or a positive whole number"),
+
+    body("ai_daily_token_cap_global")
+        .optional()
+        .isInt({ min: 0 }).withMessage("Daily global token cap must be zero or a positive whole number"),
+
+    body("ai_monthly_token_cap_global")
+        .optional()
+        .isInt({ min: 0 }).withMessage("Monthly global token cap must be zero or a positive whole number")
 ];
 
 exports.createAdminValidation = [

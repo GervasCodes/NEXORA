@@ -83,7 +83,7 @@ describe("ai.service.explainFraudQueue", () => {
 
         const result = await aiService.explainFraudQueue({ userId: 1 });
 
-        expect(result).toEqual({ openCount: 0, byRule: [], explanation: "No open fraud flags right now.", aiGenerated: false });
+        expect(result).toEqual({ openCount: 0, byRule: [], explanation: "No open fraud flags right now.", aiGenerated: false, truncated: false });
     });
 
     it("groups real flags by rule and falls back to a plain count summary with no provider", async () => {

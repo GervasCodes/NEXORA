@@ -53,7 +53,7 @@ describe("ai/providers/gemini.provider", () => {
         ]);
         expect(body.generationConfig.maxOutputTokens).toBe(300);
 
-        expect(result).toEqual({ text: "hello from gemini", inputTokens: 12, outputTokens: 6 });
+        expect(result).toEqual({ text: "hello from gemini", inputTokens: 12, outputTokens: 6, truncated: false });
     });
 
     it("throws on a non-ok response so ai.service.js's callProvider falls back", async () => {

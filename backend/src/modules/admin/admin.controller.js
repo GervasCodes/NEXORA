@@ -401,9 +401,12 @@ exports.exportAdvancedAnalyticsCsv = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
     try {
-        const settings = await adminService.getSettings();
+        const [settings, aiUsage] = await Promise.all([
+            adminService.getSettings(),
+            adminService.getAiUsageSummary()
+        ]);
 
-        return res.json({ success: true, data: settings });
+        return res.json({ success: true, data: { ...settings, aiUsage } });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

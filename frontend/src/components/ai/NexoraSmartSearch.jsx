@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { parseSearchQuery } from "../../api/ai";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // feature #2: smart product search. This never talks to the
 // product listing directly - it only turns free text into the same
@@ -39,13 +40,18 @@ export default function NexoraSmartSearch({ onApply }) {
 
     return (
         <form onSubmit={handleSubmit} className="mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-azure mb-1.5 ml-1">
+                Nexora Assistant · Smart search
+            </p>
             <div className="flex items-center gap-2 rounded-full glass-strong px-4 py-2.5">
-                <span className="h-4 w-4 rounded-full bg-gradient-to-br from-azure-light to-azure-deep shrink-0" aria-hidden="true" />
+                <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0">
+                    <AssistantSparkleIcon className="w-3 h-3 text-white" />
+                </span>
                 <input
                     type="text"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder="Try “running shoes under 50,000 TZS” — ask Nexora AI"
+                    placeholder="Try “running shoes under 50,000 TZS” — ask Nexora Assistant"
                     className="flex-1 bg-transparent focus-ring text-sm placeholder:text-ash"
                 />
                 <button
@@ -57,7 +63,7 @@ export default function NexoraSmartSearch({ onApply }) {
                 </button>
             </div>
             {lastAiGenerated === false && (
-                <p className="text-xs text-ash mt-1 px-2">Nexora AI is unavailable right now - searching your exact words instead.</p>
+                <p className="text-xs text-ash mt-1 px-2">Nexora Assistant is unavailable right now - searching your exact words instead.</p>
             )}
         </form>
     );

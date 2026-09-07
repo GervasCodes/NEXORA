@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { suggestRestockAndPricing } from "../../api/ai";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // AI Extensions - advisory only. seller.repository.js#getSalesVelocityByProduct
 // computes the actual restock-urgency/slow-mover numbers this reads (see
@@ -27,9 +28,16 @@ export default function NexoraDemandForecast() {
 
     return (
         <div className="rounded-lg glass-strong p-4 mb-6">
-            <div className="flex items-start gap-2 mb-3">
-                <span className="h-4 w-4 mt-0.5 rounded-full bg-gradient-to-br from-azure-light to-azure-deep shrink-0" aria-hidden="true" />
-                <p className="text-sm text-abyss">{forecast.explanation}</p>
+            <div className="flex items-start gap-3 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <AssistantSparkleIcon className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-azure mb-1">
+                        Nexora Assistant · Demand forecast
+                    </p>
+                    <p className="text-sm text-abyss">{forecast.explanation}</p>
+                </div>
             </div>
 
             {forecast.restockSoon.length > 0 && (

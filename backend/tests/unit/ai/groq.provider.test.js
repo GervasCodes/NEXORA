@@ -49,7 +49,7 @@ describe("ai/providers/groq.provider", () => {
             { role: "user", content: "hi" }
         ]);
 
-        expect(result).toEqual({ text: "hello from groq", inputTokens: 10, outputTokens: 5 });
+        expect(result).toEqual({ text: "hello from groq", inputTokens: 10, outputTokens: 5, truncated: false });
     });
 
     it("throws on a non-ok response so ai.service.js's callProvider falls back", async () => {

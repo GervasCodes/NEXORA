@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAIAssistant } from "../../context/AIAssistantContext";
-import { sendChatMessage, explainOrderStatus } from "../../api/ai";
+import { sendChatMessage, explainOrderStatus, explainProduct, explainBooking } from "../../api/ai";
+import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // Typing dots animation for "thinking" state
 function TypingDots() {
@@ -17,16 +18,18 @@ function TypingDots() {
     );
 }
 
-// AI sparkle icon inline
-function SparkleIcon({ className = "w-4 h-4" }) {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
-            strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <path d="M12 3v3M12 18v3M4.2 12H3M21 12h-1.2M6 6l1.5 1.5M18 18l-1.5-1.5M18 6l-1.5 1.5M6 18l1.5-1.5" />
-            <circle cx="12" cy="12" r="4" />
-        </svg>
-    );
-}
+
+// Maps ai.service.js#chat's unavailableReason (only ever set when the
+// spend guard specifically blocked the call, never for any other kind
+// of AI-unavailable case) to a short note shown under the fallback
+// bubble. Any other/missing reason renders no extra note.
+const UNAVAILABLE_REASON_NOTES = {
+    AI_DISABLED: "Nexora Assistant is currently turned off.",
+    USER_DAILY_CAP: "Nexora Assistant has reached today's usage limit — please try again tomorrow.",
+    GLOBAL_DAILY_CAP: "Nexora Assistant has reached today's usage limit — please try again tomorrow.",
+    USER_MONTHLY_CAP: "Nexora Assistant has reached this month's usage limit.",
+    GLOBAL_MONTHLY_CAP: "Nexora Assistant has reached this month's usage limit."
+};
 
 export default function NexoraAIDrawer() {
     const assistant = useAIAssistant();
@@ -54,8 +57,28 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: "I couldn't load that order's status right now — please check the Orders page directly.", aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
+        } else if (context?.type === "product") {
+            setSending(true);
+            explainProduct(context.slug)
+                .then((result) => {
+                    setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
+                })
+                .catch(() => {
+                    setMessages([{ role: "assistant", text: "I couldn't load that product's details right now — please check the product page directly.", aiGenerated: false }]);
+                })
+                .finally(() => setSending(false));
+        } else if (context?.type === "booking") {
+            setSending(true);
+            explainBooking(context.bookingId)
+                .then((result) => {
+                    setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
+                })
+                .catch(() => {
+                    setMessages([{ role: "assistant", text: "I couldn't load that booking's status right now — please check the Bookings page directly.", aiGenerated: false }]);
+                })
+                .finally(() => setSending(false));
         } else {
-            setMessages([{ role: "assistant", text: "Hi! I'm Nexora AI. Ask me about orders, delivery, refunds, or finding a product.", aiGenerated: false }]);
+            setMessages([{ role: "assistant", text: "Hi! I'm Nexora Assistant. Ask me about orders, delivery, refunds, or finding a product.", aiGenerated: false }]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
@@ -79,21 +102,61 @@ export default function NexoraAIDrawer() {
         const text = input.trim();
         if (!text || sending) return;
 
+        // Existing messages state, mapped to the {role, content} shape
+        // sendChatMessage/ai.service.js expect - captured before the
+        // just-added user message below, which goes as `message` itself.
+        const history = messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({ role: m.role, content: m.text }));
+
         setMessages((prev) => [...prev, { role: "user", text }]);
         setInput("");
         setSending(true);
         try {
-            const result = await sendChatMessage(text);
-            setMessages((prev) => [...prev, { role: "assistant", text: result.reply, aiGenerated: result.aiGenerated }]);
+            const result = await sendChatMessage(text, { history });
+            setMessages((prev) => [...prev, {
+                role: "assistant",
+                text: result.reply,
+                aiGenerated: result.aiGenerated,
+                truncated: result.truncated,
+                unavailableReason: result.unavailableReason,
+                sourceQuestion: text
+            }]);
         } catch {
             setMessages((prev) => [...prev, {
                 role: "assistant",
-                text: "Nexora AI is temporarily unavailable — please try again or reach out to support from your Account page.",
+                text: "Nexora Assistant is temporarily unavailable — please try again or reach out to support from your Account page.",
                 aiGenerated: false,
                 error: true
             }]);
         } finally {
             setSending(false);
+        }
+    };
+
+    // Re-sends the same question with the prior (truncated) reply passed
+    // back as assistant context, so the model continues instead of
+    // starting over - ai.service.js#chat doubles maxTokens for this one
+    // follow-up call. Appends to the existing bubble rather than
+    // starting a new one.
+    const handleShowMore = async (index) => {
+        const message = messages[index];
+        if (!message || message.loadingMore) return;
+
+        setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, loadingMore: true } : m)));
+        try {
+            const result = await sendChatMessage(message.sourceQuestion, { priorReply: message.text });
+            setMessages((prev) => prev.map((m, i) => (i === index
+                ? {
+                    ...m,
+                    text: result.reply ? `${m.text} ${result.reply}` : m.text,
+                    truncated: result.truncated,
+                    unavailableReason: result.unavailableReason,
+                    loadingMore: false
+                }
+                : m)));
+        } catch {
+            setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, loadingMore: false } : m)));
         }
     };
 
@@ -118,7 +181,7 @@ export default function NexoraAIDrawer() {
             <div
                 role="dialog"
                 aria-modal="true"
-                aria-label="Nexora AI"
+                aria-label="Nexora Assistant"
                 className="
                     relative w-full sm:w-[400px] sm:mr-6 sm:mb-6
                     h-[80vh] sm:h-[600px]
@@ -133,17 +196,17 @@ export default function NexoraAIDrawer() {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-line/60 shrink-0 bg-gradient-to-r from-azure/8 to-transparent">
                     <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shadow-sm">
-                            <SparkleIcon className="w-4 h-4 text-white" />
+                            <AssistantSparkleIcon className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                            <p className="font-semibold text-sm text-ink leading-tight">Nexora AI</p>
+                            <p className="font-semibold text-sm text-ink leading-tight">Nexora Assistant</p>
                             <p className="text-[10px] text-azure/80 uppercase tracking-widest leading-tight">Always here to help</p>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={assistant.close}
-                        aria-label="Close Nexora AI"
+                        aria-label="Close Nexora Assistant"
                         className="w-11 h-11 flex items-center justify-center rounded-lg text-ash hover:text-ink hover:bg-line/50 transition-colors"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
@@ -158,21 +221,38 @@ export default function NexoraAIDrawer() {
                         <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                             {m.role === "assistant" && (
                                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mr-2 mt-1 shadow-sm">
-                                    <SparkleIcon className="w-3 h-3 text-white" />
+                                    <AssistantSparkleIcon className="w-3 h-3 text-white" />
                                 </div>
                             )}
-                            <div
-                                className={`
-                                    max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap
-                                    ${m.role === "user"
-                                        ? "bg-gradient-to-br from-azure-light to-azure-deep text-white rounded-tr-sm shadow-sm shadow-azure/20"
-                                        : m.error
-                                            ? "bg-coral/10 text-coral border border-coral/20 rounded-tl-sm"
-                                            : "bg-line/30 text-ink rounded-tl-sm"
-                                    }
-                                `}
-                            >
-                                {m.text}
+                            <div className="flex flex-col max-w-[80%] items-start">
+                                <div
+                                    className={`
+                                        rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap
+                                        ${m.role === "user"
+                                            ? "bg-gradient-to-br from-azure-light to-azure-deep text-white rounded-tr-sm shadow-sm shadow-azure/20"
+                                            : m.error
+                                                ? "bg-coral/10 text-coral border border-coral/20 rounded-tl-sm"
+                                                : "bg-line/30 text-ink rounded-tl-sm"
+                                        }
+                                    `}
+                                >
+                                    {m.text}
+                                </div>
+                                {m.role === "assistant" && m.truncated && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleShowMore(i)}
+                                        disabled={m.loadingMore}
+                                        className="mt-1 ml-1 text-xs text-azure hover:underline disabled:opacity-50 disabled:cursor-wait"
+                                    >
+                                        {m.loadingMore ? "Loading more…" : "Show more"}
+                                    </button>
+                                )}
+                                {m.role === "assistant" && UNAVAILABLE_REASON_NOTES[m.unavailableReason] && (
+                                    <p className="mt-1 ml-1 text-xs text-ash">
+                                        {UNAVAILABLE_REASON_NOTES[m.unavailableReason]}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -181,7 +261,7 @@ export default function NexoraAIDrawer() {
                     {sending && (
                         <div className="flex justify-start">
                             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-azure-light to-azure-deep flex items-center justify-center shrink-0 mr-2 mt-0.5 shadow-sm">
-                                <SparkleIcon className="w-3 h-3 text-white" />
+                                <AssistantSparkleIcon className="w-3 h-3 text-white" />
                             </div>
                             <div className="bg-line/30 rounded-2xl rounded-tl-sm">
                                 <TypingDots />
@@ -216,22 +296,27 @@ export default function NexoraAIDrawer() {
                     onSubmit={handleSend}
                     className="flex items-end gap-2 p-3 border-t border-line/60 shrink-0 bg-paper/50"
                 >
-                    <textarea
-                        ref={inputRef}
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Ask Nexora AI…"
-                        maxLength={1000}
-                        rows={1}
-                        className="
-                            flex-1 rounded-xl bg-line/20 border border-line/60
-                            px-3.5 py-2.5 text-sm outline-none resize-none
-                            focus:border-azure/60 focus:bg-paper
-                            transition-colors placeholder:text-ash
-                            max-h-24 overflow-y-auto
-                        "
-                    />
+                    <div className="flex-1 min-w-0">
+                        <textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Ask Nexora Assistant…"
+                            maxLength={1000}
+                            rows={1}
+                            className="
+                                w-full rounded-xl bg-line/20 border border-line/60
+                                px-3.5 py-2.5 text-sm outline-none resize-none
+                                focus:border-azure/60 focus:bg-paper
+                                transition-colors placeholder:text-ash
+                                max-h-24 overflow-y-auto
+                            "
+                        />
+                        <p className="text-[11px] text-ash text-right mt-0.5 pr-1">
+                            {input.length}/1000
+                        </p>
+                    </div>
                     <button
                         type="submit"
                         disabled={sending || !input.trim()}

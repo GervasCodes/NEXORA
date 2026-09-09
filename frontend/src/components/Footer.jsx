@@ -23,8 +23,10 @@ const PAYMENT_BADGES = [
 // marked as such below, rather than fabricated URLs - flagging that real
 // company social links need to be supplied before these go live.
 const COMPANY_SOCIAL_LINKS = [
-    { key: "instagram", label: "Instagram", href: "#" },
-    { key: "facebook", label: "Facebook", href: "#" }
+    { key: "instagram", label: "Instagram", href: "https://www.instagram.com/nexora.marketplace?stkn=MTNiOThzMXd0dnJ2OQ==" },
+    { key: "facebook", label: "Facebook", href: "https://www.facebook.com/share/1EwieSM4VV/" },
+    { key: "tiktok", label: "TikTok", href: "https://www.tiktok.com/@nexoramarketplace4?_r=1&_t=ZS-99bIB0RkMBI" },
+    { key: "youtube", label: "YouTube", href: "https://www.youtube.com/@Nexoramarketplace" }
 ];
 
 function InstallCallout() {

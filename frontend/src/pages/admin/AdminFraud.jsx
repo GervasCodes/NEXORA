@@ -165,6 +165,9 @@ export default function AdminFraud() {
                             Rule-based flags using explainable heuristics — first-order size, order velocity,
                             withdrawal outliers. Every flag has a plain-English reason attached.
                         </p>
+                        <Link to="/admin/fraud-dashboard" className="inline-block mt-2 text-xs text-teal hover:underline">
+                            View trends over time in the Fraud dashboard →
+                        </Link>
                     </div>
 
                     {/* Stats chips */}

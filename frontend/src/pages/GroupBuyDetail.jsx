@@ -29,7 +29,7 @@ export default function GroupBuyDetail() {
 
     useEffect(load, [id]);
 
-    // Share (Phase 9, UI/UX remediation) - a group buy inherently
+    // Share ( UI/UX remediation) - a group buy inherently
     // depends on the buyer recruiting others to hit the threshold, so
     // "share this" is core to the feature, not a nice-to-have - reuses
     // the exact native-share/WhatsApp pattern Loyalty.jsx's referral

@@ -31,6 +31,41 @@ const isProd = () => process.env.NODE_ENV === "production";
 // so `Lax` already works and doesn't require HTTPS the way `None` does.
 const sameSitePolicy = () => (isProd() ? "none" : "lax");
 
+// Phase 6 (Session/login flag) - investigated whether this SameSite=None
+// requirement could be avoided instead of just documented, since it's
+// the root cause of the Safari/iOS "session expired right after login"
+// reports (Safari's Intelligent Tracking Prevention is markedly more
+// aggressive than Chrome/Firefox about partitioning or dropping
+// cross-site cookies, even ones correctly marked SameSite=None; Secure).
+// The real fix is routing the frontend's API calls through a same-site
+// path - e.g. nexoramarketplace.online/api/* rewritten to the backend -
+// so the browser sees this cookie as first-party instead of cross-site
+// and SameSite=Lax/Strict would work everywhere, Safari included.
+//
+// Checked this codebase/repo specifically for an existing rewrite/
+// reverse-proxy mechanism to wire that through:
+//   - frontend/vite.config.js has no `server.proxy` (and wouldn't apply
+//     to a production static build anyway, only Vite's own dev server)
+//   - frontend/public/_redirects is Netlify-style but only handles SPA
+//     fallback routing (`/* -> /index.html`), nothing for `/api/*`
+//   - no vercel.json / netlify.toml / render.yaml / nginx.conf exists
+//     anywhere in the repo
+//   - docs/DEPLOYMENT.md explicitly punts this to whatever's hosting the
+//     built frontend ("Serve frontend/dist behind your usual static
+//     host / reverse proxy (Nginx, Vercel, Netlify, etc.)") - i.e. the
+//     actual hosting/proxy configuration lives in that host's dashboard
+//     or DNS settings, outside this repo and outside what a code change
+//     here can reach.
+// So this genuinely isn't fixable from within this codebase alone - it
+// needs an infra/DNS-level same-site proxy set up wherever the frontend
+// is actually hosted. Per the phase's own instruction: not attempting a
+// partial workaround that weakens cookie security here (e.g. dropping
+// Secure or httpOnly) just to sidestep SameSite=None - that would trade
+// a Safari-specific inconvenience for a real cross-site vulnerability on
+// every other browser. Leaving this as SameSite=None; Secure (correct
+// and necessary given the current cross-origin hosting setup) until a
+// same-site reverse proxy is provisioned outside this repo.
+
 const sessionCookieOptions = () => ({
     httpOnly: true,
     secure: isProd(),

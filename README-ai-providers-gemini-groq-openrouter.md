@@ -1,4 +1,4 @@
-# NEXORA — Add Gemini, Groq, OpenRouter AI providers
+# NEXORA — Gemini, Groq, OpenRouter AI providers
 
 Ad hoc addition to the existing pluggable AI-provider system
 (`backend/src/modules/ai/providers/`), which already supported

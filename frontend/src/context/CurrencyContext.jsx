@@ -45,7 +45,7 @@ export function CurrencyProvider({ children }) {
     }, [setCurrency]);
 
     // amountTzs: a price as stored in the database (always TZS).
-    // Phase 2 (Remediation, E3): this converts a TZS settlement amount into
+    //  (Remediation, E3): this converts a TZS settlement amount into
     // the buyer's chosen display currency and labels it accordingly - use
     // this for buyer-facing prices (product/service listings, cart,
     // checkout). It is display-only: the amount that actually settles is

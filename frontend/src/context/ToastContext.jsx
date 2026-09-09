@@ -48,7 +48,7 @@ function ToastItem({ toast, onClose }) {
     }, []);
 
     return (
-        // D1 (Phase 4 remediation): an error toast is announced assertively
+        // D1 (remediation): an error toast is announced assertively
         // (role="alert", interrupts) since it's often the only signal a
         // failed action gets; success/info stay role="status" (polite,
         // waits its turn) since those are confirmations, not something the

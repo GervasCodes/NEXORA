@@ -8,6 +8,7 @@ import RecommendedProducts from "../components/RecommendedProducts";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
+import { ServicesIcon } from "../components/NavIcons";
 
 function DepartmentCardSkeleton() {
     return (
@@ -127,7 +128,7 @@ export default function Home() {
                                 <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
                             )}
                             <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
-                                Everything you need, from sellers you trust.
+                                Everything You Need, From The Sellers You Trust.
                             </h1>
                             <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
                                 Shop thousands of products from local vendors, with delivery tracked door to door.
@@ -136,6 +137,7 @@ export default function Home() {
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
                                 {[
                                     { label: "Verified sellers", icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
+                                    { label: "service booking", icon: "M8 2v4M16 2v4M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 10h18" },
                                     { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
                                     { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
                                 ].map((item) => (
@@ -150,11 +152,11 @@ export default function Home() {
                         </div>
 
                         {/*
-                          Phase 5 (Visual Polish & Metadata) introduced this photo
+                          (Visual Polish & Metadata) introduced this photo
                           showcase but shipped it pointing at three placeholder
                           paths under /public/images/hero/ that were never filled
                           in (404s hidden by the onError handlers below).
-                          Phase 4 (Real Imagery & Avatars) follow-up: replaced
+                          (Real Imagery & Avatars) follow-up: replaced
                           with real, verified, freely-licensed photos (Unsplash
                           License - free for commercial use, no attribution
                           required: https://unsplash.com/license), sourced the
@@ -219,6 +221,26 @@ export default function Home() {
                                 Or browse every product →
                             </Link>
                         </div>
+
+                        {/* Services now lives only here, not in the global header
+                            (see Header.jsx) - the header was carrying it as a
+                            permanent icon for every page/role even though it's
+                            really a homepage-discovery entry point. */}
+                        <Link
+                            to="/services"
+                            className="mt-10 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-azure/5 hover:bg-azure/10 transition-colors px-6 py-5"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="w-11 h-11 rounded-xl bg-azure/15 flex items-center justify-center shrink-0">
+                                    <ServicesIcon className="w-5 h-5 text-azure" />
+                                </div>
+                                <div>
+                                    <p className="font-display text-lg">Looking for a service, not a product?</p>
+                                    <p className="text-ash text-sm">Book trusted local pros for home, events, and more.</p>
+                                </div>
+                            </div>
+                            <span className="text-sm text-teal shrink-0 hidden sm:inline">Browse services →</span>
+                        </Link>
 
                         <RecommendedProducts endpoint="/recommendations/for-me" title="Recommended for you" />
                     </>

@@ -7,8 +7,9 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { getEmbedUrl } from "../utils/liveSellingEmbed";
 import { buildLiveSellingIcs, downloadIcs } from "../utils/icsCalendar";
+import { BellIcon, CalendarIcon } from "../components/Icons";
 
-// Phase 9 (UI/UX remediation) - one row's worth of UI, kept in its own
+//  (UI/UX remediation) - one row's worth of UI, kept in its own
 // component since it now carries meaningfully more state (embed toggle,
 // reminder subscription) than a plain <li> did before.
 function SessionRow({ session, user, toast }) {
@@ -102,17 +103,19 @@ function SessionRow({ session, user, toast }) {
                                 type="button"
                                 onClick={handleToggleRemind}
                                 disabled={remindBusy}
-                                className={`text-sm hover:underline disabled:opacity-60 ${reminded ? "text-teal" : "text-ash"}`}
+                                className={`text-sm hover:underline disabled:opacity-60 inline-flex items-center gap-1 ${reminded ? "text-teal" : "text-ash"}`}
                             >
-                                {reminded ? "🔔 We'll notify you" : "🔔 Notify me"}
+                                <BellIcon className="w-3.5 h-3.5 shrink-0" />
+                                {reminded ? "We'll notify you" : "Notify me"}
                             </button>
                         )}
                         <button
                             type="button"
                             onClick={handleAddToCalendar}
-                            className="text-ash text-sm hover:underline"
+                            className="text-ash text-sm hover:underline inline-flex items-center gap-1"
                         >
-                            📅 Add to calendar
+                            <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+                            Add to calendar
                         </button>
                     </>
                 )}

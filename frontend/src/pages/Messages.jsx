@@ -8,8 +8,9 @@ import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import { useToast } from "../context/ToastContext";
 import Avatar from "../components/ui/Avatar";
+import { BellIcon, BellOffIcon, ArchiveIcon } from "../components/Icons";
 
-// Phase 8 (UI/UX remediation) - search here is now two things layered
+// (UI/UX remediation) - search here is now two things layered
 // together, and it's worth being explicit about the difference:
 //   1. The existing local filter (unchanged) narrows the *visible list*
 //      of conversations by name/product/last-message-preview - instant,
@@ -78,7 +79,7 @@ export default function Messages() {
             : `${c.buyer_first_name} ${c.buyer_last_name}`;
     };
 
-    // Phase 4 (Real Imagery & Avatars): same buyer/seller branch
+    // (Real Imagery & Avatars): same buyer/seller branch
     // otherPartyName uses above, just returning the photo column
     // findConversationsByUser now selects instead of the name.
     const otherPartyPhoto = (c) => {
@@ -109,7 +110,7 @@ export default function Messages() {
         }
     };
 
-    // Mute / archive (Phase 8, UI/UX remediation) - optimistic removal
+    // Mute / archive ( UI/UX remediation) - optimistic removal
     // from the current list (an archived conversation no longer belongs
     // in "active", and vice versa if unarchiving from the archived
     // view); mute doesn't change which list a conversation is in, so it
@@ -196,7 +197,7 @@ export default function Messages() {
                 />
             </div>
 
-            {/* Cross-conversation message results (Phase 8) - separate
+            {/* Cross-conversation message results  - separate
                 from the conversation-list filter below, since this
                 searches message content across every thread, not just
                 what's visible in the current view/list. */}
@@ -260,7 +261,9 @@ export default function Messages() {
                                         <span className="flex items-center gap-1.5 min-w-0">
                                             <p className="text-sm font-medium truncate">{otherPartyName(c)}</p>
                                             {c.my_muted_at && (
-                                                <span title={t("messages.mutedIndicator")} aria-label={t("messages.mutedIndicator")} className="text-ash shrink-0">🔕</span>
+                                                <span title={t("messages.mutedIndicator")} aria-label={t("messages.mutedIndicator")} className="text-ash shrink-0">
+                                                    <BellOffIcon className="w-3.5 h-3.5" />
+                                                </span>
                                             )}
                                         </span>
                                         {c.unread_count > 0 && (
@@ -283,18 +286,18 @@ export default function Messages() {
                                         onClick={() => handleToggleMute(c)}
                                         disabled={busyAction === c.id}
                                         aria-label={c.my_muted_at ? t("messages.unmuteAria") : t("messages.muteAria")}
-                                        className="text-xs text-ash hover:text-ink px-1.5 py-1 disabled:opacity-50"
+                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
                                     >
-                                        {c.my_muted_at ? "🔔" : "🔕"}
+                                        {c.my_muted_at ? <BellIcon className="w-4 h-4" /> : <BellOffIcon className="w-4 h-4" />}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handleToggleArchive(c)}
                                         disabled={busyAction === c.id}
                                         aria-label={view === "archived" ? t("messages.unarchiveAria") : t("messages.archiveAria")}
-                                        className="text-xs text-ash hover:text-ink px-1.5 py-1 disabled:opacity-50"
+                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
                                     >
-                                        {view === "archived" ? "📤" : "🗄️"}
+                                        <ArchiveIcon className="w-4 h-4" active={view === "archived"} />
                                     </button>
                                     <button
                                         type="button"

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 import Button from "../components/ui/Button";
 
-// Phase 6 (New UI/UX & Imagery Additions, item 22): extracted from the
+// (New UI/UX & Imagery Additions, item 22): extracted from the
 // inline `<Route path="*">` fallback in App.jsx into a real page so it
 // gets its own PageMeta and is styled consistently with the rest of the
 // app instead of being a bare, unstyled router fallback. The illustration

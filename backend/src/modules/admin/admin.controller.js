@@ -88,6 +88,17 @@ exports.listSellers = async (req, res) => {
     }
 };
 
+exports.listDeliveryAgents = async (req, res) => {
+    try {
+        const agents = await adminService.listDeliveryAgents();
+
+        return res.json({ success: true, data: agents });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.verifySeller = async (req, res) => {
     try {
         await adminService.setSellerVerified(req.params.id, true);

@@ -14,6 +14,7 @@ import Skeleton from "../components/Skeleton";
 import PageMeta from "../components/PageMeta";
 import { useAIAssistant } from "../context/AIAssistantContext";
 import RescheduleModal from "../components/RescheduleModal";
+import { CalendarIcon } from "../components/Icons";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
 // allows either side to cancel a pending or confirmed booking. A
@@ -182,7 +183,7 @@ export default function BookingDetail() {
     const canPay = !isProvider && booking.payment_status === "unpaid"
         && !["cancelled", "refunded", "rejected"].includes(booking.status);
     const canCancel = CANCELLABLE.includes(booking.status) && !(isProvider && booking.status === "pending");
-    // Phase 7 (UI/UX remediation) - reschedule is buyer-only (see
+    // (UI/UX remediation) - reschedule is buyer-only (see
     // booking.service.js#rescheduleBooking's ownership check), under the
     // same status gate as cancel.
     const canReschedule = !isProvider && CANCELLABLE.includes(booking.status);
@@ -366,7 +367,7 @@ export default function BookingDetail() {
 
             <BookingProgressTimeline status={booking.status} />
 
-            {/* Phase 9: booking-status assistant - reads this same real
+            {/*  booking-status assistant - reads this same real
                 booking via /ai/bookings/:id/explain, AI only phrases it. */}
             {assistant && (
                 <button
@@ -467,8 +468,9 @@ export default function BookingDetail() {
                 )}
                 {canReschedule && (
                     <button onClick={() => setShowReschedule(true)} disabled={busy}
-                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
-                        📅 Reschedule
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60 inline-flex items-center gap-1.5">
+                        <CalendarIcon className="w-4 h-4 shrink-0" />
+                        Reschedule
                     </button>
                 )}
                 {canCancel && (

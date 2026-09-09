@@ -107,6 +107,7 @@ const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminDeletedAccounts = lazy(() => import("./pages/admin/AdminDeletedAccounts"));
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
+const AdminDeliveryAgents = lazy(() => import("./pages/admin/AdminDeliveryAgents"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminMaintenance = lazy(() => import("./pages/admin/AdminMaintenance"));
@@ -142,7 +143,7 @@ export default function App() {
     const navigate = useNavigate();
     const toast = useToast();
 
-    // Phase 2: Session expiry. Fires for either an idle-timeout (see
+    // Session expiry. Fires for either an idle-timeout (see
     // AuthContext.jsx's isIdleExpired check on load) or a session that
     // died server-side mid-use (401 caught in api/client.js). Either way
     // the person gets an explicit reason instead of a silent bounce, then
@@ -162,13 +163,13 @@ export default function App() {
     // min-h-[52px] tab height plus a little breathing room.
     const hasMobileBottomNav = ["buyer", "seller", "delivery_agent"].includes(user?.role);
 
-    // Phase B1: Nexora AI is buyer-facing/advisory only - a guest
+    // Nexora AI is buyer-facing/advisory only - a guest
     // (user is null, not yet logged in) or a signed-in buyer gets it;
     // seller/delivery_agent/admin roles get their own AI entry points
     // in later phases (B2/B3), not this one.
     const showNexoraAI = !user || user.role === "buyer";
 
-    // Phase 3: when a push notification is clicked and it focuses an
+    // when a push notification is clicked and it focuses an
     // already-open tab (see sw.js#notificationclick), that only brings the
     // browser window forward - it doesn't change the SPA's route, since
     // this is a client-rendered app and the service worker has no access
@@ -311,7 +312,7 @@ export default function App() {
                             <Route path="analytics" element={<SellerAnalytics />} />
                             <Route path="wallet" element={<SellerWallet />} />
                             <Route path="promote" element={<SellerPromote />} />
-                            {/* Phase 3 (A3): sponsorship/featured-store/department-sponsorship
+                            {/* sponsorship/featured-store/department-sponsorship
                                 are now tabs on the "Promote" hub above - these three keep the
                                 old URLs working (bookmarks, old links) by redirecting into the
                                 matching tab instead of rendering their own separate page. */}
@@ -340,6 +341,7 @@ export default function App() {
                             <Route path="users" element={<AdminUsers />} />
                             <Route path="deleted-accounts" element={<AdminDeletedAccounts />} />
                             <Route path="sellers" element={<AdminSellers />} />
+                            <Route path="delivery-agents" element={<AdminDeliveryAgents />} />
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="categories" element={<AdminCategories />} />
                             <Route path="maintenance" element={<AdminMaintenance />} />

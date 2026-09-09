@@ -326,6 +326,10 @@ exports.listSellers = async () => {
     return adminRepository.findAllSellers();
 };
 
+exports.listDeliveryAgents = async () => {
+    return adminRepository.findAllDeliveryAgents();
+};
+
 exports.setSellerVerified = async (sellerUserId, isVerified) => {
     const profile = await adminRepository.findSellerProfileByUserId(sellerUserId);
 

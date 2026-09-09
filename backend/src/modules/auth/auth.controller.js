@@ -4,6 +4,7 @@ const { t } = require("../../i18n");
 const loginService = require("./login.service");
 const authRepository = require("./auth.repository");
 const passwordResetService = require("./passwordReset.service");
+const otpService = require("../otp/otp.service");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const { sessionCookieOptions, csrfCookieOptions } = require("../../utils/sessionCookie");
@@ -144,11 +145,14 @@ exports.verifyLoginOtp = async (req, res) => {
 
 exports.resendLoginOtp = async (req, res) => {
     try {
-        await loginService.resendLoginOtp(req.body.pre_auth_token);
+        // Phase 5 (OTP resend/expiry UX) - previously discarded, so the
+        // frontend had no way to restart its countdown after a resend.
+        const { expiresInSeconds } = await loginService.resendLoginOtp(req.body.pre_auth_token);
 
         res.json({
             success: true,
-            message: "A new code has been sent."
+            message: "A new code has been sent.",
+            data: { expiresInSeconds }
         });
 
     } catch (error) {
@@ -162,8 +166,15 @@ exports.resendLoginOtp = async (req, res) => {
 // Always responds success regardless of whether the email exists -
 // see passwordReset.service.js for why (prevents email enumeration).
 exports.forgotPassword = async (req, res) => {
+    // Phase 5 (OTP resend/expiry UX) - defaults to the same fixed
+    // constant requestPasswordReset would have returned, so a thrown/
+    // swallowed error below still gives the frontend a valid countdown
+    // instead of `undefined` - it never varies with whether the account
+    // exists, so this stays safe for the anti-enumeration guarantee
+    // above.
+    let expiresInSeconds = otpService.OTP_EXPIRY_SECONDS;
     try {
-        await passwordResetService.requestPasswordReset(req.body.email);
+        ({ expiresInSeconds } = await passwordResetService.requestPasswordReset(req.body.email));
     } catch (error) {
         // Swallowed deliberately - an OTP send failure here shouldn't
         // reveal anything different to the caller than the happy path.
@@ -171,7 +182,8 @@ exports.forgotPassword = async (req, res) => {
 
     res.json({
         success: true,
-        message: "If an account exists for that email, we've sent a reset code."
+        message: "If an account exists for that email, we've sent a reset code.",
+        data: { expiresInSeconds }
     });
 };
 

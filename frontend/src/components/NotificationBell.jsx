@@ -123,7 +123,7 @@ export default function NotificationBell() {
 
     return (
         <div className="relative" ref={rootRef}>
-            {/* Phase 0 (UI/UX remediation): announce unread-count changes to
+            {/* (UI/UX remediation): announce unread-count changes to
                 screen readers, matching the cart/messages announcers added
                 to Header.jsx - the visual badge below already told sighted
                 users a new notification arrived. */}

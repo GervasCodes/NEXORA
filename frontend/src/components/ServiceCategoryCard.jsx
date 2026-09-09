@@ -26,7 +26,7 @@ const FALLBACK_GRADIENTS = [
 // since it represents services in general (the individual categories -
 // accommodation, transportation, tourism, etc. - don't have a sourced
 // photo yet and keep the dark gradient + grid icon below).
-const ALL_SERVICES_COVER_IMAGE = "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop";
+const ALL_SERVICES_COVER_IMAGE = "https://www.pinterest.com/pin/492229434296870277/fm=jpg&q=80&w=1200&auto=format&fit=crop";
 
 export default function ServiceCategoryCard({ category, index, active, totalCount }) {
     const isAll = !category;

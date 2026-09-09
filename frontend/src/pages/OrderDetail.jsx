@@ -16,6 +16,7 @@ import { useAIAssistant } from "../context/AIAssistantContext";
 import FiscalReceiptBadge from "../components/FiscalReceiptBadge";
 import PaymentStatusBanner, { PaymentConfirmedPill } from "../components/PaymentStatusBanner";
 import { ORDER_STATE, getOrderState } from "../utils/orderStatusModel";
+import { ChatIcon, RefreshIcon, ReceiptIcon } from "../components/Icons";
 
 const CANCELLABLE = ["pending", "processing"];
 
@@ -30,7 +31,7 @@ const statusStyles = {
 const VEHICLE_LABELS = {
     bicycle: "Bicycle",
     motorcycle: "Motorcycle",
-    tuktuk: "Tuk-tuk",
+    tuktuk: "Bajaji",
     car: "Car",
     van: "Van",
     truck: "Truck"
@@ -61,7 +62,7 @@ export default function OrderDetail() {
     );
     const [busy, setBusy] = useState(false);
 
-    // Phase 2 (Honest Status Transparency): not a persisted order field
+    // (Honest Status Transparency): not a persisted order field
     // (orders.payment_status is only ever 'unpaid'/'paid' - see
     // database/schema/orders.sql) - this is the transient "we just heard
     // it failed/was cancelled" signal from a redirect or the
@@ -227,7 +228,7 @@ export default function OrderDetail() {
         }
     };
 
-    // Buy again (Phase 4, UI/UX remediation) - re-adds every line item
+    // Buy again ( UI/UX remediation) - re-adds every line item
     // from this order to the cart in one action. Deliberately best-
     // effort per item rather than all-or-nothing: an order placed months
     // ago may have items that are now out of stock, discontinued, or
@@ -271,7 +272,7 @@ export default function OrderDetail() {
         }
     };
 
-    // Download invoice (Phase 4, UI/UX remediation) - same blob-download
+    // Download invoice ( UI/UX remediation) - same blob-download
     // pattern already used for CSV export in AdminDashboard.jsx (fetch
     // as a blob, then trigger the download via a synthetic <a>, rather
     // than a plain <a href> to the API URL - keeps this working
@@ -394,7 +395,7 @@ export default function OrderDetail() {
         );
     }
 
-    // Phase 2 (Honest Status Transparency): a single computed state
+    // (Honest Status Transparency): a single computed state
     // drives both the payment banner below and the "Live tracking"
     // section's searching-vs-assigned visual, so the two never disagree
     // about what stage this order is actually in. Child orders (see
@@ -424,7 +425,7 @@ export default function OrderDetail() {
                 <OrderTimeline status={order.status} searching={orderState === ORDER_STATE.SEARCHING} />
             )}
 
-            {/* Phase B1: order-status assistant - reads this same real
+            {/*  order-status assistant - reads this same real
                 order via /ai/orders/:id/explain, AI only phrases it. */}
             {!order.is_parent && assistant && (
                 <button
@@ -585,8 +586,9 @@ export default function OrderDetail() {
                 )}
                 {delivery?.agent_id && (
                     <button onClick={handleMessageAgent}
-                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring">
-                        💬 Message delivery agent
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center gap-1.5">
+                        <ChatIcon className="w-4 h-4 shrink-0" />
+                        Message delivery agent
                     </button>
                 )}
                 {!order.is_parent && !["pending", "cancelled"].includes(order.status) && (
@@ -603,14 +605,14 @@ export default function OrderDetail() {
                 )}
                 {order.status !== "cancelled" && (
                     <button onClick={handleBuyAgain} disabled={reordering}
-                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
-                        {reordering ? "Adding to cart…" : "🔁 Buy again"}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60 inline-flex items-center gap-1.5">
+                        {reordering ? "Adding to cart…" : <><RefreshIcon className="w-4 h-4 shrink-0" /> Buy again</>}
                     </button>
                 )}
                 {!order.is_parent && (
                     <button onClick={handleDownloadInvoice} disabled={downloadingInvoice}
-                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
-                        {downloadingInvoice ? "Preparing…" : "🧾 Download invoice"}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60 inline-flex items-center gap-1.5">
+                        {downloadingInvoice ? "Preparing…" : <><ReceiptIcon className="w-4 h-4 shrink-0" /> Download invoice</>}
                     </button>
                 )}
             </div>

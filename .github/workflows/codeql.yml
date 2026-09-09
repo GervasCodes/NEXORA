@@ -1,41 +1,41 @@
 name: CodeQL
 
+# Static application security testing (SAST) over the whole repo's
+# JavaScript/JSX (backend + frontend both use the same "javascript"
+# CodeQL language pack; no per-package matrix needed). Referenced from
+# docs/SECURITY_REVIEW_CHECKLIST.md's SAST row, which already assumed
+# this workflow existed under this path.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   schedule:
-    # Every Monday at 03:00 UTC
+    # Weekly, independent of push/PR activity, to catch newly-published
+    # CodeQL query updates against unchanged code.
     - cron: "0 3 * * 1"
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze (javascript)
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ["javascript-typescript"]
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: javascript
           queries: security-extended
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL Analysis
+      - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:javascript"

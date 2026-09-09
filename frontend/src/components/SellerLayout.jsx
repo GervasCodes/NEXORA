@@ -6,7 +6,8 @@ import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
 import MobileBottomNav from "./MobileBottomNav";
-import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon } from "./NavIcons";
+import ConfirmDialog from "./ConfirmDialog";
+import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
@@ -110,7 +111,7 @@ function visibleGroups(merchantType) {
 }
 
 export default function SellerLayout() {
-    const { user, sessionReady } = useAuth();
+    const { user, sessionReady, logout } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -118,6 +119,22 @@ export default function SellerLayout() {
     const location = useLocation();
 
     const isApproved = user?.account_verification_status === "approved";
+
+    // Account/Sign-out used to live in the global Header alongside the
+    // shopper-facing icons - out of place for a seller living inside
+    // their own dashboard shell. Both now live down here instead (see
+    // Header.jsx for the corresponding removal for the seller role).
+    // Mobile still also has "Profile" on the bottom tab bar below
+    // (sellerBottomNavItems) - that's a different, mobile-only surface
+    // and stays as-is; this addition is specifically for the sidebar/
+    // drawer that replaces the header's old Account icon.
+    const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+    const confirmSignOut = () => {
+        setSignOutConfirmOpen(false);
+        setDrawerOpen(false);
+        logout();
+        navigate("/");
+    };
 
     // Close the drawer on every navigation, so it never sits open behind
     // a page the seller didn't mean to open it on.
@@ -181,7 +198,7 @@ export default function SellerLayout() {
         { to: "/account", label: "Profile", icon: AccountIcon }
     ];
 
-    // Phase 1 direct-access guard: only for tabs whose page has no
+    // direct-access guard: only for tabs whose page has no
     // merchant-type fallback UI of its own (selfGated tabs - Services,
     // Bookings, Availability, Pricing - are intentionally left alone so
     // their existing upgrade-prompt/empty-state behavior isn't
@@ -307,6 +324,24 @@ export default function SellerLayout() {
                                 </div>
                             </div>
                         ))}
+
+                        <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                            <Link
+                                to="/account"
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                            >
+                                <AccountIcon className="w-4 h-4 shrink-0" />
+                                Account
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setSignOutConfirmOpen(true)}
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                            >
+                                <SignOutIcon className="w-4 h-4 shrink-0" />
+                                Sign out
+                            </button>
+                        </div>
                     </nav>
                 )}
             </div>
@@ -352,6 +387,24 @@ export default function SellerLayout() {
                         </div>
                     ))}
                 </nav>
+
+                <div className="mt-6 pt-4 border-t border-line/60 flex flex-col gap-1">
+                    <Link
+                        to="/account"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-ink/80 hover:bg-line/50 transition-colors"
+                    >
+                        <AccountIcon className="w-4 h-4 shrink-0" />
+                        Account
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setSignOutConfirmOpen(true)}
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-coral hover:bg-coral/10 transition-colors text-left"
+                    >
+                        <SignOutIcon className="w-4 h-4 shrink-0" />
+                        Sign out
+                    </button>
+                </div>
             </aside>
 
             <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
@@ -361,6 +414,17 @@ export default function SellerLayout() {
             </div>
 
             <MobileBottomNav items={sellerBottomNavItems} />
+
+            <ConfirmDialog
+                open={signOutConfirmOpen}
+                title="Sign out"
+                description="You'll need to sign in again to access your seller dashboard."
+                confirmLabel="Sign out"
+                cancelLabel="Cancel"
+                danger
+                onConfirm={confirmSignOut}
+                onCancel={() => setSignOutConfirmOpen(false)}
+            />
         </div>
     );
 }

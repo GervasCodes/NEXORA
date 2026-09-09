@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 const STORAGE_PREFIX = "nexora_onboarding_seen_";
 
-// Phase 6 (New UI/UX & Imagery Additions, item 18): emoji-only steps
+// (New UI/UX & Imagery Additions, item 18): emoji-only steps
 // replaced with real illustration/photography per step. Buyer step 2
 // (checkout) now uses a verified, freely-licensed photo (Unsplash
 // License - free for commercial use, no attribution required:
@@ -42,7 +42,7 @@ const BUYER_STEPS = [
     }
 ];
 
-// Phase 3 (Remediation, A4): role-specific steps for sellers and
+// (Remediation, A4): role-specific steps for sellers and
 // delivery agents, added onto the existing "shown once per account"
 // mechanism below - same STORAGE_PREFIX key pattern, same dismiss/skip
 // behavior, just a different STEPS array and finish() destination per

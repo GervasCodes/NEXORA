@@ -8,7 +8,7 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import SellerOnboardingChecklist from "../../components/seller/SellerOnboardingChecklist";
 
-// Merchant-Type-Aware Dashboard (Phase 4) - the same product/service
+// Merchant-Type-Aware Dashboard  - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
 // applied to the Overview stat cards and quick actions instead of nav
 // visibility. `hybrid` gets both sections; `product`/`service` only
@@ -79,6 +79,15 @@ export default function SellerOverview() {
         .filter((b) => b.payment_status === "paid" && isWithinRevenueRange(b.created_at))
         .reduce((sum, b) => sum + Number(b.amount), 0);
 
+    // (Seller Dashboard polish) - staggered entrance delay for
+    // every Stat card rendered below, in on-page order, matching the
+    // 40ms-per-card cadence SellerAnalytics.jsx's Stat already uses.
+    // Kept as a simple running counter rather than fixed indices so the
+    // product/service sections can independently show/hide without
+    // leaving gaps in the animation timing.
+    let statDelay = -40;
+    const nextDelay = () => { statDelay += 40; return statDelay; };
+
     return (
         <div>
             <PageMeta title="Seller Dashboard" noIndex />
@@ -94,7 +103,7 @@ export default function SellerOverview() {
             />
 
             {(showProducts || showServices) && (
-                <div className="flex flex-wrap items-end gap-3 mb-4">
+                <div className="border border-line rounded-lg p-4 mb-8 flex flex-wrap items-end gap-3">
                     <p className="text-xs uppercase tracking-widest text-ash w-full sm:w-auto sm:mr-1">
                         Filter revenue by date
                     </p>
@@ -130,61 +139,90 @@ export default function SellerOverview() {
                 </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                {showProducts && (
-                    <>
-                        <Stat label="Products" value={products.length} sub={`${activeProducts} active`} />
-                        <Stat label="Orders" value={orders.length} sub={`${pendingOrders} pending`} />
-                        <Stat label="Revenue" value={formatMoney(productRevenue)} sub={revenueFrom || revenueTo ? "In range" : "All time"} mono />
-                    </>
-                )}
+            {showProducts && (
+                <div className="mb-10">
+                    <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                        Products & orders
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <Stat label="Products" value={products.length} sub={`${activeProducts} active`} delay={nextDelay()} />
+                        <Stat label="Orders" value={orders.length} sub={`${pendingOrders} pending`} delay={nextDelay()} />
+                        <Stat label="Revenue" value={formatMoney(productRevenue)} sub={revenueFrom || revenueTo ? "In range" : "All time"} mono delay={nextDelay()} />
+                    </div>
+                </div>
+            )}
 
-                {showServices && (
-                    <>
-                        <Stat label="Services" value={services.length} sub={`${activeServices} active`} />
-                        <Stat label="Bookings" value={bookings.length} sub={`${pendingBookings} pending`} />
-                        <Stat label="Booking revenue" value={formatMoney(serviceRevenue)} sub={revenueFrom || revenueTo ? "In range" : "All time"} mono />
-                    </>
-                )}
+            {showServices && (
+                <div className="mb-10">
+                    <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                        Services & bookings
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <Stat label="Services" value={services.length} sub={`${activeServices} active`} delay={nextDelay()} />
+                        <Stat label="Bookings" value={bookings.length} sub={`${pendingBookings} pending`} delay={nextDelay()} />
+                        <Stat label="Booking revenue" value={formatMoney(serviceRevenue)} sub={revenueFrom || revenueTo ? "In range" : "All time"} mono delay={nextDelay()} />
+                    </div>
+                </div>
+            )}
 
-                <Stat label="Status" value={profile.is_verified ? "Verified" : "Pending"} />
+            <div className="mb-10">
+                <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                    Account
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <Stat label="Status" value={profile.is_verified ? "Verified" : "Pending"} highlight={profile.is_verified} delay={nextDelay()} />
+                </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-                {showProducts && (
-                    <>
-                        <Button as={Link} to="/seller/products/new" size="sm">
-                            List a new product
-                        </Button>
-                        <Link to="/seller/orders" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
-                            View orders
-                        </Link>
-                    </>
-                )}
+            <div>
+                <p className="text-xs uppercase tracking-widest text-ash mb-3">
+                    Quick actions
+                </p>
+                <div className="flex flex-wrap gap-3">
+                    {showProducts && (
+                        <>
+                            <Button as={Link} to="/seller/products/new" size="sm">
+                                List a new product
+                            </Button>
+                            <Link to="/seller/orders" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
+                                View orders
+                            </Link>
+                        </>
+                    )}
 
-                {showServices && (
-                    <>
-                        <Button as={Link} to="/seller/services/new" size="sm">
-                            List a new service
-                        </Button>
-                        <Link to="/seller/bookings" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
-                            View bookings
-                        </Link>
-                        <Link to="/seller/availability" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
-                            Manage availability
-                        </Link>
-                    </>
-                )}
+                    {showServices && (
+                        <>
+                            <Button as={Link} to="/seller/services/new" size="sm">
+                                List a new service
+                            </Button>
+                            <Link to="/seller/bookings" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
+                                View bookings
+                            </Link>
+                            <Link to="/seller/availability" className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-ink transition-colors">
+                                Manage availability
+                            </Link>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
 }
 
-function Stat({ label, value, sub, mono }) {
+// (Seller Dashboard polish) - brought in line with the
+// modernized Stat card already used on SellerAnalytics.jsx (staggered
+// slide-up entrance + hover lift/shadow), so the two seller pages that
+// sit side by side in the sidebar ("Overview" and "Analytics") no
+// longer look like two different eras of the app. `highlight` reuses
+// the same teal-accent treatment SellerAnalytics.jsx's Stat supports.
+function Stat({ label, value, sub, mono, delay = 0, highlight }) {
     return (
-        <div className="border border-line rounded-lg p-4">
+        <div
+            className={`border rounded-lg p-4 animate-slide-up hover:-translate-y-0.5 hover:shadow-md transition-all ${highlight ? "border-teal/30 bg-teal/5" : "border-line"}`}
+            style={{ animationDelay: `${delay}ms` }}
+        >
             <p className="text-xs text-ash mb-1">{label}</p>
-            <p className={`text-xl font-medium ${mono ? "price" : "font-display"}`}>{value}</p>
+            <p className={`text-xl font-medium ${mono ? "price" : "font-display"} ${highlight ? "text-teal" : ""}`}>{value}</p>
             {sub && <p className="text-xs text-ash mt-0.5">{sub}</p>}
         </div>
     );

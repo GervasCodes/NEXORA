@@ -26,7 +26,7 @@ const timeSince = (isoString) => {
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
 };
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - same "Nm ago" shape
+// (Admin Manual Override & Ops Visibility) - same "Nm ago" shape
 // as timeSince above, but for a plain minute count (admin.service.js
 // already computes minutes_waiting server-side via TIMESTAMPDIFF, so
 // there's no timestamp to diff against here).
@@ -46,7 +46,7 @@ export default function AdminDispatch() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Phase 3 (Admin Manual Override & Ops Visibility) - toggles the
+    // (Admin Manual Override & Ops Visibility) - toggles the
     // unmatched-orders list between "everything waiting" and "only the
     // ones past the stalled threshold" (see admin.service.js's
     // STALLED_ORDER_MINUTES), same is_stalled flag the map's stalled
@@ -100,7 +100,7 @@ export default function AdminDispatch() {
         socket.on("dispatch:delivery_status", refresh);
         socket.on("dispatch:agent_status", refresh);
         socket.on("dispatch:agent_position", handlePosition);
-        // Phase 3: an order widening its search radius or exhausting
+        //  an order widening its search radius or exhausting
         // every radius step (see delivery.service.js's
         // offerToNextCandidate) doesn't change who's assigned to what,
         // but it can move an order into/out of the manual pool this
@@ -117,7 +117,7 @@ export default function AdminDispatch() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, connected]);
 
-    // Phase 3 (Admin Manual Override) - assigns the order to whichever
+    //  (Admin Manual Override) - assigns the order to whichever
     // agent is currently selected in that row's dropdown. Mirrors
     // AdminOrders.jsx's releaseEscrow: per-row loading flag + a
     // dismissable inline result/error message under that row, not a
@@ -227,7 +227,7 @@ export default function AdminDispatch() {
                 <AdminDispatchMap deliveries={sortedDeliveries} agents={agents} unmatchedOrders={unmatchedOrders} />
             </div>
 
-            {/* Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) -
+            {/* Roadmap  (Predictive Coverage Dashboard for Ops) -
                 separate read-only historical view; doesn't touch the
                 live map/socket state above it at all. */}
             <h2 className="font-display text-lg mb-3">Coverage forecast</h2>

@@ -28,7 +28,7 @@ export default function Loyalty() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Native share + WhatsApp-specific share (Phase 6, UI/UX
+    // Native share + WhatsApp-specific share ( UI/UX
     // remediation) - a referral program's whole value depends on how
     // easily it spreads, and "copy link" alone puts more friction
     // between a buyer and actually sharing it than necessary,

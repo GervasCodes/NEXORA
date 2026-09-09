@@ -383,8 +383,19 @@ exports.cancelOrder = async (orderId, buyerId) => {
         // still needed for the cancellability check right before this,
         // so that fetch stays; only the per-row update collapses.
         await orderRepository.updateOrderStatusForChildren(orderId, "cancelled");
+        // Stock-restoration fix: a split cart's items live on the child
+        // orders, not the parent row itself (see createSplitOrder), so
+        // restoring stock for a cancelled parent means restoring every
+        // child's items in one pass - see restoreStockForChildOrders.
+        await orderRepository.restoreStockForChildOrders(orderId);
     } else if (!CANCELLABLE_STATUSES.includes(order.status)) {
         throw new Error(`Order can no longer be cancelled (status: ${order.status})`);
+    } else {
+        // Stock-restoration fix: give back whatever this standalone
+        // order's items took at checkout - otherwise a cancelled order
+        // permanently keeps its reserved stock, and a product can read
+        // "out of stock" for a sale that never actually completed.
+        await orderRepository.restoreStockForOrder(orderId);
     }
 
     await orderRepository.updateOrderStatus(orderId, "cancelled");
@@ -415,6 +426,14 @@ exports.autoCancelStaleOrder = async (order) => {
         // pure overhead; one batched UPDATE replaces both the SELECT and
         // the loop.
         await orderRepository.updateOrderStatusForChildren(order.id, "cancelled");
+        // Stock-restoration fix: same reasoning as cancelOrder above -
+        // these orders never got a payment confirmation at all, so the
+        // stock they reserved at checkout must go back.
+        await orderRepository.restoreStockForChildOrders(order.id);
+    } else {
+        // Stock-restoration fix: standalone stale/unpaid order - restore
+        // its own items' stock the same way.
+        await orderRepository.restoreStockForOrder(order.id);
     }
 
     await orderRepository.updateOrderStatus(order.id, "cancelled");

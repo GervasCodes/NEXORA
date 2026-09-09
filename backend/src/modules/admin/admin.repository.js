@@ -95,6 +95,29 @@ exports.setSellerVerified = async (userId, isVerified) => {
     );
 };
 
+// --- Delivery agents ---
+// Unlike sellers, an agent has no separate profile table - their profile
+// IS their users row (vehicle_type/vehicle_plate_number, is_online,
+// account_verification_status live directly on users - see
+// accountVerification.repository.js#findUserById, which this mirrors).
+// Same deleted_at exclusion as findAllSellers above. Pending-verification
+// agents surface first, same ordering intent as findAllSellers'
+// `is_verified ASC` (least-done-with first).
+exports.findAllDeliveryAgents = async () => {
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, email, phone,
+                vehicle_type, vehicle_plate_number,
+                is_active, is_online,
+                account_verification_status,
+                suspended_at, suspension_reason,
+                created_at
+        FROM users
+        WHERE role = 'delivery_agent' AND deleted_at IS NULL
+        ORDER BY FIELD(account_verification_status, 'pending', 'rejected', 'approved'), created_at DESC`
+    );
+    return rows;
+};
+
 // --- Products ---
 // Phase A4: search (name/brand/store) + category + status filters, plus
 // pagination - same shape as product.repository.js#findAll (search plan,

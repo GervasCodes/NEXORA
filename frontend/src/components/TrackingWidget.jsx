@@ -12,7 +12,7 @@ const SEARCH_STAGE_COPY_KEY = {
     [SEARCH_STAGE.TAKING_LONGER]: "delivery.tracking.searching.takingLonger"
 };
 
-// Phase 2 (Honest Status Transparency): `searching` is a distinct third
+//  (Honest Status Transparency): `searching` is a distinct third
 // mode alongside "no delivery info yet" (null) and "agent assigned" -
 // before this the widget only ever rendered once `delivery.agent_id`
 // existed, so a paid order sitting in dispatch (see

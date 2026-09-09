@@ -27,7 +27,7 @@ export default function Guides() {
             <h1 className="font-display text-2xl mb-1">Buying guides</h1>
             <p className="text-ash text-sm mb-6">Tips and guides to help you shop smarter.</p>
 
-            {/* Category filter chips (Phase 9, UI/UX remediation) - only
+            {/* Category filter chips ( UI/UX remediation) - only
                 categories that actually have at least one published
                 guide (see content.repository.js#findCategoriesInUse),
                 so there's never a filter that returns an empty list. */}

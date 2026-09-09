@@ -34,7 +34,7 @@ export default function GroupBuys() {
             ) : (
                 <ul className="space-y-3">
                     {groups.map((g) => {
-                        // Phase 9 (UI/UX remediation) - progress bar +
+                        // (UI/UX remediation) - progress bar +
                         // countdown, matching the treatment
                         // GroupBuyDetail.jsx's page already had, so the
                         // list itself communicates momentum instead of

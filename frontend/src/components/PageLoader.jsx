@@ -1,5 +1,5 @@
 
-// D1 (Phase 4 remediation): used on nearly every page while data loads, but
+// D1 ( remediation): used on nearly every page while data loads, but
 // previously communicated nothing to a screen-reader user - it's a purely
 // decorative spinning ring, so silence during a genuine wait read as the
 // page being broken. role="status" + a visually-hidden label announces

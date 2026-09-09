@@ -5,7 +5,7 @@ import PageMeta from "../components/PageMeta";
 import EmptyState from "../components/ui/EmptyState";
 
 /**
- * ComparePage - Phase 3 (UI/UX remediation).
+ * ComparePage - (UI/UX remediation).
  *
  * Side-by-side table of whatever's currently in CompareContext (2-3
  * products, client-side only - see that context's own comment on why

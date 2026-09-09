@@ -249,6 +249,90 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
     }
 };
 
+// Restores stock the mirror-image way `insertOrderItems` above decrements
+// it - used when an order that already took stock (any order that
+// reached `insertOrderItems`, i.e. every standalone/child order; a bare
+// parent row never carries items of its own - see createSplitOrder)
+// is cancelled, whether buyer-initiated (cancelOrder) or system-initiated
+// as stale/unpaid (autoCancelStaleOrder). Without this, a mobile-money
+// order that's cancelled or expires unpaid permanently keeps the stock
+// it reserved, so a product can read "out of stock" for a sale that
+// never actually completed.
+//
+// `rows` here is already `{ product_id, variant_id, quantity }` - either
+// a single order's items, or (via restoreStockForChildOrders below) every
+// item across a whole parent's children in one shot. Quantities are
+// summed per id first (a plain object.reduce, not more SQL) so this
+// stays correct even if the same product/variant somehow appears more
+// than once across the rows being restored - the CASE-WHEN update below
+// only keeps the LAST match per id otherwise, silently under-restoring.
+const applyStockIncrease = async (executor, rows) => {
+    if (!rows.length) return;
+
+    const plainTotals = new Map();
+    const variantTotals = new Map();
+
+    for (const row of rows) {
+        if (row.variant_id) {
+            variantTotals.set(row.variant_id, (variantTotals.get(row.variant_id) || 0) + row.quantity);
+        } else {
+            plainTotals.set(row.product_id, (plainTotals.get(row.product_id) || 0) + row.quantity);
+        }
+    }
+
+    if (plainTotals.size) {
+        const ids = [...plainTotals.keys()];
+        const caseClauses = ids.map(() => "WHEN ? THEN stock + ?").join(" ");
+        const caseParams = ids.flatMap((id) => [id, plainTotals.get(id)]);
+
+        await executor.query(
+            `UPDATE products
+            SET stock = CASE id ${caseClauses} END
+            WHERE id IN (?)`,
+            [...caseParams, ids]
+        );
+    }
+
+    if (variantTotals.size) {
+        const ids = [...variantTotals.keys()];
+        const caseClauses = ids.map(() => "WHEN ? THEN stock + ?").join(" ");
+        const caseParams = ids.flatMap((id) => [id, variantTotals.get(id)]);
+
+        await executor.query(
+            `UPDATE product_variants
+            SET stock = CASE id ${caseClauses} END
+            WHERE id IN (?)`,
+            [...caseParams, ids]
+        );
+    }
+};
+
+// Restores stock for a single standalone or child order's items. Safe to
+// call even for an order with no items (no-op).
+exports.restoreStockForOrder = async (orderId) => {
+    const [rows] = await db.query(
+        "SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?",
+        [orderId]
+    );
+
+    await applyStockIncrease(db, rows);
+};
+
+// Restores stock for every child order under a parent in one pass -
+// mirrors updateOrderStatusForChildren's "one batched query, not N" shape
+// rather than looping restoreStockForOrder per child.
+exports.restoreStockForChildOrders = async (parentOrderId) => {
+    const [rows] = await db.query(
+        `SELECT oi.product_id, oi.variant_id, oi.quantity
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE o.parent_order_id = ?`,
+        [parentOrderId]
+    );
+
+    await applyStockIncrease(db, rows);
+};
+
 // Orders placed via mobile money that never got a payment confirmation
 // webhook (buyer abandoned the USSD prompt, network issue, etc.) and
 // have sat unpaid/pending past the cutoff - candidates for the
@@ -460,6 +544,7 @@ exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at,
+                u.first_name AS buyer_first_name, u.last_name AS buyer_last_name,
                 EXISTS (
                     SELECT 1 FROM order_items oi2
                     WHERE oi2.order_id = o.id AND oi2.seller_id = ? AND oi2.wallet_credited = FALSE
@@ -468,6 +553,7 @@ exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
                   AND o.updated_at < (NOW() - INTERVAL 10 MINUTE) AS wallet_credit_pending
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
+        JOIN users u ON u.id = o.buyer_id
         WHERE ${conditions.join(" AND ")}
         ORDER BY o.created_at DESC`,
         [sellerId, ...params]

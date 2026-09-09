@@ -68,10 +68,18 @@ export default function UpdateAvailableBanner() {
 
     if (!visible || dismissed) return null;
 
+    // Mobile/desktop bottom offsets bumped up from bottom-20/sm:bottom-20
+    // (80px) - that was the exact same offset NexoraAIButton and
+    // SupportWidget use for their own bottom position, so this
+    // full-width (inset-x-4) banner was rendering directly on top of
+    // both floating buttons whenever it appeared. bottom-56/sm:bottom-24
+    // clears NexoraAIButton/SupportWidget (~80-140px band) and, on
+    // mobile, also clears InstallPrompt's own slot (~160-224px) in case
+    // both banners are ever visible at once.
     return (
         <div
             role="status"
-            className="fixed bottom-20 inset-x-4 sm:inset-x-auto sm:left-4 sm:bottom-20 z-[1100] sm:w-80
+            className="fixed bottom-56 inset-x-4 sm:inset-x-auto sm:left-4 sm:bottom-24 z-[1100] sm:w-80
                 glass-strong border border-azure/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

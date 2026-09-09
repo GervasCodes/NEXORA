@@ -10,11 +10,11 @@ const SORT_OPTIONS = [
     { value: "rating", label: "Highest rated" }
 ];
 
-// Phase 4 (Customer Experience) - same 4-and-up-through-1-and-up ladder
+// (Customer Experience) - same 4-and-up-through-1-and-up ladder
 // as ProductFilters.jsx's RATING_OPTIONS.
 const RATING_OPTIONS = [4, 3, 2, 1];
 
-// Note (Phase 5: Icon & Empty-State Consistency): the ★ glyph below is
+// Note ( Icon & Empty-State Consistency): the ★ glyph below is
 // left as plain text on purpose - it's rendered inside a native
 // <option>, which can only ever show text, not an SVG icon like the
 // StarIcon used everywhere else star ratings appear.
@@ -30,7 +30,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
     const [minRating, setMinRating] = useState("");
     const [sort, setSort] = useState("newest");
 
-    // Phase 4 - feeds the Location dropdown, same shape as
+    // feeds the Location dropdown, same shape as
     // ProductFilters.jsx's own regions effect.
     useEffect(() => {
         setRegionsError(false);

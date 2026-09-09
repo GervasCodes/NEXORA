@@ -23,7 +23,7 @@ export default function AdminOrders() {
         api.get("/admin/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
     }, []);
 
-    // Phase 9D manual early release - bypasses the normal delivered +
+    //  manual early release - bypasses the normal delivered +
     // escrow_hold_days timing gate for one order, but the backend still
     // refuses to release anything covered by an open dispute. See
     // docs/ESCROW_ANALYSIS.md section 3.4.
@@ -60,8 +60,12 @@ export default function AdminOrders() {
                 {orders.map((o) => (
                     <li key={o.id} className="py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
-                            <p className="price text-sm font-medium">{o.order_number}</p>
-                            <p className="text-xs text-ash truncate">{o.first_name} {o.last_name} · {o.email}</p>
+                            <p className="text-sm font-medium truncate">
+                                {o.first_name} {o.last_name}
+                            </p>
+                            <p className="price text-xs text-ash truncate">
+                                <span>{o.order_number}</span> · <span>{o.email}</span>
+                            </p>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:shrink-0">

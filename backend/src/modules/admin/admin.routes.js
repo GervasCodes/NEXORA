@@ -127,6 +127,7 @@ router.delete(
 );
 
 router.get("/sellers", adminController.listSellers);
+router.get("/delivery-agents", adminController.listDeliveryAgents);
 router.put("/sellers/:id/verify", userIdValidation, validationMiddleware, adminController.verifySeller);
 router.put("/sellers/:id/unverify", userIdValidation, validationMiddleware, adminController.unverifySeller);
 

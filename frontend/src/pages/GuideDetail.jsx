@@ -5,7 +5,7 @@ import PageMeta from "../components/PageMeta";
 import PageLoader from "../components/PageLoader";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
 
-// Phase 1 (Remediation, A5): still no markdown-rendering dependency in
+// (Remediation): still no markdown-rendering dependency in
 // this project, so this stays a hand-rolled renderer rather than
 // pulling one in - guide bodies are plain prose, not richly formatted
 // content that needs real markdown (tables, code blocks, etc). What
@@ -73,7 +73,7 @@ export default function GuideDetail() {
             <h1 className="font-display text-3xl mb-6">{article.title}</h1>
             <div className="text-ink/90 text-[15px]">{renderBody(article.body_markdown)}</div>
 
-            {/* Related guides (Phase 9, UI/UX remediation) - already
+            {/* Related guides ( UI/UX remediation) - already
                 included in the /content/:slug response (see
                 content.controller.js#getBySlug), no second request. */}
             {article.related?.length > 0 && (

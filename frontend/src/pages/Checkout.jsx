@@ -92,7 +92,7 @@ export default function Checkout() {
     const [pin, setPin] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // Phase 5 (Resilience & Growth), extended for MalipoPay Card: null =
+    // (Resilience & Growth), extended for MalipoPay Card: null =
     // still loading / endpoint unavailable - in either case every method
     // stays visible (fail-open), so this lookup can never make checkout
     // show FEWER options than it did before this phase if something's
@@ -103,7 +103,7 @@ export default function Checkout() {
     const [providersFetchFailed, setProvidersFetchFailed] = useState(false);
     const configuredKeys = configuredProviders && configuredProviders.map((provider) => provider.key);
 
-    // Loyalty points redemption (Phase Q7) - fetched once; the server
+    // Loyalty points redemption  - fetched once; the server
     // re-validates the balance regardless (see order.service.js's
     // quoteRedemption), this is purely for showing an accurate max/
     // estimate before submitting.
@@ -113,7 +113,7 @@ export default function Checkout() {
         api.get("/loyalty/me").then(({ data }) => setLoyaltyBalance(data.data.balance)).catch(() => {});
     }, []);
 
-    // Coupon / promo code (Phase 1, UI/UX remediation) - "Apply" hits a
+    // Coupon / promo code (UI/UX remediation) - "Apply" hits a
     // read-only validation endpoint (coupon.controller.js#validate) that
     // recomputes the subtotal from the buyer's actual server-side cart,
     // so this preview can't be spoofed into showing a discount that
@@ -150,7 +150,7 @@ export default function Checkout() {
         setForm((f) => ({ ...f, coupon_code: "" }));
     };
 
-    // Agent/kiosk pickup points (Phase Q5) - fetched once; selecting one
+    // Agent/kiosk pickup points  - fetched once; selecting one
     // auto-fills the address fields the checkout payload already sends
     // (server re-validates and re-substitutes the pickup point's own
     // address regardless, see order.service.js#checkout, but the
@@ -162,7 +162,7 @@ export default function Checkout() {
         api.get("/pickup-points").then(({ data }) => setPickupPoints(data.data)).catch(() => {});
     }, []);
 
-    // Saved address book (Phase 1, UI/UX remediation) - fetched once;
+    // Saved address book (UI/UX remediation) - fetched once;
     // same auto-fill-then-server-re-validates relationship as pickup
     // points above (see order.service.js#checkout's address_id
     // handling). Pre-selects the buyer's default address (if any) so
@@ -210,7 +210,7 @@ export default function Checkout() {
         }));
     };
 
-    // Phase 6 (Checkout & Order Timeline UX): upfront delivery-time
+    // (Checkout & Order Timeline UX): upfront delivery-time
     // estimate, fetched from the same distance/duration calculation the
     // platform already uses for rider pay (see
     // deliveryPricing.service.js#estimateDeliveryForRoute via
@@ -252,7 +252,7 @@ export default function Checkout() {
         }));
     };
 
-    // Wallet top-up (Phase Q2) - only offered as a payment method once
+    // Wallet top-up  - only offered as a payment method once
     // there's an actual balance to spend; a zero/no-wallet buyer just
     // never sees the option, rather than seeing it and hitting an
     // "insufficient balance" error on submit.
@@ -362,7 +362,7 @@ export default function Checkout() {
             const { data } = await api.post("/orders", payload);
             orderId = data.data.orderId;
 
-            // Save-new-address checkbox (Phase 1, UI/UX remediation) -
+            // Save-new-address checkbox ( UI/UX remediation) -
             // fire-and-forget, deliberately not awaited: this is a
             // convenience for next time, not something that should ever
             // block or fail an order that already succeeded.

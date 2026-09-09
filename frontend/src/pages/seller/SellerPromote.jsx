@@ -4,7 +4,7 @@ import SellerSponsorship from "./SellerSponsorship";
 import SellerFeaturedStore from "./SellerFeaturedStore";
 import SellerDepartmentSponsorship from "./SellerDepartmentSponsorship";
 
-// Phase 3 (Remediation, A3): sponsorship, featured stores, and
+// (Remediation, A3): sponsorship, featured stores, and
 // department sponsorship used to be three separate nav entries/routes
 // that did the same thing (pay from wallet balance to buy a period of
 // extra visibility somewhere on the site) with three near-identical

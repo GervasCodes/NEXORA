@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import Button from "./ui/Button";
 
 /**
- * Error-boundary fallback - Phase 2 Metadata & Error Polish.
+ * Error-boundary fallback - Metadata & Error Polish.
  *
  * Replaces the bare `<p>Something went wrong...</p>` that main.jsx's
  * Sentry.ErrorBoundary previously rendered. Reuses the same visual

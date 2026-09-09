@@ -1,9 +1,25 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+
+// Phase 5 (OTP resend/expiry UX) - same fallback/cooldown values as
+// Login.jsx's OTP step, mirroring otp.service.js's real
+// EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES. This file doesn't use the
+// i18n t() system (it never has - unlike Login.jsx, it wasn't part of
+// the earlier i18n rollout), so these stay plain English strings to
+// match the rest of the page.
+const OTP_EXPIRY_FALLBACK_SECONDS = 300;
+const RESEND_COOLDOWN_SECONDS = 60;
+
+const formatCountdown = (totalSeconds) => {
+    const clamped = Math.max(0, totalSeconds);
+    const minutes = Math.floor(clamped / 60);
+    const seconds = clamped % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
@@ -14,20 +30,62 @@ export default function ForgotPassword() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    // Phase 5 (OTP resend/expiry UX) - live "expires in mm:ss" plus a
+    // resend-button cooldown, same shape as Login.jsx's OTP step.
+    const [expiresIn, setExpiresIn] = useState(OTP_EXPIRY_FALLBACK_SECONDS);
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const [resending, setResending] = useState(false);
+    const tickRef = useRef(null);
+
+    useEffect(() => {
+        if (step !== "reset") return undefined;
+
+        clearInterval(tickRef.current);
+        tickRef.current = setInterval(() => {
+            setExpiresIn((prev) => (prev > 0 ? prev - 1 : 0));
+            setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+
+        return () => clearInterval(tickRef.current);
+    }, [step]);
 
     const handleRequest = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError("");
         try {
-            await api.post("/auth/forgot-password", { email });
-            
+            const { data } = await api.post("/auth/forgot-password", { email });
+
             setNotice("If an account exists for that email, a reset code is on its way.");
+            setExpiresIn(data.data?.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
             setStep("reset");
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    // Re-requesting a code is the same endpoint as the initial request -
+    // there's no separate resend route for password reset (unlike
+    // login's /auth/login/resend-otp). The anti-enumeration behavior is
+    // unaffected: this always responds success regardless of whether the
+    // account exists, same as the first call.
+    const handleResend = async () => {
+        if (resendCooldown > 0 || resending) return;
+        setResending(true);
+        setError("");
+        setNotice("");
+        try {
+            const { data } = await api.post("/auth/forgot-password", { email });
+
+            setNotice("A new code is on its way.");
+            setExpiresIn(data.data?.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
+            setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setResending(false);
         }
     };
 
@@ -102,6 +160,12 @@ export default function ForgotPassword() {
                         hidePasswordLabel="Hide password"
                     />
 
+                    <p className={`text-xs ${expiresIn > 0 ? "text-ash" : "text-coral"}`}>
+                        {expiresIn > 0
+                            ? `Code expires in ${formatCountdown(expiresIn)}`
+                            : "Your code has expired. Request a new one below."}
+                    </p>
+
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
@@ -113,13 +177,23 @@ export default function ForgotPassword() {
                         {submitting ? "Resetting…" : "Reset password"}
                     </Button>
 
-                    <button
-                        type="button"
-                        onClick={() => { setStep("email"); setError(""); setNotice(""); }}
-                        className="w-full text-sm text-ash hover:text-ink transition-colors"
-                    >
-                        ← Use a different email
-                    </button>
+                    <div className="flex items-center justify-between text-sm">
+                        <button
+                            type="button"
+                            onClick={() => { setStep("email"); setError(""); setNotice(""); }}
+                            className="text-ash hover:text-ink transition-colors"
+                        >
+                            ← Use a different email
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={resendCooldown > 0 || resending}
+                            className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                        >
+                            {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+                        </button>
+                    </div>
                 </form>
             )}
 

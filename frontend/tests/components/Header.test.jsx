@@ -37,14 +37,16 @@ const renderHeader = () =>
     );
 
 describe("Header nav links (A2 audit)", () => {
-    it("links to Services alongside Browse for a signed-out visitor", () => {
+    it("links to Browse for a signed-out visitor, but not Services (moved to the homepage)", () => {
         mockUser = null;
         renderHeader();
 
-        // Two "Services" instances render: the desktop icon link and the
-        // mobile drawer's (hidden but present) row - both should exist.
-        expect(screen.getAllByRole("link", { name: "Services" }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole("link", { name: "Browse all" }).length).toBeGreaterThan(0);
+        // Services used to have its own permanent icon in both the desktop
+        // row and the mobile drawer - it's now only reachable from the
+        // homepage's own Services promo card (see Home.jsx), not the
+        // global header, so neither instance should render here anymore.
+        expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
     });
 
     it("surfaces Returns for a signed-in buyer via the Tools menu", async () => {

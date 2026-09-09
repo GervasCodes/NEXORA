@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import PageTransition from "./PageTransition";
-import { HomeIcon } from "./NavIcons";
+import ConfirmDialog from "./ConfirmDialog";
+import { useAuth } from "../context/AuthContext";
+import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like the rest of the app's nav) instead of a wall of 17
@@ -47,6 +49,7 @@ const groups = [
             { to: "/admin/users", label: "Users" },
             { to: "/admin/deleted-accounts", label: "Deleted accounts" },
             { to: "/admin/sellers", label: "Sellers" },
+            { to: "/admin/delivery-agents", label: "Delivery agents" },
             { to: "/admin/account-verifications", label: "Verifications" },
             { to: "/admin/disputes", label: "Disputes" },
             { to: "/admin/returns", label: "Returns" },
@@ -80,6 +83,21 @@ function tabIsActive(tab, pathname) {
 export default function AdminLayout() {
     const { pathname } = useLocation();
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const { logout } = useAuth();
+    const navigate = useNavigate();
+
+    // Account/Sign-out used to live in the global Header alongside the
+    // shopper-facing icons (Home/Browse/Cart/etc.) - out of place for an
+    // admin who's living inside the Control room, not the storefront.
+    // Both now live down here instead; see Header.jsx for the
+    // corresponding removal for the admin role.
+    const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+    const confirmSignOut = () => {
+        setSignOutConfirmOpen(false);
+        setDrawerOpen(false);
+        logout();
+        navigate("/");
+    };
 
     // Close the drawer on every navigation, so it never sits open behind
     // a page the admin didn't mean to open it on.
@@ -123,7 +141,7 @@ export default function AdminLayout() {
                         className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
                     >
                         <span className="min-w-0 text-left">
-                            <span className="block text-xs uppercase tracking-widest text-ash">Admin</span>
+                            <span className="block text-xs uppercase tracking-widest text-ash">Control room</span>
                             <span className="block font-display text-lg truncate">
                                 {currentTab?.label ?? "Control room"}
                             </span>
@@ -167,6 +185,24 @@ export default function AdminLayout() {
                                 </div>
                             </div>
                         ))}
+
+                        <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                            <Link
+                                to="/account"
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                            >
+                                <AccountIcon className="w-4 h-4 shrink-0" />
+                                Account
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setSignOutConfirmOpen(true)}
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                            >
+                                <SignOutIcon className="w-4 h-4 shrink-0" />
+                                Sign out
+                            </button>
+                        </div>
                     </nav>
                 )}
             </div>
@@ -208,6 +244,24 @@ export default function AdminLayout() {
                         </div>
                     ))}
                 </nav>
+
+                <div className="mt-6 pt-4 border-t border-line/60 flex flex-col gap-1">
+                    <Link
+                        to="/account"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-ink/80 hover:bg-line/50 transition-colors"
+                    >
+                        <AccountIcon className="w-4 h-4 shrink-0" />
+                        Account
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setSignOutConfirmOpen(true)}
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-coral hover:bg-coral/10 transition-colors text-left"
+                    >
+                        <SignOutIcon className="w-4 h-4 shrink-0" />
+                        Sign out
+                    </button>
+                </div>
             </aside>
 
             <div className="min-w-0 px-4 pb-6 pt-2 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
@@ -215,6 +269,17 @@ export default function AdminLayout() {
                     <Outlet />
                 </PageTransition>
             </div>
+
+            <ConfirmDialog
+                open={signOutConfirmOpen}
+                title="Sign out"
+                description="You'll need to sign in again to access the Control room."
+                confirmLabel="Sign out"
+                cancelLabel="Cancel"
+                danger
+                onConfirm={confirmSignOut}
+                onCancel={() => setSignOutConfirmOpen(false)}
+            />
         </div>
     );
 }

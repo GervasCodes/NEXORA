@@ -304,7 +304,7 @@ app.get("/health", async (req, res) => {
 app.get("/", (req, res) => {
     res.json({
         success: true,
-        message: "Welcome to NEXORA API 🚀"
+        message: "Welcome to NEXORA API"
     });
 });
 

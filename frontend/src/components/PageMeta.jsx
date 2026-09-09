@@ -3,7 +3,7 @@ import { Helmet } from "react-helmet-async";
 const SITE_NAME = "NEXORA";
 const DEFAULT_DESCRIPTION =
     "NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners.";
-// Phase 6 (Branding): dedicated 1200x630 Open Graph banner - replaces the
+// (Branding): dedicated 1200x630 Open Graph banner - replaces the
 // icon-512.png fallback used while no banner existed.
 const DEFAULT_IMAGE = "/og-banner.png";
 

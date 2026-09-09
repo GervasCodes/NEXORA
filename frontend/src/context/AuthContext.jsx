@@ -3,7 +3,7 @@ import api, { extractErrorMessage, registerSuspensionHandler, registerSessionExp
 
 const AuthContext = createContext(null);
 
-// Phase 2: Session expiry. A session with no activity for this long is
+//  Session expiry. A session with no activity for this long is
 // treated as stale and cleared proactively on next app load, rather than
 // riding out the full 7-day JWT and dying with a confusing mid-session
 // 401 (see api/client.js's request interceptor, which refreshes
@@ -19,7 +19,7 @@ const loadStoredUser = () => {
     // Checked here (not just in the effect below) so a stale user never
     // even briefly renders as logged-in on first paint.
     if (isIdleExpired()) return null;
-    // Phase 4 (Testing & Session Hardening): this is now an *optimistic*
+    //  (Testing & Session Hardening): this is now an *optimistic*
     // value only, for instant first paint - not authoritative. The real
     // session lives in an httpOnly cookie this code can't read, so it
     // can't actually confirm anyone is still logged in; it can only
@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Phase 4 (Testing & Session Hardening): loadStoredUser's initial
+    //  (Testing & Session Hardening): loadStoredUser's initial
     // value is optimistic only - it can't actually see whether the
     // httpOnly session cookie is still valid. This confirms it against
     // the server on every app load. Only acts when there WAS a cached
@@ -139,7 +139,12 @@ export function AuthProvider({ children }) {
                 success: true,
                 needsOtp: true,
                 preAuthToken: data.data.preAuthToken,
-                maskedEmail: data.data.maskedEmail
+                maskedEmail: data.data.maskedEmail,
+                //  (OTP resend/expiry UX) - now threaded through from
+                // the API response (see login.service.js) so Login.jsx can
+                // drive a live "expires in mm:ss" countdown instead of
+                // hardcoding a duration that could drift from the server's.
+                expiresInSeconds: data.data.expiresInSeconds
             };
         } catch (error) {
             if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
@@ -153,7 +158,7 @@ export function AuthProvider({ children }) {
     const verifyLoginOtp = useCallback(async (preAuthToken, code) => {
         try {
             const { data } = await api.post("/auth/login/verify-otp", { pre_auth_token: preAuthToken, code });
-            // Phase 4 (Testing & Session Hardening): no more token in the
+            //  (Testing & Session Hardening): no more token in the
             // response body to store - the backend sets it as an
             // httpOnly cookie directly (see auth.controller.js). Only
             // the (non-sensitive) user profile is cached here, for
@@ -176,8 +181,14 @@ export function AuthProvider({ children }) {
 
     const resendLoginOtp = useCallback(async (preAuthToken) => {
         try {
-            await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken });
-            return { success: true };
+            const response = await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken });
+            //  (OTP resend/expiry UX) - lets the caller restart both
+            // the expiry countdown and its own resend cooldown from the
+            // real value instead of assuming the same number as before.
+            // Optional-chained throughout since this response shape isn't
+            // guaranteed by every caller in tests (or, in principle, an
+            // unexpected 2xx from a proxy/gateway in front of the API).
+            return { success: true, expiresInSeconds: response?.data?.data?.expiresInSeconds };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
         }
@@ -196,7 +207,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     const logout = useCallback(() => {
-        // Phase 4 (Testing & Session Hardening): the session cookie is
+        //  (Testing & Session Hardening): the session cookie is
         // httpOnly - no amount of localStorage.removeItem clears it,
         // only a Set-Cookie response from the server can (see
         // auth.controller.js#logout). Fire-and-forget: the local state

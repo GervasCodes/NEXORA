@@ -1,6 +1,6 @@
 import GuidesNavIcon from "./GuidesNavIcon";
 
-// Small hand-drawn icon set for the header nav (Phase 3: Header UI).
+// Small hand-drawn icon set for the header nav (Header UI).
 // Kept as plain inline SVGs - same style already used for the cart/menu
 // icons in Header.jsx - rather than pulling in an icon library dependency
 // the rest of the project doesn't otherwise use.
@@ -128,7 +128,7 @@ export function SavedIcon({ className }) {
     );
 }
 
-// A buyer's own bookings (Phase 2: Booking Infrastructure) - a calendar
+// A buyer's own bookings (Booking Infrastructure) - a calendar
 // with a checkmark, so it reads distinctly from ServicesIcon's plain
 // calendar (browsing bookable listings) at nav-icon size.
 export function BookingsIcon({ className }) {

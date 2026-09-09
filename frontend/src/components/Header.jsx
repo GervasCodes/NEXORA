@@ -9,7 +9,7 @@ import NotificationBell from "./NotificationBell";
 import AdminNotificationBell from "./AdminNotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
-import { NAV_ICON_BY_PATH, BrowseIcon, ServicesIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
 
@@ -31,7 +31,7 @@ function useNavLinks() {
     if (user?.role === "delivery_agent") links.push({ to: "/delivery", label: t("nav.deliveries"), group: "primary" });
     if (user?.role === "admin") links.push({ to: "/admin", label: t("nav.admin"), group: "primary" });
     if (user?.role === "buyer" || user?.role === "seller") links.push({ to: "/messages", label: t("nav.messages"), group: "primary" });
-    if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders"), group: "primary" });
+    if (user?.role === "buyer") links.push({ to: "/orders", label: t("nav.orders"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/bookings", label: t("nav.bookings"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/disputes", label: t("nav.disputes"), group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/returns", label: t("nav.returns"), group: "secondary" });
@@ -43,7 +43,16 @@ function useNavLinks() {
     links.push({ to: "/live-selling", label: "Live selling", group: "secondary" });
     links.push({ to: "/guides", label: "Guides", group: "secondary" });
     if (user?.role === "buyer") links.push({ to: "/cart", label: t("nav.cart"), group: "primary" });
-    if (user) links.push({ to: "/account", label: t("nav.account"), group: "primary" });
+    // Account (and Sign-out, rendered separately below) used to appear
+    // in this header for every signed-in role. Admin and seller now have
+    // their own dashboard shells (Control room / seller sidebar) with
+    // Account and Sign-out built into them instead - see AdminLayout.jsx
+    // and SellerLayout.jsx - so this header no longer duplicates it for
+    // those two roles. Buyer and delivery agent still get it here since
+    // neither has an equivalent shell of their own.
+    if (user && user.role !== "admin" && user.role !== "seller") {
+        links.push({ to: "/account", label: t("nav.account"), group: "primary" });
+    }
 
     return links;
 }
@@ -130,7 +139,7 @@ export default function Header() {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [menuOpen]);
 
-    // Phase 4: sign-out now requires an explicit confirmation instead of
+    //  sign-out now requires an explicit confirmation instead of
     // firing on a single click - a stray tap (easy on the mobile drawer's
     // compact rows) used to log someone out immediately with no way back
     // except signing in again.
@@ -177,7 +186,7 @@ export default function Header() {
 
     return (
         <header className="glass-dark text-frost sticky top-0 z-40">
-            {/* Phase 0 (UI/UX remediation): the cart/messages/notification
+            {/* (UI/UX remediation): the cart/messages/notification
                 badge counts above only ever updated visually - a
                 screen-reader user had no way to learn a new item landed
                 in their cart or a new message arrived unless they
@@ -232,13 +241,6 @@ export default function Header() {
                         active={isActive("/products")}
                     />
 
-                    <IconNavLink
-                        to="/services"
-                        label={t("nav.services")}
-                        icon={ServicesIcon}
-                        active={isActive("/services")}
-                    />
-
                     {primaryLinks.map((link) => (
                         <IconNavLink
                             key={link.to}
@@ -265,7 +267,7 @@ export default function Header() {
                     {user && <NotificationBell />}
                     {user?.role === "admin" && <AdminNotificationBell />}
 
-                    {user ? (
+                    {user && user.role !== "admin" && user.role !== "seller" ? (
                         <button
                             onClick={handleSignOut}
                             aria-label={t("nav.signOut")}
@@ -282,7 +284,7 @@ export default function Header() {
                                 {t("nav.signOut")}
                             </span>
                         </button>
-                    ) : (
+                    ) : !user ? (
                         <>
                             <IconNavLink
                                 to="/login"
@@ -299,7 +301,7 @@ export default function Header() {
                                 {t("nav.join")}
                             </Button>
                         </>
-                    )}
+                    ) : null}
                 </nav>
 
                 {/* Mobile: cart + hamburger only, always visible regardless
@@ -376,16 +378,6 @@ export default function Header() {
                             {t("nav.browse")}
                         </Link>
 
-                        <Link
-                            to="/services"
-                            onClick={() => setMenuOpen(false)}
-                            className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
-                                ${isActive("/services") ? "text-teal" : "hover:text-teal"}`}
-                        >
-                            <ServicesIcon className="w-[18px] h-[18px] shrink-0" />
-                            {t("nav.services")}
-                        </Link>
-
                         {links.map((link) => {
                             const Icon = NAV_ICON_BY_PATH[link.to] || CartIcon;
                             return (
@@ -412,7 +404,7 @@ export default function Header() {
                             );
                         })}
 
-                        {user ? (
+                        {user && user.role !== "admin" && user.role !== "seller" ? (
                             <button
                                 onClick={handleSignOut}
                                 className="py-3 flex items-center gap-3 text-left text-sm font-medium text-coral hover:opacity-80 transition-opacity duration-150"
@@ -420,7 +412,7 @@ export default function Header() {
                                 <SignOutIcon className="w-[18px] h-[18px] shrink-0" />
                                 {t("nav.signOut")}
                             </button>
-                        ) : (
+                        ) : !user ? (
                             <div className="py-3 flex items-center gap-3">
                                 <Link
                                     to="/login"
@@ -439,7 +431,7 @@ export default function Header() {
                                     {t("nav.join")}
                                 </Button>
                             </div>
-                        )}
+                        ) : null}
                     </nav>
                 </div>
             )}

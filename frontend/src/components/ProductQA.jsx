@@ -6,7 +6,7 @@ import { formatDate } from "../utils/format";
 import Button from "./ui/Button";
 
 /**
- * ProductQA - Phase 2 (UI/UX remediation).
+ * ProductQA (UI/UX remediation).
  *
  * Public question list (readable by anyone, including guests, same as
  * reviews already are) plus an ask form for logged-in buyers. Mirrors

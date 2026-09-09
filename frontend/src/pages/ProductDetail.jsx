@@ -18,6 +18,7 @@ import PageMeta from "../components/PageMeta";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import Avatar from "../components/ui/Avatar";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
+import { BellIcon, ChatIcon } from "../components/Icons";
 import Skeleton from "../components/Skeleton";
 
 export default function ProductDetail() {
@@ -38,7 +39,7 @@ export default function ProductDetail() {
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const [quantity, setQuantity] = useState(1);
 
-    // Variant selection (Phase 2 continuation, UI/UX remediation) -
+    // Variant selection (continuation, UI/UX remediation) -
     // { "Size": "M", "Color": "Red" }, built up as the buyer taps each
     // option axis's buttons. A product with no variants (product.options
     // is empty) never touches this - selectedVariant stays null and
@@ -194,7 +195,7 @@ export default function ProductDetail() {
         }
     };
 
-    // Share (Phase 2, UI/UX remediation) - native share sheet where
+    // Share (, UI/UX remediation) - native share sheet where
     // available (mobile), falling back to copy-link + toast confirmation,
     // the same pattern Loyalty.jsx's referral link already established.
     const handleShare = async () => {
@@ -256,7 +257,7 @@ export default function ProductDetail() {
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const images = product.images?.length ? product.images : [{ image_url: null }];
 
-    // Variants (Phase 2 continuation, UI/UX remediation).
+    // Variants ( continuation, UI/UX remediation).
     const variantOptions = product.options || [];
     const hasVariants = variantOptions.length > 0;
     const allOptionsSelected = hasVariants && variantOptions.every((opt) => selectedOptions[opt.name]);
@@ -411,7 +412,7 @@ export default function ProductDetail() {
                         )}
                     </div>
 
-                    {/* Delivery estimate / return policy summary (Phase 2,
+                    {/* Delivery estimate / return policy summary (
                         UI/UX remediation) - previously this only appeared
                         at checkout, after the buyer had already committed
                         to buying. Falls back to a generic platform default
@@ -435,7 +436,7 @@ export default function ProductDetail() {
                         <dt>{t("product.inStock")}</dt><dd className="text-ink">{product.stock}</dd>
                     </dl>
 
-                    {/* Phase 9: product-status assistant - reads this same real
+                    {/*  product-status assistant - reads this same real
                         product via /ai/products/:slug/explain, AI only phrases it. */}
                     {assistant && (
                         <button
@@ -508,11 +509,12 @@ export default function ProductDetail() {
                                     type="button"
                                     onClick={() => toggleAlert("back_in_stock")}
                                     disabled={alertBusy === "back_in_stock"}
-                                    className={`text-sm px-3 py-1.5 rounded-md border transition-colors disabled:opacity-60 ${
+                                    className={`text-sm px-3 py-1.5 rounded-md border shadow-btn-flat-rest transition-colors disabled:opacity-60 disabled:shadow-none inline-flex items-center gap-1.5 ${
                                         alertSubs.includes("back_in_stock") ? "border-teal text-teal bg-teal/5" : "border-line hover:border-ink"
                                     }`}
                                 >
-                                    {alertSubs.includes("back_in_stock") ? `🔔 ${t("product.alertBackInStockOn")}` : `🔔 ${t("product.alertBackInStock")}`}
+                                    <BellIcon className="w-4 h-4 shrink-0" />
+                                    {alertSubs.includes("back_in_stock") ? t("product.alertBackInStockOn") : t("product.alertBackInStock")}
                                 </button>
                             )}
                         </div>
@@ -523,9 +525,10 @@ export default function ProductDetail() {
                             type="button"
                             onClick={() => toggleAlert("price_drop")}
                             disabled={alertBusy === "price_drop"}
-                            className={`text-xs mb-3 block ${alertSubs.includes("price_drop") ? "text-teal" : "text-ash hover:text-ink"} disabled:opacity-60`}
+                            className={`text-xs mb-3 inline-flex items-center gap-1 ${alertSubs.includes("price_drop") ? "text-teal" : "text-ash hover:text-ink"} disabled:opacity-60`}
                         >
-                            {alertSubs.includes("price_drop") ? `🔔 ${t("product.alertPriceDropOn")}` : `🔔 ${t("product.alertPriceDrop")}`}
+                            <BellIcon className="w-3.5 h-3.5 shrink-0" />
+                            {alertSubs.includes("price_drop") ? t("product.alertPriceDropOn") : t("product.alertPriceDrop")}
                         </button>
                     )}
 
@@ -533,9 +536,10 @@ export default function ProductDetail() {
 
                     <button
                         onClick={handleMessageSeller}
-                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring"
+                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center gap-1.5"
                     >
-                        💬 {t("product.messageSeller", { seller: product.store_name || t("product.defaultSeller") })}
+                        <ChatIcon className="w-4 h-4 shrink-0" />
+                        {t("product.messageSeller", { seller: product.store_name || t("product.defaultSeller") })}
                     </button>
                 </div>
             </div>

@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext";
 
 const WishlistContext = createContext(null);
 
-// Phase 5 (UI/UX remediation) - generalized to hold saved services
+// (UI/UX remediation) - generalized to hold saved services
 // alongside saved products, rather than a second parallel context.
 // Every existing call site (isSaved(productId), toggle(productId)) that
 // doesn't pass a type keeps working unchanged - "product" is the

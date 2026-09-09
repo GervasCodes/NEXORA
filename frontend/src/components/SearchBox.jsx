@@ -54,7 +54,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
 
         debounceRef.current = setTimeout(() => {
             const term = value.trim();
-            // Phase 3 (UI/UX remediation) - previously only ever searched
+            // (UI/UX remediation) - previously only ever searched
             // /products, even though the app has three other browsable
             // content types (services, stores, guides) with no way to
             // reach them from the one search box every page shares.

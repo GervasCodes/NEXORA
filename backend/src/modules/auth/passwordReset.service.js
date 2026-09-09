@@ -7,12 +7,20 @@ const otpService = require("../otp/otp.service");
 // whether or not the email exists - this deliberately does NOT throw for
 // an unknown email, so the API response can't be used to enumerate which
 // addresses have an account.
+// Phase 5 (OTP resend/expiry UX) - always returns the same
+// expiresInSeconds whether or not the account exists (it's the fixed
+// otpService.OTP_EXPIRY_SECONDS constant, not anything derived from the
+// lookup), so handing it to the frontend for a countdown doesn't
+// reopen the account-enumeration gap this function's early-return
+// deliberately avoids.
 exports.requestPasswordReset = async (email) => {
     const user = await userRepository.findByEmail(email);
 
     if (user) {
         await otpService.requestOtp(user, "password_reset");
     }
+
+    return { expiresInSeconds: otpService.OTP_EXPIRY_SECONDS };
 };
 
 // Step 2: verify the code and set the new password in one call - unlike

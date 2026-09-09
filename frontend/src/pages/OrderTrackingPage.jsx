@@ -32,7 +32,7 @@ export default function OrderTrackingPage() {
     
     const [liveEta, setLiveEta] = useState(null);
 
-    // Phase 2 (Honest Status Transparency): a paid, shipped order with no
+    // (Honest Status Transparency): a paid, shipped order with no
     // delivery row yet is dispatch actively searching (see
     // delivery.service.js#offerToNextCandidate) - a perfectly normal,
     // temporary state, NOT an error. Fetching delivery separately (rather
@@ -182,7 +182,7 @@ export default function OrderTrackingPage() {
         </button>
     );
 
-    // Phase 2 (Honest Status Transparency): distinct full-page treatment
+    // (Honest Status Transparency): distinct full-page treatment
     // for "paid, dispatch still searching" - no map/timeline/courier card
     // to populate (there's no agent yet), just a calm, clearly-not-an-
     // error state with the same payment-confirmed reassurance and

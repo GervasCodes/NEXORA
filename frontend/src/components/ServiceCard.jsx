@@ -57,7 +57,7 @@ function ServiceCard({ service, layout = "grid" }) {
                 </span>
             ) : null}
 
-            {/* Save for later (Phase 5, UI/UX remediation) - same
+            {/* Save for later ( UI/UX remediation) - same
                 affordance and styling ProductCard.jsx already has, so
                 products and services feel like equal citizens of the
                 marketplace instead of only products being saveable. */}

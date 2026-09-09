@@ -14,7 +14,7 @@ import PageMeta from "../components/PageMeta";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
 
 
-// Exported so Footer.jsx (Phase 5, Visual Polish & Metadata) can reuse it
+// Exported so Footer.jsx ( Visual Polish & Metadata) can reuse it
 // for NEXORA's own company social links, instead of a second copy of the
 // same three icon paths.
 export function SocialIcon({ name }) {
@@ -72,7 +72,7 @@ export default function StorePage() {
     const [productCount, setProductCount] = useState(null);
     const [collections, setCollections] = useState([]);
 
-    // Follow store (Phase 6, UI/UX remediation).
+    // Follow store ( UI/UX remediation).
     const [followStatus, setFollowStatus] = useState(null);
     const [followBusy, setFollowBusy] = useState(false);
 

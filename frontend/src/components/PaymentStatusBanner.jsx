@@ -1,7 +1,7 @@
 import { useLanguage } from "../context/LanguageContext";
 import { ORDER_STATE } from "../utils/orderStatusModel";
 
-// Phase 2 (Honest Status Transparency): renders only for the two
+// (Honest Status Transparency): renders only for the two
 // payment-side states (pending / failed) - the two dispatch-side states
 // (searching / assigned) get their own distinct treatment directly in
 // TrackingWidget, since that's specifically the delivery-tracking piece.

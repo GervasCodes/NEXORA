@@ -113,8 +113,12 @@ export default function SellerOrders() {
                 {orders.map((order) => (
                     <li key={order.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">
-                            <p className="price text-sm font-medium">{order.order_number}</p>
-                            <p className="text-xs text-ash">{formatDate(order.created_at)}</p>
+                            <p className="text-sm font-medium truncate">
+                                {order.buyer_first_name} {order.buyer_last_name}
+                            </p>
+                            <p className="price text-xs text-ash">
+                                <span>{order.order_number}</span> · <span>{formatDate(order.created_at)}</span>
+                            </p>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">

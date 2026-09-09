@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-// Extracted out of InstallPrompt.jsx (Phase 5, Resilience & Growth) so
-// Footer.jsx's PWA-install callout (Phase 5, Visual Polish & Metadata) can
+// Extracted out of InstallPrompt.jsx ( Resilience & Growth) so
+// Footer.jsx's PWA-install callout ( Visual Polish & Metadata) can
 // drive the same browser install flow instead of a second
 // beforeinstallprompt listener with its own copy of this logic.
 //

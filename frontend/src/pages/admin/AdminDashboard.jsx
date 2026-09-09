@@ -28,6 +28,16 @@ export default function AdminDashboard() {
     // Trend view toggle - Bar/Line render the exact same chartData, this
     // just swaps which of the two chart components draws it.
     const [chartView, setChartView] = useState("bar");
+    //  (UI/UX remediation) - the dashboard used to be one long
+    // scroll of every section stacked vertically with no way to jump
+    // around it. Tabs group the same sections (nothing here changes
+    // what data loads or what any control does) into four focused
+    // views instead: Overview (snapshot + live insights), Sales
+    // (business metrics + product-side analytics), Services
+    // (services-marketplace analytics), Growth (advanced
+    // analytics/period comparison). All four still load together on
+    // mount - only which one is visible changes when switching tabs.
+    const [activeTab, setActiveTab] = useState("overview");
     // Analytics Visualization - custom date-range selection
     // for the Advanced analytics section. Kept as plain yyyy-mm-dd
     // strings (what <input type="date"> gives you) - only parsed into
@@ -154,41 +164,73 @@ export default function AdminDashboard() {
     return (
         <div>
             <PageMeta title="Admin Dashboard" noIndex />
-            <div className="flex items-center gap-3 mb-8">
+            <div className="flex items-center gap-3 mb-6">
                 <h1 className="font-display text-2xl">Platform overview</h1>
                 {live && <span className="text-xs text-teal flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-teal animate-pulse" /> Updating…
                 </span>}
             </div>
 
-            <NexoraAdminInsights />
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                <Stat label="Buyers" value={stats.users.buyers} />
-                <Stat label="Sellers" value={stats.users.sellers} />
-                <Stat label="Delivery agents" value={stats.users.delivery_agents} />
-                <Stat label="Revenue (paid)" value={formatMoney(stats.revenue)} mono />
+            {/* Section tabs - everything below still loads together on
+                mount (see the Promise.all in `load` above); this only
+                changes which already-loaded section is visible, so
+                switching tabs is instant and never re-fetches. */}
+            <div className="flex items-center gap-1 border-b border-line mb-8 overflow-x-auto">
+                {[
+                    { key: "overview", label: "Overview" },
+                    { key: "sales", label: "Sales" },
+                    { key: "services", label: "Services marketplace" },
+                    { key: "growth", label: "Growth" }
+                ].map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            activeTab === tab.key
+                                ? "border-ink text-ink"
+                                : "border-transparent text-ash hover:text-ink"
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                <Stat label="Total orders" value={stats.orders.total} />
-                <Stat label="Pending" value={stats.orders.pending} />
-                <Stat label="Delivered" value={stats.orders.delivered} />
-                <Stat label="Cancelled" value={stats.orders.cancelled} />
-            </div>
+            {activeTab === "overview" && (
+                <>
+                    <NexoraAdminInsights />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                <Stat label="Total products" value={stats.products.total} />
-                <Stat label="Active products" value={stats.products.active} />
-            </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                        <Stat label="Buyers" value={stats.users.buyers} />
+                        <Stat label="Sellers" value={stats.users.sellers} />
+                        <Stat label="Delivery agents" value={stats.users.delivery_agents} />
+                        <Stat label="Revenue (paid)" value={formatMoney(stats.revenue)} mono />
+                    </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-                <Stat label="Total bookings" value={stats.bookings.total} />
-                <Stat label="Completed bookings" value={stats.bookings.completed} />
-                <Stat label="Booking revenue (paid)" value={formatMoney(stats.bookingRevenue)} mono />
-                <Stat label="Active services" value={stats.services.active} />
-            </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                        <Stat label="Total orders" value={stats.orders.total} />
+                        <Stat label="Pending" value={stats.orders.pending} />
+                        <Stat label="Delivered" value={stats.orders.delivered} />
+                        <Stat label="Cancelled" value={stats.orders.cancelled} />
+                    </div>
 
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                        <Stat label="Total products" value={stats.products.total} />
+                        <Stat label="Active products" value={stats.products.active} />
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                        <Stat label="Total bookings" value={stats.bookings.total} />
+                        <Stat label="Completed bookings" value={stats.bookings.completed} />
+                        <Stat label="Booking revenue (paid)" value={formatMoney(stats.bookingRevenue)} mono />
+                        <Stat label="Active services" value={stats.services.active} />
+                    </div>
+                </>
+            )}
+
+            {activeTab === "sales" && (
+                <>
             {businessMetrics && (
                 <div className="mb-10">
                     <div className="flex items-center justify-between mb-4">
@@ -376,7 +418,11 @@ export default function AdminDashboard() {
                     </Link>
                 </>
             )}
+                </>
+            )}
 
+            {activeTab === "growth" && (
+            <>
             {advancedAnalytics && (
                 <div className="mb-10">
                     <h2 className="font-display text-xl mb-4">Advanced analytics</h2>
@@ -563,7 +609,11 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
+            </>
+            )}
 
+            {activeTab === "services" && (
+            <>
             {servicesAnalytics && (
                 <>
                     <h2 className="font-display text-xl mb-4">Services marketplace</h2>
@@ -680,6 +730,8 @@ export default function AdminDashboard() {
                         )}
                     </div>
                 </>
+            )}
+            </>
             )}
         </div>
     );

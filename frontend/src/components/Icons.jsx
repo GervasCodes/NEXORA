@@ -1,4 +1,4 @@
-// Shared inline SVG icon set (Phase 5: Icon & Empty-State Consistency).
+// Shared inline SVG icon set (Icon & Empty-State Consistency).
 //
 // NavIcons.jsx is specifically the header/nav-row icon set keyed by
 // route - these are the rest: star ratings, status checkmarks, chat/
@@ -206,3 +206,116 @@ export const VEHICLE_ICON_BY_TYPE = {
 };
 
 export const DEFAULT_VEHICLE_ICON = MopedIcon;
+
+// (icon3d polish pass) - additional glyphs for buyer-facing
+// notify/reschedule/reorder actions, messages/attachments, and
+// seller verification status, all previously raw emoji. Same
+// currentColor-stroke language as the set above; not wired up
+// anywhere yet, that happens in later phases.
+
+export function BellIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M6 10.5a6 6 0 0 1 12 0v4l1.7 2.5H4.3L6 14.5Z" />
+            <path d="M10 19.5a2 2 0 0 0 4 0" />
+        </svg>
+    );
+}
+
+// Slash variant of BellIcon - matches the diagonal-line pattern
+// PaperclipIcon/CloseIcon already use for a struck-through state,
+// rather than inventing a new "muted" motif.
+export function BellOffIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M8.3 7.2A6 6 0 0 1 18 10.5v4l1.7 2.5H7.8" />
+            <path d="M6 10.5c0 1.7-.4 3-1.1 4L3.2 17h3.1" />
+            <path d="M10 19.5a2 2 0 0 0 4 0" />
+            <path d="M3.5 3.5l17 17" />
+        </svg>
+    );
+}
+
+export function CalendarIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <rect x="3.5" y="5" width="17" height="15" rx="1.5" />
+            <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+        </svg>
+    );
+}
+
+export function RefreshIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M4.5 12a7.5 7.5 0 0 1 12.6-5.5L19.5 8" />
+            <path d="M19.5 4.5V8h-3.5" />
+            <path d="M19.5 12a7.5 7.5 0 0 1-12.6 5.5L4.5 16" />
+            <path d="M4.5 19.5V16H8" />
+        </svg>
+    );
+}
+
+export function ReceiptIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M6 3.5h12v17l-2.2-1.5-2 1.5-1.8-1.5-2 1.5-1.8-1.5-2.2 1.5Z" />
+            <path d="M8.5 8h7M8.5 11.5h7M8.5 15h4.5" />
+        </svg>
+    );
+}
+
+// One component for both archive states (matches the `filled` prop
+// pattern StarIcon uses) - `active` renders the "unarchive" arrow
+// (back out of the box) instead of the "archive" arrow (into the box).
+export function ArchiveIcon({ className, active = false }) {
+    return (
+        <svg {...base} className={className}>
+            <rect x="3.5" y="4.5" width="17" height="4.5" rx="1" />
+            <path d="M4.5 9v9a1.5 1.5 0 0 0 1.5 1.5h12A1.5 1.5 0 0 0 19.5 18V9" />
+            {active ? (
+                <path d="M12 17v-5.5M9.3 14 12 11.3 14.7 14" />
+            ) : (
+                <path d="M12 11.5V17M9.3 14.3 12 17l2.7-2.7" />
+            )}
+        </svg>
+    );
+}
+
+// Filled shield silhouette (rather than an outline checkmark) so a
+// verified badge reads as a status marker at a glance, distinct from
+// the plain outline CheckIcon used for generic confirmations.
+export function VerifiedBadgeIcon({ className }) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={className}
+        >
+            <path d="M12 2.5 19 5.3v6.1c0 5-3 8.4-7 10.1-4-1.7-7-5.1-7-10.1V5.3Z" />
+            <path
+                d="m8.7 12.4 2.2 2.2 4.4-4.6"
+                fill="none"
+                stroke="white"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
+// Attachment type = image, pairing with the existing PaperclipIcon
+// (attachment type = file/other) for the message-thread attachment
+// indicator.
+export function ImageIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+            <circle cx="8.5" cy="9.5" r="1.6" />
+            <path d="m4.5 16.5 4.5-4.5 3.5 3.5 3-3 4.5 4.5" />
+        </svg>
+    );
+}

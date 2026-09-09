@@ -70,7 +70,7 @@ export default function Account() {
         }
     };
 
-    // Phase 4 (Real Imagery & Avatars): same shape as
+    // (Real Imagery & Avatars): same shape as
     // SellerStore.jsx#handleLogoUpload, just for the shared
     // buyer/seller/delivery-agent profile photo endpoint instead of the
     // seller-only store logo one.
@@ -338,7 +338,7 @@ export default function Account() {
                 </div>
             </section>
 
-            {/* Notification preferences (Phase 10, UI/UX remediation) -
+            {/* Notification preferences ( UI/UX remediation) -
                 each toggle governs one category of notify() call across
                 the whole app (see notification.service.js's
                 CATEGORY_BY_TYPE) - order/booking/dispute updates, chat

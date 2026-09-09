@@ -11,6 +11,7 @@ import MessageSearch from "../components/chat/MessageSearch";
 import PageLoader from "../components/PageLoader";
 import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
+import { ImageIcon, PaperclipIcon } from "../components/Icons";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -417,8 +418,9 @@ export default function ConversationThread() {
 
             {attachmentFile && (
                 <div className="flex items-center gap-2 border border-line rounded-lg px-3 py-2 mb-2 animate-slide-up">
-                    <span className="text-xs truncate flex-1">
-                        {attachmentFile.type.startsWith("image/") ? "🖼️" : "📎"} {attachmentFile.name}
+                    <span className="text-xs truncate flex-1 inline-flex items-center gap-1">
+                        {attachmentFile.type.startsWith("image/") ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <PaperclipIcon className="w-3.5 h-3.5 shrink-0" />}
+                        {attachmentFile.name}
                     </span>
                     {uploadProgress !== null && (
                         <span className="text-[10px] text-ash font-mono">{uploadProgress}%</span>

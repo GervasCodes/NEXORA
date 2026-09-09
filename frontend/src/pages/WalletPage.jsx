@@ -8,7 +8,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 
-// Common round TZS mobile-money top-up amounts (Phase 6, UI/UX
+// Common round TZS mobile-money top-up amounts ( UI/UX
 // remediation) - see the preset chips' own comment below for why these
 // exist as one-tap shortcuts rather than a second input.
 const TOPUP_PRESETS = [5000, 10000, 20000, 50000];
@@ -68,7 +68,7 @@ export default function WalletPage() {
                 </div>
                 <div>
                     <label htmlFor="topup-amount" className="block text-sm mb-1">{t("wallet.amount")}</label>
-                    {/* Quick-amount presets (Phase 6, UI/UX remediation) -
+                    {/* Quick-amount presets ( UI/UX remediation) -
                         common round TZS amounts as one-tap chips, since
                         this is a mobile-money top-up flow where typing a
                         round number by hand is exactly the kind of small

@@ -21,7 +21,7 @@ const statusStyles = {
 
 const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
 
-// Phase 4 (UI/UX remediation): filtering + pagination, matching the
+// (UI/UX remediation): filtering + pagination, matching the
 // same pattern applied to Bookings.jsx/Returns.jsx/Disputes.jsx. Filter
 // changes are debounced before hitting the API (the search box in
 // particular would otherwise fire a request per keystroke).

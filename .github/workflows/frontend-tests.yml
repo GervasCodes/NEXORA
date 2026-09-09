@@ -1,0 +1,46 @@
+name: Frontend Tests
+
+# Lint + test the frontend on every push/PR that touches it. Runs the
+# `npm test` (vitest run) suite - unit/component tests only. Playwright
+# e2e (`npm run test:e2e`) is intentionally NOT run here: it needs a
+# built app served and browsers installed, which is a heavier job better
+# suited to its own workflow later rather than folding into this one.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-tests.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-tests.yml"
+
+jobs:
+  test:
+    name: Lint & Test (frontend)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test

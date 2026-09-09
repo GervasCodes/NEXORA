@@ -11,6 +11,7 @@ import { formatDate } from "../utils/format";
 import Button from "../components/ui/Button";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
 import PageMeta from "../components/PageMeta";
+import { ChatIcon } from "../components/Icons";
 
 const PRICING_LABELS = {
     fixed: "",
@@ -412,9 +413,10 @@ export default function ServiceDetail() {
 
                     <button
                         onClick={handleMessageProvider}
-                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring"
+                        className="mt-3 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center gap-1.5"
                     >
-                        💬 Message {service.store_name || "provider"}
+                        <ChatIcon className="w-4 h-4 shrink-0" />
+                        Message {service.store_name || "provider"}
                     </button>
 
                     <BookingWidget service={service} />

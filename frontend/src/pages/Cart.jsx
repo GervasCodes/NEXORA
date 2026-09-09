@@ -72,7 +72,7 @@ export default function Cart() {
         if (!result?.success) toast?.error(result?.message || "Couldn't remove item.");
     };
 
-    // Save for later (Phase 1, UI/UX remediation) - reuses the same
+    // Save for later ( UI/UX remediation) - reuses the same
     // WishlistContext.toggle() the heart icon on ProductCard already
     // calls, rather than a second, parallel "add to wishlist" call.
     // Guarded with isSaved() first since toggle() is a true toggle (it
@@ -118,7 +118,7 @@ export default function Cart() {
         navigate("/checkout");
     };
 
-    // Group by seller (Phase 1, UI/UX remediation) - a multi-vendor cart
+    // Group by seller ( UI/UX remediation) - a multi-vendor cart
     // previously rendered as one flat list with no indication a buyer
     // was ordering from several different stores at once, even though
     // checkout itself already splits the resulting order per vendor

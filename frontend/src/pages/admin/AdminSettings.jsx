@@ -210,7 +210,7 @@ export default function AdminSettings() {
                     </div>
 
                     <p className="text-xs text-ash mt-2">
-                        Bolt-style tiers: a delivery is priced by the first band its distance fits under (seller's pickup
+                        A delivery is priced by the first band its distance fits under (seller's pickup
                         pin to the buyer's delivery pin). Past the last band, each extra km adds the rate above.
                     </p>
                 </div>

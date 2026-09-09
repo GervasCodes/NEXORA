@@ -1,7 +1,7 @@
 import { useLanguage } from "../context/LanguageContext";
 import { CheckIcon } from "./Icons";
 
-// Phase 6 (Checkout & Order Timeline UX): `searching` (order.status ===
+// (Checkout & Order Timeline UX): `searching` (order.status ===
 // "shipped" but dispatch hasn't found a rider yet - see
 // utils/orderStatusModel.js's ORDER_STATE.SEARCHING) swaps the "Shipped"
 // label for "Finding a rider" instead. Before this, the timeline claimed

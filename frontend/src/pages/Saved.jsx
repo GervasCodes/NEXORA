@@ -10,7 +10,7 @@ import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import PageMeta from "../components/PageMeta";
 
-// Phase 0 (UI/UX remediation): this page previously hand-rolled its own
+// (UI/UX remediation): this page previously hand-rolled its own
 // "Loading…" text, empty-state markup, and error text instead of reusing
 // the shared SkeletonList/EmptyState/ErrorState components that
 // Orders.jsx/Bookings.jsx/Cart.jsx already standardized on - so it quietly
@@ -18,7 +18,7 @@ import PageMeta from "../components/PageMeta";
 // treatment (no retry on failure, no grid-shaped skeleton, no icon or
 // role="status"/"alert" for screen readers). This brings it back in line.
 //
-// Phase 5 (UI/UX remediation): a buyer could previously save a product
+// (UI/UX remediation): a buyer could previously save a product
 // but not a service - this page only ever rendered ProductCard. Both
 // lists are fetched together (a saved-items page is exactly the kind of
 // page where a buyer wants to see everything they saved, not go looking

@@ -4,6 +4,7 @@ import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatDate } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
+import { VerifiedBadgeIcon, HourglassIcon } from "../../components/Icons";
 
 export default function SellerTaxInfo() {
     const [taxInfo, setTaxInfo] = useState(null);
@@ -58,8 +59,18 @@ export default function SellerTaxInfo() {
 
             {taxInfo?.tin && (
                 <div className="border border-line rounded-lg p-4 mb-8 text-sm">
-                    <p className="font-medium mb-1">
-                        {taxInfo.efd_registered ? "✅ Verified" : "⏳ Pending admin verification"}
+                    <p className="font-medium mb-1 flex items-center gap-1.5">
+                        {taxInfo.efd_registered ? (
+                            <>
+                                <VerifiedBadgeIcon className="w-4 h-4 text-mango shrink-0" />
+                                Verified
+                            </>
+                        ) : (
+                            <>
+                                <HourglassIcon className="w-4 h-4 text-ash shrink-0" />
+                                Pending admin verification
+                            </>
+                        )}
                     </p>
                     <p className="text-ash">TIN: {taxInfo.tin}{taxInfo.vrn ? ` · VRN: ${taxInfo.vrn}` : ""}</p>
                 </div>

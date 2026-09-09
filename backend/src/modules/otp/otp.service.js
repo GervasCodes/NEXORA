@@ -8,6 +8,16 @@ const EXPIRY_MINUTES = 5;
 const RESEND_THROTTLE_MINUTES = 1;
 const MAX_REQUESTS_PER_WINDOW = 5;
 
+// Phase 5 (OTP resend/expiry UX) - exported so callers that need to hand
+// the frontend an expiry countdown (but aren't themselves the ones
+// calling requestOtp - e.g. passwordReset.service.js's anti-enumeration
+// path, which must return the same value whether or not the account
+// exists) don't have to duplicate this constant.
+exports.OTP_EXPIRY_SECONDS = EXPIRY_MINUTES * 60;
+// Mirrors the server-side resend throttle above, so the frontend's
+// resend-button cooldown can match the actual rule instead of guessing.
+exports.RESEND_THROTTLE_SECONDS = RESEND_THROTTLE_MINUTES * 60;
+
 const generateCode = () => {
     // Zero-padded 6-digit code, e.g. "042917" - never fewer than 6 digits.
     return String(Math.floor(Math.random() * 1_000_000)).padStart(CODE_LENGTH, "0");

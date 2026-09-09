@@ -1,7 +1,7 @@
 import { useState } from "react";
 import useInstallPrompt, { INSTALL_DISMISSED_KEY } from "../hooks/useInstallPrompt";
 
-// Phase 5 (Resilience & Growth). The beforeinstallprompt/appinstalled
+// (Resilience & Growth). The beforeinstallprompt/appinstalled
 // wiring itself now lives in useInstallPrompt (extracted in Phase 5,
 // Visual Polish & Metadata, so Footer.jsx's install callout can share it)
 // - this component is just the dismissible banner UI on top of it.
@@ -26,10 +26,15 @@ export default function InstallPrompt() {
 
     if (!visible) return null;
 
+    // Mobile bottom offset bumped from bottom-36 (144px) to bottom-40
+    // (160px) so this clears NexoraAIButton/SupportWidget, which both
+    // sit at 5rem (80px) + safe-area - the previous 144px left barely
+    // any gap above those two floating buttons and could visually
+    // collide with them depending on device safe-area size.
     return (
         <div
             role="status"
-            className="fixed bottom-36 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-36 z-[1050] sm:w-80
+            className="fixed bottom-40 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-36 z-[1050] sm:w-80
                 glass-strong border border-teal/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

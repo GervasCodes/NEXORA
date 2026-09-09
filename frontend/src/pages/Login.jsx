@@ -1,10 +1,26 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+
+//  (OTP resend/expiry UX) - fallbacks only, used if a response
+// ever omits expiresInSeconds (e.g. an old cached bundle mid-deploy
+// talking to a newer backend, or a test mock that doesn't set it -
+// see tests/pages/Login.test.jsx). Mirror the backend's real values
+// (otp.service.js's EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES) so the
+// fallback still lines up with the server's actual behavior.
+const OTP_EXPIRY_FALLBACK_SECONDS = 300;
+const RESEND_COOLDOWN_SECONDS = 60;
+
+const formatCountdown = (totalSeconds) => {
+    const clamped = Math.max(0, totalSeconds);
+    const minutes = Math.floor(clamped / 60);
+    const seconds = clamped % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
 
 export default function Login() {
     const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
@@ -19,6 +35,31 @@ export default function Login() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    //  (OTP resend/expiry UX) - live "expires in mm:ss" and a
+    // resend-button cooldown, both driven off the real values the API
+    // returns (see AuthContext.jsx's login/resendLoginOtp) rather than
+    // a client-guessed duration.
+    const [expiresIn, setExpiresIn] = useState(OTP_EXPIRY_FALLBACK_SECONDS);
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const tickRef = useRef(null);
+
+    // One ticking interval drives both counters at once while on the
+    // OTP step - restarted (via the `step` dependency) each time the
+    // step actually changes, not on every render. Values themselves are
+    // reset separately in handleCredentials/handleResend, matching the
+    // same setInterval + cleanup shape IncomingOfferModal.jsx already
+    // uses elsewhere in this codebase for a similar live countdown.
+    useEffect(() => {
+        if (step !== "otp") return undefined;
+
+        clearInterval(tickRef.current);
+        tickRef.current = setInterval(() => {
+            setExpiresIn((prev) => (prev > 0 ? prev - 1 : 0));
+            setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+
+        return () => clearInterval(tickRef.current);
+    }, [step]);
 
     const handleCredentials = async (e) => {
         e.preventDefault();
@@ -36,6 +77,12 @@ export default function Login() {
 
         setPreAuthToken(result.preAuthToken);
         setMaskedEmail(result.maskedEmail);
+        // Only the expiry countdown starts here - the resend cooldown is
+        // deliberately left at 0 on first arriving at this step (someone
+        // who didn't get the email yet should be able to ask again right
+        // away). It only kicks in after an actual resend, per the spec's
+        // "after each resend" wording, in handleResend below.
+        setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
         setStep("otp");
     };
 
@@ -56,11 +103,17 @@ export default function Login() {
     };
 
     const handleResend = async () => {
+        if (resendCooldown > 0) return;
         setError("");
         setNotice("");
         const result = await resendLoginOtp(preAuthToken);
         setNotice(result.success ? t("auth.otp.resendSuccess") : "");
-        if (!result.success) setError(result.message);
+        if (result.success) {
+            setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
+            setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        } else {
+            setError(result.message);
+        }
     };
 
     if (step === "otp") {
@@ -96,6 +149,12 @@ export default function Login() {
                         />
                     </div>
 
+                    <p className={`text-xs ${expiresIn > 0 ? "text-ash" : "text-coral"}`}>
+                        {expiresIn > 0
+                            ? t("auth.otp.expiresIn", { time: formatCountdown(expiresIn) })
+                            : t("auth.otp.expired")}
+                    </p>
+
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
 
@@ -116,8 +175,15 @@ export default function Login() {
                     >
                         ← {t("auth.otp.useDifferentAccount")}
                     </button>
-                    <button type="button" onClick={handleResend} className="text-teal hover:underline">
-                        {t("auth.otp.resendCode")}
+                    <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={resendCooldown > 0}
+                        className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                    >
+                        {resendCooldown > 0
+                            ? t("auth.otp.resendIn", { seconds: resendCooldown })
+                            : t("auth.otp.resendCode")}
                     </button>
                 </div>
             </div>

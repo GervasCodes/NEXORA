@@ -237,6 +237,11 @@ exports.markAsRead = async (conversationId, userId) => {
 // string) so a reaction always renders as a single emoji glyph and
 // can't be used to smuggle arbitrary text into what's meant to be a
 // lightweight, non-conversational reaction.
+//
+// Kept in lockstep with REACTION_EMOJIS in
+// frontend/src/components/chat/EmojiPicker.jsx. There's no shared-constants
+// package linking frontend and backend, so this array is duplicated by
+// hand — if you change one, change the other.
 const ALLOWED_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"];
 
 exports.reactToMessage = async (conversationId, messageId, userId, emoji) => {

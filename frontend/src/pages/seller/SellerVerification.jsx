@@ -117,7 +117,7 @@ export default function SellerVerification() {
         <div>
             <PageMeta title="Verification" noIndex />
             {/*
-              Phase 6 (New UI/UX & Imagery Additions, item 20): same
+              (New UI/UX & Imagery Additions, item 20): same
               illustrated trust badge treatment as KycStatus.jsx, for
               consistency between the two verification flows. See the
               comment there re: inline SVG vs. commissioned photography.

@@ -5,7 +5,7 @@ import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
 
-// Phase 4 (Customer Experience) - provider-side counterpart of
+// (Customer Experience) - provider-side counterpart of
 // SellerReviews.jsx, same paginated-list-with-reply shape, just hitting
 // /reviews/provider/:providerId (booking-keyed reviews) instead of
 // /reviews/store/:sellerId (product-keyed reviews). Reply posts through

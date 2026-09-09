@@ -18,7 +18,7 @@ const inclusiveDateRange = (start, end) => {
 };
 
 /**
- * RescheduleModal - Phase 7 (UI/UX remediation).
+ * RescheduleModal (UI/UX remediation).
  *
  * Lets a buyer pick a new date (or check-in/check-out range, for a
  * per_night service) for an existing booking, reusing

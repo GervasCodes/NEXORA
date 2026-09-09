@@ -15,7 +15,7 @@ const FALLBACK_GRADIENTS = [
     "linear-gradient(135deg, #1E3A8A 0%, #9FC1F2 100%)"
 ];
 
-// Phase 6 (item 23) follow-up: the team decided to replace the
+//  (item 23) follow-up: the team decided to replace the
 // gradient-and-initial placeholder with a real photo for the
 // "services" department specifically. This is a real, verified,
 // freely-licensed photo (Unsplash License - free for commercial use,
@@ -40,7 +40,7 @@ const FALLBACK_GRADIENTS = [
 // Every department now has a sourced photo, so this is a full curated
 // set rather than the partial rollout it started as.
 const CURATED_COVER_IMAGES = {
-    services: "https://stl.tech/wp-content/uploads/2023/02/Network-services-scaled.webp?fm=jpg&q=80&w=1200&auto=format&fit=crop",
+    "services": "https://www.pinterest.com/pin/492229434296870277/fm=jpg&q=80&w=1200&auto=format&fit=crop",
     "phones-electronics": "https://images.unsplash.com/photo-1545063328-c8e3faffa16f?q=80&w=1200&auto=format&fit=crop",
     "fashion-beauty": "https://images.unsplash.com/photo-1573612664822-d7d347da7b80?q=80&w=1200&auto=format&fit=crop",
     "home-living": "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=1200&auto=format&fit=crop",

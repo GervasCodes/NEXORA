@@ -4,7 +4,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { SocialIcon } from "../pages/StorePage";
 import useInstallPrompt from "../hooks/useInstallPrompt";
 
-// Phase 5 (Visual Polish & Metadata): the four payment rails checkout
+// (Visual Polish & Metadata): the four payment rails checkout
 // actually offers (see PAYMENT_METHODS_BEFORE_CARDS/AFTER_CARDS and the
 // dynamic card-provider list in Checkout.jsx) - shown here as plain
 // line-icon badges rather than provider brand marks (Visa/Mastercard/etc.

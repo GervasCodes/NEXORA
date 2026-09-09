@@ -45,7 +45,15 @@ exports.login = async (email, password) => {
         throw new Error("This account has been deactivated. Please contact support");
     }
 
-    await otpService.requestOtp(user, "login");
+    // Phase 5 (OTP resend/expiry UX) - this used to hand the frontend a
+    // hardcoded `expiresInSeconds: 600`, which is actually the pre-auth
+    // token's own lifetime (PRE_AUTH_EXPIRY, 10 minutes), not the OTP
+    // code's - the code itself expires after otpService's EXPIRY_MINUTES
+    // (5 minutes). A countdown built off the old value would have kept
+    // ticking for 5 minutes after the code had already stopped working.
+    // Use requestOtp's own returned value instead so the two can never
+    // drift apart again.
+    const { expiresInSeconds } = await otpService.requestOtp(user, "login");
 
     const preAuthToken = generateShortLivedToken(PRE_AUTH_TYP, { id: user.id }, PRE_AUTH_EXPIRY);
 
@@ -53,7 +61,7 @@ exports.login = async (email, password) => {
     // without ever having the full address in a network response.
     const maskedEmail = user.email.replace(/^(.{2}).+(@.+)$/, "$1***$2");
 
-    return { preAuthToken, maskedEmail, expiresInSeconds: 600 };
+    return { preAuthToken, maskedEmail, expiresInSeconds };
 };
 
 exports.resendLoginOtp = async (preAuthToken) => {

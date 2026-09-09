@@ -22,7 +22,7 @@ function useStatusLabels(t) {
     };
 }
 
-// Merchant-Type-Aware Dashboard (Phase 4) - GET /seller/analytics stays
+// Merchant-Type-Aware Dashboard  - GET /seller/analytics stays
 // the single source of truth for the paid Verified Seller fee gate
 // (requireVerificationFeePaid isn't merchant-type-specific, so every
 // merchant type still needs it called once to know whether analytics is
@@ -78,7 +78,7 @@ export default function SellerAnalytics() {
 
     const [analytics, setAnalytics] = useState(null);
     const [bookingStats, setBookingStats] = useState(null);
-    // Phase A5 (Advanced Analytics) - period comparison + top customers
+    // (Advanced Analytics) - period comparison + top customers
     // for this seller's product sales.
     const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -307,7 +307,7 @@ export default function SellerAnalytics() {
                         <div className="mb-10">
                             <p className="text-sm font-medium mb-4">{t("seller.analytics.advancedAnalytics")}</p>
 
-                            {/* Phase P8 (Analytics Visualization) - custom date-range
+                            {/* (Analytics Visualization) - custom date-range
                                 selection, same shape/behavior as AdminDashboard.jsx's
                                 equivalent section. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
@@ -381,7 +381,7 @@ export default function SellerAnalytics() {
                                 )}
                             </div>
 
-                            {/* Phase P8 (Analytics Visualization) - GMV bar chart alongside
+                            {/* (Analytics Visualization) - GMV bar chart alongside
                                 the text cards, same pairing AdminDashboard.jsx uses. */}
                             <div className="border border-line rounded-lg p-4 mb-6">
                                 <p className="text-sm font-medium mb-4">{t("seller.analytics.periodComparisonVisualized")}</p>
@@ -443,7 +443,7 @@ export default function SellerAnalytics() {
                                     )}
                                 </div>
 
-                                {/* Phase P8 (Analytics Visualization) - "Add seller
+                                {/* (Analytics Visualization) - "Add seller
                                     leaderboard": platform-wide top 5 (public storefront
                                     info, same as admin sees) plus this seller's own
                                     rank/row highlighted even when it falls outside the

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 
 const CompareContext = createContext(null);
 
-// Phase 3 (UI/UX remediation) - lightweight product comparison tray.
+//  (UI/UX remediation) - lightweight product comparison tray.
 // Deliberately client-side only (no backend, no persistence beyond this
 // session) - comparing 2-3 products while browsing is a short-lived,
 // disposable task, not something worth a saved-across-devices feature

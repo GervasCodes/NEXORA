@@ -101,7 +101,7 @@ export default function DisputeDetail() {
         }
     };
 
-    // Phase 1 (Remediation): swapped the native window.confirm() for the
+    // (Remediation): swapped the native window.confirm() for the
     // shared ConfirmDialog component - matches how Header.jsx already
     // confirms sign-out instead of a browser-native alert.
     const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);

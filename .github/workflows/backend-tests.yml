@@ -1,95 +1,57 @@
-name: Backend Tests (DB integration)
+name: Backend Tests
+
+# Lint + test the backend on every push/PR that touches it. This runs the
+# default `npm test` suite only (tests/unit + tests/integration, both with
+# the mysql2 pool mocked - see backend/jest.config.js) - it never spins up
+# a real MySQL instance, so it stays fast and has no external services to
+# provision. The separate real-database suite (tests/db-integration/,
+# `npm run test:db`) is intentionally NOT run here; see docker-compose.test.yml
+# for that suite's local-only setup.
+#
+# docs/SECURITY_REVIEW_CHECKLIST.md's "CI blocks merge on lint/test/audit
+# failure" row and docs/UPTIME_MONITORING.md both refer to workflow names
+# (ci.yml, uptime-check.yml) that don't exist yet in this repo - see the
+# icon3d Phase 8 write-up for that discrepancy. This workflow (and its
+# frontend counterpart) cover the lint/test half of that claim; the audit
+# step and an uptime-check workflow are not part of this phase.
 
 on:
   push:
     branches: [main]
+    paths:
+      - "backend/**"
+      - "database/**"
+      - ".github/workflows/backend-tests.yml"
   pull_request:
-    branches: [main]
+    paths:
+      - "backend/**"
+      - "database/**"
+      - ".github/workflows/backend-tests.yml"
 
 jobs:
-  db-tests:
-    name: Backend + DB test suites
+  test:
+    name: Lint & Test (backend)
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: nexora_test
-          MYSQL_USER: test
-          MYSQL_PASSWORD: test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -u root -proot"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
-
-    env:
-      NODE_ENV: test
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_USER: test
-      DB_PASSWORD: test
-      DB_NAME: nexora_test
-      # Intentionally unset: backend/src/config/brevo.js falls back to a
-      # simulated (no-network) send outside NODE_ENV=production, so no
-      # test run should ever hit a real email provider.
-      # BREVO_API_KEY: (unset)
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            database/package-lock.json
-            frontend/package-lock.json
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Wait for MySQL
-        run: |
-          for i in {1..30}; do
-            mysqladmin ping -h 127.0.0.1 -u root -proot --silent && break
-            sleep 2
-          done
-
-      - name: Install database deps
+      - name: Install dependencies
+        working-directory: backend
         run: npm ci
-        working-directory: database
 
-      - name: Run pending migrations
-        run: npm run migrate
-        working-directory: database
-
-      - name: Install backend deps
-        run: npm ci
+      - name: Lint
         working-directory: backend
+        run: npm run lint
 
-      - name: Backend unit tests
-        run: npm run test:unit
+      - name: Test
         working-directory: backend
-
-      - name: Backend integration tests
-        run: npm run test:integration
-        working-directory: backend
-
-      - name: Backend DB-integration tests
-        run: npm run test:db
-        working-directory: backend
-
-      - name: Install frontend deps
-        run: npm ci
-        working-directory: frontend
-
-      - name: Frontend tests
         run: npm test
-        working-directory: frontend
-
-      - name: Frontend build
-        run: npm run build
-        working-directory: frontend

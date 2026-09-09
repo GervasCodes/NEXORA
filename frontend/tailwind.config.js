@@ -42,6 +42,37 @@ export default {
             backgroundImage: {
                 "brand-gradient": "linear-gradient(135deg, #9FC1F2 0%, #6EA8FE 45%, #1D4ED8 100%)"
             },
+            // 3D-button elevation tokens (Phase 6, icon3d roadmap). Tinted from
+            // the existing --color-mango / --color-ink CSS variables rather than
+            // flat black/gray, so the depth reads as part of the warm brand
+            // palette instead of a bolted-on generic Tailwind shadow.
+            //
+            // "btn-*" (mango-tinted) is for the primary CTA - rest is a soft
+            // lift, hover grows taller/softer to sell an upward float, active
+            // collapses to a short, tight shadow so the button reads as
+            // physically pressed in.
+            //
+            // "btn-flat-*" (neutral ink-tinted, much fainter) is for
+            // secondary/ghost buttons - just enough rest shadow to not look
+            // completely flat next to the primary CTA, without competing for
+            // visual weight. No flat-hover/flat-active variant: those variants
+            // intentionally don't lift or press.
+            boxShadow: {
+                "btn-rest": "0 3px 8px -1px rgb(var(--color-mango) / 0.35), 0 1px 2px rgb(var(--color-mango) / 0.2)",
+                "btn-hover": "0 10px 20px -3px rgb(var(--color-mango) / 0.45), 0 3px 6px -1px rgb(var(--color-mango) / 0.25)",
+                "btn-active": "0 1px 2px rgb(var(--color-mango) / 0.35)",
+                "btn-flat-rest": "0 1px 3px rgb(var(--color-ink) / 0.08)",
+                // Icon-only circular toggle buttons (Phase 7, icon3d roadmap:
+                // mute/archive in Messages.jsx). Ink-tinted like "btn-flat-*"
+                // rather than mango, since these are small utility toggles,
+                // not CTAs - but unlike "btn-flat-*" they DO get a lift/press
+                // pair, because they're tap targets a user repeatedly presses
+                // and the press feedback is the main affordance confirming
+                // the tap registered.
+                "btn-icon-rest": "0 1px 3px rgb(var(--color-ink) / 0.10), 0 1px 2px rgb(var(--color-ink) / 0.06)",
+                "btn-icon-hover": "0 4px 10px -1px rgb(var(--color-ink) / 0.16), 0 2px 4px -1px rgb(var(--color-ink) / 0.10)",
+                "btn-icon-active": "0 1px 2px rgb(var(--color-ink) / 0.12)"
+            },
             keyframes: {
                 fadeIn: { from: { opacity: "0" }, to: { opacity: "1" } },
                 slideUp: { from: { opacity: "0", transform: "translateY(12px)" }, to: { opacity: "1", transform: "translateY(0)" } },

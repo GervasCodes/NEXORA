@@ -71,7 +71,7 @@ export default function KycStatus() {
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Verification level" noIndex />
             {/*
-              Phase 6 (New UI/UX & Imagery Additions, item 20): supporting
+              (New UI/UX & Imagery Additions, item 20): supporting
               imagery for the trust/verification flow, which was
               previously text-and-badge-only. No photography has been
               supplied for this, so this is an illustrated trust badge

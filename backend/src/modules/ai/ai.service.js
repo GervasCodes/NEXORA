@@ -353,7 +353,14 @@ exports.explainProductForBuyer = async ({ userId, slug }) => {
     const product = await productService.getProductBySlug(slug);
 
     const price = product.discount_price || product.price;
-    const facts = `Product: ${product.name}\nCategory: ${product.category_name || "n/a"}\nBrand: ${product.brand || "n/a"}\nCondition: ${product.product_condition}\nPrice: ${price} TZS${product.discount_price ? ` (discounted from ${product.price} TZS)` : ""}\nIn stock: ${product.stock > 0 ? `yes, ${product.stock} available` : "no, currently out of stock"}\nSold by: ${product.store_name}${product.is_verified ? " (Verified Seller)" : ""}\nRating: ${product.average_rating ? `${Number(product.average_rating).toFixed(1)}/5 from ${product.review_count} review(s)` : "no reviews yet"}\nDescription: ${product.description || "n/a"}`;
+    // Comma-formatted, same as every other money figure fed to the AI
+    // (see explainForecast below) - an unformatted number here (e.g.
+    // "45000" instead of "45,000") tends to get echoed back verbatim by
+    // the model in its generated reply, unlike the rest of the app
+    // which always renders money through formatMoney()/toLocaleString().
+    const formattedPrice = Number(price).toLocaleString("en-US");
+    const formattedOriginalPrice = Number(product.price).toLocaleString("en-US");
+    const facts = `Product: ${product.name}\nCategory: ${product.category_name || "n/a"}\nBrand: ${product.brand || "n/a"}\nCondition: ${product.product_condition}\nPrice: ${formattedPrice} TZS${product.discount_price ? ` (discounted from ${formattedOriginalPrice} TZS)` : ""}\nIn stock: ${product.stock > 0 ? `yes, ${product.stock} available` : "no, currently out of stock"}\nSold by: ${product.store_name}${product.is_verified ? " (Verified Seller)" : ""}\nRating: ${product.average_rating ? `${Number(product.average_rating).toFixed(1)}/5 from ${product.review_count} review(s)` : "no reviews yet"}\nDescription: ${product.description || "n/a"}`;
 
     const result = await callProvider({
         userId,
@@ -382,7 +389,9 @@ exports.explainProductForBuyer = async ({ userId, slug }) => {
 exports.explainBookingForBuyer = async ({ userId, bookingId }) => {
     const booking = await bookingService.getBookingById(bookingId, userId);
 
-    const facts = `Booking ${booking.booking_reference}\nService: ${booking.service_title || "n/a"}\nStatus: ${booking.status}\nPayment status: ${booking.payment_status}\nDates: ${booking.start_date} to ${booking.end_date}\nQuantity: ${booking.quantity}\nAmount: ${booking.amount} TZS`;
+    // Comma-formatted for the same reason as explainProductForBuyer above.
+    const formattedAmount = Number(booking.amount).toLocaleString("en-US");
+    const facts = `Booking ${booking.booking_reference}\nService: ${booking.service_title || "n/a"}\nStatus: ${booking.status}\nPayment status: ${booking.payment_status}\nDates: ${booking.start_date} to ${booking.end_date}\nQuantity: ${booking.quantity}\nAmount: ${formattedAmount} TZS`;
 
     const result = await callProvider({
         userId,

@@ -141,7 +141,7 @@ export default function AdminServiceCategories() {
                     <li key={c.id} className="py-3 flex flex-wrap items-center gap-3">
                         <div className="w-12 h-12 rounded-md bg-line/40 overflow-hidden shrink-0">
                             {c.cover_image_url ? (
-                                <img src={c."https://www.pinterest.com/pin/492229434296870277/"}, alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                <img src={c.cover_image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             ) : null}
                         </div>
 

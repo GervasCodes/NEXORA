@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 
-// Phase 4 (Testing & Session Hardening) - CSRF protection for the new
+// (Testing & Session Hardening) - CSRF protection for the new
 // httpOnly session cookie.
 //
 // Background: a Bearer token attached via JS (the old localStorage
@@ -36,8 +36,40 @@ const crypto = require("crypto");
 // API consumers for no security benefit.
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+// Routes that establish, re-establish, or tear down the session itself
+// rather than acting on an already-authenticated one. These don't need
+// (and must NOT get) CSRF protection:
+//   - /login, /login/verify-otp, /login/resend-otp, /register: prove
+//     the caller's identity with their own credentials (password, OTP,
+//     signup data) - a forged cross-site POST here can't do anything
+//     without also knowing the victim's password/OTP, so CSRF adds
+//     nothing.
+//   - /forgot-password, /reset-password: gated by a one-time code sent
+//     out-of-band (email), same reasoning.
+//   - /logout: no sensitive side effect worth CSRF-protecting (worst
+//     case, an attacker logs the victim out).
+// Bug this fixes: with these routes CSRF-gated, ANY leftover
+// nexora_session cookie in the browser (e.g. from an expired session,
+// or after a page refresh wiped the in-memory CSRF token - see
+// frontend/src/api/client.js) caused the CSRF check below to demand an
+// X-CSRF-Token header the frontend had no way to produce, 403'ing every
+// fresh login attempt AND every logout attempt (since logout was also
+// gated) - a lockout with no way to recover except manually clearing
+// cookies. See the login/logout 403s in the request logs.
+const CSRF_EXEMPT_PATHS = new Set([
+    "/api/v1/auth/register",
+    "/api/v1/auth/login",
+    "/api/v1/auth/login/verify-otp",
+    "/api/v1/auth/login/resend-otp",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
+    "/api/v1/auth/logout"
+]);
+
 module.exports = function csrfProtection(req, res, next) {
     if (SAFE_METHODS.has(req.method)) return next();
+
+    if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
 
     // Bearer-authenticated request - not cookie-driven, CSRF doesn't apply.
     if (req.headers.authorization?.startsWith("Bearer ")) return next();

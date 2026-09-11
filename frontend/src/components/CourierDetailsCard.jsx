@@ -4,7 +4,7 @@ import { ChatIcon, PhoneIcon } from "./Icons";
 const VEHICLE_LABELS = {
     bicycle: "Bicycle",
     motorcycle: "Motorcycle",
-    tuktuk: "Tuk-tuk",
+    tuktuk: "Bajaji",
     car: "Car",
     van: "Van",
     truck: "Truck"

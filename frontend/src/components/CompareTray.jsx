@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useCompare } from "../context/CompareContext";
 
 /**
- * CompareTray - Phase 3 (UI/UX remediation).
+ * CompareTray - (UI/UX remediation).
  *
  * Fixed floating bar that appears once 2+ products are selected for
  * comparison, showing a thumbnail per item with a remove (x) and a

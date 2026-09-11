@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
 
-// Trust & Monetization Communication (roadmap Section 6/Phase 7) - one
+// Trust & Monetization Communication  - one
 // small self-fetching banner, dropped onto the Subscription, Sponsorship
 // (product/featured-store/department), and Verification pages so
 // sellers/providers always know whether that specific billing stream is

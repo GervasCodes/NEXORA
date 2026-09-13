@@ -12,7 +12,7 @@ const PROVIDERS = {
 
 const hasCoordinate = (value) => value != null && Number.isFinite(Number(value));
 
-// Routing abstraction layer (Phase 5A). This is the one place the rest of
+// Routing abstraction layer . This is the one place the rest of
 // the app should go through for "how far / how long between these two
 // points" - it doesn't yet replace any of the app's existing straight-line
 // calls (that's Phase 5B/5C/5D, one call site at a time); it exists first

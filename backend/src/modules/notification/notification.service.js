@@ -33,7 +33,7 @@ const resolveParams = (locale, params) => {
     return resolved;
 };
 
-// Notification preferences (Phase 10, UI/UX remediation) - which
+// Notification preferences (UI/UX remediation) - which
 // notify() `type` values fall under each of the four buyer-toggleable
 // categories (see migration 100's comment on why these four and no
 // others). Any type NOT listed here is never gated by preference at
@@ -149,7 +149,7 @@ exports.notify = async ({
         await sendEmail(contact.email, resolvedTitle, body);
     }
 
-    // Phase Q3: opt-in only (contact.whatsapp_order_updates), and only
+    // opt-in only (contact.whatsapp_order_updates), and only
     // when the caller explicitly asked for this leg (withWhatsApp) -
     // most notify() call sites are things a WhatsApp message would be
     // noise for (a chat reply, a wishlist price drop), so this is never

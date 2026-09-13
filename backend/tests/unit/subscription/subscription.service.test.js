@@ -111,7 +111,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
         expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
     });
 
-    // Monetization Master Switch (Phase 1): commission is flat 0% when
+    // Monetization Master Switch : commission is flat 0% when
     // commission monetization is off, ignoring plan overrides and the
     // platform default alike - not even consulted, let alone applied.
     it("returns flat 0% and ignores plan overrides when commission monetization is disabled", async () => {

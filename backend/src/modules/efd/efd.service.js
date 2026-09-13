@@ -1,5 +1,5 @@
 /**
- * EFD (Electronic Fiscal Device) e-invoicing (Phase Q4).
+ * EFD (Electronic Fiscal Device) e-invoicing .
  *
  * Per-seller, not platform-wide: a fiscal receipt has to carry the
  * actual seller's TIN (and VRN, if they're VAT-registered) - NEXORA

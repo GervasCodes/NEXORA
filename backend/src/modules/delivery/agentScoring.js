@@ -1,5 +1,5 @@
 /**
- * Roadmap Phase 2 (Smarter Agent Ranking, Lightweight Pre-ML).
+ * Roadmap (Smarter Agent Ranking, Lightweight Pre-ML).
  *
  * A single, isolated scoring function - delivery.service.js's
  * rankCandidatesBySellerEta calls scoreCandidate(agent) and sorts

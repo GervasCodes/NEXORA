@@ -72,7 +72,7 @@ describe("login.service.verifyLoginOtp (step 2: OTP check -> real session)", () 
         expect(result.token).toEqual(expect.any(String));
         expect(result.user.password).toBeUndefined();
 
-        // See migration 071 / auth.middleware.js - a missing token_version
+        
         // on the row (pre-migration data) must still produce a tv claim,
         // defaulted to 0, rather than an undefined claim.
         const decoded = jwt.decode(result.token);

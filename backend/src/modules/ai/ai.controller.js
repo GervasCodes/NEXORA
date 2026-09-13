@@ -73,7 +73,7 @@ exports.explainOrderStatus = async (req, res) => {
     }
 };
 
-// Phase 9: public/optional-auth like chat/search/recommendations above -
+// public/optional-auth like chat/search/recommendations above -
 // a product page is public, so this personalizes for a signed-in buyer
 // but doesn't require one. product.service.js#getProductBySlug throws a
 // plain "Product not found" for a bad slug, same 404-passthrough as
@@ -101,7 +101,7 @@ exports.explainBookingForBuyer = async (req, res) => {
     }
 };
 
-// --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---
+// --- seller/provider AI (draft-generation, no auto-execute) ---
 // Every route these sit behind requires auth (see ai.routes.js) - none
 // of these personalize for an anonymous caller the way B1's public
 // endpoints do.
@@ -164,7 +164,7 @@ exports.explainDeliveryRoute = async (req, res) => {
     }
 };
 
-// --- Phase B3: Admin AI Copilot (advisory only, never auto-acts) --------
+// --- Admin AI Copilot (advisory only, never auto-acts) --------
 // Every route these sit behind requires authMiddleware + authorize("admin")
 // (see ai.routes.js) - none of these write to a dispute, fraud flag, or
 // any other admin-managed record; the admin still acts through the same

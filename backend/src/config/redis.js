@@ -1,4 +1,4 @@
-// Redis client for the Phase RF5 caching layer (category/department
+// Redis client for caching layer (category/department
 // listings, product browse/search results). Same "degrade gracefully
 // when unconfigured" pattern as sentry.js/brevo.js: with no REDIS_URL
 // set, `getClient()` returns null and every caller (see utils/cache.js)

@@ -51,7 +51,7 @@ router.post(
     aiController.explainOrderStatus
 );
 
-// Phase 9: public/optional-auth, same shape as chat/search/recommendations
+// public/optional-auth, same shape as chat/search/recommendations
 // above - a product page is public, so this personalizes for a signed-in
 // buyer without requiring one.
 router.post(
@@ -75,7 +75,7 @@ router.post(
     aiController.explainBookingForBuyer
 );
 
-// --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---
+// --- seller/provider AI (draft-generation, no auto-execute) ---
 // account-approval gates mirror the exact chains seller.routes.js /
 // availability.routes.js already use for the equivalent non-AI
 // endpoints - see requireApprovedSeller/requireVerificationFeePaid's own
@@ -113,7 +113,7 @@ router.get(
     aiController.summarizeSellerAnalytics
 );
 
-// Phase Q8 (AI demand forecasting). Same auth/gating as the analytics
+// (AI demand forecasting). Same auth/gating as the analytics
 // summary right above it - a seller-facing advisory feature, same
 // verification-fee-paid gate the rest of this seller AI surface uses.
 router.get(
@@ -137,7 +137,7 @@ router.get(
     aiController.suggestAvailability
 );
 
-// --- Phase B2: delivery-agent assistant -----------------------------------
+// --- delivery-agent assistant -----------------------------------
 
 router.get(
     "/delivery/route",
@@ -148,7 +148,7 @@ router.get(
     aiController.explainDeliveryRoute
 );
 
-// --- Phase B3: Admin AI Copilot (advisory only, never auto-acts) --------
+// --- Admin AI Copilot (advisory only, never auto-acts) --------
 // Every route below requires a signed-in admin - no anonymous/optional-
 // auth shape here, unlike B1's buyer-facing endpoints, since every one
 // of these reads admin-only data (dispute detail, fraud queue, business

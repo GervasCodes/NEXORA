@@ -1,4 +1,4 @@
-// Phase 7A (Store Themes) - the fixed set of accent-color presets a
+// (Store Themes) - the fixed set of accent-color presets a
 // seller can choose for their public store page. Kept as a plain JS
 // array (not a DB lookup table like store_types) because this list is
 // small, code-defined, and not admin-editable - see the comment in

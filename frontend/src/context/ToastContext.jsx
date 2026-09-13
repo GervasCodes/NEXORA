@@ -93,7 +93,17 @@ export function ToastProvider({ children }) {
     return (
         <ToastContext.Provider value={value}>
             {children}
-            <div className="fixed bottom-20 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-20 z-[1000] flex flex-col gap-2 sm:w-80 pointer-events-none">
+            {/* Mobile UI/UX audit: bottom-20 (80px) was a plain pixel offset
+                with no safe-area allowance, unlike every other floating
+                surface stacked above MobileBottomNav (NexoraAIButton,
+                SupportWidget) - on a device with a home-indicator inset,
+                the nav's own height grows by that inset (see its
+                paddingBottom), so this container's bottom edge could end
+                up a few pixels *inside* the nav instead of clearing it.
+                Same calc() pattern as those two floating buttons. Kept at
+                a plain bottom-20 from md up, where MobileBottomNav doesn't
+                render at all. */}
+            <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-20 inset-x-4 sm:inset-x-auto sm:right-4 z-[1000] flex flex-col gap-2 sm:w-80 pointer-events-none">
                 {toasts.map((toast) => (
                     <ToastItem key={toast.id} toast={toast} onClose={() => dismiss(toast.id)} />
                 ))}

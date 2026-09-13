@@ -1,5 +1,5 @@
 /**
- * General-purpose buyer wallet (Phase Q2).
+ * General-purpose buyer wallet .
  *
  * A buyer can pre-load this balance via a mobile-money top-up
  * (initiated/confirmed through payment.service.js - see

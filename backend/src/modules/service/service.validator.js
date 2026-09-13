@@ -44,7 +44,7 @@ exports.createServiceValidation = [
 const RULE_TYPES = ["day_of_week", "date_range"];
 const ADJUSTMENT_TYPES = ["percentage", "fixed"];
 
-// Phase 5 (Growth) - Dynamic Pricing. Deliberately loose here (doesn't
+// Dynamic Pricing. Deliberately loose here (doesn't
 // enforce day_of_week vs. date_range's mutually-exclusive fields the
 // way migration 066's CHECK constraint does) - service.service.js's
 // validatePricingRuleInput is the real gate for that, same division of

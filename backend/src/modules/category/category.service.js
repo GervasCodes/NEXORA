@@ -3,7 +3,7 @@ const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const socket = require("../../socket/socket");
 const cache = require("../../utils/cache");
 
-// Phase RF5: namespace for every cached category/department read below.
+// namespace for every cached category/department read below.
 // Bumped (not deleted key-by-key) on any write that changes what one of
 // these reads would return - see the CACHE_NAMESPACE.bumpVersion calls
 // throughout this file, and utils/cache.js for why versioning is used
@@ -16,7 +16,7 @@ const toSlug = (name) =>
 // How many trending products to preview on a department card.
 const TRENDING_PREVIEW_LIMIT = 3;
 // How many recent products to return per department (data layer for
-// Phase 2B's "recently added products" feed).
+// "recently added products" feed).
 const RECENT_PREVIEW_LIMIT = 6;
 // Window for the "N new this week" card indicator.
 const NEW_WINDOW_DAYS = 7;
@@ -39,7 +39,7 @@ exports.listForAdmin = async () => {
 // so a few extra queries per card is simpler and clearer than one large
 // aggregate query.
 //
-// Phase 8C (Department Sponsorship) is what pulls in
+// (Department Sponsorship) is what pulls in
 // findAllActiveWithSponsorship instead of findAllActive here: a
 // currently-active department_sponsorship_campaigns row for a category
 // bumps it to the front of this list and sets `is_sponsored` on the

@@ -28,7 +28,7 @@ router.get("/", storeController.search);
 
 router.get("/:slug/collections", storeController.getStoreCollections);
 
-// Store follows (Phase 6, UI/UX remediation) - same "extra path segment
+// Store follows (UI/UX remediation) - same "extra path segment
 // past /:slug, no ordering ambiguity" reasoning as /:slug/collections
 // above.
 router.get("/:slug/follow-status", authMiddleware, authorize("buyer"), storeController.getFollowStatus);

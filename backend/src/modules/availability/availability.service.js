@@ -72,7 +72,7 @@ exports.getAvailability = async (serviceId, startDate, endDate) => {
         row
     ]));
 
-    // Phase 5 (Growth) - same rule set + priority order
+    // (Growth) - same rule set + priority order
     // booking.service.js's priceDateItems uses at charge time, so the
     // calendar preview never shows a price different from what the
     // customer will actually be charged.

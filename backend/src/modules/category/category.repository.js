@@ -10,8 +10,18 @@ exports.findAllActive = async () => {
     return rows;
 };
 
+// The 'services' row (migration 065) only exists so /departments/services
+// resolves via getDepartmentBySlug/findBySlug below - it isn't a real,
+// admin-manageable department. The homepage already excludes it from the
+// department grid (Home.jsx) and renders its own purpose-built Services
+// tile instead, so toggling this row's is_active or uploading a cover
+// image here has no visible effect anywhere. Excluding it from the admin
+// list too (this feeds both AdminCategories.jsx's "Categories" screen and
+// the Maintenance Management overview) removes a control that looked
+// live but did nothing - "Services" is reachable from exactly one place,
+// its homepage tile, same as the header nav link removed in 065.
 exports.findAllForAdmin = async () => {
-    const [rows] = await db.query("SELECT * FROM categories ORDER BY display_order ASC, name ASC");
+    const [rows] = await db.query("SELECT * FROM categories WHERE slug != 'services' ORDER BY display_order ASC, name ASC");
     return rows;
 };
 
@@ -145,7 +155,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
 // their active products in this department. Verified stores are
 // prioritized first (trust signal), then rating, then catalog size.
 //
-// Phase 8B ("Featured Stores") made this placement purchasable
+// ("Featured Stores") made this placement purchasable
 // (store_featured_campaigns, migration 052) without introducing a
 // separate "sponsored stores" section or a boolean flag - unlike
 // products (Phase 8A's is_sponsored), a store can have active listings
@@ -180,15 +190,15 @@ exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
     return rows;
 };
 
-// Homepage department grid, with Phase 8C's Department Sponsorship applied.
+// Homepage department grid, with  Department Sponsorship applied.
 // Same organic ordering findAllActive always used (display_order ASC, name
 // ASC), but any department with a currently-active, unexpired campaign in
 // department_sponsorship_campaigns is bumped to the front first.
 //
 // A department isn't owned by any one seller (several sellers active in
 // the same department could each independently sponsor it), so - like
-// findFeaturedStoresByCategory (Phase 8B) and unlike products.is_sponsored
-// (Phase 8A) - there's no flag on `categories` itself to keep in sync.
+// findFeaturedStoresByCategory and unlike products.is_sponsored
+// there's no flag on `categories` itself to keep in sync.
 // This LEFT JOINs the campaigns table live and derives `is_sponsored` from
 // whether *any* matching row exists, so starting/cancelling/expiring a
 // campaign never needs a second write anywhere else.

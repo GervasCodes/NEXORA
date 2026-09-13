@@ -14,7 +14,7 @@ exports.removeProduct = async (userId, productId) => {
     await wishlistRepository.remove(userId, { productId });
 };
 
-// Phase 5 (UI/UX remediation) - service wishlist parity with products.
+// (UI/UX remediation) - service wishlist parity with products.
 exports.addService = async (userId, serviceId) => {
     const service = await serviceRepository.findById(serviceId);
     if (!service) {

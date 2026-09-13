@@ -36,7 +36,7 @@ exports.orderIdValidation = [
     param("id").isInt({ min: 1 }).withMessage("Invalid order id")
 ];
 
-// Phase 9: product/booking "ask about this" validators. Slug format
+// product/booking "ask about this" validators. Slug format
 // mirrors product.routes.js's own param handling (no dedicated
 // isSlug validator elsewhere in this codebase - a plain non-empty
 // string is enough here since product.service.js#getProductBySlug
@@ -49,7 +49,7 @@ exports.bookingIdValidation = [
     param("id").isInt({ min: 1 }).withMessage("Invalid booking id")
 ];
 
-// --- Phase B2 validators --------------------------------------------------
+// ---  validators --------------------------------------------------
 
 exports.listingDraftValidation = [
     body("type").isIn(["product", "service"]).withMessage("type must be 'product' or 'service'"),
@@ -69,7 +69,7 @@ exports.serviceIdParamValidation = [
     param("serviceId").isInt({ min: 1 }).withMessage("Invalid service id")
 ];
 
-// --- Phase B3 validators ---------------------------------------------------
+// --- validators ---------------------------------------------------
 
 exports.disputeIdParamValidation = [
     param("id").isInt({ min: 1 }).withMessage("Invalid dispute id")

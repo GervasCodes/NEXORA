@@ -20,7 +20,7 @@ exports.createReviewValidation = [
         .withMessage("Comment is too long")
 ];
 
-// Phase 4 (Customer Experience) - booking-review counterpart of
+// (Customer Experience) - booking-review counterpart of
 // createReviewValidation. booking_id comes from the URL param, not the
 // body, so there's no equivalent of the product_id body check here.
 exports.createBookingReviewValidation = [

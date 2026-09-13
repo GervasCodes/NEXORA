@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 const EMPTY_FORM = { title: "", description: "", externalLink: "", scheduledAt: "" };
 
@@ -70,10 +71,10 @@ export default function SellerLiveSelling() {
 
             <form onSubmit={submit} className="border border-line rounded-lg p-4 mb-8 space-y-3">
                 <h2 className="font-display text-lg">Schedule a session</h2>
-                <input required placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                <textarea placeholder="Description (optional)" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none" />
-                <input required type="url" placeholder="Link to your stream (Instagram/YouTube/TikTok Live)" value={form.externalLink} onChange={(e) => setForm({ ...form, externalLink: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                <input required type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                <Input required placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <Input as="textarea" placeholder="Description (optional)" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="resize-none" />
+                <Input required type="url" placeholder="Link to your stream (Instagram/YouTube/TikTok Live)" value={form.externalLink} onChange={(e) => setForm({ ...form, externalLink: e.target.value })} />
+                <Input required type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
 
                 {error && <p className="text-sm text-coral">{error}</p>}
 

@@ -2,7 +2,7 @@ const subscriptionService = require("./subscription.service");
 const subscriptionRepository = require("./subscription.repository");
 const paymentService = require("../payment/payment.service");
 const settingsService = require("../settings/settings.service");
-// Phase 7 (Security) - subscribeSnippe/subscribeMalipopayCard/subscribePaypal
+// (Security) - subscribeSnippe/subscribeMalipopayCard/subscribePaypal
 // below were forwarding req.body.successUrl/cancelUrl/returnUrl straight to
 // the payment provider with no validation at all, unlike every other
 // redirect-accepting endpoint in payment.controller.js. That's an open

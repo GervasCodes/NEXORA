@@ -1,5 +1,5 @@
 /**
- * Affiliate/influencer program (Phase Q7).
+ * Affiliate/influencer program .
  *
  * SPA-friendly tracking, not server-side redirect/cookie based: a
  * landing page with ?ref=CODE calls trackClick() via the API, gets back

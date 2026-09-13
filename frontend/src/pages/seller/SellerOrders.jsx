@@ -8,8 +8,18 @@ import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
 import SavedFilters from "../../components/seller/SavedFilters";
+import Input from "../../components/ui/Input";
 
 const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
+
+const SORT_OPTIONS = [
+    { value: "newest", label: "Newest first" },
+    { value: "oldest", label: "Oldest first" },
+    { value: "item_name", label: "Item name (A-Z)" },
+    { value: "status", label: "Status" },
+    { value: "amount_high", label: "Amount (high to low)" },
+    { value: "amount_low", label: "Amount (low to high)" }
+];
 
 export default function SellerOrders() {
     const { t } = useLanguage();
@@ -25,6 +35,7 @@ export default function SellerOrders() {
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
+    const [sort, setSort] = useState("newest");
 
     useEffect(() => {
         const handle = setTimeout(() => setSearch(searchInput), 400);
@@ -36,11 +47,12 @@ export default function SellerOrders() {
         const params = {};
         if (search.trim()) params.q = search.trim();
         if (status) params.status = status;
+        if (sort) params.sort = sort;
         api.get("/orders/seller/list", { params }).then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
         api.get("/seller/delivery-agents").then(({ data }) => setRoster(data.data)).catch(() => {});
     };
 
-    useEffect(load, [search, status]);
+    useEffect(load, [search, status, sort]);
 
     const applySavedFilters = (filters) => {
         setSearchInput(filters.search || "");
@@ -77,13 +89,14 @@ export default function SellerOrders() {
             />
 
             <div className="flex flex-wrap gap-3 mb-6">
-                <input
-                    type="text"
-                    placeholder="Search order number or product…"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    className="flex-1 min-w-[180px] sm:min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
-                />
+                <div className="flex-1 min-w-[180px] sm:min-w-[220px]">
+                    <Input
+                        type="text"
+                        placeholder="Search order number or product…"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                </div>
                 <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
@@ -92,6 +105,16 @@ export default function SellerOrders() {
                     <option value="">All statuses</option>
                     {STATUS_OPTIONS.map((s) => (
                         <option key={s} value={s} className="capitalize">{s}</option>
+                    ))}
+                </select>
+                <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
+                    aria-label="Sort"
+                >
+                    {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                 </select>
                 {(search || status) && (
@@ -116,6 +139,9 @@ export default function SellerOrders() {
                             <p className="text-sm font-medium truncate">
                                 {order.buyer_first_name} {order.buyer_last_name}
                             </p>
+                            {order.primary_item_name && (
+                                <p className="text-xs text-ash truncate">{order.primary_item_name}</p>
+                            )}
                             <p className="price text-xs text-ash">
                                 <span>{order.order_number}</span> · <span>{formatDate(order.created_at)}</span>
                             </p>

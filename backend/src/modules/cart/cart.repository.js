@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 2 continuation (UI/UX remediation) - variant_id threaded through
+// continuation (UI/UX remediation) - variant_id threaded through
 // every function below. It uses a 0 sentinel (not NULL) for "no variant
 // selected" - see migration 095's comment on cart_items for why: it lets
 // (user_id, product_id, variant_id) stay a clean unique key without

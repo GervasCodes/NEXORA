@@ -6,6 +6,7 @@ import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
 import Avatar from "../../components/ui/Avatar";
+import Input from "../../components/ui/Input";
 
 export default function SellerDeliveryTeam() {
     const [roster, setRoster] = useState([]);
@@ -62,14 +63,15 @@ export default function SellerDeliveryTeam() {
             </p>
 
             <form onSubmit={handleAdd} className="flex gap-2 mb-8">
-                <input
-                    type="email"
-                    required
-                    placeholder="agent@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                />
+                <div className="flex-1">
+                    <Input
+                        type="email"
+                        required
+                        placeholder="agent@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
+                </div>
                 <Button
                     type="submit"
                     disabled={submitting}

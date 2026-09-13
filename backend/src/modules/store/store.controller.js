@@ -18,7 +18,7 @@ exports.getStoreProfile = async (req, res) => {
     }
 };
 
-// Phase 7C - Seller Collections. Public, no auth - same as getStoreProfile
+// Seller Collections. Public, no auth - same as getStoreProfile
 // above. Always 200 with an array (possibly empty), never 404 - see
 // store.service's comment on why an unknown slug and a valid slug with
 // no collections don't need to be told apart here.
@@ -38,7 +38,7 @@ exports.getStoreCollections = async (req, res) => {
     }
 };
 
-// Phase 3 (UI/UX remediation) - backs the global search box's store
+// (UI/UX remediation) - backs the global search box's store
 // suggestions. Always 200 with an array (possibly empty) for the same
 // reasoning getStoreCollections above already documents for this kind
 // of endpoint.
@@ -51,7 +51,7 @@ exports.search = async (req, res) => {
     }
 };
 
-// Store follows (Phase 6, UI/UX remediation).
+// Store follows (UI/UX remediation).
 exports.follow = async (req, res) => {
     try {
         await storeService.follow(req.user.id, req.params.slug);

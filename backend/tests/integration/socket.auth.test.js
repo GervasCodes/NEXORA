@@ -1,4 +1,4 @@
-// Phase 2 (Security Hardening). Covers the fix in socket.js's `io.use`
+// (Security Hardening). Covers the fix in socket.js's `io.use`
 // handshake middleware: a signature-valid JWT must now ALSO pass a fresh
 // is_active/suspension/token_version check against the database before
 // the socket is allowed to connect at all - mirroring
@@ -49,7 +49,7 @@ describe("Socket.IO handshake - fresh account-status check", () => {
         client.on("connect_error", (error) => resolve({ ok: false, error, client }));
     });
 
-    // Phase 4 (Testing & Session Hardening): the frontend no longer has
+    // (Testing & Session Hardening): the frontend no longer has
     // JS access to the token to pass via `auth: { token }` (it's an
     // httpOnly cookie now) - the handshake has to authenticate off the
     // cookie the browser sends automatically instead. Connects the same

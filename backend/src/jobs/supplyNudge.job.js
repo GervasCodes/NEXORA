@@ -4,7 +4,7 @@ const whatsappProvider = require("../modules/whatsapp/providers/whatsapp.provide
 const logger = require("../utils/logger").child({ module: "job:supplyNudge" });
 const Sentry = require("../config/sentry");
 
-// Roadmap Phase 3 (Supply-Side Incentive Nudges) - deliberately just a
+// Roadmap Supply-Side Incentive Nudges) - deliberately just a
 // notification mechanism, NOT a full surge-pricing engine (explicitly
 // out of scope per the roadmap doc). Kept as plain constants here rather
 // than admin-editable settings.service.js rows, matching the roadmap's

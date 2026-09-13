@@ -9,7 +9,7 @@ const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const reviewService = require("../../../src/modules/review/review.service");
 
-// Phase 5D: getStoreReviews is the store-page sibling of the existing
+// GetStoreReviews is the store-page sibling of the existing
 // getProductReviews (untested before this phase) - same
 // reviews+summary-in-parallel shape, but paginated since a store's
 // review count (unlike one product's) is unbounded.

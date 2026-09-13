@@ -1,4 +1,4 @@
-// Phase 2 (Security Hardening). Wraps a multer instance so every upload
+// (Security Hardening). Wraps a multer instance so every upload
 // route continues calling `.single(field)` / `.array(field, max)` /
 // `.fields(spec)` exactly as before (no route file needed to change),
 // but each now runs the given content-validation middleware right after

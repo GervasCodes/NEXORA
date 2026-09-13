@@ -29,6 +29,21 @@ const generateOrderNumber = () => {
     return `ORD-${timestamp}-${random}`;
 };
 
+// Turns an item name + how many line items an order has into the
+// `{itemSummary}` notification content templates interpolate (Phase 6,
+// UI/UX remediation) - "order placed"/"cancelled"/"status updated"
+// previously only ever named the order number, never what was actually
+// in it. Returns null when there's no item to name (checkout never hits
+// this - a single-vendor order always has at least one item - but the
+// post-checkout lifecycle notifications look this up via
+// orderRepository.getPrimaryItemSummary, which returns null for a
+// multi-vendor parent order), so callers can fall back to the existing
+// order-number-only message key exactly as before this existed.
+const buildItemSummary = (itemName, itemCount) => {
+    if (!itemName) return null;
+    return itemCount > 1 ? `${itemName} +${itemCount - 1} more` : itemName;
+};
+
 // Checkout buyer-protection insurance add-on (Phase Q1): a flat
 // percentage of the cart subtotal, clamped to a min/max so it's neither
 // negligible on a tiny order nor disproportionate on a huge one. Applied
@@ -62,7 +77,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const products = await cartRepository.findProductsByIds(productIds);
     const productsById = new Map(products.map((p) => [p.id, p]));
 
-    // Variants (Phase 2 continuation, UI/UX remediation) - same batched
+    // Variants (continuation, UI/UX remediation) - same batched
     // fetch shape as products above, only for the line items that
     // actually have one (variant_id is the 0 sentinel otherwise - see
     // cart.repository.js's comment).
@@ -91,7 +106,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
             throw new Error(`Only ${availableStock} of "${item.name}"${variant ? " (selected option)" : ""} left in stock`);
         }
 
-        // B2B / bulk ordering (Phase Q7) - the best bulk tier this line
+        // B2B / bulk ordering the best bulk tier this line
         // item's quantity qualifies for beats the regular/discount price,
         // if one exists. Available to any buyer (see migration 089's
         // comment on product_bulk_price_tiers for why this isn't gated
@@ -130,7 +145,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const orderNumber = generateOrderNumber();
     const isMultiVendor = bySeller.size > 1;
 
-    // Agent/kiosk pickup points (Phase Q5) - substitute the pickup
+    // Agent/kiosk pickup points  - substitute the pickup
     // point's own address in for shippingInfo's before anything is
     // written, so every downstream consumer (delivery agent routing,
     // delivery fee calc, order confirmation email) just sees "the
@@ -151,7 +166,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
         };
     }
 
-    // Saved address book (Phase 1, UI/UX remediation) - same idea as the
+    // Saved address book ( UI/UX remediation) - same idea as the
     // pickup-point substitution just above: re-fetch the authoritative
     // saved address server-side (rather than trusting whatever text the
     // client copied into shipping_address) so an address the buyer no
@@ -177,7 +192,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const wantsBuyerProtection = Boolean(shippingInfo.buyer_protection_addon);
     const buyerProtectionFee = wantsBuyerProtection ? calculateBuyerProtectionFee(totalAmount) : 0;
 
-    // Loyalty points redemption (Phase Q7) - quoted (validated, not yet
+    // Loyalty points redemption  - quoted (validated, not yet
     // deducted) here so the discount can be folded into roundedTotal;
     // actually committed (balance deducted) only after the order row
     // exists below, so a checkout that fails after this point never
@@ -185,7 +200,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const pointsToRedeem = Number(shippingInfo.loyalty_points_redeemed) || 0;
     const { pointsRedeemed, discountAmount: loyaltyDiscount } = await referralService.quoteRedemption(buyerId, pointsToRedeem);
 
-    // Coupon code (Phase 1, UI/UX remediation) - same quote-then-commit
+    // Coupon code (UI/UX remediation) - same quote-then-commit
     // sequencing as loyalty points above, for the same reason: a
     // checkout that fails after this point should never burn the code's
     // one-per-buyer redemption. Quoted against the pre-discount cart
@@ -200,7 +215,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
 
     const roundedTotal = Number((totalAmount + buyerProtectionFee - loyaltyDiscount - couponDiscount).toFixed(2));
 
-    // Progressive KYC (Phase Q1): a buyer's tier caps how large a single
+    // Progressive KYC  a buyer's tier caps how large a single
     // order can be - see kyc.service.js#enforceOrderLimit. Checked here,
     // against the final charge total (subtotal + insurance fee), before
     // any order/payment row exists, so a blocked checkout leaves nothing
@@ -255,7 +270,7 @@ exports.checkout = async (buyerId, shippingInfo) => {
     // genuinely exists.
     await couponService.commitRedemption(coupon?.id, buyerId, orderId, couponDiscount);
 
-    // Affiliate attribution (Phase Q7) - fire-and-forget, resolves to a
+    // Affiliate attribution fire-and-forget, resolves to a
     // no-op if no click_token was submitted or it doesn't check out (see
     // affiliate.service.js#attributeOrder). Uses the actual order total
     // (post buyer-protection-fee, post loyalty-discount) since that's
@@ -268,7 +283,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
         type: "order_placed",
         titleKey: "notifications.order.placed.title",
         messageKey: isMultiVendor ? "notifications.order.placed.messageMultiVendor" : "notifications.order.placed.messageSingle",
-        messageParams: { orderNumber, vendorCount },
+        // itemSummary only matters to messageSingle (see its template) -
+        // harmless to always compute it, since cartItems is this whole
+        // order's item list in the single-vendor case being named here.
+        messageParams: { orderNumber, vendorCount, itemSummary: buildItemSummary(cartItems[0]?.name, cartItems.length) },
         relatedOrderId: orderId,
         withEmail: true,
         withWhatsApp: true
@@ -313,6 +331,7 @@ exports.getMyOrders = async (buyerId, query = {}) => {
         from: query.from || null,
         to: query.to || null,
         q: query.q || null,
+        sort: query.sort || null,
         page,
         limit
     });
@@ -377,7 +396,7 @@ exports.cancelOrder = async (orderId, buyerId) => {
             );
         }
 
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): was N
+        // (Backend N+1 Fixes & Read Replica Adoption): was N
         // sequential UPDATEs (one per child order) in a loop - now one
         // query covers every child order at once. `children` above is
         // still needed for the cancellability check right before this,
@@ -400,12 +419,20 @@ exports.cancelOrder = async (orderId, buyerId) => {
 
     await orderRepository.updateOrderStatus(orderId, "cancelled");
 
+    // Item context for the notification (Phase 6, UI/UX remediation) -
+    // null for a multi-vendor parent order (its items live on the child
+    // orders, not this row - see getPrimaryItemSummary's comment), in
+    // which case this falls back to the existing order-number-only
+    // message key exactly as before this existed.
+    const { itemName, itemCount } = await orderRepository.getPrimaryItemSummary(orderId);
+    const itemSummary = buildItemSummary(itemName, itemCount);
+
     await notificationService.notify({
         userId: buyerId,
         type: "order_cancelled",
         titleKey: "notifications.order.cancelled.title",
-        messageKey: "notifications.order.cancelled.message",
-        messageParams: { orderNumber: order.order_number },
+        messageKey: itemSummary ? "notifications.order.cancelled.messageWithItem" : "notifications.order.cancelled.message",
+        messageParams: { orderNumber: order.order_number, itemSummary },
         relatedOrderId: orderId,
         withEmail: true
     });
@@ -438,12 +465,21 @@ exports.autoCancelStaleOrder = async (order) => {
 
     await orderRepository.updateOrderStatus(order.id, "cancelled");
 
+    // Item context for the notification (Phase 6, UI/UX remediation) -
+    // same lookup/fallback shape as cancelOrder above: null for a
+    // multi-vendor parent order (its items live on the child orders, not
+    // this row - see getPrimaryItemSummary's comment), in which case this
+    // falls back to the existing order-number-only message key exactly
+    // as before this existed.
+    const { itemName, itemCount } = await orderRepository.getPrimaryItemSummary(order.id);
+    const itemSummary = buildItemSummary(itemName, itemCount);
+
     await notificationService.notify({
         userId: order.buyer_id,
         type: "order_cancelled",
         titleKey: "notifications.order.cancelled.title",
-        messageKey: "notifications.order.cancelledUnpaid.message",
-        messageParams: { orderNumber: order.order_number },
+        messageKey: itemSummary ? "notifications.order.cancelledUnpaid.messageWithItem" : "notifications.order.cancelledUnpaid.message",
+        messageParams: { orderNumber: order.order_number, itemSummary },
         relatedOrderId: order.id,
         withEmail: true
     });
@@ -452,7 +488,8 @@ exports.autoCancelStaleOrder = async (order) => {
 exports.getSellerOrders = async (sellerId, query = {}) => {
     return orderRepository.findOrdersBySeller(sellerId, {
         status: query.status || null,
-        q: query.q || null
+        q: query.q || null,
+        sort: query.sort || null
     });
 };
 
@@ -474,7 +511,7 @@ exports.getSellerOrderDetail = async (orderId, sellerId) => {
 
     const items = await orderRepository.findOrderItemsBySeller(orderId, sellerId);
 
-    // C1 (Phase 4 remediation): same "stuck wallet credit" signal as
+    // C1 (remediation): same "stuck wallet credit" signal as
     // getSellerOrders/findOrdersBySeller above, computed here instead of
     // in SQL since `items` (already scoped to this seller) already
     // carries wallet_credited per row - see the longer comment on
@@ -586,19 +623,27 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         });
     }
 
+    // Item context for the notification (Phase 6, UI/UX remediation) -
+    // same lookup/fallback shape as cancelOrder/autoCancelStaleOrder
+    // above: null for a multi-vendor parent order, in which case this
+    // falls back to the existing order-number-only message key exactly
+    // as before this existed.
+    const { itemName, itemCount } = await orderRepository.getPrimaryItemSummary(orderId);
+    const itemSummary = buildItemSummary(itemName, itemCount);
+
     await notificationService.notify({
         userId: order.buyer_id,
         type: "order_status_update",
         titleKey: "notifications.order.statusUpdated.title",
-        messageKey: "notifications.order.statusUpdated.message",
-        messageParams: { orderNumber: order.order_number, status: newStatus },
+        messageKey: itemSummary ? "notifications.order.statusUpdated.messageWithItem" : "notifications.order.statusUpdated.message",
+        messageParams: { orderNumber: order.order_number, status: newStatus, itemSummary },
         relatedOrderId: orderId,
         withEmail: true,
         withWhatsApp: true
     });
 };
 
-// Phase 6 (Checkout & Order Timeline UX): a pre-payment estimate of how
+// (Checkout & Order Timeline UX): a pre-payment estimate of how
 // long delivery is likely to take, using the exact same distance/duration
 // calculation the platform already relies on for rider pay (see
 // deliveryPricingService.estimateDeliveryForRoute) - just run against the

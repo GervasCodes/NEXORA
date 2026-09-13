@@ -1,5 +1,5 @@
 /**
- * Live-selling sessions (Phase Q7) - a scheduling/announcement layer,
+ * Live-selling sessions  a scheduling/announcement layer,
  * not real video streaming infrastructure. See migration 089's header
  * comment for the explicit scope reasoning.
  */
@@ -34,7 +34,7 @@ exports.setStatus = async (id, sellerId, status) => {
     await liveSellingRepository.setStatus(id, status);
     const updated = await liveSellingRepository.findById(id);
 
-    // Reminders (Phase 9, UI/UX remediation) - fire-and-forget, same
+    // Reminders (UI/UX remediation) - fire-and-forget, same
     // reasoning as every other "notify someone" call elsewhere in this
     // codebase. Only fires on the transition into 'live', not on every
     // status change (an 'ended'/'cancelled' session isn't something a

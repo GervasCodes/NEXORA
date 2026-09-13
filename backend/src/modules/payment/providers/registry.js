@@ -1,5 +1,5 @@
 /**
- * Payment-provider registry — Phase 5 (Resilience & Growth).
+ * Payment-provider registry (Resilience & Growth).
  *
  * NEXORA has four payment rails, each with a genuinely different shape:
  *   - mobile_money: a router (mobileMoney.provider.js) over malipopay /
@@ -96,7 +96,7 @@ const PROVIDERS = [
             disbursement: false,
             requiresRedirect: true
         },
-        // Phase 3: MalipoPay Card is now the primary/default card gateway
+        // MalipoPay Card is now the primary/default card gateway
         // (see the malipopay_card entry below) - Snippe carries a higher
         // per-transaction fee than MalipoPay's advertised 3.0% card rate,
         // so it's off by default rather than removed outright (an admin
@@ -110,7 +110,7 @@ const PROVIDERS = [
         key: "malipopay_card",
         label: "MalipoPay (cards)",
         type: "card",
-        // Phase 3: the primary/default card gateway - see checkout
+        // the primary/default card gateway - see checkout
         // ordering in Checkout.jsx, which now sorts a `primary` rail
         // first among same-`type` options instead of using whatever
         // order the API happened to return them in.
@@ -142,7 +142,7 @@ const PROVIDERS = [
             disbursement: false,
             requiresRedirect: true
         },
-        // Phase 3: PayPal charges are meaningfully more expensive than
+        // PayPal charges are meaningfully more expensive than
         // MalipoPay's local card rate and add a currency-conversion step
         // most TZS-based buyers don't need - kept available (it's the
         // only rail international/diaspora buyers without local mobile

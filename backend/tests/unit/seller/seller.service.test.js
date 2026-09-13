@@ -310,7 +310,7 @@ describe("seller.service verification fee / badge sync", () => {
         expect(result).toEqual({ status: "pending" });
     });
 
-    // Monetization Master Switch (Phase 1): when verification-fee
+    // Monetization Master Switch : when verification-fee
     // monetization is off, payVerificationFee skips payment entirely
     // and waives the fee immediately instead of requiring a phone
     // number or calling payment.service at all.

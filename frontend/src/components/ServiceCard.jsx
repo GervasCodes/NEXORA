@@ -117,10 +117,19 @@ function ServiceCard({ service, layout = "grid" }) {
     // ratingAndStock (category takes the stock slot, since a service
     // listing has no stock concept), so both card types line up the same
     // way instead of the category and rating stacking as separate rows.
+    //
+    // Mobile UI/UX audit: category_name is arbitrary admin-entered text
+    // (unlike ratingAndStock's short, bounded "Only N left"/rating
+    // strings), and this row renders in a 2-column grid at the smallest
+    // breakpoint (see ServiceGrid.jsx) - same class of bug as
+    // DepartmentCard's trending-name row: `truncate` with no min-w-0 on
+    // a flex child doesn't actually clip, it just lets the row (and the
+    // card) grow to fit. flex-1 min-w-0 gives it the rest of the row's
+    // width (after the shrink-0 rating) to truncate against.
     const categoryAndRating = (service.category_name || service.average_rating) ? (
         <div className="flex items-center justify-between mt-1 gap-2">
             {service.category_name ? (
-                <p className="text-xs text-ash truncate">{service.category_name}</p>
+                <p className="text-xs text-ash truncate flex-1 min-w-0">{service.category_name}</p>
             ) : <span />}
 
             {service.average_rating ? (

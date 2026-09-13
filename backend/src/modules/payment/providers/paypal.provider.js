@@ -132,7 +132,7 @@ exports.captureOrder = async (paypalOrderId) => {
     };
 };
 
-// Refund leg (Phase 2 - Refund Automation). Refunds a previously
+// Refund leg (Refund Automation). Refunds a previously
 // captured payment via PayPal's documented Payments v2 API
 // (POST /v2/payments/captures/{capture_id}/refund). captureId is the
 // value stored as payments.transaction_reference for a PayPal payment

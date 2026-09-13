@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 
 export default function SellerCollections() {
@@ -131,15 +132,16 @@ export default function SellerCollections() {
             </p>
 
             <form onSubmit={handleCreate} className="flex gap-2 mb-8 max-w-md">
-                <input
-                    type="text"
-                    required
-                    maxLength={80}
-                    placeholder="Collection name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                />
+                <div className="flex-1">
+                    <Input
+                        type="text"
+                        required
+                        maxLength={80}
+                        placeholder="Collection name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                </div>
                 <Button
                     type="submit"
                     disabled={creating}

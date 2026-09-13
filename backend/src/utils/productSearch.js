@@ -1,4 +1,4 @@
-// Phase 3B: query-building logic for product search, pulled out of
+// Query-building logic for product search, pulled out of
 // product.repository.js so it can be unit-tested without a database.
 //
 // Background: migration 022 added a FULLTEXT index on

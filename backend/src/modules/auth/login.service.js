@@ -8,7 +8,7 @@ const appError = require("../../utils/appError");
 const PRE_AUTH_TYP = "login_otp";
 const PRE_AUTH_EXPIRY = "10m";
 
-// Step 1: verify email + password. On success, does NOT issue a session -
+//  verify email + password. On success, does NOT issue a session -
 // it sends an OTP to the account's email and returns a short-lived
 // pre-auth token that step 2 needs to complete the login.
 exports.login = async (email, password) => {
@@ -45,7 +45,7 @@ exports.login = async (email, password) => {
         throw new Error("This account has been deactivated. Please contact support");
     }
 
-    // Phase 5 (OTP resend/expiry UX) - this used to hand the frontend a
+    // OTP resend/expiry UX) - this used to hand the frontend a
     // hardcoded `expiresInSeconds: 600`, which is actually the pre-auth
     // token's own lifetime (PRE_AUTH_EXPIRY, 10 minutes), not the OTP
     // code's - the code itself expires after otpService's EXPIRY_MINUTES
@@ -75,7 +75,7 @@ exports.resendLoginOtp = async (preAuthToken) => {
     return otpService.requestOtp(user, "login");
 };
 
-// Step 2: verify the OTP against the pre-auth token issued in step 1. Only
+// verify the OTP against the pre-auth token issued in step 1. Only
 // now is a real session token issued.
 exports.verifyLoginOtp = async (preAuthToken, code) => {
     let decoded;

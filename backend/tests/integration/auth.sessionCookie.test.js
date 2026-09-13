@@ -124,13 +124,25 @@ describe("CSRF protection on cookie-authenticated requests", () => {
         return agent;
     };
 
+    // Every mutating route inside the auth module itself (login,
+    // register, forgot/reset-password, logout) is deliberately
+    // CSRF-exempt - see csrf.middleware.js's CSRF_EXEMPT_PATHS comment
+    // for why (gating logout caused a lockout bug: a leftover session
+    // cookie with no matching CSRF token 403'd every login AND logout
+    // attempt, with no way to recover except manually clearing
+    // cookies). So there's no mutating auth endpoint this block could
+    // ever assert CSRF against. PUT /notifications/read-all is just a
+    // stand-in for "some real, non-exempt, cookie-authenticated
+    // mutating route" - the CSRF check runs as global middleware
+    // before routing, so it 403s before reaching this route's own
+    // auth/validation/controller logic, and no additional DB mocking
+    // is needed for that to happen.
+    const PROTECTED_MUTATING_PATH = "/api/v1/notifications/read-all";
+
     it("rejects a cookie-authenticated mutating request with no X-CSRF-Token header", async () => {
         const agent = await setupAuthenticatedAgent();
 
-        const res = await agent.post("/api/v1/auth/logout");
-        // logout itself is CSRF-exempt in practice? No - it's a real
-        // mutating request through the global middleware, so it IS
-        // checked. Assert the 403 CSRF rejection specifically.
+        const res = await agent.put(PROTECTED_MUTATING_PATH);
         expect(res.status).toBe(403);
         expect(res.body.code).toBe("CSRF_TOKEN_INVALID");
     });
@@ -139,7 +151,7 @@ describe("CSRF protection on cookie-authenticated requests", () => {
         const agent = await setupAuthenticatedAgent();
 
         const res = await agent
-            .post("/api/v1/auth/logout")
+            .put(PROTECTED_MUTATING_PATH)
             .set("X-CSRF-Token", "not-the-right-token");
 
         expect(res.status).toBe(403);
@@ -150,9 +162,11 @@ describe("CSRF protection on cookie-authenticated requests", () => {
         // No cookie at all here - a Bearer-only client (the existing
         // backend test suite's normal pattern, or a non-browser API
         // consumer) must be unaffected by CSRF protection, which only
-        // exists to guard the cookie-driven path.
+        // exists to guard the cookie-driven path. Still hits auth
+        // middleware with a bogus token, so this only proves it isn't
+        // CSRF (403) rejecting it - a 401 here is expected and fine.
         const res = await request(app)
-            .post("/api/v1/auth/logout")
+            .put(PROTECTED_MUTATING_PATH)
             .set("Authorization", "Bearer some-token-value");
 
         expect(res.status).not.toBe(403);

@@ -20,7 +20,7 @@ describe("POST /api/v1/payments/webhooks/malipopay - payloadSignature verificati
         .update(`${reference}${timestamp}${amount}${phoneNumber}${process.env.MOBILE_MONEY_API_KEY}`)
         .digest("hex");
 
-    // Phase 2 (Security Hardening) added a replay-protection timestamp
+    // (Security Hardening) added a replay-protection timestamp
     // freshness check (see utils/webhookReplayGuard.js) - MalipoPay's
     // documented "yyyyMMddHHmmss" timestamp must be within a few minutes
     // of "now" or the webhook is rejected as a possible replay. Generate

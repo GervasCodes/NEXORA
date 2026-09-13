@@ -6,7 +6,7 @@ module.exports = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
-        // Phase 4 (Testing & Session Hardening): the frontend now sends
+        // (Testing & Session Hardening): the frontend now sends
         // the session via an httpOnly cookie rather than a
         // JS-readable Bearer token (see sessionCookie.js / auth.controller.js).
         // Bearer support is kept alongside it deliberately, not just for
@@ -38,7 +38,7 @@ module.exports = async (req, res, next) => {
             });
         }
 
-        // Phase 3 (Soft Account Deletion): a session token stays valid for
+        // (Soft Account Deletion): a session token stays valid for
         // 7 days (utils/generateToken.js) regardless of what happens to the
         // account afterward, so blocking login alone isn't enough - a
         // still-unexpired token from before the account was deleted (or

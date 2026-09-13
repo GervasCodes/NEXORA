@@ -145,7 +145,7 @@ exports.removeFromRoster = async (sellerId, agentId) => {
     return result.affectedRows;
 };
 
-// --- Seller collections (Phase 7C) ---
+// --- Seller collections  ---
 // Same "seller's own roster of something" shape as the delivery-agent
 // functions above, applied to product shelves instead of hired agents.
 
@@ -323,7 +323,7 @@ exports.getTopProducts = async (sellerId, limit = 5) => {
     return rows;
 };
 
-// Phase Q8 (AI demand forecasting): per-product sales velocity over the
+// (AI demand forecasting): per-product sales velocity over the
 // trailing window, joined with the product's current live stock/price -
 // the actual "how fast is this selling, how much is left" arithmetic AI
 // only phrases a suggestion on top of (see ai.service.js#suggestRestockAndPricing).
@@ -358,7 +358,7 @@ exports.getRepeatCustomerCount = async (sellerId) => {
     return row.repeat_customers;
 };
 
-// --- Phase A5 (Advanced Analytics) --------------------------------------
+// --- (Advanced Analytics) --------------------------------------
 // Seller-scoped period comparison (product sales only, matching
 // getDailySales/getTopProducts above) and top customers - the services
 // side of "advanced analytics" is computed client-side in
@@ -377,7 +377,7 @@ async function getSellerWindowTotal(sellerId, start, end) {
     return { gmv: Number(row.gmv) || 0, transactionCount: Number(row.transaction_count) || 0 };
 }
 
-// Phase P8 (Analytics Visualization) - optional customRange
+// (Analytics Visualization) - optional customRange
 // ({start, end}) adds a "current vs. immediately-preceding window of
 // the same duration" comparison, same shape as admin.repository.js's
 // equivalent addition - see that file's getPeriodComparison for the

@@ -73,7 +73,7 @@ router.post(
     paymentController.capturePaypalPayment
 );
 
-// Booking payments (Phase 3 - Financial Integration) - buyer-side, mirror
+// Booking payments (Financial Integration) - buyer-side, mirror
 // the order-payment routes below one-for-one but under a literal
 // "/booking/" prefix so they can't collide with "/:orderId/..." further
 // down (same reasoning the verification-fee/paypal routes above already
@@ -163,7 +163,7 @@ router.post(
     paymentController.initiatePaypalOrderPayment
 );
 
-// Phase 5 (Resilience & Growth). Literal path - MUST stay registered
+// (Resilience & Growth). Literal path - MUST stay registered
 // before "/:orderId" below for the same reason the verification-fee
 // routes above do (Express would otherwise bind orderId to the string
 // "methods").
@@ -173,7 +173,7 @@ router.get(
     paymentController.getAvailablePaymentMethods
 );
 
-// Wallet top-up (Phase Q2) - literal path, same registration-order
+// Wallet top-up - literal path, same registration-order
 // reasoning as "/methods" and "/verification-fee/*" above.
 router.post(
     "/wallet/topup",

@@ -11,7 +11,7 @@ name: Backend Tests
 # docs/SECURITY_REVIEW_CHECKLIST.md's "CI blocks merge on lint/test/audit
 # failure" row and docs/UPTIME_MONITORING.md both refer to workflow names
 # (ci.yml, uptime-check.yml) that don't exist yet in this repo - see the
-# icon3d Phase 8 write-up for that discrepancy. This workflow (and its
+# icon3d write-up for that discrepancy. This workflow (and its
 # frontend counterpart) cover the lint/test half of that claim; the audit
 # step and an uptime-check workflow are not part of this phase.
 

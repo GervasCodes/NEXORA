@@ -386,7 +386,7 @@ exports._handleSubscriptionPaymentWebhook = async (subscriptionId, success, tran
     return { subscriptionId, success: true, receiptNumber };
 };
 
-// ---- Booking payments (Phase 3 - Financial Integration) --------------------
+// ---- Booking payments Financial Integration) --------------------
 // Follow initiateVerificationFeePayment's shape, not the order-payment
 // functions' - see migration 064's design notes: a booking has no
 // predetermined payment_method column to validate against (unlike
@@ -558,7 +558,7 @@ exports.getBookingPayment = async (bookingId, userId) => {
 // confirmed a capture server-side. `providerReference` is the reference WE
 // sent when initiating the payment: "ORDER-42" for order payments,
 // "VERIFY-7" for a seller's verification fee, "BOOKING-15" for a booking
-// payment (Phase 3) - see the `reference` values above/in the order
+// payment  - see the `reference` values above/in the order
 // functions further down. `chargedCurrency`/`chargedAmount` are only
 // passed for foreign-currency gateways (PayPal) - see migration 028.
 exports.handleProviderWebhook = async ({ providerReference, success, transactionReference, chargedCurrency, chargedAmount }) => {
@@ -820,7 +820,7 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
                 logger.error({ err, orderId: child.id, parentOrderId: orderId }, "Seller wallet credit error");
                 Sentry.captureException(err, { tags: { area: "payment-webhook", stage: "wallet-credit" }, extra: { orderId: child.id, parentOrderId: orderId } });
             });
-            // EFD e-invoicing (Phase Q4) - a receipt is per (single-vendor)
+            // EFD e-invoicing - a receipt is per (single-vendor)
             // child order, same reasoning as wallet crediting just above.
             // No-op if the seller hasn't registered/been verified for EFD.
             require("../efd/efd.service").issueReceiptForOrder(child.id).catch((err) => {
@@ -842,7 +842,7 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     const socketModule = require("../../socket/socket");
     socketModule.emitToAdmins("admin:stats_changed", { reason: "payment_confirmed" });
 
-    // Referral & loyalty (Phase Q7) - once per order (not per child), on
+    // Referral & loyalty  - once per order (not per child), on
     // the buyer's own account, since both are buyer-scoped concepts. The
     // amount used is what was actually charged, falling back to the
     // order's own total if the provider didn't report a charged amount
@@ -1186,7 +1186,7 @@ exports.capturePaypalPayment = async (paypalOrderId) => {
     });
 };
 
-// Phase 5 (Resilience & Growth). Purely additive - reads the registry's
+// (Resilience & Growth). Purely additive - reads the registry's
 // capability metadata, doesn't touch any existing payment flow. Lets
 // checkout show only rails an admin has actually configured, instead of
 // hardcoding "mobile money, Snippe, PayPal" and finding out one of them

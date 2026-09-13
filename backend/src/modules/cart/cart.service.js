@@ -1,6 +1,6 @@
 const cartRepository = require("./cart.repository");
 
-// Phase 2 continuation (UI/UX remediation) - variant_id threaded through.
+// continuation (UI/UX remediation) - variant_id threaded through.
 // Every function accepts an optional variantId (null/undefined for the
 // many products with no variants); cartRepository normalizes that to the
 // 0 sentinel at the query boundary (see cart.repository.js's comment).

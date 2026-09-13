@@ -38,7 +38,7 @@ exports.checkout = async (req, res) => {
     }
 };
 
-// Phase 6 (Checkout & Order Timeline UX): pre-payment delivery-time
+// (Checkout & Order Timeline UX): pre-payment delivery-time
 // estimate for the buyer's current cart + the pin they've dropped on
 // Checkout.jsx. Read-only, no order is created here.
 exports.getDeliveryEstimate = async (req, res) => {

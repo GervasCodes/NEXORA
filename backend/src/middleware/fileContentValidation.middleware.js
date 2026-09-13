@@ -1,4 +1,4 @@
-// Phase 2 (Security Hardening) - see utils/fileContentValidator.js for
+// (Security Hardening) - see utils/fileContentValidator.js for
 // why this exists. This middleware runs AFTER multer (memoryStorage) has
 // already buffered the file(s) into req.file/req.files, so it works
 // whether the route used `.single()`, `.array()`, or `.fields()`.

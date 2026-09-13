@@ -40,7 +40,7 @@ exports.orderIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid order")
 ];
 
-// Phase 3 (Admin Manual Override & Ops Visibility)
+// (Admin Manual Override & Ops Visibility)
 exports.manualAssignDeliveryValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid order"),
     body("agentId").isInt({ gt: 0 }).withMessage("Invalid agent")
@@ -141,7 +141,7 @@ exports.updateSettingsValidation = [
         .isInt({ min: 0 })
         .withMessage("Escrow hold period must be zero or a positive whole number of days"),
 
-    // Phase 1 (Durable Dispatch Foundation) - see settingsService.getDeliveryOfferRadiusStepsKm.
+    // (Durable Dispatch Foundation) - see settingsService.getDeliveryOfferRadiusStepsKm.
     body("delivery_offer_radius_steps_km")
         .optional()
         .isArray({ min: 1 }).withMessage("At least one radius step is required")
@@ -157,7 +157,7 @@ exports.updateSettingsValidation = [
         .isInt({ min: 1000 })
         .withMessage("Offer timeout must be at least 1000ms"),
 
-    // Nexora Assistant (migration 081, Phase B1/Phase 7 admin controls) -
+    // Nexora Assistant (admin controls) -
     // see settingsService.getAiSettings/ai.service.js#checkSpendGuard.
     body("ai_enabled")
         .optional()

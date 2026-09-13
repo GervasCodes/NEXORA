@@ -1,5 +1,5 @@
 // Closes out department-sponsorship campaigns whose paid duration has
-// ended (Phase 8C). departmentSponsorshipService.expireDueCampaigns() is
+// ended  departmentSponsorshipService.expireDueCampaigns() is
 // idempotent - it only ever touches rows still marked 'active' with a
 // past ends_at - so it's safe to run on every tick even if a previous run
 // (or a manual retry) already handled everything. Same shape as

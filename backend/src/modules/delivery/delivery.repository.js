@@ -15,7 +15,7 @@ exports.findAvailableForPickup = async () => {
     return rows;
 };
 
-// Phase 1 (Durable Dispatch Foundation) - the periodic re-check job
+// (Durable Dispatch Foundation) - the periodic re-check job
 // (jobs/deliveryRematch.job.js) sweeps this to retry matching for orders
 // that landed in the manual pool with no active offer currently in
 // flight. Same base shape as findAvailableForPickup above, with one more
@@ -48,7 +48,7 @@ exports.findByOrderId = async (orderId) => {
 // getDelivery, so a buyer tracking their order can see what vehicle/
 // plate number to expect, without a second round trip.
 //
-// Phase 1 (live order tracking) extends this with three more things the
+// (live order tracking) extends this with three more things the
 // full tracking page needs on first load (before any socket event has
 // arrived): the agent's last known position + when it was last updated,
 // and the seller's pickup pin (LEFT JOINed - many sellers haven't set one
@@ -114,7 +114,7 @@ exports.markEarningsCredited = async (deliveryId) => {
     return result.affectedRows > 0;
 };
 
-// Phase 5C: LEFT JOINs the agent's vehicle_type so callers (updateAgentLocation's
+// LEFT JOINs the agent's vehicle_type so callers (updateAgentLocation's
 // live per-order ETA calculation) can pick the right OSRM profile without a
 // second round trip. Nullable/optional like every other vehicle-type read in
 // this module - a missing vehicle_type just falls back to routing's default
@@ -208,7 +208,7 @@ exports.findCandidateAgents = async (orderId) => {
     return rows;
 };
 
-// Phase 3 (Admin Manual Override) - lets delivery.service.js's
+// (Admin Manual Override) - lets delivery.service.js's
 // adminAssignDelivery verify the agent an admin picked from the dispatch
 // board dropdown is actually a delivery agent and currently online,
 // rather than trusting whatever id the request sent.
@@ -220,7 +220,7 @@ exports.findOnlineAgentById = async (agentId) => {
     return rows[0];
 };
 
-// Roadmap Phase 2: batched read of each candidate's historical
+// Roadmap batched read of each candidate's historical
 // acceptance-rate (delivery_offers) and completion-rate (deliveries)
 // stats, for the weighted scoring step in
 // agentScoring.js#scoreCandidate. ONE query per stat (not one per
@@ -321,7 +321,7 @@ exports.findOfflineEligibleAgents = async () => {
 
 // ---- Offer queue -----------------------------------------------------------
 
-// Roadmap Phase 1: externalChannel records whether this offer was ALSO
+// Roadmap externalChannel records whether this offer was ALSO
 // pushed via WhatsApp/SMS (in addition to the always-sent in-app socket
 // event + push) - null when neither integration is configured. See
 // migration 092.

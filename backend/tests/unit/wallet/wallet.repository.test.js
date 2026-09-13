@@ -3,7 +3,7 @@ jest.mock("../../../src/config/db", () => require("../../helpers/mockDb"));
 const db = require("../../../src/config/db");
 const walletRepository = require("../../../src/modules/wallet/wallet.repository");
 
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): markItemsCredited
+// (Backend N+1 Fixes & Read Replica Adoption): markItemsCredited
 // batches N per-item UPDATEs into one UPDATE using a CASE WHEN expression
 // per varying column (commission_rate/commission_amount/seller_net_amount
 // genuinely differ per item; wallet_credited/wallet_released don't - see

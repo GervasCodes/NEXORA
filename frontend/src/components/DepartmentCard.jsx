@@ -85,7 +85,7 @@ export default function DepartmentCard({ department, index }) {
             {trending.length > 0 && (
                 <div className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
                     <span className="text-[10px] uppercase tracking-wide text-ash shrink-0">Trending</span>
-                    <div className="flex -space-x-2">
+                    <div className="flex -space-x-2 shrink-0">
                         {trending.map((product) => (
                             <div key={product.id} className="w-7 h-7 rounded-full border-2 border-paper bg-line/50 overflow-hidden shrink-0">
                                 {product.image_url ? (
@@ -94,7 +94,20 @@ export default function DepartmentCard({ department, index }) {
                             </div>
                         ))}
                     </div>
-                    <p className="text-xs text-ash truncate">
+                    {/* Mobile UI/UX audit: this row sits inside a 2-column
+                        grid tile (grid-cols-2 on the smallest breakpoint -
+                        see Home.jsx's DepartmentDiscovery), so it's often
+                        under 160px wide once the tile's own padding is
+                        subtracted. `truncate` alone does nothing on a flex
+                        child with the default `min-width: auto` - a long
+                        product name just kept the row (and the tile) at
+                        its full content width instead of clipping,
+                        overflowing the card at exactly the widths this
+                        was meant to protect. flex-1 min-w-0 lets it
+                        actually shrink to the space left after the label
+                        and avatar stack, so truncate has something to work
+                        with. */}
+                    <p className="text-xs text-ash truncate flex-1 min-w-0">
                         {trending[0].name}
                     </p>
                 </div>

@@ -1,4 +1,4 @@
-// Resolves group buys whose deadline has passed (Phase Q7) - see
+// Resolves group buys whose deadline has passed  - see
 // groupBuy.service.js#sweepExpired's header comment. Idempotent: only
 // touches group_buys still in 'open' with a past deadline, so a missed
 // tick or a manual retry never double-resolves one.

@@ -50,7 +50,7 @@ exports.permanentlyDeleteUser = async (req, res) => {
     }
 };
 
-// Phase 1 (Admin Account Control) - replaces the old deactivate/activate
+// (Admin Account Control) - replaces the old deactivate/activate
 // toggle. Suspending requires a reason (validated in admin.validator.js);
 // admin.service.js#suspendUser records it along with the acting admin and
 // a timestamp, and login.service.js/auth.middleware.js block the account
@@ -241,7 +241,7 @@ exports.unsponsorProduct = async (req, res) => {
 
 exports.listOrders = async (req, res) => {
     try {
-        const orders = await adminService.listAllOrders();
+        const orders = await adminService.listAllOrders(req.query);
 
         return res.json({ success: true, data: orders });
 
@@ -261,7 +261,7 @@ exports.getDispatchOverview = async (req, res) => {
     }
 };
 
-// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only,
+// Roadmap (Predictive Coverage Dashboard for Ops) - read-only,
 // no request body/params beyond an optional ?windowDays= override.
 exports.getCoverageHeatmap = async (req, res) => {
     try {
@@ -274,7 +274,7 @@ exports.getCoverageHeatmap = async (req, res) => {
     }
 };
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - counterpart to the
+// (Admin Manual Override & Ops Visibility) - counterpart to the
 // dispatch overview above: pushes one unmatched order onto one specific
 // online agent instead of just watching the board wait on auto-matching.
 exports.manualAssignDelivery = async (req, res) => {
@@ -313,7 +313,7 @@ exports.getAnalytics = async (req, res) => {
     }
 };
 
-// Phase 5 (Growth) - services counterpart of getAnalytics.
+// (Growth) - services counterpart of getAnalytics.
 exports.getServicesAnalytics = async (req, res) => {
     try {
         const analytics = await adminService.getServicesAnalytics();
@@ -325,7 +325,7 @@ exports.getServicesAnalytics = async (req, res) => {
     }
 };
 
-// Phase 4 (Analytics & Business Metrics) - GMV, take rate, repeat-buyer
+// (Analytics & Business Metrics) - GMV, take rate, repeat-buyer
 // rate, and provider retention, blended across products + services.
 exports.getBusinessMetrics = async (req, res) => {
     try {
@@ -338,7 +338,7 @@ exports.getBusinessMetrics = async (req, res) => {
     }
 };
 
-// Phase 4 (Analytics & Business Metrics) - CSV download of the daily
+// (Analytics & Business Metrics) - CSV download of the daily
 // GMV series backing the business-metrics dashboard section.
 // ?days= defaults to 90 and is clamped to a sane [1, 365] range so a
 // stray query param can't trigger an unbounded scan.
@@ -358,9 +358,9 @@ exports.exportGmvCsv = async (req, res) => {
     }
 };
 
-// Phase A5 (Advanced Analytics) - period comparison, platform-wide top
+// (Advanced Analytics) - period comparison, platform-wide top
 // customers, and the admin-only seller performance leaderboard.
-// Phase P8 (Analytics Visualization) - optional ?start=&end= (ISO date
+// (Analytics Visualization) - optional ?start=&end= (ISO date
 // strings) add a custom-range comparison alongside the fixed week/month
 // ones. Both must be present and parse to valid dates with end after
 // start, or the request is rejected outright rather than silently
@@ -572,7 +572,7 @@ exports.markWithdrawalPaid = async (req, res) => {
     }
 };
 
-// --- Escrow manual release (Phase 9D) ---
+// --- Escrow manual release  ---
 
 exports.releaseOrderEscrow = async (req, res) => {
     try {
@@ -585,7 +585,7 @@ exports.releaseOrderEscrow = async (req, res) => {
     }
 };
 
-// Booking equivalent (Phase 3).
+// Booking equivalent .
 exports.releaseBookingEscrow = async (req, res) => {
     try {
         const result = await adminService.releaseBookingEscrow(req.params.id);
@@ -659,7 +659,7 @@ exports.listFraudFlags = async (req, res) => {
     }
 };
 
-// Phase Q9 (Admin Tools) - anomaly-detection dashboard: trend/breakdown
+// (Admin Tools) - anomaly-detection dashboard: trend/breakdown
 // data over fraud_flags plus the simple statistical spike checks
 // computed in fraud.service.js#getDashboardStats. Read-only, separate
 // from the open-queue endpoint above.
@@ -674,7 +674,7 @@ exports.getFraudDashboard = async (req, res) => {
     }
 };
 
-// ---- Refunds (Phase 2 - Refund Automation) -----------------------------
+// ---- Refunds (Refund Automation) -----------------------------
 // Automatic refunds are triggered by dispute.service.js when a dispute
 // is resolved in the buyer's favor; these endpoints are for triage of
 // ones that need attention ('failed' / 'manual_required') and for

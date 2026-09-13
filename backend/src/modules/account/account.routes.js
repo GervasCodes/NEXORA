@@ -21,7 +21,7 @@ router.get("/", accountController.getProfile);
 router.put("/profile", updateProfileValidation, validationMiddleware, accountController.updateProfile);
 router.put("/settings", updateSettingsValidation, validationMiddleware, accountController.updateSettings);
 
-// Phase 4 (Real Imagery & Avatars): one shared endpoint for every
+// (Real Imagery & Avatars): one shared endpoint for every
 // account type (buyer, seller, delivery agent) - router.use(authMiddleware)
 // above is all the auth this needs, same as seller's upload-logo/-banner.
 // Goes through the same upload + file-content-validation middleware as

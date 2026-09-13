@@ -37,7 +37,7 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME,
     ssl: buildSslConfig(),
     waitForConnections: true,
-    // Phase RF4 (red-flag remediation): was a hardcoded 10 with no way to
+    // (red-flag remediation): was a hardcoded 10 with no way to
     // tune it without a code change. Default unchanged - this just makes
     // it configurable once real concurrent-usage data says it needs to
     // move. See docs/DEPLOYMENT.md for how to read the saturation
@@ -45,7 +45,7 @@ const pool = mysql.createPool({
     connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 10
 });
 
-// Phase RF4: the pool had zero visibility into its own saturation before
+// the pool had zero visibility into its own saturation before
 // this - a burst of traffic maxing out connectionLimit would just show up
 // as slow requests, with nothing pointing at "the DB pool is the
 // bottleneck" specifically. mysql2's Pool emits 'enqueue' exactly when a

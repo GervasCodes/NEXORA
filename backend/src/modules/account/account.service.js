@@ -44,7 +44,7 @@ exports.updateProfile = async (userId, data) => {
     return exports.getProfile(userId);
 };
 
-// Phase 4 (Real Imagery & Avatars): available to every account type
+// (Real Imagery & Avatars): available to every account type
 // (buyer, seller, delivery agent alike) - there's nothing role-specific
 // about a profile photo, unlike the seller-only store logo/banner. Same
 // shape as sellerService.uploadStoreLogo: upload the buffer through the
@@ -75,7 +75,7 @@ exports.requestPasswordChangeOtp = async (userId) => {
     return otpService.requestOtp(user, "password_change");
 };
 
-// Step 2: verify the code, and hand back a short-lived reauth token. Only
+// verify the code, and hand back a short-lived reauth token. Only
 // this token (not the user's current password) unlocks the actual
 // password update - this is what lets Settings replace the old
 // "type your current password" form with an OTP step instead.
@@ -84,7 +84,7 @@ exports.verifyPasswordChangeOtp = async (userId, code) => {
     return generateShortLivedToken(REAUTH_TYP, { id: userId }, REAUTH_EXPIRY);
 };
 
-// Step 3: the actual update. Requires the reauth token from step 2 rather
+// the actual update. Requires the reauth token from step 2 rather
 // than the current password.
 exports.changePassword = async (userId, reauthToken, newPassword) => {
     let decoded;
@@ -108,7 +108,7 @@ exports.changePassword = async (userId, reauthToken, newPassword) => {
     await accountRepository.updatePassword(userId, hashed);
 };
 
-// Phase 3 - Soft Account Deletion.
+// Soft Account Deletion.
 // Locks the account out immediately (can never log in or use an
 // already-issued session again - see login.service.js and
 // auth.middleware.js) and takes down any storefront listings, but

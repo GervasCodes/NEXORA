@@ -45,7 +45,7 @@ exports.listServices = async (req, res) => {
     }
 };
 
-// Phase 4 (Customer Experience) - feeds ServiceFilters.jsx's Location
+// (Customer Experience) - feeds ServiceFilters.jsx's Location
 // dropdown, mirroring product.controller.js#listFilterRegions.
 exports.listFilterRegions = async (req, res) => {
     try {
@@ -239,7 +239,7 @@ exports.activateMyService = async (req, res) => {
     }
 };
 
-// --- Dynamic pricing rules (Phase 5 - Growth) --------------------------
+// --- Dynamic pricing rules  --------------------------
 
 exports.createPricingRule = async (req, res) => {
     const errors = validationResult(req);

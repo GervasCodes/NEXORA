@@ -12,7 +12,7 @@
  * each page also needs it to build its API query params) - this is
  * purely the input controls.
  */
-export default function ListFilters({ statusOptions, filters, onChange, searchPlaceholder }) {
+export default function ListFilters({ statusOptions, filters, onChange, searchPlaceholder, sortOptions }) {
     const update = (patch) => onChange({ ...filters, ...patch });
 
     return (
@@ -27,6 +27,23 @@ export default function ListFilters({ statusOptions, filters, onChange, searchPl
                     <option value="">All statuses</option>
                     {statusOptions.map((opt) => (
                         <option key={opt} value={opt} className="capitalize">{opt}</option>
+                    ))}
+                </select>
+            )}
+
+            {/* Optional - only Orders.jsx passes this today (deep-dive
+                remediation, order-list sort/naming ask). Bookings/Returns/
+                Disputes don't pass sortOptions, so they render exactly as
+                before. */}
+            {sortOptions && (
+                <select
+                    value={filters.sort || sortOptions[0].value}
+                    onChange={(e) => update({ sort: e.target.value })}
+                    className="border border-line rounded-md px-2.5 py-1.5 text-sm bg-paper focus-ring"
+                    aria-label="Sort"
+                >
+                    {sortOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                 </select>
             )}

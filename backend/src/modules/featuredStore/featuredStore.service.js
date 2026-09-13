@@ -7,7 +7,7 @@ const walletRepository = require("../wallet/wallet.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 
-// Same bounds as sponsorship.service.js (Phase 8A) and for the same
+// Same bounds as sponsorship.service.js  and for the same
 // reason: long enough to be useful, short enough that a mistaken
 // purchase can't lock up a large chunk of a seller's wallet for very
 // long. Nothing stops them creating a new campaign the moment one ends.
@@ -34,7 +34,7 @@ exports.getEligibleCategories = async (sellerId) => {
 
 // Charges the seller's wallet, snapshots the rate that applied, and
 // opens the campaign - all inside one transaction, same shape
-// sponsorship.service.js#createCampaign (Phase 8A) already uses for
+// sponsorship.service.js#createCampaign  already uses for
 // "row-lock wallet, check funds, debit, write ledger entry". Unlike that
 // phase, there is no products.is_sponsored-equivalent flag to flip here:
 // featuredStore.repository.js's ranking join

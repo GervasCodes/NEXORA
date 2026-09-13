@@ -1,5 +1,5 @@
 const db = require("../../config/db");
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): read-heavy,
+// (Backend N+1 Fixes & Read Replica Adoption): read-heavy,
 // lag-tolerant browsing queries only - see the comment above each swapped
 // function below for why that specific one is safe. Everything else in
 // this file (writes, and any read used in a read-after-write or
@@ -82,14 +82,14 @@ exports.findById = async (productId) => {
 // product's name, and typing a store's name surfaces its whole catalog even
 // if that name never appears in any single product's name/brand/description.
 //
-// minPrice/maxPrice/sellerId (Phase 3A), region/minRating (Phase 3B),
-// and sort (Phase 3C) are expected to already be parsed/validated by
+// minPrice/maxPrice/sellerId, region/minRat,
+// and sort  are expected to already be parsed/validated by
 // utils/productFilters.js / utils/productSort.js - this function just
 // applies whatever it's given. `sp.region` is also now part of the
 // SELECT (Phase 4B) so the card can show a seller's location alongside
 // rating/badge, not just filter by it.
 //
-// Phase 5: public product browsing/search (GET /products) - the
+// public product browsing/search (GET /products) - the
 // canonical "read-heavy, lag-tolerant, no read-after-write" case from
 // docs/SCALABILITY_REPORT.md §3. Nothing in this request path writes
 // then re-reads through this function.
@@ -128,7 +128,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
         params.push(`%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`);
     }
 
-    // An explicit `sort` (Phase 3C) always wins; with none given, this
+    // An explicit `sort`always wins; with none given, this
     // falls back to relevance-first when a FULLTEXT search is active
     // (selectExtra is only non-empty in that branch), or newest-first
     // otherwise - the same default ordering the listing had before Phase
@@ -174,11 +174,11 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
 };
 
 // Distinct sellers with at least one active product, for the "Store"
-// filter dropdown (Phase 3A). Optionally scoped to a category, so a
+// filter dropdown . Optionally scoped to a category, so a
 // department page only offers sellers who actually sell in it instead of
 // the entire platform's seller list.
 //
-// Phase 5: filter-dropdown population for the browse UI - same
+//filter-dropdown population for the browse UI - same
 // read-heavy, lag-tolerant, cache-wrapped-at-the-service-layer shape as
 // findAll above.
 exports.findFilterSellers = async ({ categoryId }) => {
@@ -203,7 +203,7 @@ exports.findFilterSellers = async ({ categoryId }) => {
 };
 
 // Distinct seller regions with at least one active product, for the
-// "Location" filter dropdown (Phase 3B). Optionally scoped to a
+// "Location" filter dropdown . Optionally scoped to a
 // category, same reasoning as findFilterSellers above. sp.region is
 // free-text (set by the seller in Store settings) and NULL for any
 // seller who hasn't set one - those are excluded here since "" isn't a
@@ -233,7 +233,7 @@ exports.findFilterRegions = async ({ categoryId }) => {
 
 // Public product detail by slug: full info + all images + store + ratings
 //
-// Phase 5: single call site (product.service.js#getProductBySlug, the
+// single call site (product.service.js#getProductBySlug, the
 // public ProductDetail page) - confirmed via grep before moving this,
 // not assumed. No read-after-write use anywhere in this file.
 exports.findBySlug = async (slug) => {
@@ -273,7 +273,7 @@ exports.countExistingImages = async (productId) => {
     return rows[0].count;
 };
 
-// Phase (Seller Product Management): delete/set-primary/reorder controls
+// (Seller Product Management): delete/set-primary/reorder controls
 // for photos already uploaded. `product_id` is included in every WHERE
 // clause here (not just `id`) so these can't be used to touch another
 // seller's row even if an id were guessed/reused across products - the
@@ -345,7 +345,7 @@ exports.reorderProductImages = (productId, orderedIds) =>
     reorderMediaDisplayOrder("product_images", productId, orderedIds);
 
 // Seller's own catalog - includes inactive products, unlike the public listing
-// Phase 6A - Product Videos. Mirrors addProductImage/findImagesByProductId/
+// Product Videos. Mirrors addProductImage/findImagesByProductId/
 // countExistingImages above, minus is_primary (see migration 044's comment
 // for why videos don't have a "cover" concept).
 exports.addProductVideo = async (productId, videoUrl, displayOrder) => {
@@ -393,7 +393,7 @@ exports.deleteProductVideo = async (productId, videoId) => {
 exports.reorderProductVideos = (productId, orderedIds) =>
     reorderMediaDisplayOrder("product_videos", productId, orderedIds);
 
-// Phase 6B - Product Audio. Same shape as the product_videos functions
+// Product Audio. Same shape as the product_videos functions
 // above, and the same reasoning for no is_primary (see migration 045's
 // comment).
 exports.addProductAudio = async (productId, audioUrl, displayOrder) => {
@@ -498,7 +498,7 @@ exports.findAllBySeller = async ({ sellerId, search, categoryId, status, page, l
     return { rows, total };
 };
 
-// Bulk activate/deactivate for a seller's own products (Phase A4). The
+// Bulk activate/deactivate for a seller's own products . The
 // seller_id condition is what keeps this ownership-scoped - a seller
 // can never flip a product that isn't theirs by passing someone else's
 // id, since it's just silently excluded from the UPDATE rather than
@@ -511,7 +511,7 @@ exports.setActiveBulkBySeller = async (sellerId, ids, isActive) => {
     );
 };
 
-// Phase 11 (UI/UX remediation) - bulk price adjustment. Applies to the
+// (UI/UX remediation) - bulk price adjustment. Applies to the
 // base `price` column only (discount_price is left alone - a seller
 // managing markdowns separately from a base-price update is the more
 // common intent, and silently scaling an active discount alongside the
@@ -531,7 +531,7 @@ exports.adjustPriceBulkBySeller = async (sellerId, ids, adjustType, adjustValue)
 };
 
 // Distinct departments (categories) a seller currently has at least one
-// active, published product in - used by the Phase 8B Featured Stores
+// active, published product in - used by the Featured Stores
 // campaign form (featuredStore module) so a seller can only pay to be
 // featured in a department where their store actually has something to
 // show, same reasoning sponsorship.service.js#createCampaign uses to

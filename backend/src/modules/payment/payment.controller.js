@@ -1,7 +1,7 @@
 const paymentService = require("./payment.service");
 const logger = require("../../utils/logger").child({ module: "payment-webhook" });
 const Sentry = require("../../config/sentry");
-// Phase 7 (Security) - this used to be a private copy of the same check
+// (Security) - this used to be a private copy of the same check
 // duplicated in subscription.controller.js (which wasn't applying it at
 // all - see that file). Now shared from one place - see
 // utils/redirectValidator.js's header comment for why.
@@ -46,7 +46,7 @@ exports.initiateMobileMoneyPayment = async (req, res) => {
     }
 };
 
-// Phase 5 (Resilience & Growth). No orderId/auth-role restriction beyond
+// (Resilience & Growth). No orderId/auth-role restriction beyond
 // being logged in - this just reports which rails are configured, not
 // anything about the requesting user's own orders.
 exports.getAvailablePaymentMethods = async (req, res) => {
@@ -102,7 +102,7 @@ exports.malipopayWebhook = async (req, res) => {
     try {
         const payload = req.body || {};
 
-        // Phase 7 (Security) - the signature check upstream proves this
+        // (Security) - the signature check upstream proves this
         // request came from MalipoPay at some point; it doesn't prove
         // `reference` is the well-formed string handleProviderWebhook's
         // ORDER-/VERIFY-/BOOKING-/SUB- regex match expects. A malformed
@@ -210,7 +210,7 @@ exports.snippeWebhook = async (req, res) => {
         const replayGuard = require("../../utils/webhookReplayGuard");
         const event = snippeProvider.constructWebhookEvent(req.body, req.headers["snippe-signature"]);
 
-        // Phase 2 (Security Hardening) - replay protection. HMAC
+        // (Security Hardening) - replay protection. HMAC
         // signature verification above proves this came from Snippe; it
         // doesn't prove this exact delivery hasn't already been consumed
         // (a captured, validly-signed request replayed later would still
@@ -409,7 +409,7 @@ exports.capturePaypalPayment = async (req, res) => {
     }
 };
 
-// --- Booking payments (Phase 3 - Financial Integration) ---------------------
+// --- Booking payments Financial Integration) ---------------------
 
 exports.initiateMobileMoneyBookingPayment = async (req, res) => {
     try {

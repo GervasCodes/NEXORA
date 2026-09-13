@@ -38,7 +38,7 @@ exports.incrementBalance = async (sellerId, delta, executor = db) => {
     return wallet.balance;
 };
 
-// Escrow (Phase 9C): earnings from orders paid by a platform-captured
+// Escrow earnings from orders paid by a platform-captured
 // method (mobile money / Snippe / PayPal) land here instead of `balance`
 // until Phase 9D's release job (or an admin/dispute action) moves them
 // over - see docs/ESCROW_ANALYSIS.md. Mirrors incrementBalance exactly,
@@ -95,7 +95,7 @@ exports.findUncreditedItemsByOrder = async (orderId, executor = db) => {
 // (Cash on Delivery - the seller already has the cash by the time this
 // runs; see wallet.service.js#creditSellersForOrder), FALSE for
 // platform-captured methods (mobile money / Snippe / PayPal), which
-// start out held and wait for Phase 9D's release job.
+// start out held and wait for  release job.
 exports.markItemCredited = async (itemId, commissionRate, commissionAmount, netAmount, released, executor = db) => {
     await executor.query(
         `UPDATE order_items
@@ -106,7 +106,7 @@ exports.markItemCredited = async (itemId, commissionRate, commissionAmount, netA
     );
 };
 
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): batched version of
+// (Backend N+1 Fixes & Read Replica Adoption): batched version of
 // markItemCredited above, for wallet.service.js#creditSellersForOrder's
 // per-item loop - one UPDATE covering every item in the order instead of
 // one UPDATE per item (a webhook processing a multi-item order previously
@@ -152,9 +152,9 @@ exports.markItemsCredited = async (items, released, executor = db) => {
     );
 };
 
-// ---- Escrow release (Phase 9D) ---------------------------------------------
+// ---- Escrow release  ---------------------------------------------
 
-// The set Phase 9D's background job scans: items whose earnings were
+// The  background job scans: items whose earnings were
 // credited (Phase 9C - into held_balance for anything but Cash on
 // Delivery) but not yet released, whose order has actually been
 // delivered, and whose delivery happened at least `holdDays` ago. Callers
@@ -204,7 +204,7 @@ exports.markItemReleased = async (itemId, executor = db) => {
     );
 };
 
-// ---- Booking items (Phase 3 - Financial Integration) -----------------------
+// ---- Booking items (Financial Integration) -----------------------
 // Byte-for-byte the same shape as the order_items functions above, against
 // booking_items/bookings instead - see migration 064's design notes for why
 // this is a parallel set rather than a generic "order OR booking" parameter
@@ -277,7 +277,7 @@ exports.markBookingItemReleased = async (itemId, executor = db) => {
 
 // ---- Withdrawal requests ----------------------------------------------------
 
-// payoutCurrency/payoutAmount/payoutExchangeRate (Phase 3c - multi-
+// payoutCurrency/payoutAmount/payoutExchangeRate ( multi-
 // currency payouts) default to TZS/null/null when the caller doesn't
 // pass them, so any existing call site keeps behaving exactly as
 // before this column existed.

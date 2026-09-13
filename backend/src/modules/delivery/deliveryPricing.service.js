@@ -18,7 +18,7 @@ const { computeBandedFee } = require("../../utils/deliveryPricing");
 // with orders that are about to be (or already are) shipped, which by
 // definition are never parent orders.
 //
-// Phase 5D: the pickup -> delivery distance now comes from the routing
+// the pickup -> delivery distance now comes from the routing
 // abstraction layer (OSRM road distance, with its own automatic
 // straight-line fallback - see services/routing/routing.service.js)
 // instead of calling haversineKm directly. `computeBandedFee` itself is
@@ -35,7 +35,7 @@ const { computeBandedFee } = require("../../utils/deliveryPricing");
 // all when there's no pin pair to route between, so there's no
 // routingProvider/degraded to report either.
 //
-// Phase 6 (Checkout & Order Timeline UX): the actual pin-to-pin math is
+// (Checkout & Order Timeline UX): the actual pin-to-pin math is
 // pulled out into estimateDeliveryForRoute below so it can also be used
 // pre-order (Checkout.jsx's upfront estimate, via
 // order.service.js#getDeliveryEstimate) - at that point there's no order

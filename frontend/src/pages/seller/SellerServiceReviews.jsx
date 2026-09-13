@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 // (Customer Experience) - provider-side counterpart of
 // SellerReviews.jsx, same paginated-list-with-reply shape, just hitting
@@ -105,13 +106,14 @@ export default function SellerServiceReviews() {
                                 </div>
                             ) : (
                                 <div className="mt-2">
-                                    <textarea
+                                    <Input
+                                        as="textarea"
                                         value={drafts[r.id] || ""}
                                         onChange={(e) => setDrafts({ ...drafts, [r.id]: e.target.value })}
                                         placeholder="Write a response to this review…"
                                         maxLength={1000}
                                         rows={2}
-                                        className="w-full border border-line rounded-md px-3 py-2 text-sm mb-2 focus-ring"
+                                        className="mb-2"
                                     />
                                     <button
                                         onClick={() => handleReply(r.id)}

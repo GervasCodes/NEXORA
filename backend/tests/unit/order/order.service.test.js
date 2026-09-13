@@ -64,6 +64,13 @@ beforeEach(() => {
     // "under the cap" no-op return. Individual tests can override to
     // exercise the "throws, checkout blocked" path.
     kycService.enforceOrderLimit.mockResolvedValue(undefined);
+    // Item context for notifications (Phase 6, UI/UX remediation) - most
+    // tests below don't care about item-aware messaging, so default to
+    // "no items on this row" (the multi-vendor-parent / no-match shape),
+    // which keeps every pre-existing notify() expectation on the
+    // order-number-only message key. Tests exercising the item-aware
+    // branch override this per-case.
+    orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: null, itemCount: 0 });
 });
 
 describe("order.service.checkout", () => {
@@ -234,6 +241,37 @@ describe("order.service.checkout", () => {
         );
     });
 
+    it("names the single item in the itemSummary for a one-item standalone order", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10, name: "Widget" })]);
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
+        orderRepository.createOrder.mockResolvedValue(42);
+
+        await orderService.checkout(1, {});
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageParams: expect.objectContaining({ itemSummary: "Widget" })
+            })
+        );
+    });
+
+    it("summarizes multiple line items as the first item name plus a '+N more' count", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, name: "Widget" }),
+            cartRow({ product_id: 2, seller_id: 10, name: "Gadget" })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 }), productRow({ id: 2 })]);
+        orderRepository.createOrder.mockResolvedValue(42);
+
+        await orderService.checkout(1, {});
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageParams: expect.objectContaining({ itemSummary: "Widget +1 more" })
+            })
+        );
+    });
+
     it("does not let a fraud-evaluation failure fail or block checkout", async () => {
         cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10 })]);
         cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
@@ -267,6 +305,7 @@ describe("order.service.getMyOrders", () => {
             from: null,
             to: null,
             q: null,
+            sort: null,
             page: 1,
             limit: 10
         });
@@ -348,7 +387,7 @@ describe("order.service.cancelOrder", () => {
 
         await orderService.cancelOrder(1, 5);
 
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): children
+        // (Backend N+1 Fixes & Read Replica Adoption): children
         // are cancelled in a single batched query now, not one
         // updateOrderStatus call per child - see
         // updateOrderStatusForChildren in order.repository.js.
@@ -396,7 +435,42 @@ describe("order.service.cancelOrder", () => {
                 userId: 5,
                 type: "order_cancelled",
                 messageKey: "notifications.order.cancelled.message",
+                messageParams: { orderNumber: "ORD-1", itemSummary: null },
                 relatedOrderId: 1
+            })
+        );
+    });
+
+    it("uses the item-aware message key and names the item when the order has one on this row", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1"
+        });
+        orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: "Widget", itemCount: 1 });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageKey: "notifications.order.cancelled.messageWithItem",
+                messageParams: { orderNumber: "ORD-1", itemSummary: "Widget" }
+            })
+        );
+    });
+
+    it("falls back to the order-number-only message key for a multi-vendor parent order (no item on this row)", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: true, order_number: "ORD-1"
+        });
+        orderRepository.findChildOrders.mockResolvedValue([
+            { id: 2, status: "pending", order_number: "ORD-1-V1" }
+        ]);
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageKey: "notifications.order.cancelled.message",
+                messageParams: { orderNumber: "ORD-1", itemSummary: null }
             })
         );
     });
@@ -414,7 +488,7 @@ describe("order.service.autoCancelStaleOrder", () => {
     it("cancels all children then the parent, without checking cancellable status (system-initiated)", async () => {
         await orderService.autoCancelStaleOrder({ id: 1, is_parent: true, buyer_id: 5, order_number: "ORD-1" });
 
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): no
+        // (Backend N+1 Fixes & Read Replica Adoption): no
         // per-child cancellability check needed here (unlike cancelOrder
         // above), so findChildOrders isn't called at all anymore - the
         // batched update replaces both the SELECT and the per-child
@@ -432,7 +506,32 @@ describe("order.service.autoCancelStaleOrder", () => {
             expect.objectContaining({
                 userId: 5,
                 messageKey: "notifications.order.cancelledUnpaid.message",
+                messageParams: { orderNumber: "ORD-1", itemSummary: null },
                 relatedOrderId: 1
+            })
+        );
+    });
+
+    it("uses the item-aware unpaid-cancellation message key and names the item when one is on this row", async () => {
+        orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: "Widget", itemCount: 2 });
+
+        await orderService.autoCancelStaleOrder({ id: 1, is_parent: false, buyer_id: 5, order_number: "ORD-1" });
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageKey: "notifications.order.cancelledUnpaid.messageWithItem",
+                messageParams: { orderNumber: "ORD-1", itemSummary: "Widget +1 more" }
+            })
+        );
+    });
+
+    it("falls back to the order-number-only unpaid-cancellation key for a multi-vendor parent order", async () => {
+        await orderService.autoCancelStaleOrder({ id: 1, is_parent: true, buyer_id: 5, order_number: "ORD-1" });
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageKey: "notifications.order.cancelledUnpaid.message",
+                messageParams: { orderNumber: "ORD-1", itemSummary: null }
             })
         );
     });
@@ -446,7 +545,8 @@ describe("order.service.getSellerOrders", () => {
 
         expect(orderRepository.findOrdersBySeller).toHaveBeenCalledWith(10, {
             status: null,
-            q: null
+            q: null,
+            sort: null
         });
         expect(result).toEqual([{ id: 1 }]);
     });
@@ -504,7 +604,7 @@ describe("order.service.getSellerOrderDetail", () => {
         expect(result.buyer_id).toBeUndefined();
     });
 
-    // C1 (Phase 4 remediation): the fire-and-forget wallet-crediting call in
+    // (remediation): the fire-and-forget wallet-crediting call in
     // payment.service.js can fail silently from the seller's point of view -
     // wallet_credit_pending is the signal that surfaces it in the API.
     it("flags wallet_credit_pending when paid, non-COD, long enough ago, and an item is still uncredited", async () => {
@@ -684,8 +784,26 @@ describe("order.service.updateOrderStatusBySeller", () => {
             expect.objectContaining({
                 userId: 5,
                 type: "order_status_update",
-                messageParams: { orderNumber: "ORD-1", status: "processing" },
+                messageKey: "notifications.order.statusUpdated.message",
+                messageParams: { orderNumber: "ORD-1", status: "processing", itemSummary: null },
                 relatedOrderId: 1
+            })
+        );
+    });
+
+    it("uses the item-aware status-update message key and names the item when one is on this row", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1", payment_status: "paid", payment_method: "mobile_money"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: "Widget", itemCount: 1 });
+
+        await orderService.updateOrderStatusBySeller(1, 10, "processing");
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messageKey: "notifications.order.statusUpdated.messageWithItem",
+                messageParams: { orderNumber: "ORD-1", status: "processing", itemSummary: "Widget" }
             })
         );
     });

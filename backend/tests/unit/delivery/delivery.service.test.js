@@ -66,7 +66,7 @@ beforeEach(() => {
     // a usable, non-empty array unless it specifically overrides one.
     settingsService.getDeliveryOfferRadiusStepsKm.mockResolvedValue([5, 15, 30]);
     settingsService.getDeliveryOfferTimeoutMs.mockResolvedValue(30000);
-    // Roadmap Phase 2 (agentScoring) - rankCandidatesBySellerEta always
+    // Roadmap  (agentScoring) - rankCandidatesBySellerEta always
     // pulls this for whatever pool it just timed, so every test that goes
     // through offerToNextCandidate needs a default here (an empty stats
     // map, meaning "no history yet" for every candidate) unless it's

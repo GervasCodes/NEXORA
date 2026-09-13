@@ -1,5 +1,5 @@
 /**
- * Buyer protection / return-shipping workflow (Phase Q1).
+ * Buyer protection / return-shipping workflow .
  *
  * State machine: requested -> approved -> shipped_back -> received -> refunded
  *                requested/approved -> rejected (seller/admin) or cancelled (buyer)

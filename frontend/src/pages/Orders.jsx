@@ -21,6 +21,15 @@ const statusStyles = {
 
 const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
 
+const SORT_OPTIONS = [
+    { value: "newest", label: "Newest first" },
+    { value: "oldest", label: "Oldest first" },
+    { value: "item_name", label: "Item name (A-Z)" },
+    { value: "status", label: "Status" },
+    { value: "amount_high", label: "Amount (high to low)" },
+    { value: "amount_low", label: "Amount (low to high)" }
+];
+
 // (UI/UX remediation): filtering + pagination, matching the
 // same pattern applied to Bookings.jsx/Returns.jsx/Disputes.jsx. Filter
 // changes are debounced before hitting the API (the search box in
@@ -81,6 +90,7 @@ export default function Orders() {
 
             <ListFilters
                 statusOptions={STATUS_OPTIONS}
+                sortOptions={SORT_OPTIONS}
                 filters={filters}
                 onChange={setFilters}
                 searchPlaceholder="Search order number or product…"
@@ -105,6 +115,9 @@ export default function Orders() {
                                 <Link to={`/orders/${order.id}`} className="py-4 flex items-center justify-between gap-4 hover:bg-line/20 active:scale-[0.99] transition-all -mx-2 px-2 rounded-md">
                                     <div>
                                         <p className="text-sm font-medium price">{order.order_number}</p>
+                                        {order.primary_item_name && (
+                                            <p className="text-xs text-ash mt-0.5 truncate max-w-[12rem]">{order.primary_item_name}</p>
+                                        )}
                                         <p className="text-xs text-ash mt-0.5">{formatDate(order.created_at)}</p>
                                     </div>
                                     {order.is_parent ? (

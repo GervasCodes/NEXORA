@@ -26,7 +26,7 @@
 const providers = {
     malipopay: require("./malipopay.provider"),
     selcom: require("./selcom.provider"),
-    // Phase 5 (Resilience & Growth): third rail prepared per this file's
+    // (Resilience & Growth): third rail prepared per this file's
     // own doc comment above. Inert until MOBILE_MONEY_PROVIDER=azampay is
     // set AND azampay.provider.js#isConfigured() passes — adding this line
     // changes no behavior for anyone still on malipopay/selcom.

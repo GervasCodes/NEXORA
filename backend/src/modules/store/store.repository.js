@@ -1,4 +1,4 @@
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): both functions in
+// (Backend N+1 Fixes & Read Replica Adoption): both functions in
 // this file are public-only, single-call-site reads (see the comment
 // above each) - no writes and no read-after-write concerns in this file
 // at all, unlike product/service.repository.js. That means there's no
@@ -20,7 +20,7 @@ const db = require("../../config/db");
 // verification_fee_* columns, and no address/pickup_lat/pickup_lng
 // (precise location - region/city/country is the public-safe level of
 // detail, same granularity already exposed via product listings' `region`
-// field since Phase 4B).
+// field since ).
 //
 // `is_verified` (the paid "Verified Seller" badge, same one ProductCard
 // already renders per-product) and `created_at` (store creation date,
@@ -28,13 +28,13 @@ const db = require("../../config/db");
 // phase - the one named "Trust Info" - would have its own fields to add
 // rather than finding them already there.
 //
-// `sp.user_id` (Phase 5C) is the one column here that isn't itself a
+// `sp.user_id`  is the one column here that isn't itself a
 // display field - it's what the store page passes to GET /products as
 // `seller_id` to load this store's catalog, the same id
 // findFilterSellers already exposes publicly today for the product
 // listing's own "Store" filter dropdown, so this isn't new exposure.
 //
-// `has_pickup_pin` (Phase 5D) answers "does this store's delivery fee
+// `has_pickup_pin`  answers "does this store's delivery fee
 // get calculated by distance" for the store page's Delivery section,
 // without exposing sp.pickup_lat/pickup_lng themselves - those stay out
 // for the same precise-location reason address/pickup_lat/pickup_lng
@@ -46,7 +46,7 @@ const db = require("../../config/db");
 // `p.is_active = 1` in product.repository.js, applied to the seller
 // account level since this query has no per-product `is_active` to check.
 //
-// `sp.store_theme` (Phase 7A) is a plain display field like store_logo/
+// `sp.store_theme`  is a plain display field like store_logo/
 // store_banner above - the seller's chosen accent-color preset for this
 // page, from the fixed list in seller.constants.js. No join needed since
 // it's not a lookup-table id (see migration 048's comment for why).
@@ -59,7 +59,7 @@ const db = require("../../config/db");
 // entered for account purposes), these four exist specifically to be
 // published - a seller who fills them in wants buyers to see them.
 //
-// `identity_verified` (Phase 7D) surfaces `u.account_verification_status`
+// `identity_verified`  surfaces `u.account_verification_status`
 // as a plain boolean - NEXORA-reviewed identity documents at registration
 // (migration 026), completely separate from `sp.is_verified` above (the
 // optional *paid* "Verified Seller" badge). Migration 026's own comment
@@ -107,7 +107,7 @@ exports.findPublicBySlug = async (slug) => {
     return rows[0];
 };
 
-// Public store collections - Phase 7C (Seller Collections). A seller can
+// Public store collections -  (Seller Collections). A seller can
 // group their own products into named shelves (e.g. "New Arrivals")
 // shown on the store page above the full catalog grid Phase 5C already
 // wired up. One query, flat rows grouped in JS below - same shape/fields
@@ -178,7 +178,7 @@ exports.findCollectionsBySlug = async (slug) => {
     return collections;
 };
 
-// Store follows (Phase 6, UI/UX remediation).
+// Store follows (UI/UX remediation).
 exports.follow = async (followerId, storeUserId) => {
     await db.query(
         "INSERT IGNORE INTO store_follows (follower_id, store_user_id) VALUES (?, ?)",
@@ -221,7 +221,7 @@ exports.findFollowerIds = async (storeUserId) => {
     return rows.map((r) => r.follower_id);
 };
 
-// Phase 3 (UI/UX remediation) - lightweight store search for the global
+// (UI/UX remediation) - lightweight store search for the global
 // search box's suggestions dropdown, not a full store directory/browse
 // page (there isn't one yet - see this file's own comment above
 // findPublicBySlug anticipating exactly this kind of addition). Plain

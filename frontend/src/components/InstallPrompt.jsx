@@ -26,15 +26,20 @@ export default function InstallPrompt() {
 
     if (!visible) return null;
 
-    // Mobile bottom offset bumped from bottom-36 (144px) to bottom-40
-    // (160px) so this clears NexoraAIButton/SupportWidget, which both
-    // sit at 5rem (80px) + safe-area - the previous 144px left barely
-    // any gap above those two floating buttons and could visually
-    // collide with them depending on device safe-area size.
+    // Mobile UI/UX audit: bottom-40/sm:bottom-36 were plain pixel offsets
+    // with no safe-area allowance - harmless on most phones since the
+    // ~80px buffer above NexoraAIButton/SupportWidget usually absorbs a
+    // typical home-indicator inset, but not guaranteed on a device with a
+    // larger one. Switched to the same calc() pattern those two floating
+    // buttons already use, and the breakpoint that drops the safe-area
+    // term moved from sm: to md: to match where MobileBottomNav actually
+    // stops rendering (it's `md:hidden`, not `sm:hidden`) - at the
+    // in-between (sm-to-md) widths this banner already draws its
+    // corner-card layout, but the nav bar is still on screen underneath.
     return (
         <div
             role="status"
-            className="fixed bottom-40 inset-x-4 sm:inset-x-auto sm:right-4 sm:bottom-36 z-[1050] sm:w-80
+            className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] md:bottom-36 inset-x-4 sm:inset-x-auto sm:right-4 z-[1050] sm:w-80
                 glass-strong border border-teal/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

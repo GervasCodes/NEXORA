@@ -7,6 +7,7 @@ import { STORE_THEMES } from "../../utils/storeThemes";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import Input from "../../components/ui/Input";
 
 // Nexora Services (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
@@ -221,27 +222,26 @@ export default function SellerStore() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm mb-1">{t("seller.store.storeName")}</label>
-                    <input minLength={3} maxLength={150} value={form.store_name} onChange={update("store_name")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                </div>
+                <Input
+                    label={t("seller.store.storeName")}
+                    minLength={3} maxLength={150} value={form.store_name} onChange={update("store_name")}
+                />
 
                 <div>
                     <label className="block text-sm mb-1">{t("seller.store.storeTagline")}</label>
                     <p className="text-xs text-ash mb-2">
                         {t("seller.store.storeTaglineHint")}
                     </p>
-                    <input maxLength={150} value={form.store_tagline} onChange={update("store_tagline")}
+                    <Input maxLength={150} value={form.store_tagline} onChange={update("store_tagline")}
                         placeholder={t("seller.store.optional")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
+                    />
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">{t("seller.store.storeDescription")}</label>
-                    <textarea rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                </div>
+                <Input
+                    as="textarea"
+                    label={t("seller.store.storeDescription")}
+                    rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
+                />
 
                 <div>
                     <label className="block text-sm mb-1">{t("seller.store.storeType")}</label>
@@ -288,24 +288,23 @@ export default function SellerStore() {
                         {t("seller.store.socialLinksHint")}
                     </p>
                     <div className="space-y-2">
-                        <input value={form.social_instagram} onChange={update("social_instagram")}
+                        <Input value={form.social_instagram} onChange={update("social_instagram")}
                             placeholder={t("seller.store.instagramPlaceholder")} maxLength={150}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                        <input value={form.social_facebook} onChange={update("social_facebook")}
+                        />
+                        <Input value={form.social_facebook} onChange={update("social_facebook")}
                             placeholder={t("seller.store.facebookPlaceholder")} maxLength={150}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                        <input value={form.social_whatsapp} onChange={update("social_whatsapp")}
+                        />
+                        <Input value={form.social_whatsapp} onChange={update("social_whatsapp")}
                             placeholder={t("seller.store.whatsappPlaceholder")} maxLength={20}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
+                        />
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">{t("seller.store.businessEmail")}</label>
-                        <input type="email" value={form.business_email} onChange={update("business_email")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label={t("seller.store.businessEmail")}
+                        type="email" value={form.business_email} onChange={update("business_email")}
+                    />
                     <div>
                         <label className="block text-sm mb-1">{t("seller.store.businessPhone")}</label>
                         <PhoneInput
@@ -316,29 +315,25 @@ export default function SellerStore() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">{t("seller.store.country")}</label>
-                        <input value={form.country} onChange={update("country")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">{t("seller.store.region")}</label>
-                        <input value={form.region} onChange={update("region")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label={t("seller.store.country")}
+                        value={form.country} onChange={update("country")}
+                    />
+                    <Input
+                        label={t("seller.store.region")}
+                        value={form.region} onChange={update("region")}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">{t("seller.store.city")}</label>
-                        <input value={form.city} onChange={update("city")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">{t("seller.store.address")}</label>
-                        <input value={form.address} onChange={update("address")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label={t("seller.store.city")}
+                        value={form.city} onChange={update("city")}
+                    />
+                    <Input
+                        label={t("seller.store.address")}
+                        value={form.address} onChange={update("address")}
+                    />
                 </div>
 
                 <div>

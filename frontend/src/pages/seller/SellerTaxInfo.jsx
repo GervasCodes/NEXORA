@@ -5,6 +5,7 @@ import PageLoader from "../../components/PageLoader";
 import { formatDate } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
 import { VerifiedBadgeIcon, HourglassIcon } from "../../components/Icons";
+import Input from "../../components/ui/Input";
 
 export default function SellerTaxInfo() {
     const [taxInfo, setTaxInfo] = useState(null);
@@ -77,26 +78,20 @@ export default function SellerTaxInfo() {
             )}
 
             <form onSubmit={submit} className="space-y-4 mb-10">
-                <div>
-                    <label htmlFor="efd-tin" className="block text-sm mb-1">TIN (9 digits)</label>
-                    <input
-                        id="efd-tin"
-                        required
-                        pattern="\d{9}"
-                        value={tin}
-                        onChange={(e) => setTin(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="efd-vrn" className="block text-sm mb-1">VRN (optional, if VAT-registered)</label>
-                    <input
-                        id="efd-vrn"
-                        value={vrn}
-                        onChange={(e) => setVrn(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                </div>
+                <Input
+                    id="efd-tin"
+                    label="TIN (9 digits)"
+                    required
+                    pattern="\d{9}"
+                    value={tin}
+                    onChange={(e) => setTin(e.target.value)}
+                />
+                <Input
+                    id="efd-vrn"
+                    label="VRN (optional, if VAT-registered)"
+                    value={vrn}
+                    onChange={(e) => setVrn(e.target.value)}
+                />
 
                 {message && <p className="text-sm text-teal">{message}</p>}
                 {error && <p className="text-sm text-coral">{error}</p>}

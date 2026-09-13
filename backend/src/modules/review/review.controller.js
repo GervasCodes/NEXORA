@@ -25,7 +25,7 @@ exports.createReview = async (req, res) => {
     }
 };
 
-// Phase 4 (Customer Experience) - booking-review counterpart of
+// (Customer Experience) - booking-review counterpart of
 // createReview.
 exports.createBookingReview = async (req, res) => {
     try {
@@ -110,7 +110,7 @@ exports.getProductReviews = async (req, res) => {
     }
 };
 
-// Phase 4 - public, same as getProductReviews (anyone can read a
+// public, same as getProductReviews (anyone can read a
 // service's reviews).
 exports.getServiceReviews = async (req, res) => {
     try {
@@ -129,7 +129,7 @@ exports.getServiceReviews = async (req, res) => {
     }
 };
 
-// Phase 4 - public, paginated provider-level sibling of
+// public, paginated provider-level sibling of
 // getServiceReviews, same "?page=" convention as getStoreReviews below.
 exports.getProviderReviews = async (req, res) => {
     try {
@@ -149,7 +149,7 @@ exports.getProviderReviews = async (req, res) => {
     }
 };
 
-// Phase 5D - public, same as getProductReviews (anyone can read a store's
+// public, same as getProductReviews (anyone can read a store's
 // reviews). `page` is an optional query param, same "?page=" convention
 // GET /products already uses; anything not a positive integer falls back
 // to page 1 rather than erroring, since a malformed page number here
@@ -172,7 +172,7 @@ exports.getStoreReviews = async (req, res) => {
     }
 };
 
-// Phase 6C - buyer attaches a photo to their own review, same
+// buyer attaches a photo to their own review, same
 // req.file-required shape as product.controller.js's
 // uploadProductImage/uploadProductVideo.
 exports.uploadReviewPhoto = async (req, res) => {
@@ -204,7 +204,7 @@ exports.uploadReviewPhoto = async (req, res) => {
     }
 };
 
-// Phase 6C - seller reply to a review on one of their products.
+// seller reply to a review on one of their products.
 exports.replyToReview = async (req, res) => {
     try {
         await reviewService.replyToReview(req.user.id, req.params.id, req.body.reply);

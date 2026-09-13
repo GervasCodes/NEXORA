@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 5 (UI/UX remediation) - wishlist_items now holds both saved
+// (UI/UX remediation) - wishlist_items now holds both saved
 // products and saved services (see migration 096's comment on why this
 // is one table with a nullable type-specific column, not two parallel
 // tables). Every function below takes { productId, serviceId } with

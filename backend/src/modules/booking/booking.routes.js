@@ -54,7 +54,7 @@ router.put(
     bookingController.confirmBooking
 );
 
-// Phase 5 (Booking Status Review): provider-only, mirrors /confirm -
+// (Booking Status Review): provider-only, mirrors /confirm -
 // only valid while the booking is still pending (see
 // booking.service.js#rejectBooking).
 router.put(
@@ -86,7 +86,7 @@ router.put(
     bookingController.cancelBooking
 );
 
-// Phase 7 (UI/UX remediation) - reschedule. Buyer-only (unlike
+// (UI/UX remediation) - reschedule. Buyer-only (unlike
 // /:id/cancel and /:id above, which are shared between customer and
 // provider) since rescheduleBooking's own ownership check in
 // booking.service.js only ever validates against booking.customer_id -

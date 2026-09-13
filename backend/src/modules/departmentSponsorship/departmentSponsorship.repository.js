@@ -4,7 +4,7 @@ const db = require("../../config/db");
 // in-flight transaction connection) so departmentSponsorship.service can
 // run the wallet debit + campaign insert as a single atomic transaction,
 // same pattern sponsorship.repository.js (Phase 8A) and
-// featuredStore.repository.js (Phase 8B) already use.
+// featuredStore.repository.js  already use.
 
 exports.create = async (
     { sellerId, categoryId, dailyRate, days, totalCost, endsAt },

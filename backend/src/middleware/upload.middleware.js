@@ -18,7 +18,7 @@ const upload = multer({
     }
 });
 
-// Phase 2 (Security Hardening): the fileFilter above only trusts the
+// (Security Hardening): the fileFilter above only trusts the
 // client-reported mimetype - this adds a second, independent check of
 // the actual bytes (see utils/fileContentValidator.js). Every call site
 // still calls `upload.single("field")` etc. exactly as before.

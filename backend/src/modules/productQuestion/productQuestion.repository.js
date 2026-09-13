@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 2 (UI/UX remediation): product Q&A, mirroring reviews'
+// (UI/UX remediation): product Q&A, mirroring reviews'
 // seller_reply pattern (see migration 094's comment) rather than a
 // threaded discussion model.
 

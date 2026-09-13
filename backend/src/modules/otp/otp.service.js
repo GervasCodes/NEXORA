@@ -8,7 +8,7 @@ const EXPIRY_MINUTES = 5;
 const RESEND_THROTTLE_MINUTES = 1;
 const MAX_REQUESTS_PER_WINDOW = 5;
 
-// Phase 5 (OTP resend/expiry UX) - exported so callers that need to hand
+// (OTP resend/expiry UX) - exported so callers that need to hand
 // the frontend an expiry countdown (but aren't themselves the ones
 // calling requestOtp - e.g. passwordReset.service.js's anti-enumeration
 // path, which must return the same value whether or not the account

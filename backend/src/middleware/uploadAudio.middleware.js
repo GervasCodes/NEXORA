@@ -22,7 +22,7 @@ const uploadAudio = multer({
     }
 });
 
-// Phase 2 (Security Hardening): second, content-based check independent
+// (Security Hardening): second, content-based check independent
 // of the client-reported mimetype above - see
 // utils/fileContentValidator.js.
 module.exports = wrapUpload(uploadAudio, validateFileContent(["audio"]));

@@ -83,7 +83,7 @@ const DEFAULTS = {
     monetization_sponsorship_enabled: "false",
     monetization_verification_fee_enabled: "false",
 
-    // Nexora AI (migration 081, Phase B1). ai_enabled is a master switch
+    // Nexora AI . ai_enabled is a master switch
     // independent of whether a provider is actually configured via env
     // (see modules/ai/providers/registry.js) - both must be true for any
     // AI feature to call out to a provider; either one off falls back to

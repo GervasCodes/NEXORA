@@ -66,7 +66,7 @@ const priceDateItems = async (service, dates, quantity) => {
         row
     ]));
 
-    // Phase 5 (Growth) - Dynamic Pricing. Fetched once outside the loop
+    // (Growth) - Dynamic Pricing. Fetched once outside the loop
     // (same rule set applies to every date in the range) and only
     // consulted for a date with no manual service_availability.price -
     // a provider's explicit per-date override always wins over a rule,
@@ -163,7 +163,7 @@ const loadBookingWithAccessCheck = async (bookingId, userId) => {
     return booking;
 };
 
-// Phase 4 (Customer Experience) - "Improved customer booking journey":
+// (Customer Experience) - "Improved customer booking journey":
 // a completed booking now carries its own review (if the customer
 // already left one) plus a can_review flag, so BookingDetail.jsx can
 // show "Leave a review" / "Edit your review" / nothing, without a
@@ -174,7 +174,7 @@ exports.getBookingById = async (bookingId, userId) => {
     const booking = await loadBookingWithAccessCheck(bookingId, userId);
     const items = await bookingRepository.findItemsByBookingId(bookingId);
 
-    // Phase 7 (UI/UX remediation) - the reschedule UI needs to know the
+    // (UI/UX remediation) - the reschedule UI needs to know the
     // service's pricing_model to pick the right date-selection mode
     // (single date vs. check-in/check-out range), the same distinction
     // ServiceDetail.jsx's own booking widget already makes. Also fills a
@@ -262,7 +262,7 @@ exports.confirmBooking = async (bookingId, providerId) => {
     });
 };
 
-// Phase 5 (Merchant-Type-Aware Dashboard - Booking Status Review):
+// (Merchant-Type-Aware Dashboard - Booking Status Review):
 // provider-only, pending -> rejected. Split out from cancelBooking
 // below so a provider turning down a request is distinguishable from
 // either side cancelling one - see migration 070's notes. Only valid

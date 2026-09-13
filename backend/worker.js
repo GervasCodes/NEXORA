@@ -1,4 +1,4 @@
-// Phase 4 (Engineering & Scalability) - dedicated worker process for
+// (Engineering & Scalability) - dedicated worker process for
 // scheduled jobs (escrow release, booking lifecycle, sponsorship expiry,
 // etc. - see src/jobs/index.js). Previously these all ran inside
 // server.js's own process alongside the HTTP server, which meant:
@@ -52,7 +52,7 @@ envCheck.run(logger);
 
 startJobs();
 
-// Phase 1 (Durable Dispatch Foundation): also consume durable
+// (Durable Dispatch Foundation): also consume durable
 // offer-expiry timers from this process - see the matching call in
 // server.js for why it's safe/intended to run this Worker in more than
 // one process at once. Running it here too means dispatch timers keep
@@ -62,7 +62,7 @@ dispatchQueue.startDispatchWorker({
     [dispatchQueue.JOB_NAMES.OFFER_EXPIRE]: deliveryService.handleOfferExpiryJob
 });
 
-logger.info("🕒 Worker process running (scheduled jobs only, no HTTP server)");
+logger.info("Worker process running (scheduled jobs only, no HTTP server)");
 
 // No explicit keepalive needed here - node-cron's scheduled tasks use
 // real timers internally, which already hold the Node event loop open

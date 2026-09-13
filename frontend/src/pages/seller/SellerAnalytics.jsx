@@ -11,6 +11,7 @@ import NexoraDemandForecast from "../../components/ai/NexoraDemandForecast";
 import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import Input from "../../components/ui/Input";
 
 function useStatusLabels(t) {
     return {
@@ -315,20 +316,18 @@ export default function SellerAnalytics() {
                                 <div className="flex flex-wrap items-end gap-3">
                                     <label className="text-xs text-ash flex flex-col gap-1">
                                         {t("seller.analytics.start")}
-                                        <input
+                                        <Input
                                             type="date"
                                             value={customStart}
                                             onChange={(e) => setCustomStart(e.target.value)}
-                                            className="border border-line rounded-md px-2 py-1.5 text-sm"
                                         />
                                     </label>
                                     <label className="text-xs text-ash flex flex-col gap-1">
                                         {t("seller.analytics.end")}
-                                        <input
+                                        <Input
                                             type="date"
                                             value={customEnd}
                                             onChange={(e) => setCustomEnd(e.target.value)}
-                                            className="border border-line rounded-md px-2 py-1.5 text-sm"
                                         />
                                     </label>
                                     <button

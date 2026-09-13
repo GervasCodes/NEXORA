@@ -27,7 +27,7 @@ const deletedColumnFor = (conversation, userId) => {
 };
 exports.deletedColumnFor = deletedColumnFor;
 
-// Phase 8 (UI/UX remediation) - same per-participant column pattern as
+// (UI/UX remediation) - same per-participant column pattern as
 // clearedColumnFor/deletedColumnFor above (see migration 098's comment).
 const mutedColumnFor = (conversation, userId) => {
     if (conversation.buyer_id === userId) return "buyer_muted_at";
@@ -94,7 +94,7 @@ exports.findConversationById = async (conversationId) => {
     return rows[0];
 };
 
-// Phase 8 (UI/UX remediation) - added my_muted_at/my_archived_at
+// (UI/UX remediation) - added my_muted_at/my_archived_at
 // columns (same CASE-per-participant shape as my_cleared_at already
 // has) and an `archived` filter: false (default) excludes archived
 // conversations from the normal Messages list, true returns only the

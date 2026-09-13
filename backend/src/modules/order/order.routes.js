@@ -24,7 +24,7 @@ router.post(
     orderController.checkout
 );
 
-// Phase 6 (Checkout & Order Timeline UX): must be registered before
+// (Checkout & Order Timeline UX): must be registered before
 // GET/PUT "/:id" below - otherwise "delivery-estimate" would be captured
 // as an :id param instead of reaching this handler. POST (not GET)
 // because it takes a body (the dropped pin) and validationMiddleware's
@@ -54,7 +54,7 @@ router.get(
     orderController.getOrderDetail
 );
 
-// Phase 4 (UI/UX remediation) - downloadable invoice PDF. An extra path
+// (UI/UX remediation) - downloadable invoice PDF. An extra path
 // segment past "/:id" so there's no ordering ambiguity with the route
 // above (Express matches by segment count, not registration order, for
 // two routes that aren't actually the same shape - but keeping it

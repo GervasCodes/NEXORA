@@ -1,6 +1,6 @@
 // Real-database integration tests for refund.service.autoRefundForDispute()
-// (Phase 2's refund automation, now exercised against real MySQL for
-// Phase 3). Only the actual payment-provider network calls and
+// (Refund automation, now exercised against real MySQL for
+// Only the actual payment-provider network calls and
 // audit.service are mocked - refunds/payments/disputes/orders all run
 // against real SQL, which is what this suite exists to catch (a typo'd
 // column, a broken join, or - specifically here - the UNIQUE(dispute_id)

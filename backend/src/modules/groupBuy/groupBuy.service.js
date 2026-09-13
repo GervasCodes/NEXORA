@@ -1,5 +1,5 @@
 /**
- * Group buying (Phase Q7): a seller opens a discounted group price on
+ * Group buying a seller opens a discounted group price on
  * one of their products, good only if enough buyers join before a
  * deadline. See migration 089's header comment on group_buys for why
  * there's no pre-authorization/hold on joining - nobody is charged

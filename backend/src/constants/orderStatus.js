@@ -18,7 +18,7 @@ exports.SELLER_STATUS_TRANSITIONS = {
     shipped: ["delivered"]
 };
 
-// Checkout buyer-protection insurance add-on (Phase Q1) - see
+// Checkout buyer-protection insurance add-on  - see
 // order.service.js#calculateBuyerProtectionFee. 1.5% of cart subtotal,
 // floored/capped so it's meaningful on a cheap order and not excessive
 // on a very large one.
@@ -59,7 +59,7 @@ exports.OFFER_TIMEOUT_MS = 30 * 1000; // time an agent has to accept before we m
 exports.VEHICLE_AVERAGE_SPEED_KMH = {
     bicycle: 14,
     motorcycle: 32,
-    tuktuk: 24,
+    Bajaji: 24,
     car: 28,
     van: 26,
     truck: 22

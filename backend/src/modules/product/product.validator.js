@@ -29,7 +29,7 @@ exports.bulkProductStatusValidation = [
     body("is_active").isBoolean().withMessage("is_active must be true or false").toBoolean()
 ];
 
-// Phase 11 (UI/UX remediation) - bulk price adjustment.
+// (UI/UX remediation) - bulk price adjustment.
 exports.bulkProductPriceValidation = [
     body("ids").isArray({ min: 1 }).withMessage("At least one product must be selected"),
     body("ids.*").isInt({ gt: 0 }).withMessage("Invalid product id"),

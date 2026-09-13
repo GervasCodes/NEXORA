@@ -354,9 +354,28 @@ export default function Header() {
 
             {/* Mobile drawer - every nav item, always reachable regardless
                 of screen width or orientation. Icon + label rows - a
-                drawer has room for both, unlike the compact desktop bar. */}
+                drawer has room for both, unlike the compact desktop bar.
+
+                Mobile UI/UX audit: this list has grown past what a short
+                phone viewport can show in one screen (Home/Browse plus
+                every nav link plus sign-out/sign-in) - at ~44px a row that
+                easily tops 700-800px. The drawer lives inside `header`,
+                which is `sticky top-0`, so once stuck it behaves like a
+                fixed element: without its own scroll, anything past the
+                viewport's bottom edge (Bookings/Disputes/Returns/Wallet/
+                Loyalty/Affiliate were landing right in that cut-off zone)
+                was rendered but permanently unreachable - no amount of
+                page-scrolling brings it into view. max-h + overflow-y-auto
+                makes the drawer itself the thing that scrolls. The extra
+                bottom padding for buyers reserves room for the fixed
+                MobileBottomNav below so the last item can scroll clear of
+                it instead of ending up hidden underneath. */}
             {menuOpen && (
-                <div id="mobile-nav-drawer" className="md:hidden glass-strong text-ink border-t border-line/60 px-4 py-3 animate-slide-up">
+                <div
+                    id="mobile-nav-drawer"
+                    className="md:hidden glass-strong text-ink border-t border-line/60 px-4 pt-3 animate-slide-up overflow-y-auto overscroll-contain max-h-[calc(100dvh-140px)]"
+                    style={{ paddingBottom: user?.role === "buyer" ? "calc(env(safe-area-inset-bottom) + 76px)" : "0.75rem" }}
+                >
                     <nav className="flex flex-col divide-y divide-line/60">
                         <Link
                             to="/"

@@ -1,4 +1,4 @@
-// Phase 4 (Customer Experience) - query-building logic for the
+// (Customer Experience) - query-building logic for the
 // region/rating filters on the public service listing, the services
 // counterpart of utils/productFilters.js's buildLocationRatingConditions.
 //

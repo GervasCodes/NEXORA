@@ -67,14 +67,14 @@ exports.claimDelivery = async (orderId, agentId) => {
         throw err;
     }
 
-    // Phase 6: let the admin dispatch dashboard know a new delivery just
+    // let the admin dispatch dashboard know a new delivery just
     // entered the active pool, without waiting for its next poll/refresh.
     socket().emitToAdmins("dispatch:delivery_assigned", { orderId, deliveryId, agentId });
 
     return { deliveryId, orderId };
 };
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - staff picking a
+// (Admin Manual Override & Ops Visibility) - staff picking a
 // specific online agent for a specific unmatched order from the dispatch
 // board, bypassing automatic radius-based matching (startMatching) and
 // the periodic rematch sweep (jobs/deliveryRematch.job.js) entirely.
@@ -203,7 +203,7 @@ exports.getDelivery = async (orderId, userId) => {
     };
 };
 
-// Shared road-network distance-remaining + ETA calculation (Phase 5C).
+// Shared road-network distance-remaining + ETA calculation .
 // Goes through the routing abstraction layer (OSRM, with an automatic
 // straight-line fallback - see services/routing/routing.service.js)
 // instead of calling haversineKm + estimateEtaMinutes directly. Returns
@@ -213,7 +213,7 @@ exports.getDelivery = async (orderId, userId) => {
 // null ETA as "calculating…".
 //
 // Used by both `buildTrackingSummary` (REST GET /delivery/:id) and, as
-// of Phase 5C, `updateAgentLocation` (every live "agent:location" ping)
+// of `updateAgentLocation` (every live "agent:location" ping)
 // and `updateDeliveryStatus` (every status transition) - one place
 // computes the road-routing ETA, every caller gets the same shape back.
 const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType }) => {
@@ -250,7 +250,7 @@ const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType
 // pickup pin, if they haven't collected the order yet) to the delivery
 // destination.
 //
-// Phase 5B: goes through the routing abstraction layer instead of calling
+// goes through the routing abstraction layer instead of calling
 // haversineKm + estimateEtaMinutes directly. The returned shape is
 // unchanged from before Phase 5B (pickup/destination/distance_remaining_km/
 // eta_minutes) with two additive fields - `routing_provider` and
@@ -321,7 +321,7 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             withEmail: newStatus === "delivered"
         });
 
-        // Phase 5C: a status transition (e.g. "picked_up" -> "in_transit")
+        // a status transition (e.g. "picked_up" -> "in_transit")
         // changes which point the ETA is measured *from* (see
         // buildTrackingSummary - pickup pin vs agent's current position),
         // so recompute it here and push it along with the status itself
@@ -343,7 +343,7 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             degraded: eta.degraded
         });
 
-        // Phase 6: mirror the same status change into the dispatch
+        // mirror the same status change into the dispatch
         // dashboard's admin-only room, so a delivery moving to
         // "delivered"/"failed" (leaving the active pool) or any other
         // transition is reflected there live instead of only on refresh.
@@ -360,7 +360,7 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
 exports.setAgentOnline = async (agentId, isOnline) => {
     await deliveryRepository.setOnlineStatus(agentId, isOnline);
 
-    // Phase 6: dispatch dashboard's online-agents list should update the
+    // dispatch dashboard's online-agents list should update the
     // moment an agent goes on/off shift, not just on its next poll.
     socket().emitToAdmins("dispatch:agent_status", { agentId, isOnline });
 };
@@ -384,7 +384,7 @@ exports.getAgentOnlineStatus = async (agentId) => {
 // tracking room in one go (Phase 5C), instead of the frontend recomputing
 // a straight-line ETA locally on every tick (see frontend/src/utils/geo.js).
 //
-// Before Phase 5C this returned a bare array of order ids; every existing
+// Before this returned a bare array of order ids; every existing
 // caller was internal (socket.js) and has been updated alongside this
 // change - see delivery.service.test.js for the current contract.
 exports.updateAgentLocation = async (agentId, lat, lng) => {
@@ -507,7 +507,7 @@ exports.startMatching = async (orderId) => {
 // no network calls), then asks the routing layer for a real travel-time
 // ETA on just the closest few (see ETA_CANDIDATE_POOL_SIZE) and, within
 // that same small pool, scores each candidate on ETA plus historical
-// reliability (Roadmap Phase 2 - see agentScoring.js) rather than ETA
+// reliability (Roadmap  - see agentScoring.js) rather than ETA
 // alone. A nearer/faster agent with a poor accept/completion track
 // record can lose out to a slightly-slower one who's more likely to
 // actually show up and finish the job - which pure ETA ranking would
@@ -547,7 +547,7 @@ const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
         })
     );
 
-    // Roadmap Phase 2: pull acceptance/completion history for just this
+    // Roadmap pull acceptance/completion history for just this
     // small pool (one batched query each, not one per agent - see
     // delivery.repository.js#findAgentPerformanceStats) and fold it
     // into a single weighted score per candidate, instead of sorting by
@@ -576,7 +576,7 @@ const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
 // multiple server instances running. Falls back to the old bare
 // setTimeout only when Redis isn't configured at all (local dev/CI -
 // see config/redis.js) - that fallback has the same non-durability
-// limitation the pre-Phase-1 code always had (lost on restart, doesn't
+// limitation the pre code always had (lost on restart, doesn't
 // coordinate across instances), which is acceptable for a dev/CI
 // environment that also has no persistent Redis, but is never expected
 // in a real deployment (which is expected to have REDIS_URL set, same
@@ -652,7 +652,7 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
                 { orderId, radiusKm, nextRadiusKm: radiusSteps[nextRadiusIndex] },
                 "no dispatch candidates in range - widening search radius"
             );
-            // Phase 2 (Honest Status Transparency): lets the buyer's
+            // (Honest Status Transparency): lets the buyer's
             // tracking page/widget upgrade its "searching" copy the
             // moment we actually widen, instead of only guessing off a
             // client-side timer. Purely informational - nothing here
@@ -681,7 +681,7 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
     const timeoutMs = await settingsService.getDeliveryOfferTimeoutMs();
     const expiresAt = new Date(Date.now() + timeoutMs);
 
-    // Roadmap Phase 1: WhatsApp is preferred when configured (agents in
+    // Roadmap  WhatsApp is preferred when configured (agents in
     // low-connectivity conditions may see a WhatsApp message land well
     // before/instead of an in-app push); SMS is the fallback for a
     // deployment with no WhatsApp integration active. Never both -
@@ -728,7 +728,7 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
         })
         .catch((err) => logger.warn({ err, offerId, orderId }, "push send error"));
 
-    // Roadmap Phase 1: mirror the same offer as a WhatsApp/SMS text the
+    // Roadmap  mirror the same offer as a WhatsApp/SMS text the
     // agent can reply to directly, for low-connectivity conditions where
     // the in-app push/socket event may not reach them promptly. Best
     // effort, fire-and-forget - same failure posture as the push send
@@ -825,7 +825,7 @@ exports.acceptOffer = async (offerId, agentId, responseChannel = "app") => {
             agentId
         });
 
-        // Phase 6: same as the manual-claim path above - a matched
+        // same as the manual-claim path above - a matched
         // (offer-accepted) delivery should also appear on the dispatch
         // dashboard immediately.
         socket().emitToAdmins("dispatch:delivery_assigned", {
@@ -914,7 +914,7 @@ exports.declineOffer = async (offerId, agentId, responseChannel = "app") => {
     }
 };
 
-// ---- Roadmap Phase 1: offer accept/decline by WhatsApp/SMS reply ---------
+// ---- Roadmap offer accept/decline by WhatsApp/SMS reply ---------
 //
 // Called by both whatsapp.service.js (inbound Cloud API message) and
 // sms.controller.js (inbound gateway webhook) with whatever raw text the

@@ -90,7 +90,7 @@ router.delete(
     sellerController.removeDeliveryAgent
 );
 
-// --- Seller collections (Phase 7C) ---
+// --- Seller collections ---
 // Same auth shape as the delivery-agents routes above - authenticated,
 // approved-seller-not-required (a seller can organize their own catalog
 // into shelves before or after approval, same as managing products
@@ -155,7 +155,7 @@ router.get(
     sellerController.getAnalytics
 );
 
-// Phase A5 (Advanced Analytics) - period comparison + top customers,
+// (Advanced Analytics) - period comparison + top customers,
 // plus a CSV export of top customers/products. Same gates as /analytics.
 router.get(
     "/analytics/advanced",
@@ -191,7 +191,7 @@ router.post(
     sellerController.payVerificationFee
 );
 
-// --- Nexora Services Phase 1: Merchant Type System ---
+// --- Nexora Services  Merchant Type System ---
 // A seller opts into Services (or both) here; account approval isn't
 // required to flip this since it's just a dashboard-access flag - the
 // Services endpoints themselves (service.routes.js) still require an

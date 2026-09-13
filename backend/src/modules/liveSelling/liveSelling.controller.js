@@ -36,7 +36,7 @@ exports.setStatus = async (req, res) => {
     }
 };
 
-// Reminders (Phase 9, UI/UX remediation) - buyer-facing.
+// Reminders (UI/UX remediation) - buyer-facing.
 exports.subscribeReminder = async (req, res) => {
     try {
         await liveSellingService.subscribeReminder(req.user.id, req.params.id);

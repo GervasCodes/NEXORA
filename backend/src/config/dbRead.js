@@ -1,4 +1,4 @@
-// MySQL read-replica pool (Phase 4 - Engineering & Scalability).
+// MySQL read-replica pool (Engineering & Scalability).
 //
 // This is additive, opt-in infrastructure, not a behavior change: every
 // existing `require("../config/db")` call in the codebase is untouched

@@ -7,7 +7,7 @@ const authRepository = require("../modules/auth/auth.repository");
 
 let io = null;
 
-// Shift-persistence fix (Phase 2): a page refresh always fires the
+// Shift-persistence fix  a page refresh always fires the
 // socket's "disconnect" event before the new page's socket reconnects -
 // treating that the same as the agent actually going offline (closing
 // the tab, losing signal) meant is_online got flipped back to false in
@@ -118,7 +118,7 @@ exports.init = (httpServer) => {
 
     // Authenticate the socket using the same JWT used for REST requests.
     //
-    // Phase 2 (Security Hardening). This used to stop at "is the
+    // (Security Hardening). This used to stop at "is the
     // signature valid" - unlike auth.middleware.js on the REST side,
     // which also re-checks is_active/suspension/token_version fresh from
     // the database on every request (see that file's comments). A
@@ -135,7 +135,7 @@ exports.init = (httpServer) => {
     // be on any REST request.
     io.use(async (socket, next) => {
         try {
-            // Phase 4 (Testing & Session Hardening): the frontend no
+            // (Testing & Session Hardening): the frontend no
             // longer has JS-readable access to the session token (it's
             // an httpOnly cookie now - see sessionCookie.js), so it can't
             // keep passing it via `auth: { token }` the way it used to.
@@ -223,7 +223,7 @@ if (
             socket.leave(`conversation:${conversationId}`);
         });
 
-        // Phase 4: typing indicator. Purely ephemeral - never touches the
+        // Typing indicator. Purely ephemeral - never touches the
         // database, just relayed to whoever else is in the room right
         // now. The client is responsible for debouncing "start" while the
         // user types and firing "stop" on blur/send/idle timeout; the
@@ -314,7 +314,7 @@ if (
         // Forwarded straight into any order room(s) they're currently
         // assigned to, so the buyer's map updates live.
         //
-        // Phase 5C: updateAgentLocation now also returns a fresh
+        // UpdateAgentLocation now also returns a fresh
         // road-routing distance-remaining/ETA for each order (computed
         // from this new position to that order's destination), so the
         // tracking widget/page can show an up-to-date ETA on every tick
@@ -342,7 +342,7 @@ if (
                     });
                 });
 
-                // Phase 6: dispatch dashboard shows every online agent's
+                // Dispatch dashboard shows every online agent's
                 // live position on one admin-only feed, independent of
                 // whichever order room(s) they're currently attached to
                 // (an idle-but-online agent has none, but should still

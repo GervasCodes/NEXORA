@@ -1,4 +1,4 @@
-// Single-instance locking for scheduled jobs (Phase 4 - Engineering &
+// Single-instance locking for scheduled jobs (Engineering &
 // Scalability). Once jobs run from a dedicated worker process (see
 // jobs/index.js and worker.js) it becomes possible to scale that worker
 // horizontally (2+ replicas for redundancy) - without this, every

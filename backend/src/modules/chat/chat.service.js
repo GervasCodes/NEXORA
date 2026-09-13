@@ -395,7 +395,7 @@ exports.archiveConversation = (conversationId, userId) =>
 exports.unarchiveConversation = (conversationId, userId) =>
     toggleConversationFlag(conversationId, userId, chatRepository.archivedColumnFor, false);
 
-// Search across every conversation the user participates in (Phase 8,
+// Search across every conversation the user participates in (
 // UI/UX remediation) - MessageSearch.jsx's existing search only ever
 // covered one open thread at a time (see exports.searchMessages above,
 // which takes a single conversationId). This is the cross-thread

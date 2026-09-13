@@ -16,7 +16,7 @@
  * payment.controller.js can drive both card rails through parallel
  * functions without inventing a new integration pattern.
  *
- * PHASE 3 REWRITE - the previous version of this file called endpoints
+ * REWRITE - the previous version of this file called endpoints
  * that don't exist anywhere in MalipoPay's real API
  * (`/card/checkout/sessions`, `/card/payments/:ref/refund`) and
  * authenticated with `Authorization: Bearer`. Verified against

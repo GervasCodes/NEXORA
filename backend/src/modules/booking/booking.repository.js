@@ -11,7 +11,7 @@ const availabilityRepository = require("../availability/availability.repository"
 // per date in [startDate, endDate], already priced by
 // booking.service.js against service_availability.
 //
-// Phase RF3: this used to run 2 queries per date (a per-date
+// this used to run 2 queries per date (a per-date
 // decrementUnits UPDATE + a per-date booking_items INSERT) - a 14-night
 // booking was 28+ sequential queries in one transaction. Now it's a
 // pre-check SELECT (to give the same per-date "no longer enough
@@ -114,7 +114,7 @@ exports.findItemsByBookingId = async (bookingId) => {
     return rows;
 };
 
-// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// (UI/UX remediation) - filtering + pagination, same treatment
 // as order.repository.js#findOrdersByBuyer. Date filters apply to
 // start_date (the actual appointment date) rather than created_at -
 // "bookings in March" means the appointment was in March, not that the
@@ -267,10 +267,10 @@ exports.cancelBooking = async (bookingId, serviceId, dateItems, finalStatus = "c
     }
 };
 
-// Phase 7 (UI/UX remediation) - reschedule. Same booking row and id
+// (UI/UX remediation) - reschedule. Same booking row and id
 // throughout (booking history, messages, and payment stay attached to
 // it - see this phase's own plan for why that matters over
-// cancel-and-rebook), but its dates/quantity/amount/items all change.
+// cancel-and-rebook), but its dates/quantity/amount/itall change.
 // Structured as: release the old dates' held units (mirrors
 // cancelBooking's restore step exactly), then check+hold the new dates
 // (mirrors createBooking's pre-check + guarded decrement exactly), then

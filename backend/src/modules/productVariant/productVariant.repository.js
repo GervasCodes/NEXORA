@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 2 continuation (UI/UX remediation) - product variants.
+// continuation (UI/UX remediation) - product variants.
 // See migration 095's comments for the schema reasoning (options_key
 // for uniqueness, variant_label snapshot on order_items, etc.).
 

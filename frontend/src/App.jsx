@@ -92,7 +92,6 @@ const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"
 const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 const SellerReturns = lazy(() => import("./pages/seller/SellerReturns"));
-const SellerLoans = lazy(() => import("./pages/seller/SellerLoans"));
 const SellerTaxInfo = lazy(() => import("./pages/seller/SellerTaxInfo"));
 const SellerGroupBuys = lazy(() => import("./pages/seller/SellerGroupBuys"));
 const SellerLiveSelling = lazy(() => import("./pages/seller/SellerLiveSelling"));
@@ -322,7 +321,6 @@ export default function App() {
                             <Route path="subscription" element={<SellerSubscription />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                             <Route path="returns" element={<SellerReturns />} />
-                            <Route path="loans" element={<SellerLoans />} />
                             <Route path="tax-info" element={<SellerTaxInfo />} />
                             <Route path="group-buys" element={<SellerGroupBuys />} />
                             <Route path="live-selling" element={<SellerLiveSelling />} />

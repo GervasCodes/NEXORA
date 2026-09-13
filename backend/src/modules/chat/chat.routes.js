@@ -34,7 +34,7 @@ router.post(
 
 router.get("/conversations", chatController.getMyConversations);
 
-// Phase 8 (UI/UX remediation) - cross-conversation search. Placed here
+// (UI/UX remediation) - cross-conversation search. Placed here
 // (a literal "search" suffix, not a param) so there's no ambiguity with
 // any /conversations/:id/... route below - same reasoning the existing
 // comment above /conversations/:id/search already gives for that one.

@@ -11,7 +11,7 @@ const { createValidation, idValidation, setStatusValidation } = require("./conte
 // --- Public ---
 router.get("/", contentController.listPublished);
 
-// Phase 9 (UI/UX remediation) - mounted before "/:slug" for the same
+// (UI/UX remediation) - mounted before "/:slug" for the same
 // reason the admin routes below already are: "categories" would
 // otherwise be swallowed as a slug by the catch-all route.
 router.get("/categories", contentController.listCategoriesInUse);

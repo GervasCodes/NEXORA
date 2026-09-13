@@ -1,5 +1,5 @@
 const db = require("../../config/db");
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): same reasoning as
+// (Backend N+1 Fixes & Read Replica Adoption): same reasoning as
 // product.repository.js - only genuinely public-browsing, single-call-site
 // reads get moved to dbRead; anything shared with a pre-write validation
 // check or a post-write re-fetch stays on the primary. See the comment
@@ -59,17 +59,17 @@ exports.findById = async (serviceId) => {
 };
 
 // Public marketplace listing: published + active services only, with
-// primary media, provider store name, category name, and (Phase 4)
+// primary media, provider store name, category name, and 
 // rating summary. Mirrors product.repository.js#findAll's shape
 // (search/category/price/region/rating/pagination) as closely as the
 // two listings' schemas allow.
 //
-// region/minRating (Phase 4) are expected to already be parsed by
-// utils/serviceFilters.js, and sort (Phase 4) by utils/serviceSort.js -
+// region/minRating  are expected to already be parsed by
+// utils/serviceFilters.js, and sort  by utils/serviceSort.js -
 // this function just applies whatever it's given, same contract
 // product.repository.js#findAll documents.
 //
-// Phase 5: public service browsing/search - same reasoning as
+// Public service browsing/search - same reasoning as
 // product.repository.js#findAll.
 exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region, minRating, sort, page, limit }) => {
     const offset = (page - 1) * limit;
@@ -168,7 +168,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
 };
 
 // Distinct provider regions with at least one published service, for
-// the "Location" filter dropdown (Phase 4) - services counterpart of
+// the "Location" filter dropdown services counterpart of
 // product.repository.js#findFilterRegions, scoped to s.region (a
 // service's own location) rather than sp.region (a seller's store
 // location), since a provider can list services in different regions
@@ -197,7 +197,7 @@ exports.findFilterRegions = async ({ categoryId }) => {
 
 // Public service detail by slug: full info + provider + category.
 //
-// Phase 5: single call site (service.service.js#getServiceBySlug, the
+// Single call site (service.service.js#getServiceBySlug, the
 // public ServiceDetail page) - confirmed via grep before moving this.
 exports.findBySlug = async (slug) => {
     const [rows] = await dbRead.query(
@@ -308,7 +308,7 @@ exports.setActive = async (serviceId, isActive) => {
     await db.query("UPDATE services SET is_active = ? WHERE id = ?", [isActive, serviceId]);
 };
 
-// --- Dynamic pricing rules (Phase 5 - Growth) --------------------------
+// --- Dynamic pricing rules  --------------------------
 
 const normalizeDateColumn = (value) =>
     value instanceof Date ? value.toISOString().slice(0, 10) : value;

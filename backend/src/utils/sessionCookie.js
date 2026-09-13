@@ -1,4 +1,4 @@
-// Phase 4 (Testing & Session Hardening) - centralizes the httpOnly
+// (Testing & Session Hardening) - centralizes the httpOnly
 // session cookie's options so login (auth.controller.js) and logout use
 // identical settings. res.clearCookie only actually clears a cookie if
 // its options (path, domain, sameSite, secure) match how it was set -
@@ -31,7 +31,7 @@ const isProd = () => process.env.NODE_ENV === "production";
 // so `Lax` already works and doesn't require HTTPS the way `None` does.
 const sameSitePolicy = () => (isProd() ? "none" : "lax");
 
-// Phase 6 (Session/login flag) - investigated whether this SameSite=None
+// (Session/login flag) - investigated whether this SameSite=None
 // requirement could be avoided instead of just documented, since it's
 // the root cause of the Safari/iOS "session expired right after login"
 // reports (Safari's Intelligent Tracking Prevention is markedly more

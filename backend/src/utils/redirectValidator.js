@@ -1,4 +1,4 @@
-// Phase 7 (Security) - extracted from payment.controller.js, which had
+// (Security) - extracted from payment.controller.js, which had
 // its own private copy of this check (assertAllowedRedirect) already
 // applied to every /payments/* endpoint that accepts a client-supplied
 // successUrl/cancelUrl/returnUrl. subscription.controller.js's PayPal/

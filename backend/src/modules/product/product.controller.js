@@ -307,7 +307,7 @@ exports.bulkProductStatus = async (req, res) => {
     }
 };
 
-// Phase 11 (UI/UX remediation) - bulk price adjustment.
+// (UI/UX remediation) - bulk price adjustment.
 exports.bulkProductPrice = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

@@ -166,7 +166,7 @@ exports.removeDeliveryAgent = async (req, res) => {
     }
 };
 
-// --- Seller collections (Phase 7C) ---
+// --- Seller collections  ---
 
 exports.getCollections = async (req, res) => {
     try {
@@ -308,8 +308,8 @@ exports.getAnalytics = async (req, res) => {
     }
 };
 
-// Phase A5 (Advanced Analytics) - period comparison + top customers.
-// Phase P8 (Analytics Visualization) - optional ?start=&end= custom
+// (Advanced Analytics) - period comparison + top customers.
+// (Analytics Visualization) - optional ?start=&end= custom
 // range, same validation shape as admin.controller.js's equivalent
 // endpoint (see that file for the full reasoning).
 exports.getAdvancedAnalytics = async (req, res) => {

@@ -1,5 +1,5 @@
 /**
- * B2B / bulk ordering tier (Phase Q7).
+ * B2B / bulk ordering tier .
  *
  * Two independent halves:
  *  - Business account verification (business.repository's getStatus/

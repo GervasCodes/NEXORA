@@ -50,7 +50,6 @@ const disputeRoutes = require("./modules/dispute/dispute.routes");
 const returnRoutes = require("./modules/return/return.routes");
 const kycRoutes = require("./modules/kyc/kyc.routes");
 const buyerWalletRoutes = require("./modules/buyerWallet/buyerWallet.routes");
-const loanRoutes = require("./modules/loan/loan.routes");
 const supportRoutes = require("./modules/support/support.routes");
 const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
 const efdRoutes = require("./modules/efd/efd.routes");
@@ -169,7 +168,7 @@ app.post(
     require("./modules/payment/payment.controller").malipopayCardWebhook
 );
 
-// WhatsApp Cloud API inbound webhook (Phase Q3) - same raw-body
+// WhatsApp Cloud API inbound webhook  - same raw-body
 // requirement as the two routes directly above, for the same reason
 // (X-Hub-Signature-256 verification needs the exact bytes Meta signed,
 // see webhookAuth.middleware.js#verifyWhatsAppWebhook). The GET
@@ -187,7 +186,7 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-// Phase 4 (Testing & Session Hardening): must come after cookieParser
+// (Testing & Session Hardening): must come after cookieParser
 // (needs req.cookies) and before route handlers, but there's no need to
 // place it after auth.middleware - it only inspects the raw cookie/header
 // pair, it doesn't need req.user. See csrf.middleware.js for what this
@@ -331,13 +330,13 @@ app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/store-types", storeTypeRoutes);
-// Nexora Services - Phase 1 (Foundation). Separate top-level namespaces
+// Nexora Services - (Foundation). Separate top-level namespaces
 // from /categories and /products, matching CHANGES.md's own framing of
 // Services as a parallel domain sharing infrastructure, not a variant of
 // the product catalog.
 app.use("/api/v1/service-categories", serviceCategoryRoutes);
 app.use("/api/v1/services", serviceRoutes);
-// Nexora Services - Phase 2 (Booking Infrastructure). Mounted at the
+// Nexora Services - (Booking Infrastructure). Mounted at the
 // same /services base as serviceRoutes above, not nested further -
 // availabilityRoutes defines its own "/:serviceId/availability" paths,
 // so this sits alongside serviceRoutes' own "/:id/images" etc. without
@@ -394,10 +393,9 @@ app.use("/api/v1/kyc", kycRoutes);
 // matching router, which would reject a buyer before ever reaching this
 // one. A sibling path avoids the collision entirely.
 app.use("/api/v1/buyer-wallet", buyerWalletRoutes);
-app.use("/api/v1/loans", loanRoutes);
 app.use("/api/v1/support", supportRoutes);
 app.use("/api/v1/whatsapp", whatsappRoutes);
-// Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel) - SMS
+// Roadmap (WhatsApp/SMS as an Offer-Accept Channel) - SMS
 // fallback inbound webhook. See sms.routes.js's header comment for why
 // this doesn't need the raw-body wiring the routes above it do.
 app.use("/api/v1/sms", require("./modules/sms/sms.routes"));
@@ -412,7 +410,7 @@ app.use("/api/v1/affiliate", affiliateRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);
-// Nexora AI (Phase B1) - see modules/ai/ai.service.js's header comment
+// Nexora AI  - see modules/ai/ai.service.js's header comment
 // for the safety/grounding rules every route here shares.
 app.use("/api/v1/ai", aiRoutes);
 

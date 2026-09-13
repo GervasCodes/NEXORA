@@ -1,5 +1,5 @@
 // Centralized phone number handling — Monetization Control roadmap,
-// Section 3 (Mobile Number Country Code System). Every place that used
+// Mobile Number Country Code System. Every place that used
 // to accept a bare "phone" string with its own ad-hoc length check
 // (auth registration, profile updates, seller business/mobile-money
 // phone, checkout shipping/mobile-money phone, subscription mobile

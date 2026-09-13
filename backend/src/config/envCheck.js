@@ -1,4 +1,4 @@
-// Phase 1 (Launch Blockers): a real backend/.env in this project had
+// (Launch Blockers): a real backend/.env in this project had
 // AADMIN_EMAIL instead of ADMIN_EMAIL, and MOBILE_MONEY_PROVIDER unset -
 // neither is a syntax error, so Node started up fine and each problem
 // only surfaced as quiet downstream behavior (database/seed.js silently

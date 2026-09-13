@@ -3,7 +3,7 @@ const deliveryService = require("../modules/delivery/delivery.service");
 const logger = require("../utils/logger").child({ module: "job:deliveryRematch" });
 const Sentry = require("../config/sentry");
 
-// Phase 1 (Durable Dispatch Foundation): an order that exhausted every
+// (Durable Dispatch Foundation): an order that exhausted every
 // configured search radius (see delivery.service.js#offerToNextCandidate)
 // lands in the manual "available for pickup" pool and, before this job,
 // only got matched again if some *other* coincidental event (a new order

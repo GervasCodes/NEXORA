@@ -3,11 +3,11 @@ const accountRepository = require("../account/account.repository");
 const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
 
-// Step 1: request a reset code by email. Always responds the same way
+// request a reset code by email. Always responds the same way
 // whether or not the email exists - this deliberately does NOT throw for
 // an unknown email, so the API response can't be used to enumerate which
 // addresses have an account.
-// Phase 5 (OTP resend/expiry UX) - always returns the same
+//  (OTP resend/expiry UX) - always returns the same
 // expiresInSeconds whether or not the account exists (it's the fixed
 // otpService.OTP_EXPIRY_SECONDS constant, not anything derived from the
 // lookup), so handing it to the frontend for a countdown doesn't
@@ -23,7 +23,7 @@ exports.requestPasswordReset = async (email) => {
     return { expiresInSeconds: otpService.OTP_EXPIRY_SECONDS };
 };
 
-// Step 2: verify the code and set the new password in one call - unlike
+//  verify the code and set the new password in one call - unlike
 // the logged-in password-change flow, there's no session to issue a
 // reauth token against here, so this does both steps at once.
 exports.resetPassword = async (email, code, newPassword) => {

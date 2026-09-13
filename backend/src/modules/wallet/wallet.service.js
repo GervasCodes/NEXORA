@@ -15,7 +15,7 @@ const fraudService = require("../fraud/fraud.service");
 // order_items rows that haven't been credited yet, so it's safe to call
 // more than once for the same order.
 //
-// Escrow (Phase 9C): which wallet column gets credited depends on the
+// Escrow  which wallet column gets credited depends on the
 // order's payment method. For mobile money / Snippe / PayPal, the
 // platform actually holds the buyer's money from the moment the provider
 // webhook confirms payment - so the seller's earnings go into
@@ -24,7 +24,7 @@ const fraudService = require("../fraud/fraud.service");
 // moves them into `balance`. Cash on Delivery is different: the seller
 // already has the cash in hand by the time `confirmDeliveryReceipt` can
 // even run (it requires the order to already be `delivered`, and is now
-// a buyer-only action per Phase 2 - see payment.service.js), so there
+// a buyer-only action per  - see payment.service.js), so there
 // is no platform-held money to hold back - COD earnings go straight to
 // `balance`, exactly as every payment method did before this phase, and
 // the corresponding order_items rows are marked `wallet_released = TRUE`
@@ -65,7 +65,7 @@ exports.creditSellersForOrder = async (orderId) => {
         // description text below - all of a given seller's items share the
         // same rate (it's the seller's own plan, not an item property).
         //
-        // Phase RF3: look up each distinct seller's commission rate once,
+        // Look up each distinct seller's commission rate once,
         // not once per item - a multi-item order from the same seller (the
         // common case, since order_items groups items by seller already)
         // previously repeated this lookup redundantly for every item.
@@ -79,7 +79,7 @@ exports.creditSellersForOrder = async (orderId) => {
 
         const bySeller = new Map();
         const rateBySeller = new Map();
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): this loop
+        // (Backend N+1 Fixes & Read Replica Adoption): this loop
         // now only computes each item's commission figures in memory -
         // the DB write that used to happen once per item right here
         // (markItemCredited) has moved to a single batched call
@@ -157,7 +157,7 @@ exports.creditSellersForOrder = async (orderId) => {
     }
 };
 
-// ---- Bookings (Phase 3 - Financial Integration) ----------------------------
+// ---- Bookings (Financial Integration) ----------------------------
 // Called once a booking's payment is confirmed (payment.service.js's
 // booking-payment webhook handler). Mirrors creditSellersForOrder above
 // almost exactly - the one real difference is that a booking never splits
@@ -390,7 +390,7 @@ exports.getWalletSummary = async (sellerId) => {
     };
 };
 
-// ---- Escrow release (Phase 9D) ---------------------------------------------
+// ---- Escrow release  ---------------------------------------------
 
 const OPEN_DISPUTE_STATUSES = ["open", "under_review"];
 const REFUND_RESOLUTIONS = ["refund_full", "refund_partial"];
@@ -492,16 +492,6 @@ const releaseItems = async (items) => {
     }
 
     for (const sellerId of releasedSellerIds) {
-        // Phase Q2: intercept as much of what just moved into `balance`
-        // as an active working-capital advance still needs, before the
-        // seller notification below (which always fires regardless, so
-        // a seller with a loan still hears "your earnings were
-        // released" even if most/all of it just went to repayment).
-        require("../loan/loan.service").applyRepaymentOnRelease(sellerId).catch((err) => {
-            logger.error({ err, sellerId }, "loan auto-repayment error");
-            Sentry.captureException(err, { tags: { area: "wallet", stage: "loan-repayment" }, extra: { sellerId } });
-        });
-
         notificationService.notify({
             userId: sellerId,
             type: "wallet_release",
@@ -538,7 +528,7 @@ exports.releaseOrderEarnings = async (orderId) => {
     return releaseItems(items);
 };
 
-// Phase 3c - multi-currency payouts. payoutCurrency defaults to "TZS"
+// Multi-currency payouts. payoutCurrency defaults to "TZS"
 // (existing behavior, unchanged) - a seller can instead request "USD",
 // in which case the withdrawal is still debited from the wallet in TZS
 // (the wallet itself stays TZS-denominated - order/booking commission

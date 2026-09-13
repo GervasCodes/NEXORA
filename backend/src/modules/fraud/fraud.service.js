@@ -58,7 +58,7 @@ async function flagOnce(entityType, entityId, ruleCode, reason, severity) {
     if (alreadyFlagged) return;
     await fraudRepository.createFlag({ entityType, entityId, ruleCode, reason, severity });
 
-    // "Important security/system events" (Phase 2 event list) - a new
+    // "Important security/system events" (event list) - a new
     // fraud flag is exactly that. Every flag already lands in the Fraud
     // Review queue (admin.controller.js#listFraudFlags) regardless of
     // severity; this additionally surfaces it in the notification
@@ -84,7 +84,7 @@ exports.resolveFlag = async (id, status, adminId) => {
     await fraudRepository.resolve(id, status, adminId);
 };
 
-// --- Dashboard / anomaly detection (Phase Q9 - Admin Tools) ---
+// --- Dashboard / anomaly detection (Admin Tools) ---
 // Same philosophy as the rules above: plain, checkable statistics over
 // fraud_flags, computed fresh on every request - not a trained model,
 // nothing persisted. "Anomaly" means "this day's flag count sits more

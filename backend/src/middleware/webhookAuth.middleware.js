@@ -77,7 +77,7 @@ exports.verifyMalipopayWebhook = async (req, res, next) => {
         return res.status(200).json({ success: false });
     }
 
-    // Phase 2 (Security Hardening) - replay protection. Signature
+    // (Security Hardening) - replay protection. Signature
     // verification above proves this came from MalipoPay at some point;
     // it doesn't prove this exact delivery hasn't already been consumed
     // once (a captured, validly-signed payload replayed later would
@@ -131,7 +131,7 @@ exports.verifySelcomWebhook = async (req, res, next) => {
         return res.status(200).json({ success: false });
     }
 
-    // Phase 2 (Security Hardening) - replay protection. Selcom's
+    // (Security Hardening) - replay protection. Selcom's
     // documented C2B payload (transid/resultcode/result) carries no
     // timestamp/nonce of its own (see webhookReplayGuard.js's
     // isTimestampFresh - a no-op when there's nothing to check), so the

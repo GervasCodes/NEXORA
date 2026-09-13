@@ -1,5 +1,5 @@
 /**
- * In-app support/helpdesk widget (Phase Q3) - deliberately separate
+ * In-app support/helpdesk widget  - deliberately separate
  * from the `chat` module (buyer<->seller/delivery-agent messaging,
  * which has no admin participant at all). Any authenticated user
  * (buyer, seller, or delivery agent) can open a ticket; only admins

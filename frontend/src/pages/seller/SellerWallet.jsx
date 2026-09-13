@@ -5,6 +5,7 @@ import PageLoader from "../../components/PageLoader";
 import MaintenanceScreen from "../../components/MaintenanceScreen";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import Input from "../../components/ui/Input";
 
 const WITHDRAWAL_STATUS_STYLES = {
     pending: "bg-mango/20 text-mango-dark",
@@ -116,18 +117,15 @@ export default function SellerWallet() {
                 <form onSubmit={submitWithdrawal} className="border border-line rounded-lg p-4 mb-10 space-y-3">
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
-                    <div>
-                        <label className="text-xs text-ash block mb-1">Amount (TZS)</label>
-                        <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            required
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                        />
-                    </div>
+                    <Input
+                        label="Amount (TZS)"
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                    />
 
                     <div>
                         <label className="text-xs text-ash block mb-1">Payout method</label>
@@ -153,19 +151,14 @@ export default function SellerWallet() {
                         </select>
                     </div>
 
-                    <div>
-                        <label className="text-xs text-ash block mb-1">
-                            {payoutMethod === "mobile_money" ? "Mobile money number" : "Bank account details"}
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            value={payoutDetails}
-                            onChange={(e) => setPayoutDetails(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                            placeholder={payoutMethod === "mobile_money" ? "e.g. 0712 345 678" : "Bank, account name & number"}
-                        />
-                    </div>
+                    <Input
+                        label={payoutMethod === "mobile_money" ? "Mobile money number" : "Bank account details"}
+                        type="text"
+                        required
+                        value={payoutDetails}
+                        onChange={(e) => setPayoutDetails(e.target.value)}
+                        placeholder={payoutMethod === "mobile_money" ? "e.g. 0712 345 678" : "Bank, account name & number"}
+                    />
 
                     <button
                         type="submit"

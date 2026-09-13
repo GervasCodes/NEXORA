@@ -53,7 +53,7 @@ describe("wallet.service.creditSellersForOrder", () => {
 
         await walletService.creditSellersForOrder(42);
 
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): items are
+        // (Backend N+1 Fixes & Read Replica Adoption): items are
         // credited in one batched call now, not one markItemCredited
         // call per item - see wallet.repository.js#markItemsCredited.
         // seller 10: subtotal 1500, 10% commission = 150, net = 1350
@@ -176,7 +176,7 @@ describe("wallet.service.requestWithdrawal", () => {
     });
 });
 
-// ---- Phase 3 (Revenue & Product) - multi-currency payouts ------------------
+// ---- (Revenue & Product) - multi-currency payouts ------------------
 
 describe("wallet.service.requestWithdrawal - multi-currency payouts", () => {
     it("defaults to a TZS payout with no exchange-rate conversion", async () => {
@@ -262,7 +262,7 @@ describe("wallet.service.processWithdrawal", () => {
     });
 });
 
-// ---- Phase 9D - Seller Release --------------------------------------------
+// ----- Seller Release --------------------------------------------
 
 describe("wallet.service.releaseEligibleEarnings", () => {
     it("does nothing when there are no releasable items", async () => {

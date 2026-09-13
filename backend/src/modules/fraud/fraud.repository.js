@@ -80,7 +80,7 @@ exports.getSellerPriorWithdrawalStats = async (sellerId) => {
     return { priorCount: Number(stats.prior_count), avgAmount: Number(stats.avg_amount) };
 };
 
-// --- Dashboard queries (Phase Q9 - Admin anomaly-detection dashboard) ---
+// --- Dashboard queries (Admin anomaly-detection dashboard) ---
 // Everything below is read-only aggregation over fraud_flags for the
 // visualization/anomaly layer - none of it writes flags or changes the
 // rules above.

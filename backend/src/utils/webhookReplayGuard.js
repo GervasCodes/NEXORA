@@ -1,4 +1,4 @@
-// Webhook replay protection (Phase 2 - Security Hardening).
+// Webhook replay protection (Security Hardening).
 //
 // Signature/shared-secret verification (webhookAuth.middleware.js,
 // snippe.provider.js#constructWebhookEvent) proves a request really came

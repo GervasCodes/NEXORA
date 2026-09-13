@@ -1,4 +1,4 @@
-// Phase 7 (Security) - canonical sample payloads for MalipoPay's and
+// (Security) - canonical sample payloads for MalipoPay's and
 // Selcom's webhook callbacks, matching the shapes documented publicly at
 // developers.malipopay.co.tz/integration/webhooks and
 // developers.selcommobile.com's C2B/Collection Services section

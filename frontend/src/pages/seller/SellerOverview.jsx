@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import SellerOnboardingChecklist from "../../components/seller/SellerOnboardingChecklist";
+import Input from "../../components/ui/Input";
 
 // Merchant-Type-Aware Dashboard  - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
@@ -109,22 +110,20 @@ export default function SellerOverview() {
                     </p>
                     <label className="text-xs text-ash flex flex-col gap-1">
                         From
-                        <input
+                        <Input
                             type="date"
                             value={revenueFrom}
                             max={revenueTo || undefined}
                             onChange={(e) => setRevenueFrom(e.target.value)}
-                            className="border border-line rounded-md px-2 py-1.5 text-sm"
                         />
                     </label>
                     <label className="text-xs text-ash flex flex-col gap-1">
                         To
-                        <input
+                        <Input
                             type="date"
                             value={revenueTo}
                             min={revenueFrom || undefined}
                             onChange={(e) => setRevenueTo(e.target.value)}
-                            className="border border-line rounded-md px-2 py-1.5 text-sm"
                         />
                     </label>
                     {(revenueFrom || revenueTo) && (

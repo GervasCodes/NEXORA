@@ -1,4 +1,4 @@
-// Phase 5 (Growth) - Dynamic Pricing. Takes a base price and a service's
+// (Growth) - Dynamic Pricing. Takes a base price and a service's
 // active pricing rules (migration 066's service_pricing_rules) and
 // returns the effective price for one date.
 //

@@ -29,7 +29,7 @@ exports.findOpenByOrderAndItem = async (orderId, orderItemId) => {
     return rows[0];
 };
 
-// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// (UI/UX remediation) - filtering + pagination, same treatment
 // as order.repository.js#findOrdersByBuyer.
 exports.findByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
     const offset = (page - 1) * limit;

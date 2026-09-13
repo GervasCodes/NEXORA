@@ -41,7 +41,7 @@ exports.findRecent = async ({ eventType, userId, limit = 100 } = {}) => {
     return rows;
 };
 
-// Phase 5 - Audit Logs admin page. Same table as findRecent above, but
+// Audit Logs admin page. Same table as findRecent above, but
 // with the filtering/search/pagination the search+filters requirement
 // needs: one or more event types (a "category" of events, e.g. every
 // suspension-related type at once), the acting user, a date range, free

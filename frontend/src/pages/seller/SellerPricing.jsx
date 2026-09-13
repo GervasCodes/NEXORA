@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -168,13 +169,20 @@ export default function SellerPricing() {
                     ) : (
                         <ul className="divide-y divide-line border-y border-line">
                             {rules.map((rule) => (
-                                <li key={rule.id} className="py-3 flex items-center gap-4">
+                                <li key={rule.id} className="py-3 flex flex-wrap items-center gap-3">
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
-                                            {rule.label || (rule.rule_type === "day_of_week"
-                                                ? `Every ${DAY_LABELS[rule.day_of_week]}`
-                                                : `${rule.start_date} → ${rule.end_date}`)}
-                                        </p>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-medium truncate">
+                                                {rule.label || (rule.rule_type === "day_of_week"
+                                                    ? `Every ${DAY_LABELS[rule.day_of_week]}`
+                                                    : `${rule.start_date} → ${rule.end_date}`)}
+                                            </p>
+                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                                                rule.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"
+                                            }`}>
+                                                {rule.is_active ? "Active" : "Paused"}
+                                            </span>
+                                        </div>
                                         <p className="text-xs text-ash">
                                             {rule.adjustment_type === "percentage"
                                                 ? `${rule.adjustment_value > 0 ? "+" : ""}${rule.adjustment_value}%`
@@ -182,27 +190,23 @@ export default function SellerPricing() {
                                         </p>
                                     </div>
 
-                                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                                        rule.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"
-                                    }`}>
-                                        {rule.is_active ? "Active" : "Paused"}
-                                    </span>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <button
+                                            onClick={() => toggleRuleActive(rule)}
+                                            disabled={busyId === rule.id}
+                                            className="text-xs text-ash hover:text-ink disabled:opacity-50"
+                                        >
+                                            {rule.is_active ? "Pause" : "Resume"}
+                                        </button>
 
-                                    <button
-                                        onClick={() => toggleRuleActive(rule)}
-                                        disabled={busyId === rule.id}
-                                        className="text-xs text-ash hover:text-ink disabled:opacity-50"
-                                    >
-                                        {rule.is_active ? "Pause" : "Resume"}
-                                    </button>
-
-                                    <button
-                                        onClick={() => deleteRule(rule)}
-                                        disabled={busyId === rule.id}
-                                        className="text-xs text-coral hover:underline disabled:opacity-50"
-                                    >
-                                        Remove
-                                    </button>
+                                        <button
+                                            onClick={() => deleteRule(rule)}
+                                            disabled={busyId === rule.id}
+                                            className="text-xs text-coral hover:underline disabled:opacity-50"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -243,24 +247,22 @@ export default function SellerPricing() {
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div>
                                 <label htmlFor="pricing-start" className="block text-xs text-ash mb-1">Start date</label>
-                                <input
+                                <Input
                                     id="pricing-start"
                                     type="date"
                                     required
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
-                                    className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                                 />
                             </div>
                             <div>
                                 <label htmlFor="pricing-end" className="block text-xs text-ash mb-1">End date</label>
-                                <input
+                                <Input
                                     id="pricing-end"
                                     type="date"
                                     required
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
-                                    className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                                 />
                             </div>
                         </div>
@@ -283,7 +285,7 @@ export default function SellerPricing() {
                             <label htmlFor="pricing-adjustment-value" className="block text-xs text-ash mb-1">
                                 {adjustmentType === "percentage" ? "% change" : "Amount"}
                             </label>
-                            <input
+                            <Input
                                 id="pricing-adjustment-value"
                                 type="number"
                                 step="0.01"
@@ -291,21 +293,19 @@ export default function SellerPricing() {
                                 placeholder={adjustmentType === "percentage" ? "e.g. 20 or -10" : "e.g. 30000 or -5000"}
                                 value={adjustmentValue}
                                 onChange={(e) => setAdjustmentValue(e.target.value)}
-                                className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                             />
                         </div>
                     </div>
 
                     <div className="mb-4">
                         <label htmlFor="pricing-label" className="block text-xs text-ash mb-1">Label (optional)</label>
-                        <input
+                        <Input
                             id="pricing-label"
                             type="text"
                             maxLength={100}
                             placeholder="e.g. Weekend rate"
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
-                            className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                         />
                     </div>
 

@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 11 (UI/UX remediation) - saved filter views. See migration
+// (UI/UX remediation) - saved filter views. See migration
 // 101's comment for why `filters` is a generic JSON blob rather than
 // typed columns.
 

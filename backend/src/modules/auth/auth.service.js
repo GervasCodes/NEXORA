@@ -127,7 +127,7 @@ exports.register = async (userData, files = {}) => {
             await userRepository.insertVerificationHistory(userId, "submitted", null, null, connection);
         }
 
-        // Referral & loyalty (Phase Q7) - assigns this new user their own
+        // Referral & loyalty assigns this new user their own
         // referral code, and links them to whoever referred them (if
         // userData.referral_code was submitted and is valid). Both parts
         // happen in this same transaction, so a referral link is never

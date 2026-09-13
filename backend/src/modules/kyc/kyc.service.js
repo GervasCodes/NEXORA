@@ -1,5 +1,5 @@
 /**
- * Progressive KYC tiers (Phase Q1).
+ * Progressive KYC tiers .
  *
  * Every buyer starts at 'tier0' (light signup - just the normal
  * register flow, no documents). Placing an order above a tier's

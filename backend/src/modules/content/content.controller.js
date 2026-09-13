@@ -20,7 +20,7 @@ exports.getBySlug = async (req, res) => {
         const data = await contentService.getBySlug(req.params.slug);
         if (!data) return res.status(404).json({ success: false, message: "Article not found" });
 
-        // Related guides (Phase 9, UI/UX remediation) - folded into the
+        // Related guides (UI/UX remediation) - folded into the
         // same response rather than a second endpoint, since
         // GuideDetail.jsx always wants both together on first render.
         const related = await contentService.getRelated(data);
@@ -31,7 +31,7 @@ exports.getBySlug = async (req, res) => {
     }
 };
 
-// Phase 9 (UI/UX remediation) - category filter chips for Guides.jsx.
+// (UI/UX remediation) - category filter chips for Guides.jsx.
 exports.listCategoriesInUse = async (req, res) => {
     try {
         const data = await contentService.listCategoriesInUse();

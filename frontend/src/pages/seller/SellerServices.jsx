@@ -124,45 +124,50 @@ export default function SellerServices() {
 
             <ul className="divide-y divide-line border-y border-line">
                 {services.map((s) => (
-                    <li key={s.id} className="py-4 flex items-center gap-4">
-                        <div className="w-14 h-14 bg-line/40 rounded-md overflow-hidden shrink-0">
-                            {s.image_url && <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
+                    <li key={s.id} className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                            <div className="w-14 h-14 bg-line/40 rounded-md overflow-hidden shrink-0">
+                                {s.image_url && <img src={s.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-medium truncate">{s.title}</p>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                                        s.status === "published" ? "bg-teal/10 text-teal" : "bg-line text-ash"
+                                    }`}>
+                                        {s.status === "published" ? t("seller.services.published") : t("seller.services.draft")}
+                                    </span>
+
+                                    {!s.is_active && (
+                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-coral/10 text-coral shrink-0">{t("seller.services.inactive")}</span>
+                                    )}
+                                </div>
+                                <p className="price text-xs text-ash">{formatMoney(s.discount_price || s.base_price)}</p>
+                            </div>
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{s.title}</p>
-                            <p className="price text-xs text-ash">{formatMoney(s.discount_price || s.base_price)}</p>
+                        <div className="flex items-center gap-3 flex-wrap sm:shrink-0">
+                            <Link to={`/seller/services/${s.id}/edit`} className="text-xs text-teal hover:underline">
+                                {t("common.edit")}
+                            </Link>
+
+                            <button
+                                onClick={() => togglePublish(s)}
+                                disabled={busyId === s.id}
+                                className="text-xs text-ash hover:text-ink disabled:opacity-50"
+                            >
+                                {s.status === "published" ? t("seller.services.unpublish") : t("seller.services.publish")}
+                            </button>
+
+                            <button
+                                onClick={() => toggleActive(s)}
+                                disabled={busyId === s.id}
+                                className="text-xs text-ash hover:text-ink disabled:opacity-50"
+                            >
+                                {s.is_active ? t("seller.services.deactivate") : t("seller.services.activate")}
+                            </button>
                         </div>
-
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            s.status === "published" ? "bg-teal/10 text-teal" : "bg-line text-ash"
-                        }`}>
-                            {s.status === "published" ? t("seller.services.published") : t("seller.services.draft")}
-                        </span>
-
-                        {!s.is_active && (
-                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-coral/10 text-coral">{t("seller.services.inactive")}</span>
-                        )}
-
-                        <Link to={`/seller/services/${s.id}/edit`} className="text-xs text-teal hover:underline">
-                            {t("common.edit")}
-                        </Link>
-
-                        <button
-                            onClick={() => togglePublish(s)}
-                            disabled={busyId === s.id}
-                            className="text-xs text-ash hover:text-ink disabled:opacity-50"
-                        >
-                            {s.status === "published" ? t("seller.services.unpublish") : t("seller.services.publish")}
-                        </button>
-
-                        <button
-                            onClick={() => toggleActive(s)}
-                            disabled={busyId === s.id}
-                            className="text-xs text-ash hover:text-ink disabled:opacity-50"
-                        >
-                            {s.is_active ? t("seller.services.deactivate") : t("seller.services.activate")}
-                        </button>
                     </li>
                 ))}
             </ul>

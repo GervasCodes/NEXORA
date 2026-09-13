@@ -47,7 +47,7 @@ const httpServer = http.createServer(app);
 
 socket.init(httpServer);
 
-// Phase 1 (Durable Dispatch Foundation): consumes durable offer-expiry
+// (Durable Dispatch Foundation): consumes durable offer-expiry
 // timers created by delivery.service.js (see queues/dispatchQueue.js).
 // Started here unconditionally (not behind RUN_JOBS_IN_PROCESS like the
 // cron jobs below) because, unlike those, running this Worker in every
@@ -59,7 +59,7 @@ dispatchQueue.startDispatchWorker({
     [dispatchQueue.JOB_NAMES.OFFER_EXPIRE]: deliveryService.handleOfferExpiryJob
 });
 
-// Phase 4 (Engineering & Scalability): jobs can now run from a separate
+// (Engineering & Scalability): jobs can now run from a separate
 // process instead - see worker.js and docs/SCALABILITY_REPORT.md.
 // Defaults to `true` (jobs run in this process, exactly as before) so
 // an existing single-process deployment that hasn't set up the worker
@@ -72,23 +72,23 @@ if (process.env.RUN_JOBS_IN_PROCESS !== "false") {
     startJobs();
 }
 
-// Phase 5 (Resilience & Growth): catch a malformed payment-provider entry
+// (Resilience & Growth): catch a malformed payment-provider entry
 // (bad merge, renamed export) at boot rather than mid-checkout. Warn-only
 // - an unconfigured rail (no credentials set, normal in dev) is not an
 // error and must never block startup.
 paymentProviderRegistry.validateRegistry(logger);
 
-// Nexora AI (Phase B1) - warns at boot if AI_PROVIDER is set to
+// Nexora AI  - warns at boot if AI_PROVIDER is set to
 // something misconfigured; unset entirely (the default) is silent, not
 // a warning, since running with no AI provider is a fully supported
 // configuration, not a mistake.
 aiProviderRegistry.validateRegistry(logger);
 
-// Phase 1 (Launch Blockers): catches typo'd/misconfigured env vars (e.g.
+// (Launch Blockers): catches typo'd/misconfigured env vars (e.g.
 // AADMIN_EMAIL instead of ADMIN_EMAIL) loudly at boot instead of as
 // silent downstream behavior - see src/config/envCheck.js.
 envCheck.run(logger);
 
 httpServer.listen(PORT, () => {
-    logger.info({ port: PORT }, "🚀 Server running");
+    logger.info({ port: PORT }, " Nexora Server Running ");
 });

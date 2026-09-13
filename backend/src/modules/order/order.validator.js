@@ -41,7 +41,7 @@ exports.checkoutValidation = [
         .isInt({ gt: 0 })
         .withMessage("Invalid pickup point"),
 
-    // Phase 1 (UI/UX remediation): when set, order.service.js substitutes
+    // (UI/UX remediation): when set, order.service.js substitutes
     // this saved address's fields in for the free-text shipping_address/
     // city/region/phone above, the same way pickup_point_id already
     // substitutes a pickup point's address - shipping_address etc. stay
@@ -67,7 +67,7 @@ exports.checkoutValidation = [
         .isLength({ max: 40 })
 ];
 
-// Phase 6 (Checkout & Order Timeline UX): validates the pin the buyer has
+// (Checkout & Order Timeline UX): validates the pin the buyer has
 // currently dropped on LocationPicker so Checkout.jsx can ask for an
 // upfront delivery-time estimate before paying. Same lat/lng bounds as
 // checkoutValidation's delivery_lat/delivery_lng, but both are required

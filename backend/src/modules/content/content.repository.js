@@ -7,7 +7,7 @@ exports.findPublished = async ({ categoryId, search, limit = 20, offset = 0 } = 
         conditions.push("a.category_id = ?");
         params.push(categoryId);
     }
-    // Phase 3 (UI/UX remediation) - plain LIKE, not full-text: guides are
+    // (UI/UX remediation) - plain LIKE, not full-text: guides are
     // a small, editorially-curated set (unlike products/services), so
     // the fulltext-index machinery buildProductSearchPlan wraps around
     // for large catalogs would be overkill here.
@@ -30,7 +30,7 @@ exports.findPublished = async ({ categoryId, search, limit = 20, offset = 0 } = 
     return rows;
 };
 
-// Phase 9 (UI/UX remediation) - the distinct set of categories that
+// (UI/UX remediation) - the distinct set of categories that
 // actually have at least one published guide, for Guides.jsx's filter
 // chips - scoped this way (not the full product categories list) so a
 // buyer is never shown a filter that would return zero guides.
@@ -45,7 +45,7 @@ exports.findCategoriesInUse = async () => {
     return rows;
 };
 
-// Related guides (Phase 9, UI/UX remediation) - other published guides
+// Related guides (UI/UX remediation) - other published guides
 // in the same category, excluding the current one. Falls back to
 // "most recent other guides" when the current article has no category
 // (category_id is nullable) or is the only one in its category, so

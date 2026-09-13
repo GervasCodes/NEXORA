@@ -77,7 +77,7 @@ exports.searchValidation = [
         .withMessage("Invalid search query")
 ];
 
-// Phase 8 (UI/UX remediation) - cross-conversation search has no
+// (UI/UX remediation) - cross-conversation search has no
 // conversation id in its path (unlike searchValidation above), only
 // the query string.
 exports.searchAllValidation = [

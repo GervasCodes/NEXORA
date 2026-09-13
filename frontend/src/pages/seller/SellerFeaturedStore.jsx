@@ -6,6 +6,7 @@ import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -141,21 +142,16 @@ export default function SellerFeaturedStore({ embedded = false }) {
                         </select>
                     </div>
 
-                    <div>
-                        <label className="text-xs text-ash block mb-1">
-                            Duration ({pricing.min_days}-{pricing.max_days} days)
-                        </label>
-                        <input
-                            type="number"
-                            min={pricing.min_days}
-                            max={pricing.max_days}
-                            step="1"
-                            required
-                            value={days}
-                            onChange={(e) => setDays(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                        />
-                    </div>
+                    <Input
+                        label={`Duration (${pricing.min_days}-${pricing.max_days} days)`}
+                        type="number"
+                        min={pricing.min_days}
+                        max={pricing.max_days}
+                        step="1"
+                        required
+                        value={days}
+                        onChange={(e) => setDays(e.target.value)}
+                    />
 
                     <p className="text-sm">
                         Total cost: <span className="price font-medium">{formatMoney(totalCost)}</span>

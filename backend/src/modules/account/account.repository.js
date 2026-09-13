@@ -56,7 +56,7 @@ exports.updateProfile = async (userId, data) => {
     await db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, params);
 };
 
-// Phase 4 (Real Imagery & Avatars): deliberately separate from
+// (Real Imagery & Avatars): deliberately separate from
 // updateProfile's allowlist above - the photo is set from the dedicated
 // upload endpoint (see account.service.js#uploadProfilePhoto), never
 // from the free-text profile form, mirroring how
@@ -77,7 +77,7 @@ exports.updateSettings = async (userId, { language, theme, currency, dataSaverEn
     if (theme !== undefined) { fields.push("theme = ?"); params.push(theme); }
     if (currency !== undefined) { fields.push("currency = ?"); params.push(currency); }
     if (dataSaverEnabled !== undefined) { fields.push("data_saver_enabled = ?"); params.push(dataSaverEnabled ? 1 : 0); }
-    // Phase 10 (UI/UX remediation) - notification preferences, same
+    // (UI/UX remediation) - notification preferences, same
     // "field present in the payload -> included in the UPDATE, absent
     // -> left untouched" pattern the fields above already use.
     if (notifyOrderUpdates !== undefined) { fields.push("notify_order_updates = ?"); params.push(notifyOrderUpdates ? 1 : 0); }
@@ -101,14 +101,14 @@ exports.updatePassword = async (userId, hashedPassword) => {
     );
 };
 
-// --- Account deletion (Phase 3 - soft delete) ---
+// --- Account deletion (soft delete) ---
 // This is the *soft* delete step: it locks the account and clears out
 // genuinely ephemeral/session data, but deliberately leaves the user's
 // name, email, phone, and seller profile untouched, so an admin can still
 // see who the account belonged to in the Deleted Accounts section before
 // deciding to permanently remove it. Scrubbing/erasing that identifying
 // data, plus deleting related records, documents, and Cloudinary assets,
-// is Phase 4 (Permanent Account Removal)'s job - not this one.
+// is (Permanent Account Removal)'s job - not this one.
 exports.deleteCartItems = async (userId, executor = db) => {
     await executor.query("DELETE FROM cart_items WHERE user_id = ?", [userId]);
 };

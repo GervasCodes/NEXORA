@@ -39,8 +39,7 @@ exports.findPendingVerificationFeePayment = async (sellerId) => {
     );
     return rows[0];
 };
-
-// ---- Wallet top-up payments (Phase Q2) -------------------------------
+// ---- Wallet top-up payment  -------------------------------
 // Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
 // exactly - a top-up has no order, just a buyer (via seller_id, reused
 // as "the human this payment is for" the same way it already is for a
@@ -95,7 +94,7 @@ exports.findPendingSubscriptionPayment = async (subscriptionId) => {
 // provider only gives us that id back (e.g. PayPal's capture response,
 // or a frontend return-URL query param) and we need to find our own
 // payment row and its order_id/seller_id/purpose.
-// ---- Booking payments (Phase 3 - Financial Integration) --------------------
+// ---- Booking payments (Financial Integration) --------------------
 // Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
 // exactly (see migration 064's design notes for why bookings follow the
 // verification-fee shape - no predetermined payment_method column to

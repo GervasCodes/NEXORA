@@ -1,4 +1,4 @@
-// Server-side file-content validation (Phase 2 - Security Hardening).
+// Server-side file-content validation (Security Hardening).
 //
 // Every upload middleware (upload/uploadVideo/uploadAudio/uploadDocument/
 // uploadChatAttachment.middleware.js) already restricts uploads by

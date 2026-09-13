@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 1 (UI/UX remediation): single-code checkout discounts. Kept
+// (UI/UX remediation): single-code checkout discounts. Kept
 // deliberately minimal (see migration 093's comment) - this is a
 // working redemption flow, not a full promotions/campaign engine.
 

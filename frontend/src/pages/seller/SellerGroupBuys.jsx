@@ -4,6 +4,7 @@ import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatMoney } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -69,10 +70,10 @@ export default function SellerGroupBuys() {
                     ))}
                 </select>
                 <div className="grid grid-cols-2 gap-3">
-                    <input required type="number" min="1" step="0.01" placeholder="Group price" value={form.groupPrice} onChange={(e) => setForm({ ...form, groupPrice: e.target.value })} className="border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                    <input required type="number" min="2" placeholder="Min participants" value={form.minParticipants} onChange={(e) => setForm({ ...form, minParticipants: e.target.value })} className="border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                    <Input required type="number" min="1" step="0.01" placeholder="Group price" value={form.groupPrice} onChange={(e) => setForm({ ...form, groupPrice: e.target.value })} />
+                    <Input required type="number" min="2" placeholder="Min participants" value={form.minParticipants} onChange={(e) => setForm({ ...form, minParticipants: e.target.value })} />
                 </div>
-                <input required type="datetime-local" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
+                <Input required type="datetime-local" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
 
                 {error && <p className="text-sm text-coral">{error}</p>}
 

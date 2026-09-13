@@ -107,7 +107,14 @@ export default function NotificationBell() {
             setUnread((c) => Math.max(0, c - 1));
             api.put(`/notifications/${item.id}/read`).catch(() => {});
         }
+        // Message-type notifications (Phase 6, UI/UX remediation) carry a
+        // related_conversation_id instead of a related_order_id - route
+        // those straight to the conversation thread rather than falling
+        // through with nowhere to go. related_order_id still wins when
+        // somehow both are present, matching the order-first precedent
+        // this branch already had.
         if (item.related_order_id) navigate(`/orders/${item.related_order_id}`);
+        else if (item.related_conversation_id) navigate(`/messages/${item.related_conversation_id}`);
     };
 
     const handleMarkAllRead = async () => {

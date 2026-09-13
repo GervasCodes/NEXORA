@@ -97,7 +97,7 @@ exports.createOrderItem = async (orderId, productId, sellerId, overrides = {}) =
     return { id: result.insertId };
 };
 
-// Phase 3 addition - used by orders.checkout.db.test.js to seed a buyer's
+// Addition - used by orders.checkout.db.test.js to seed a buyer's
 // cart directly (bypassing cart.service, since these tests care about
 // order.service.checkout's own DB writes, not how the cart got items).
 exports.createCartItem = async (userId, productId, quantity = 1) => {
@@ -108,7 +108,7 @@ exports.createCartItem = async (userId, productId, quantity = 1) => {
     return { id: result.insertId };
 };
 
-// Phase 3 addition - used by refund.autoRefundForDispute.db.test.js
+// Addition - used by refund.autoRefundForDispute.db.test.js
 // (and reusable by future dispute-flow tests) to seed a completed
 // payment row for an order.
 exports.createPayment = async (orderId, overrides = {}) => {
@@ -126,7 +126,7 @@ exports.createPayment = async (orderId, overrides = {}) => {
     return { id: result.insertId };
 };
 
-// Phase 3 addition - used by refund.autoRefundForDispute.db.test.js to
+// Addition - used by refund.autoRefundForDispute.db.test.js to
 // seed a resolved (refund_full/refund_partial) dispute directly, since
 // those tests exercise refund.service against a dispute that's already
 // past the resolution step (dispute.service.resolveDispute's own DB
@@ -158,7 +158,7 @@ exports.createDispute = async (orderId, buyerId, sellerId, overrides = {}) => {
     return { id: result.insertId, disputeNumber };
 };
 
-// Phase 6 additions - used by admin.accountManagement.db.test.js and
+// Additions - used by admin.accountManagement.db.test.js and
 // chat.messaging.db.test.js.
 exports.createConversation = async (buyerId, sellerId, overrides = {}) => {
     const [result] = await db.query(
@@ -191,7 +191,7 @@ exports.resetTables = async () => {
         "bookings",
         "service_availability",
         "services",
-        // Phase 6 additions - children of users/conversations that the
+        // Additions - children of users/conversations that the
         // admin account-management and messaging db-integration tests
         // write to. Deleted first since they're the deepest children.
         "audit_logs",
@@ -201,7 +201,7 @@ exports.resetTables = async () => {
         "messages",
         "conversations",
         "seller_profiles",
-        // Phase 3 additions - children of orders/disputes/users that the
+        // Additions - children of orders/disputes/users that the
         // new checkout/refund/login db-integration tests write to.
         "refunds",
         "dispute_history",
@@ -211,7 +211,7 @@ exports.resetTables = async () => {
         "payments",
         "cart_items",
         "otp_codes",
-        // Pre-existing (Phase 2 and earlier).
+        // Pre-existing and earlier).
         "wallet_transactions",
         "withdrawal_requests",
         "seller_wallets",

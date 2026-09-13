@@ -44,7 +44,7 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
 // Insert this order's line items + decrement stock. Throws (and lets the
 // caller roll back) if any item no longer has enough stock.
 //
-// Batched (Phase RF3): previously this ran 2 queries per line item (an
+// Batched  previously this ran 2 queries per line item (an
 // INSERT then an UPDATE) - a 10-item cart was 20 sequential round trips
 // inside one checkout transaction. Product IDs within a single cart are
 // always distinct (cart_items has a UNIQUE(user_id, product_id)
@@ -54,7 +54,7 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
 // out which item's error message to raise - same message the old
 // per-item loop gave.
 //
-// Phase 2 continuation (UI/UX remediation) - variant-aware. A cart can
+// continuation (UI/UX remediation) - variant-aware. A cart can
 // mix plain-product line items (variant_id falsy) and variant line items
 // in the same checkout, so stock is decremented against two different
 // tables (products vs product_variants) using the exact same atomic
@@ -361,7 +361,26 @@ exports.findStalePendingMobileMoneyOrders = async (olderThanMinutes) => {
 // `q` matches either the order number or any product name within the
 // order (via EXISTS, not a JOIN, so an order with many line items still
 // only ever produces one row).
-exports.findOrdersByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {
+// Whitelisted sort options for order listings (buyer/seller/admin) - never
+// interpolate a caller-supplied sort string directly into SQL, so any
+// unrecognized value silently falls back to the existing default (newest
+// first) rather than being rejected or, worse, passed straight into ORDER BY.
+const ORDER_SORT_CLAUSES = {
+    newest: "o.created_at DESC",
+    oldest: "o.created_at ASC",
+    // Nulls (parent/multi-vendor rows with no order_items of their own,
+    // or - seller-scoped - orders where this seller's items were removed)
+    // sort last instead of first.
+    item_name: "primary_item_name IS NULL, primary_item_name ASC",
+    status: "o.status ASC, o.created_at DESC",
+    amount_high: "o.total_amount DESC",
+    amount_low: "o.total_amount ASC"
+};
+
+const resolveOrderSort = (sort) => ORDER_SORT_CLAUSES[sort] || ORDER_SORT_CLAUSES.newest;
+exports.resolveOrderSort = resolveOrderSort;
+
+exports.findOrdersByBuyer = async (buyerId, { status, from, to, q, sort, page = 1, limit = 10 } = {}) => {
     const offset = (page - 1) * limit;
     const conditions = ["o.buyer_id = ?", "o.parent_order_id IS NULL"];
     const params = [buyerId];
@@ -390,14 +409,18 @@ exports.findOrdersByBuyer = async (buyerId, { status, from, to, q, page = 1, lim
     }
 
     const whereClause = conditions.join(" AND ");
+    const orderByClause = resolveOrderSort(sort);
 
     const [rows] = await db.query(
         `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at, o.is_parent,
-                (SELECT COUNT(*) FROM orders c WHERE c.parent_order_id = o.id) AS vendor_count
+                (SELECT COUNT(*) FROM orders c WHERE c.parent_order_id = o.id) AS vendor_count,
+                (SELECT p.name FROM order_items oi
+                    JOIN products p ON p.id = oi.product_id
+                    WHERE oi.order_id = o.id ORDER BY oi.id ASC LIMIT 1) AS primary_item_name
         FROM orders o
         WHERE ${whereClause}
-        ORDER BY o.created_at DESC
+        ORDER BY ${orderByClause}
         LIMIT ? OFFSET ?`,
         [...params, limit, offset]
     );
@@ -482,7 +505,7 @@ exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus) =>
     );
 };
 
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): replaces what
+// (Backend N+1 Fixes & Read Replica Adoption): replaces what
 // order.service.js#cancelOrder and #autoCancelStaleOrder used to do with
 // one `UPDATE ... WHERE parent_order_id = ?` per child order in a loop -
 // N round trips for an N-vendor cart. Every child order in a cancellation
@@ -517,12 +540,12 @@ exports.updateOrderStatusForChildren = async (parentOrderId, status) => {
 // in-flight credit would have finished - this avoids flashing "pending"
 // for the split-second window between payment confirmation and the
 // async credit call actually completing.
-// Phase 11 (UI/UX remediation) - status/search filtering, same
+// (UI/UX remediation) - status/search filtering, same
 // treatment order.repository.js#findOrdersByBuyer already got in
 // Phase 4. `q` matches the order number or any of this seller's own
 // product names within the order (not another seller's items in a
 // split order - oi.seller_id scopes that).
-exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
+exports.findOrdersBySeller = async (sellerId, { status, q, sort } = {}) => {
     const conditions = ["oi.seller_id = ?", "(o.payment_method = 'cash_on_delivery' OR o.payment_status = 'paid')"];
     const params = [sellerId];
 
@@ -541,10 +564,16 @@ exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
         params.push(`%${q}%`, sellerId, `%${q}%`);
     }
 
+    const orderByClause = resolveOrderSort(sort);
+
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at,
                 u.first_name AS buyer_first_name, u.last_name AS buyer_last_name,
+                (SELECT p.name FROM order_items oi4
+                    JOIN products p ON p.id = oi4.product_id
+                    WHERE oi4.order_id = o.id AND oi4.seller_id = ?
+                    ORDER BY oi4.id ASC LIMIT 1) AS primary_item_name,
                 EXISTS (
                     SELECT 1 FROM order_items oi2
                     WHERE oi2.order_id = o.id AND oi2.seller_id = ? AND oi2.wallet_credited = FALSE
@@ -555,8 +584,8 @@ exports.findOrdersBySeller = async (sellerId, { status, q } = {}) => {
         JOIN order_items oi ON oi.order_id = o.id
         JOIN users u ON u.id = o.buyer_id
         WHERE ${conditions.join(" AND ")}
-        ORDER BY o.created_at DESC`,
-        [sellerId, ...params]
+        ORDER BY ${orderByClause}`,
+        [sellerId, sellerId, ...params]
     );
     return rows.map((row) => ({ ...row, wallet_credit_pending: !!row.wallet_credit_pending }));
 };
@@ -593,4 +622,32 @@ exports.findOrderItemsBySeller = async (orderId, sellerId) => {
         [orderId, sellerId]
     );
     return rows;
+};
+
+// Order/item context for notification content (Phase 6, UI/UX
+// remediation) - a single-order lookup for the notify() call sites that
+// only have an orderId/order row in hand, not an item list already
+// loaded in memory (checkout builds its own summary straight from the
+// cart it just processed; cancelOrder/autoCancelStaleOrder/
+// updateOrderStatusBySeller only ever fetched the order row itself).
+// Mirrors the primary_item_name subquery already used by
+// findOrdersByBuyer/findOrdersBySeller/findAllOrders (Phase 3) - first
+// item added, by order_items.id - rather than introducing a second way
+// of picking "the" item to name.
+//
+// Returns itemName: null for a multi-vendor parent order, since a split
+// cart's items live on the child orders, not the parent row itself (see
+// createSplitOrder's comment) - callers treat a null itemName as
+// "nothing to name" and fall back to the order-number-only message,
+// same as before this existed.
+exports.getPrimaryItemSummary = async (orderId) => {
+    const [rows] = await db.query(
+        `SELECT
+            (SELECT p.name FROM order_items oi
+                JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id = ? ORDER BY oi.id ASC LIMIT 1) AS itemName,
+            (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = ?) AS itemCount`,
+        [orderId, orderId]
+    );
+    return rows[0] || { itemName: null, itemCount: 0 };
 };

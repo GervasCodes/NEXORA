@@ -1,5 +1,5 @@
 const db = require("../../config/db");
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): only the public
+// (Backend N+1 Fixes & Read Replica Adoption): only the public
 // listing/rating-summary functions below move to dbRead - see each
 // function's own comment. hasDeliveredPurchase/hasCompletedBooking/
 // findByBuyerAndProduct/findByBuyerAndBooking/findById are all used in
@@ -30,7 +30,7 @@ exports.findByBuyerAndProduct = async (buyerId, productId) => {
     return rows[0];
 };
 
-// Phase 4 (Customer Experience) - booking-review counterpart of
+// (Customer Experience) - booking-review counterpart of
 // hasDeliveredPurchase above. A booking has no delivery step of its own
 // (see migration 064's design notes: a booking's exit states are
 // completed/cancelled/refunded, there's no separate "delivered" status),
@@ -72,7 +72,7 @@ exports.create = async (buyerId, productId, rating, comment) => {
     return result.insertId;
 };
 
-// Phase 4 - booking-keyed sibling of create() above (migration 065 added
+// Booking-keyed sibling of create() above (migration 065 added
 // booking_id as a nullable column alongside product_id, mutually
 // exclusive via chk_reviews_target).
 exports.createForBooking = async (buyerId, bookingId, rating, comment) => {
@@ -95,7 +95,7 @@ exports.remove = async (reviewId) => {
     await db.query("DELETE FROM reviews WHERE id = ?", [reviewId]);
 };
 
-// Phase 6C: sortable order-by, shared by findByProduct and findBySeller
+// Sortable order-by, shared by findByProduct and findBySeller
 // below rather than duplicated inline - "newest" (default) matches every
 // prior phase's behavior exactly, "highest"/"lowest" sort on rating with
 // created_at as the tiebreaker so same-rating reviews still come out
@@ -108,7 +108,7 @@ const REVIEW_SORT_CLAUSES = {
 
 const resolveSortClause = (sortBy) => REVIEW_SORT_CLAUSES[sortBy] || REVIEW_SORT_CLAUSES.newest;
 
-// Phase 5 (Backend N+1 Fixes & Read Replica Adoption): every function
+// (Backend N+1 Fixes & Read Replica Adoption): every function
 // from here down through getSellerRatingBreakdown (and
 // findPhotosByReviewIds further below) reads dbRead - these are all
 // public review-listing/rating-summary reads (ProductDetail,
@@ -139,7 +139,7 @@ exports.getProductRatingSummary = async (productId) => {
     return rows[0];
 };
 
-// Phase 6C: 1-5 star counts for the rating-distribution bar chart.
+// 1-5 star counts for the rating-distribution bar chart.
 // GROUP BY rather than five separate COUNT(...) queries so this stays a
 // single round trip regardless of how many distinct ratings exist.
 exports.getProductRatingBreakdown = async (productId) => {
@@ -153,7 +153,7 @@ exports.getProductRatingBreakdown = async (productId) => {
     return rows;
 };
 
-// Phase 4 - booking-review counterpart of findByProduct. Joined through
+// Booking-review counterpart of findByProduct. Joined through
 // bookings (reviews has no service_id column of its own, same reasoning
 // findByProduct doesn't need one for products) rather than adding a
 // denormalized service_id to reviews, keeping the "exactly one target"
@@ -195,7 +195,7 @@ exports.getServiceRatingBreakdown = async (serviceId) => {
     return rows;
 };
 
-// Phase 4 - provider-level sibling of findByService, the booking-review
+// Provider-level sibling of findByService, the booking-review
 // counterpart of findBySeller/getSellerRatingSummary/getSellerRatingBreakdown
 // just below. Paginated for the same reason findBySeller is: a provider's
 // review count across every service they offer is unbounded.
@@ -239,7 +239,7 @@ exports.getProviderRatingBreakdown = async (providerId) => {
     return rows;
 };
 
-// Phase 5D (store page): every review across every product a seller
+// (store page): every review across every product a seller
 // sells, newest first - the store-level equivalent of findByProduct.
 // Joins products to scope by seller_id (reviews has no seller_id column
 // of its own, same join store.repository.js's average_rating/review_count
@@ -278,7 +278,7 @@ exports.getSellerRatingSummary = async (sellerId) => {
     return rows[0];
 };
 
-// Phase 6C: store-level sibling of getProductRatingBreakdown, same
+// Store-level sibling of getProductRatingBreakdown, same
 // join-through-products reasoning as findBySeller/getSellerRatingSummary
 // above.
 exports.getSellerRatingBreakdown = async (sellerId) => {
@@ -293,7 +293,7 @@ exports.getSellerRatingBreakdown = async (sellerId) => {
     return rows;
 };
 
-// --- Review photos (Phase 6C) ---
+// --- Review photos  ---
 // Direct structural sibling of product_images/videos/audio in
 // product.repository.js: countExisting.../add.../findBy...ProductId, just
 // against review_photos + review_id instead of a product table.
@@ -331,7 +331,7 @@ exports.findPhotosByReviewIds = async (reviewIds) => {
     return rows;
 };
 
-// --- Seller reply (Phase 6C) ---
+// --- Seller reply  ---
 
 exports.setSellerReply = async (reviewId, replyText) => {
     await db.query(

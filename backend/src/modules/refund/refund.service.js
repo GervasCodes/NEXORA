@@ -1,5 +1,5 @@
 /**
- * Refund automation (Phase 2).
+ * Refund automation.
  *
  * Entry point: exports.autoRefundForDispute(), called from
  * dispute.service.js's resolveDispute() whenever an admin resolves a
@@ -41,7 +41,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Mirrors the ER_DUP_ENTRY code mysql2 throws on a UNIQUE constraint hit.
 const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062);
 
-// Phase Q1: generalized over the refund's source (a dispute or a
+// generalized over the refund's source (a dispute or a
 // return) rather than being dispute-only. `source` is
 // { type: "dispute" | "return", id, orderId, buyerId, sellerId }.
 // idempotency_key/dispute_id/return_id are what actually enforce "one
@@ -85,7 +85,7 @@ const findOrCreateRefundRow = async ({ source, payment, amount, requestedBy }) =
     }
 };
 
-// Refund rows come from either a dispute or a return (Phase Q1) - this
+// Refund rows come from either a dispute or a return  - this
 // just renders whichever source pointer is set, for provider references
 // and log/audit text.
 const sourceLabel = (refund) => (refund.dispute_id ? `dispute #${refund.dispute_id}` : `return #${refund.return_id}`);
@@ -163,7 +163,7 @@ const callProvider = async (refund, payment) => {
     return { success: false, error: `No automatic refund path for payment method "${payment.method}"` };
 };
 
-// Refund rows now come from either a dispute or a return (Phase Q1) -
+// Refund rows now come from either a dispute or a return  -
 // sourceLabel/sourceSlug (declared above, near callProvider) render
 // whichever source pointer is set for logs/audit text.
 

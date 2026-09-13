@@ -10,7 +10,7 @@ exports.getPublicStoreProfile = async (slug) => {
     return store;
 };
 
-// Phase 7C - Seller Collections. No "store not found" check here (unlike
+// Seller Collections. No "store not found" check here (unlike
 // getPublicStoreProfile above): an unknown slug simply matches nothing in
 // the JOIN and returns an empty array, which is exactly what a store with
 // no collections yet should also return - the two cases don't need to be
@@ -27,7 +27,7 @@ exports.search = async (query) => {
     return storeRepository.search({ search, limit });
 };
 
-// Store follows (Phase 6, UI/UX remediation). Resolves the store's
+// Store follows (UI/UX remediation). Resolves the store's
 // slug to its owning seller's user_id first (same lookup
 // getStoreProfile already does) so the follow relationship is keyed on
 // the same identifier as everything else in this file, not a second

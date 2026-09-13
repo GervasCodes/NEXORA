@@ -1,4 +1,4 @@
-// Phase 3 (Nexora Services - Financial Integration). Advances paid
+// (Nexora Services - Financial Integration). Advances paid
 // bookings through CHANGES.md's own Booking Lifecycle
 // (CONFIRMED -> ACTIVE -> COMPLETED) as their dates pass, with no user
 // action required - see booking.repository.js#activateStartedBookings /

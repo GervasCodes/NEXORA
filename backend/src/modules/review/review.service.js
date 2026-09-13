@@ -4,7 +4,7 @@ const bookingRepository = require("../booking/booking.repository");
 const notificationService = require("../notification/notification.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
-// Phase 6C: turns the flat [{rating, count}, ...] rows from
+// Turns the flat [{rating, count}, ...] rows from
 // getProductRatingBreakdown/getSellerRatingBreakdown into a fixed
 // {5: n, 4: n, 3: n, 2: n, 1: n} shape so the frontend bar chart never
 // has to handle a missing star rating (e.g. zero 2-star reviews) as a
@@ -56,7 +56,7 @@ exports.createReview = async (buyerId, productId, rating, comment) => {
     return { reviewId };
 };
 
-// Phase 4 (Customer Experience) - booking-review counterpart of
+// (Customer Experience) - booking-review counterpart of
 // createReview. Eligibility is "this buyer's own completed booking"
 // (reviewRepository.hasCompletedBooking) rather than a delivered order,
 // since a booking has no delivery step (see migration 064's design
@@ -77,7 +77,7 @@ exports.createBookingReview = async (buyerId, bookingId, rating, comment) => {
     const reviewId = await reviewRepository.createForBooking(buyerId, bookingId, rating, comment);
 
     // New-review notification to the provider - reviews never notified
-    // anyone before Phase 4 (CHANGES.md's own Phase 4 "Notifications"
+    // anyone before  (CHANGES.md's own Phase 4 "Notifications"
     // item). Plain title/message, not i18n keys, same convention
     // booking.service.js's notify() calls already use for this module's
     // events.
@@ -132,7 +132,7 @@ exports.getProductReviews = async (productId, sortBy) => {
     };
 };
 
-// Phase 4 - booking-review counterpart of getProductReviews.
+// Booking-review counterpart of getProductReviews.
 exports.getServiceReviews = async (serviceId, sortBy) => {
     const [reviews, summary, breakdownRows] = await Promise.all([
         reviewRepository.findByService(serviceId, sortBy),
@@ -152,7 +152,7 @@ exports.getServiceReviews = async (serviceId, sortBy) => {
 
 const PROVIDER_REVIEWS_PAGE_SIZE = 10;
 
-// Phase 4 - paginated provider-level sibling of getServiceReviews, same
+// Paginated provider-level sibling of getServiceReviews, same
 // reasoning/shape as getStoreReviews below (a provider's total review
 // count across every service is unbounded).
 exports.getProviderReviews = async (providerId, page = 1, sortBy) => {
@@ -181,7 +181,7 @@ exports.getProviderReviews = async (providerId, page = 1, sortBy) => {
 
 const STORE_REVIEWS_PAGE_SIZE = 10;
 
-// Phase 5D: paginated, since (unlike a single product) a store's review
+// Paginated, since (unlike a single product) a store's review
 // count is unbounded - same offset-pagination shape product.service.js's
 // findAll response already uses (pagination.total/totalPages), so the
 // store page's "Load more" can follow ProductGrid's existing pattern
@@ -210,7 +210,7 @@ exports.getStoreReviews = async (sellerId, page = 1, sortBy) => {
     };
 };
 
-// Phase 6C - buyers can attach photos to their own review, same
+// Buyers can attach photos to their own review, same
 // ownership-then-cap-then-upload shape as product.service.js's
 // addProductVideo/addProductAudio.
 const MAX_PHOTOS_PER_REVIEW = 5;
@@ -235,7 +235,7 @@ exports.addReviewPhoto = async (buyerId, reviewId, file) => {
     return { photoUrl: result.secure_url };
 };
 
-// Phase 6C - a seller can reply once (editable) to any review left on
+// A seller can reply once (editable) to any review left on
 // one of their own products. Ownership runs through products.seller_id,
 // same join reasoning findBySeller/getSellerRatingSummary already use,
 // via productRepository (already imported by wishlist.service.js the
@@ -248,7 +248,7 @@ exports.replyToReview = async (sellerId, reviewId, replyText) => {
         throw new Error("Review not found");
     }
 
-    // Phase 4 - a review is now either product-keyed or booking-keyed
+    // A review is now either product-keyed or booking-keyed
     // (migration 065), so ownership is checked against whichever target
     // it has. A provider replying to a booking review goes through the
     // exact same seller_reply column/endpoint as a seller replying to a

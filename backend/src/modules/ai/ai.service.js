@@ -129,7 +129,7 @@ exports.getUsageOverview = async () => {
     return { dailyTokensUsedGlobal, monthlyTokensUsedGlobal };
 };
 
-// --- Feature 4: FAQ / support assistant --------------------------------
+// ---  FAQ / support assistant --------------------------------
 
 // Small, hand-curated knowledge base rather than letting the model
 // answer from general training knowledge - keeps FAQ answers accurate
@@ -216,7 +216,7 @@ exports.chat = async ({ userId, message, history, priorReply }) => {
     };
 };
 
-// --- Feature 2: smart product search ------------------------------------
+// --- smart product search ------------------------------------
 
 // Must match the real values product.service.js/productSort.js accept
 // (see backend/src/utils/productSort.js's SORT_CLAUSES) - not a
@@ -261,7 +261,7 @@ exports.parseSearchQuery = async ({ userId, text }) => {
     return { ...naiveParse(text), min_price: null, max_price: null, sort: null, aiGenerated: false, truncated: Boolean(result?.truncated) };
 };
 
-// --- Feature 3: recommendation "why" phrasing ----------------------------
+// --- recommendation "why" phrasing ----------------------------
 
 // recommendationService stays fully authoritative for WHICH products
 // appear (global constraint: ranking/scoring is never AI-driven) - this
@@ -307,7 +307,7 @@ exports.explainRecommendations = async ({ userId, forProductSlug }) => {
     };
 };
 
-// --- Feature 5: order-status assistant -----------------------------------
+// --- order-status assistant -----------------------------------
 
 const STATUS_TEMPLATES = {
     pending: "Your order has been placed and is waiting for the seller to confirm it.",
@@ -343,7 +343,7 @@ exports.explainOrderStatus = async ({ userId, orderId }) => {
     };
 };
 
-// Phase 9: extends the same "ask about this" pattern to a product page,
+//  extends the same "ask about this" pattern to a product page,
 // ahead of any purchase/order existing. product.service.js#getProductBySlug
 // stays the single source of truth for every fact used below (price,
 // stock, condition, category, store) - AI only phrases them into a
@@ -419,7 +419,7 @@ const BOOKING_STATUS_TEMPLATES = {
     refunded: "This booking was refunded."
 };
 
-// --- Phase B2: seller/provider AI (draft-generation, no auto-execute) ---
+// --- seller/provider AI (draft-generation, no auto-execute) ---
 //
 // Every function below returns a DRAFT only - nothing here writes to
 // products, services, availability, or any other table. The seller/
@@ -429,7 +429,7 @@ const BOOKING_STATUS_TEMPLATES = {
 // draft response as a explicit signal the frontend surfaces, not just
 // an implicit assumption.
 
-// --- Feature 6: listing/description generator (product + service) ------
+// --- listing/description generator (product + service) ------
 
 // Pure text generation from what the seller typed - no product/service
 // DB read needed, since this also has to work for a brand-new,
@@ -458,7 +458,7 @@ exports.generateListingDraft = async ({ userId, type, name, category, keyFeature
     };
 };
 
-// --- Feature 8: AI marketing assistant (copy drafts) ---------------------
+// --- AI marketing assistant (copy drafts) ---------------------
 
 exports.generateMarketingCopy = async ({ userId, name, audience, tone, keyPoints }) => {
     const facts = `Item name: ${name}\nTarget audience: ${audience || "general shoppers"}\nDesired tone: ${tone || "friendly"}\nKey points supplied by the seller: ${keyPoints || "n/a"}`;
@@ -480,7 +480,7 @@ exports.generateMarketingCopy = async ({ userId, name, audience, tone, keyPoints
     };
 };
 
-// --- Feature 7: seller AI analytics summaries -----------------------------
+// --- seller AI analytics summaries -----------------------------
 
 // Reads the seller's own real analytics via seller.service.js#getAnalytics
 // (unchanged, still the single source of truth for every number) - AI
@@ -506,7 +506,7 @@ exports.summarizeSellerAnalytics = async ({ userId }) => {
     };
 };
 
-// --- Phase Q8: AI demand forecasting for sellers (restock/pricing) -------
+// --- AI demand forecasting for sellers (restock/pricing) -------
 //
 // Same "rule-based facts first, AI phrases a suggestion on top" pattern
 // as every other feature in this file. The actual forecast math is
@@ -585,7 +585,7 @@ exports.suggestRestockAndPricing = async ({ userId }) => {
     };
 };
 
-// --- Feature 9: service-provider assistant (booking-availability) --------
+// --- service-provider assistant (booking-availability) --------
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -637,7 +637,7 @@ exports.suggestAvailability = async ({ userId, serviceId }) => {
     };
 };
 
-// --- Feature 10: delivery-agent assistant (route/schedule help) ----------
+// --- delivery-agent assistant (route/schedule help) ----------
 
 const ACTIVE_DELIVERY_STATUSES = ["assigned", "picked_up", "in_transit"];
 
@@ -693,7 +693,7 @@ exports.explainDeliveryRoute = async ({ userId }) => {
     };
 };
 
-// --- Phase B3: Admin AI Copilot (advisory only, never auto-acts) --------
+// --- Admin AI Copilot (advisory only, never auto-acts) --------
 //
 // Every function below is read-only / draft-only, same as B1/B2 - none
 // of these call a dispute-resolve, fraud-flag-resolve, or any other
@@ -705,7 +705,7 @@ exports.explainDeliveryRoute = async ({ userId }) => {
 // already computed, per the roadmap's "AI explains, rule engine/
 // statistics stay authoritative" constraint (#12/#13/#14).
 
-// --- Feature 11: plain-language dispute summary (admin triage) ---------
+// --- plain-language dispute summary (admin triage) ---------
 
 // Reads the real dispute via dispute.service.js#getDisputeDetail with
 // role="admin" (same call/authorization shape
@@ -746,7 +746,7 @@ const TYPE_LABELS_FOR_AI = {
     other: "Other issue"
 };
 
-// --- Feature 12: fraud queue explanation (rule engine stays authoritative) ---
+// --- fraud queue explanation (rule engine stays authoritative) ---
 
 // fraud.service.js#listOpenFlags stays the one source of truth for
 // which flags exist, their severity, and their ordering (rule-based,
@@ -789,7 +789,7 @@ exports.explainFraudQueue = async ({ userId }) => {
     };
 };
 
-// --- Feature 13: predictive analytics explanation (statistical model stays authoritative) ---
+// --- predictive analytics explanation (statistical model stays authoritative) ---
 
 // admin.service.js#getAnalytics / getServicesAnalytics own the actual
 // forecast (plain OLS linear regression - see forecastRevenue there,
@@ -827,7 +827,7 @@ exports.explainForecast = async ({ userId, vertical }) => {
     };
 };
 
-// --- Feature 14: personalization health explanation (scoring algorithm stays authoritative) ---
+// --- personalization health explanation (scoring algorithm stays authoritative) ---
 
 // recommendation.service.js's ranking is never touched here or anywhere
 // in this module (global constraint) - this reads real, already-
@@ -863,7 +863,7 @@ exports.explainPersonalizationHealth = async ({ userId }) => {
     };
 };
 
-// --- Feature 15: agentic workflow - dispute-resolution suggestion ------
+// --- agentic workflow - dispute-resolution suggestion ------
 //
 // Low-risk, multi-step, advisory-only: (1) fetch the real dispute,
 // (2) look up real historical precedent for this seller+type via a

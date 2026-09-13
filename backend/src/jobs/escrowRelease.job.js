@@ -1,5 +1,5 @@
-// Phase 9D - Seller Release. Runs on a schedule (see jobs/index.js) and
-// releases held seller earnings (Phase 9C's held_balance) into
+// Seller Release. Runs on a schedule (see jobs/index.js) and
+// releases held seller earnings ( held_balance) into
 // withdrawable balance once an order is delivered and
 // settings.escrow_hold_days has elapsed with no open dispute - see
 // docs/ESCROW_ANALYSIS.md for the full design and
@@ -8,7 +8,7 @@
 // around that function, matching the shape of every other job in this
 // directory.
 //
-// Phase 3 (Nexora Services - Financial Integration) added the booking
+// (Nexora Services - Financial Integration) added the booking
 // equivalent, wallet.service.js#releaseEligibleBookingEarnings - run
 // from the same tick rather than a second cron entry, since it's the
 // exact same "release whatever's past its hold window" sweep just

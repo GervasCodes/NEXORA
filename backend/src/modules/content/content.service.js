@@ -1,5 +1,5 @@
 /**
- * SEO content engine (Phase Q7) - category/buying guides. Admin-authored
+ * SEO content engine  category/buying guides. Admin-authored
  * only (no seller-submitted content pipeline/moderation queue to build
  * here - "SEO content engine" in the roadmap reads as a marketing/
  * editorial tool, not user-generated content).

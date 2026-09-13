@@ -1,4 +1,4 @@
-// Phase 5 - Audit Logs. Every event_type ever written via
+// Audit Logs. Every event_type ever written via
 // audit.service.js#log/logFromRequest, grouped the way the admin panel's
 // filter dropdown presents them. A group name doubles as the `category`
 // query param accepted by GET /admin/audit-logs (see admin.controller.js).

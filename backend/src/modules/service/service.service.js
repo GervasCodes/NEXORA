@@ -92,7 +92,7 @@ exports.listServices = async (query) => {
     };
 };
 
-// Phase 4 (Customer Experience) - services counterpart of
+// Services counterpart of
 // product.service.js's getFilterRegions, feeding ServiceFilters.jsx's
 // Location dropdown.
 exports.listFilterRegions = async (query) => {
@@ -217,7 +217,7 @@ exports.setServiceActiveByProvider = async (providerId, serviceId, isActive) => 
     await serviceRepository.setActive(serviceId, isActive);
 };
 
-// --- Dynamic pricing rules (Phase 5 - Growth) --------------------------
+// --- Dynamic pricing rules  --------------------------
 
 const RULE_TYPES = ["day_of_week", "date_range"];
 const ADJUSTMENT_TYPES = ["percentage", "fixed"];

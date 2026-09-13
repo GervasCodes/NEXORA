@@ -42,7 +42,7 @@ exports.findByOrderId = async (orderId) => {
     return rows;
 };
 
-// Phase 4 (UI/UX remediation) - filtering + pagination, same treatment
+// (UI/UX remediation) - filtering + pagination, same treatment
 // as order.repository.js#findOrdersByBuyer. `q` matches the dispute
 // number, subject, or the order number it's against.
 exports.findByBuyer = async (buyerId, { status, from, to, q, page = 1, limit = 10 } = {}) => {

@@ -43,7 +43,7 @@ exports.setStatus = async (id, status) => {
     await db.query("UPDATE live_selling_sessions SET status = ? WHERE id = ?", [status, id]);
 };
 
-// Reminders (Phase 9, UI/UX remediation) - "notify me" for a scheduled
+// Reminders (UI/UX remediation) - "notify me" for a scheduled
 // session, fired when its status flips to 'live' (see
 // liveSelling.service.js#setStatus).
 exports.subscribeReminder = async (userId, sessionId) => {

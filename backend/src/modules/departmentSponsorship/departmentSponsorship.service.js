@@ -7,8 +7,8 @@ const walletRepository = require("../wallet/wallet.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 
-// Same bounds as sponsorship.service.js (Phase 8A) and
-// featuredStore.service.js (Phase 8B), for the same reason: long enough to
+// Same bounds as sponsorship.service.js  and
+// featuredStore.service.js , for the same reason: long enough to
 // be useful, short enough that a mistaken purchase can't lock up a large
 // chunk of a seller's wallet for very long. Nothing stops them creating a
 // new campaign the moment one ends.
@@ -180,7 +180,7 @@ exports.cancelCampaign = async (sellerId, campaignId) => {
 // Closes out every campaign whose ends_at has passed. Idempotent: only
 // ever touches rows still marked 'active', so it's safe to run on every
 // tick even if the previous run already handled everything. Like Phase
-// 8B and unlike Phase 8A, there's no display flag to clear alongside the
+// 8B and unlike , there's no display flag to clear alongside the
 // status - the homepage ranking query reads `status`/`ends_at` directly,
 // so flipping the status here is the whole effect.
 exports.expireDueCampaigns = async () => {

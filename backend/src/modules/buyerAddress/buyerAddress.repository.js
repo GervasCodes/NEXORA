@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 1 (UI/UX remediation): saved address book, so a buyer doesn't
+// (UI/UX remediation): saved address book, so a buyer doesn't
 // retype their full delivery address on every checkout. Mirrors
 // wishlist.repository.js's shape (thin raw-SQL functions, one per
 // operation, service layer owns any business rules).

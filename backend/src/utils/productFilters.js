@@ -1,4 +1,4 @@
-// Phase 3A: query-building logic for the price/seller filters on the
+// Query-building logic for the price/seller filters on the
 // public product listing, pulled out of product.repository.js so it can
 // be unit-tested without a database - same pattern as
 // utils/productSearch.js for the search feature in Phase 3B.
@@ -48,7 +48,7 @@ function parseSellerId(raw) {
     return value;
 }
 
-// Phase 3B: location filter. seller_profiles.region/city are free-text
+// Location filter. seller_profiles.region/city are free-text
 // (set by the seller in Store settings, see migration 003), so this is a
 // trimmed exact-match string rather than a parsed id - same treatment as
 // the FULLTEXT search's raw term. An empty/whitespace-only value is
@@ -62,7 +62,7 @@ function parseLocation(raw) {
     return value;
 }
 
-// Phase 3B: minimum-rating filter. Only whole 1-5 star values make sense
+// Minimum-rating filter. Only whole 1-5 star values make sense
 // as a "4 stars & up" style filter control, so anything outside that
 // range (or non-numeric) is treated the same as "not provided" rather
 // than erroring - a stray/tampered query param shouldn't 400 the page.
@@ -108,7 +108,7 @@ function buildPriceSellerConditions({ minPrice, maxPrice, sellerId }) {
     return { conditions, params };
 }
 
-// Phase 3B: builds the extra SQL conditions/params for the location
+// Builds the extra SQL conditions/params for the location
 // (region) and minimum-rating filters. Kept separate from
 // buildPriceSellerConditions above so each filter group stays testable
 // and reviewable on its own, following the same "just apply whatever

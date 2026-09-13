@@ -89,7 +89,7 @@ describe("admin.service user/seller/product moderation", () => {
     });
 });
 
-// Phase A4 - Products & Services List UI/UX (search/category/status
+// Products & Services List UI/UX (search/category/status
 // filters, pagination, bulk activate/deactivate).
 describe("admin.service.listProducts (Phase A4)", () => {
     it("clamps page/limit and forwards search/category/status filters as-is", async () => {
@@ -744,7 +744,7 @@ describe("admin.service.permanentlyDeleteUser (Phase 4 - Permanent Account Remov
     });
 });
 
-// ---- Phase 3 (Revenue & Product) - active-users metrics (076) -------------
+// ---- (Revenue & Product) - active-users metrics  -------------
 
 describe("admin.service.getBusinessMetrics - active users breakdown", () => {
     const emptyGmv = { gmv_all_time: 0, gmv_today: 0, gmv_7d: 0, gmv_30d: 0, paid_count: 0 };

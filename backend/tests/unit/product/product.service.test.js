@@ -2,7 +2,7 @@ jest.mock("../../../src/modules/product/product.repository");
 jest.mock("../../../src/modules/category/category.repository");
 jest.mock("../../../src/utils/cloudinaryUpload");
 jest.mock("../../../src/modules/subscription/subscription.service");
-// Phase RF5: getOrSet calls straight through to fetchFn so this file's
+// GetOrSet calls straight through to fetchFn so this file's
 // existing repository-level assertions keep working unchanged; bumpVersion
 // is asserted directly on every write path below.
 jest.mock("../../../src/utils/cache", () => ({
@@ -17,7 +17,7 @@ const subscriptionService = require("../../../src/modules/subscription/subscript
 const cache = require("../../../src/utils/cache");
 const productService = require("../../../src/modules/product/product.service");
 
-// Phase 6A - Product Videos. addProductVideo mirrors the pre-existing
+// Product Videos. addProductVideo mirrors the pre-existing
 // (previously untested) addProductImage: same ownership check, but with
 // its own per-product cap since video is far more storage/bandwidth
 // expensive than a photo.
@@ -136,7 +136,7 @@ describe("product.service.getProductBySlug", () => {
     });
 });
 
-// Phase A4 - Products & Services List UI/UX (seller's own product list:
+// Products & Services List UI/UX (seller's own product list:
 // search/category/status filters, pagination, bulk activate/deactivate).
 describe("product.service.getMyProducts (Phase A4)", () => {
     beforeEach(() => jest.clearAllMocks());
@@ -184,7 +184,7 @@ describe("product.service.bulkSetProductActiveBySeller (Phase A4)", () => {
     });
 });
 
-// Phase RF5 - Redis Caching Layer.
+// Redis Caching Layer.
 describe("product.service Phase RF5 caching", () => {
     beforeEach(() => jest.clearAllMocks());
 

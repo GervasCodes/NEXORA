@@ -145,7 +145,7 @@ router.put(
     productController.bulkProductStatus
 );
 
-// Phase 11 (UI/UX remediation) - bulk price adjustment.
+// UI/UX remediation - bulk price adjustment.
 router.put(
     "/bulk/price",
     authMiddleware,

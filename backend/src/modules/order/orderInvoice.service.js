@@ -3,7 +3,7 @@ const orderService = require("./order.service");
 const accountRepository = require("../account/account.repository");
 const efdRepository = require("../efd/efd.repository");
 
-// Phase 4 (UI/UX remediation) - downloadable order invoice.
+// (UI/UX remediation) - downloadable order invoice.
 //
 // No PDF library existed anywhere in this codebase before this (checked
 // both package.json files), so pdfkit is a genuinely new dependency -

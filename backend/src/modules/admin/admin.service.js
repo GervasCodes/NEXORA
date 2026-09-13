@@ -12,7 +12,7 @@ const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const accountRepository = require("../account/account.repository");
 const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
-// Phase 3 (Admin Manual Override & Ops Visibility) - manualAssignDelivery
+// (Admin Manual Override & Ops Visibility) - manualAssignDelivery
 // below delegates the actual delivery-row creation to delivery.service.js
 // so manual admin assignment goes through the same hardened path
 // (guard clauses, notifications, race handling) as every other way a
@@ -31,13 +31,13 @@ exports.listUsers = async () => {
     return adminRepository.findAllUsers();
 };
 
-// Phase 3 - Deleted Accounts section. permanentlyDeleteUser below (Phase
-// 4) is what an admin calls from here to actually erase one.
+// Deleted Accounts section. permanentlyDeleteUser below 
+//  is what an admin calls from here to actually erase one.
 exports.listDeletedUsers = async () => {
     return adminRepository.findAllDeletedUsers();
 };
 
-// Phase 4 - Permanent Account Removal.
+// Permanent Account Removal.
 //
 // Runs against an account that already went through Phase 3's soft
 // delete (deleted_at set). Erases every identifying field, deletes
@@ -113,7 +113,7 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         await adminRepository.deleteProducts(neverOrderedProductIds, connection);
         await adminRepository.deleteSellerCollections(userId, connection);
 
-        // Previously guaranteed by the self-delete step (Phase 3) that used
+        // Previously guaranteed by the self-delete step  that used
         // to be a precondition for this action. Now that an admin can
         // permanently delete an account directly, this step has to do that
         // cleanup itself instead of assuming it already happened.
@@ -349,7 +349,7 @@ exports.setSellerVerified = async (sellerUserId, isVerified) => {
     });
 };
 
-// Phase A4: page/limit clamped the same way product.service.js#listProducts
+// page/limit clamped the same way product.service.js#listProducts
 // clamps them (max 50/page); search/category_id/status pass straight
 // through to the repository, which treats a missing/unrecognized status
 // as "no filter" (both active and inactive rows).
@@ -390,7 +390,7 @@ exports.setProductActive = async (productId, isActive) => {
     });
 };
 
-// Bulk activate/deactivate (Phase A4's AdminProducts bulk action). Reuses
+// Bulk activate/deactivate (AdminProducts bulk action). Reuses
 // the same notification as the single-product toggle above, once per
 // affected product, so a seller sees the same per-listing notice either
 // way - just fetched/updated as one batch instead of N round trips.
@@ -488,11 +488,11 @@ exports.bulkSetServiceActive = async (serviceIds, isActive) => {
     return { updated: services.length };
 };
 
-exports.listAllOrders = async () => {
-    return adminRepository.findAllOrders();
+exports.listAllOrders = async (query = {}) => {
+    return adminRepository.findAllOrders({ sort: query.sort || null });
 };
 
-// --- Dispatch dashboard (Phase 6) ---
+// --- Dispatch dashboard ---
 //
 // One combined read for the admin dispatch board: every in-flight
 // delivery (with a computed delay flag - see admin.repository's
@@ -516,7 +516,7 @@ exports.getDispatchOverview = async () => {
 
     const delayed = normalizedDeliveries.filter((d) => d.is_delayed);
 
-    // Phase 3: same normalize-then-derive shape as is_delayed/delayed
+    // same normalize-then-derive shape as is_delayed/delayed
     // above, just for the manual pool instead of active deliveries.
     const normalizedUnmatched = unmatchedOrders.map((o) => ({
         ...o,
@@ -542,7 +542,7 @@ exports.getDispatchOverview = async () => {
     };
 };
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - lets staff push a
+// (Admin Manual Override & Ops Visibility) - lets staff push a
 // specific unmatched order onto a specific online agent directly from the
 // dispatch board, instead of only waiting on automatic matching. See
 // deliveryService.adminAssignDelivery for the actual guard clauses/
@@ -582,7 +582,7 @@ exports.getDashboard = async () => {
             total: Number(productCounts.total_products) || 0,
             active: Number(productCounts.active_products) || 0
         },
-        // Phase 5 (Growth) - marketplace insights: the services
+        // (Growth) - marketplace insights: the services
         // counterpart of orders/products/revenue above.
         bookings: {
             total: Number(bookingCounts.total_bookings) || 0,
@@ -650,7 +650,7 @@ exports.getAnalytics = async () => {
     };
 };
 
-// Phase 5 (Growth) - Analytics + Advanced Reporting. Services
+// (Growth) - Analytics + Advanced Reporting. Services
 // counterpart of getAnalytics above, same daily-sales/forecast/top-N
 // shape, reusing forecastRevenue as-is (it only cares about a row's
 // day/revenue fields, nothing product-specific) plus a
@@ -760,7 +760,7 @@ function forecastRevenue(rows, windowDays, forecastDays) {
     return projected;
 }
 
-// --- Business metrics (Phase 4 - Analytics & Business Metrics) --------
+// --- Business metrics (Analytics & Business Metrics) --------
 //
 // One blended endpoint covering GMV, take rate, repeat-buyer rate, and
 // provider retention - the "how healthy is the marketplace as a
@@ -869,7 +869,7 @@ exports.getBusinessMetrics = async () => {
     };
 };
 
-// CSV export (Phase 4 - Dashboard/reporting enhancements). A plain,
+// CSV export (Dashboard/reporting enhancements). A plain,
 // dependency-free CSV built by hand (one row per day, products and
 // bookings GMV kept in separate columns as well as a blended total) -
 // no new npm package pulled in just to serialize a handful of numeric
@@ -911,7 +911,7 @@ exports.exportGmvCsv = async (days) => {
     return lines.join("\n");
 };
 
-// --- Phase A5 (Advanced Analytics) --------------------------------------
+// --- (Advanced Analytics) --------------------------------------
 // Period comparison + platform-wide top customers + seller leaderboard.
 // Deliberately its own endpoint rather than folded into getBusinessMetrics
 // - that one is a single point-in-time snapshot of blended health metrics,
@@ -922,7 +922,7 @@ function growthPercent(current, previous) {
     return Number((((current - previous) / previous) * 100).toFixed(1));
 }
 
-// Phase P8 (Analytics Visualization) - customRange (optional
+// (Analytics Visualization) - customRange (optional
 // {start: Date, end: Date}) adds a third "custom" entry to
 // periodComparison alongside the fixed week/month ones. See
 // admin.controller.js for where start/end query params are parsed and
@@ -1015,7 +1015,7 @@ exports.updateSettings = async (data) => {
 };
 
 // Read-only Nexora Assistant token usage (today/this month, global) for
-// the Admin Settings page's usage panel (Phase 7). Lazily required
+// the Admin Settings page's usage panel . Lazily required
 // since ai.service.js already requires admin.service.js at module load
 // (mirrors the lazy audit.service require in settings.service.js above).
 exports.getAiUsageSummary = async () => {
@@ -1052,7 +1052,7 @@ exports.listSponsorshipCampaigns = async () => {
     return sponsorshipService.listAllCampaigns();
 };
 
-// --- Featured store campaigns (Phase 8B - read-only oversight; there is
+// --- Featured store campaigns (read-only oversight; there is
 // no manual free toggle equivalent here, since a store's featured
 // placement is scoped per department and derived live from this table -
 // see category.repository.js#findFeaturedStoresByCategory) ---
@@ -1060,7 +1060,7 @@ exports.listFeaturedStoreCampaigns = async () => {
     return featuredStoreService.listAllCampaigns();
 };
 
-// --- Department sponsorship campaigns (Phase 8C - read-only oversight;
+// --- Department sponsorship campaigns (read-only oversight;
 // same reasoning as Featured Stores above - a department's homepage
 // placement is derived live from this table, see
 // category.repository.js#findAllActiveWithSponsorship) ---
@@ -1086,7 +1086,7 @@ exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
 };
 
-// --- Escrow manual release (Phase 9D - docs/ESCROW_ANALYSIS.md section
+// --- Escrow manual release (docs/ESCROW_ANALYSIS.md section
 // 3.4). Bypasses the normal delivered + escrow_hold_days timing gate for
 // one order (e.g. a buyer has confirmed receipt, or an admin wants to
 // close out a stale/edge-case order), but still respects the same
@@ -1097,7 +1097,7 @@ exports.releaseOrderEscrow = async (orderId) => {
     return walletService.releaseOrderEarnings(orderId);
 };
 
-// Booking equivalent (Phase 3 - Financial Integration) - same manual
+// Booking equivalent (Financial Integration) - same manual
 // bypass of the completed + escrow_hold_days timing gate, for one
 // booking's held provider earnings. No dispute-freeze rule to respect
 // here (see migration 064's design notes - bookings have no dispute
@@ -1144,7 +1144,7 @@ exports.addAdmin = async (data, actorAdminId) => {
         admin_level: resolvedLevel
     });
 
-    // Phase 5 (Audit Logs) - a new admin account is itself a permission
+    // (Audit Logs) - a new admin account is itself a permission
     // grant, so it's tracked the same way as updateAdminPermissions below
     // rather than being lumped in with ordinary user_registered events.
     auditService.log({
@@ -1187,7 +1187,7 @@ exports.updateAdminPermissions = async (userId, adminLevel, actorAdminId) => {
 
     await adminRepository.updateAdminLevel(userId, adminLevel);
 
-    // Phase 5 (Audit Logs) - permission changes weren't tracked at all
+    // (Audit Logs) - permission changes weren't tracked at all
     // before this; every promotion/demotion between admin and super_admin
     // now leaves a record of who changed it and what it changed from/to.
     if (previousLevel !== resolvedLevel) {
@@ -1255,7 +1255,7 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
     });
 };
 
-// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only
+// Roadmap (Predictive Coverage Dashboard for Ops) - read-only
 // reporting view: combines historical order-volume and historical
 // offered-agent data (see the repository functions' header comment for
 // why the latter is a proxy, not a true online-status history) into one

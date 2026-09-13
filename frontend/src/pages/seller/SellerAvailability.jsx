@@ -5,6 +5,7 @@ import AvailabilityCalendar from "../../components/AvailabilityCalendar";
 import NexoraAvailabilitySuggestion from "../../components/ai/NexoraAvailabilitySuggestion";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import Input from "../../components/ui/Input";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -125,44 +126,41 @@ export default function SellerAvailability() {
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                             <label htmlFor="availability-start" className="block text-xs text-ash mb-1">Start date</label>
-                            <input
+                            <Input
                                 id="availability-start"
                                 type="date"
                                 required
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                             />
                         </div>
                         <div>
                             <label htmlFor="availability-end" className="block text-xs text-ash mb-1">End date</label>
-                            <input
+                            <Input
                                 id="availability-end"
                                 type="date"
                                 required
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                             />
                         </div>
                     </div>
 
                     <div className="mb-3">
                         <label htmlFor="availability-units" className="block text-xs text-ash mb-1">Available units</label>
-                        <input
+                        <Input
                             id="availability-units"
                             type="number"
                             min={0}
                             required
                             value={availableUnits}
                             onChange={(e) => setAvailableUnits(e.target.value)}
-                            className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                         />
                     </div>
 
                     <div className="mb-3">
                         <label htmlFor="availability-price" className="block text-xs text-ash mb-1">Price override (optional)</label>
-                        <input
+                        <Input
                             id="availability-price"
                             type="number"
                             min={0}
@@ -170,7 +168,6 @@ export default function SellerAvailability() {
                             placeholder="Use listing price"
                             value={price}
                             onChange={(e) => setPrice(e.target.value)}
-                            className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                         />
                     </div>
 

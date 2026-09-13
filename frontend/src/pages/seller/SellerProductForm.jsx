@@ -5,6 +5,7 @@ import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import Input from "../../components/ui/Input";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
@@ -290,16 +291,17 @@ export default function SellerProductForm() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm mb-1">Product name</label>
-                    <input required minLength={3} value={form.name} onChange={update("name")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                </div>
+                <Input
+                    label="Product name"
+                    required minLength={3} value={form.name} onChange={update("name")}
+                />
 
                 <div>
-                    <label className="block text-sm mb-1">Description</label>
-                    <textarea rows={4} value={form.description} onChange={update("description")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
+                    <Input
+                        as="textarea"
+                        label="Description"
+                        rows={4} value={form.description} onChange={update("description")}
+                    />
                     <NexoraCopyAssist
                         mode="product"
                         name={form.name}
@@ -312,29 +314,27 @@ export default function SellerProductForm() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">Price</label>
-                        <input required type="number" min="0" step="0.01" value={form.price} onChange={update("price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Discount price (optional)</label>
-                        <input type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
-                    </div>
+                    <Input
+                        label="Price"
+                        required type="number" min="0" step="0.01" value={form.price} onChange={update("price")}
+                        className="price"
+                    />
+                    <Input
+                        label="Discount price (optional)"
+                        type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
+                        className="price"
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">Stock</label>
-                        <input type="number" min="0" value={form.stock} onChange={update("stock")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Brand (optional)</label>
-                        <input value={form.brand} onChange={update("brand")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label="Stock"
+                        type="number" min="0" value={form.stock} onChange={update("stock")}
+                    />
+                    <Input
+                        label="Brand (optional)"
+                        value={form.brand} onChange={update("brand")}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

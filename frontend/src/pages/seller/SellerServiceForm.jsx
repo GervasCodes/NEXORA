@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import Input from "../../components/ui/Input";
 
 const PRICING_MODELS = [
     { value: "fixed", label: "Fixed price" },
@@ -147,16 +148,17 @@ export default function SellerServiceForm() {
             <h1 className="font-display text-2xl mb-6">{isEdit ? "Edit service" : "List a new service"}</h1>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm mb-1">Title</label>
-                    <input required minLength={3} value={form.title} onChange={update("title")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                </div>
+                <Input
+                    label="Title"
+                    required minLength={3} value={form.title} onChange={update("title")}
+                />
 
                 <div>
-                    <label className="block text-sm mb-1">Description</label>
-                    <textarea rows={4} value={form.description} onChange={update("description")}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
+                    <Input
+                        as="textarea"
+                        label="Description"
+                        rows={4} value={form.description} onChange={update("description")}
+                    />
                     <NexoraCopyAssist
                         mode="service"
                         name={form.title}
@@ -188,42 +190,38 @@ export default function SellerServiceForm() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">Base price</label>
-                        <input required type="number" min="0" step="0.01" value={form.base_price} onChange={update("base_price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Discount price (optional)</label>
-                        <input type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring price" />
-                    </div>
+                    <Input
+                        label="Base price"
+                        required type="number" min="0" step="0.01" value={form.base_price} onChange={update("base_price")}
+                        className="price"
+                    />
+                    <Input
+                        label="Discount price (optional)"
+                        type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
+                        className="price"
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">City</label>
-                        <input value={form.city} onChange={update("city")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Region</label>
-                        <input value={form.region} onChange={update("region")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label="City"
+                        value={form.city} onChange={update("city")}
+                    />
+                    <Input
+                        label="Region"
+                        value={form.region} onChange={update("region")}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-sm mb-1">Country</label>
-                        <input value={form.country} onChange={update("country")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
-                    <div>
-                        <label className="block text-sm mb-1">Address (optional)</label>
-                        <input value={form.address} onChange={update("address")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring" />
-                    </div>
+                    <Input
+                        label="Country"
+                        value={form.country} onChange={update("country")}
+                    />
+                    <Input
+                        label="Address (optional)"
+                        value={form.address} onChange={update("address")}
+                    />
                 </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}

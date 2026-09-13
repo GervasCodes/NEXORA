@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 
-// Phase 5 (UI/UX remediation) - back-in-stock / price-drop alerts.
+// (UI/UX remediation) - back-in-stock / price-drop alerts.
 // See migration 096's comment on product_alerts' shape.
 
 exports.subscribe = async (userId, productId, alertType, priceBaseline = null) => {

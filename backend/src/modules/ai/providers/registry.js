@@ -1,5 +1,5 @@
 /**
- * AI-provider registry (Phase B1) - deliberately mirrors
+ * AI-provider registry  deliberately mirrors
  * payment/providers/registry.js: a single place to answer "is any
  * provider actually configured right now", so every AI feature falls
  * back to its non-AI behavior instead of guessing.

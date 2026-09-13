@@ -29,7 +29,7 @@ exports.remove = async (req, res) => {
     }
 };
 
-// Services (Phase 5, UI/UX remediation - new).
+// Services (UI/UX remediation - new).
 exports.getSavedServices = async (req, res) => {
     try {
         const items = await wishlistService.getSavedServices(req.user.id);
@@ -57,7 +57,7 @@ exports.removeService = async (req, res) => {
     }
 };
 
-// Ids (Phase 5) - now returns both lists in one call; the response
+// Ids  - now returns both lists in one call; the response
 // shape changed from a flat product-id array to { productIds,
 // serviceIds } - WishlistContext.jsx is updated in the same phase to
 // match, since nothing else in the frontend calls this endpoint

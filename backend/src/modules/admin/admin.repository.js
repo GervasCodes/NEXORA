@@ -65,7 +65,7 @@ exports.unsuspendUser = async (userId) => {
 
 // --- Sellers ---
 // Same deleted_at exclusion as findAllUsers above - a deleted seller's
-// profile still exists (Phase 4 will decide what happens to it), but it
+// profile still exists (will decide what happens to it), but it
 // belongs in the Deleted Accounts section, not the regular Sellers list.
 exports.findAllSellers = async () => {
     const [rows] = await db.query(
@@ -119,7 +119,7 @@ exports.findAllDeliveryAgents = async () => {
 };
 
 // --- Products ---
-// Phase A4: search (name/brand/store) + category + status filters, plus
+// search (name/brand/store) + category + status filters, plus
 // pagination - same shape as product.repository.js#findAll (search plan,
 // LIMIT/OFFSET, separate COUNT(*) for total), minus the is_active=1
 // restriction that query applies since admin needs to see removed
@@ -202,7 +202,7 @@ exports.setProductsActiveBulk = async (ids, isActive) => {
     await db.query("UPDATE products SET is_active = ? WHERE id IN (?)", [isActive, ids]);
 };
 
-// Phase 2C's "Sponsored products" department section. Just the display
+//  "Sponsored products" department section. Just the display
 // placement flag - the campaign/budget/payment system behind it is a
 // separate, later piece of work (Phase 8A).
 exports.setProductSponsored = async (productId, isSponsored) => {
@@ -291,21 +291,25 @@ exports.setServicesActiveBulk = async (ids, isActive) => {
 // A split cart's child orders carry their own slice of the total and
 // exist so vendors/delivery can track them independently - listing them
 // here too would show the same cart's money twice.
-exports.findAllOrders = async () => {
+exports.findAllOrders = async ({ sort } = {}) => {
+    const orderByClause = require("../order/order.repository").resolveOrderSort(sort);
     const [rows] = await db.query(
         `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at, o.is_parent,
-                u.first_name, u.last_name, u.email
+                u.first_name, u.last_name, u.email,
+                (SELECT p.name FROM order_items oi
+                    JOIN products p ON p.id = oi.product_id
+                    WHERE oi.order_id = o.id ORDER BY oi.id ASC LIMIT 1) AS primary_item_name
         FROM orders o
         JOIN users u ON u.id = o.buyer_id
         WHERE o.parent_order_id IS NULL
-        ORDER BY o.created_at DESC
+        ORDER BY ${orderByClause}
         LIMIT 200`
     );
     return rows;
 };
 
-// --- Dispatch dashboard (Phase 6) ---
+// --- Dispatch dashboard  ---
 
 // All deliveries not yet in a terminal state (delivered/failed), with
 // enough order + agent detail for the dispatch board's list/map view.
@@ -373,7 +377,7 @@ exports.findOnlineAgents = async () => {
     return rows;
 };
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - the "manual pool"
+// (Admin Manual Override & Ops Visibility) - the "manual pool"
 // counterpart to findActiveDeliveries above: orders that shipped but
 // never got a delivery record, and aren't currently mid-offer either
 // (same base shape as delivery.repository.js's findAvailableForPickup/
@@ -427,7 +431,7 @@ exports.getDashboardStats = async () => {
         FROM products`
     );
 
-    // Phase 5 (Growth) - services counterpart of orderCounts/productCounts
+    // (Growth) - services counterpart of orderCounts/productCounts
     // above, same shape.
     const [[bookingCounts]] = await db.query(
         `SELECT
@@ -506,7 +510,7 @@ exports.getTopSellers = async (limit) => {
     return rows;
 };
 
-// --- Analytics: services counterpart (Phase 5 - Growth) ---------------
+// --- Analytics: services counterpart (Growth) ---------------
 
 exports.getDailyBookingSales = async (days) => {
     const [rows] = await db.query(
@@ -555,7 +559,7 @@ exports.getTopProviders = async (limit) => {
     return rows;
 };
 
-// Advanced reporting (Phase 5 - Growth): bookings/revenue grouped by
+// Advanced reporting (Growth): bookings/revenue grouped by
 // service category, for the "which category is actually driving
 // revenue" question a top-N services/providers list can't answer on
 // its own.
@@ -573,7 +577,7 @@ exports.getCategoryPerformance = async () => {
     return rows;
 };
 
-// --- Business metrics (Phase 4 - Analytics & Business Metrics) --------
+// --- Business metrics (Analytics & Business Metrics) --------
 //
 // These queries back adminService.getBusinessMetrics - a deliberately
 // separate endpoint from getDashboard/getAnalytics above rather than
@@ -860,7 +864,7 @@ exports.revokeAdmin = async (userId) => {
     );
 };
 
-// --- Permanent Account Removal (Phase 4) ---
+// --- Permanent Account Removal  ---
 // See migration 057 and admin.service.js#permanentlyDeleteUser for the
 // full reasoning. Short version: `users(id)` is referenced by orders,
 // order_items, reviews, disputes, delivery_ratings, conversations/
@@ -1105,7 +1109,7 @@ exports.scrubUserPII = async (userId, executor = db) => {
     );
 };
 
-// --- Phase A5 (Advanced Analytics) -------------------------------------
+// --- (Advanced Analytics) -------------------------------------
 //
 // Three additions beyond getAnalytics/getServicesAnalytics/getBusinessMetrics
 // above: period-over-period comparison (this week vs last week, and the
@@ -1149,7 +1153,7 @@ async function getBlendedTotalsForWindow(start, end) {
     };
 }
 
-// Phase P8 (Analytics Visualization) - optional third window, a
+// (Analytics Visualization) - optional third window, a
 // user-picked [start, end) custom range, compared against the
 // immediately-preceding window of the same duration (same "current vs.
 // prior period of equal length" shape as the week/month windows above -
@@ -1258,7 +1262,7 @@ exports.getSellerLeaderboard = async (limit) => {
     return rows;
 };
 
-// ---- Roadmap Phase 4: predictive coverage heatmap --------------------------
+// ---- Roadmap predictive coverage heatmap --------------------------
 //
 // Demand side: historical order volume grouped by shipping_region (the
 // existing free-text zone field orders are already collected against -

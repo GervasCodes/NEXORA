@@ -25,7 +25,7 @@ exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
 
-// Phase 7 (UI/UX remediation) - reschedule.
+// (UI/UX remediation) - reschedule.
 exports.rescheduleBookingValidation = [
     body("start_date")
         .matches(DATE_REGEX)

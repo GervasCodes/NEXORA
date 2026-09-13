@@ -6,7 +6,7 @@ const db = require("../../config/db");
 // resolveDispute() somehow invoked twice for the same dispute) hits the
 // unique constraint and findByDisputeId() below is used to recover the
 // existing row instead of erroring the caller.
-// Phase Q1: `disputeId` and `returnId` are now mutually exclusive source
+// `disputeId` and `returnId` are now mutually exclusive source
 // pointers (see migration 083) - exactly one must be passed. Both are
 // still nullable/unique at the DB layer, which is what actually
 // guarantees "one refund per dispute" / "one refund per return".

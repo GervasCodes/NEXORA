@@ -42,7 +42,6 @@ const groups = [
             { to: "/seller", label: "Overview", end: true },
             { to: "/seller/analytics", label: "Analytics" },
             { to: "/seller/wallet", label: "Wallet" },
-            { to: "/seller/loans", label: "Working capital" },
             { to: "/seller/tax-info", label: "Tax & receipts" }
         ]
     },

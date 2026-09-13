@@ -54,7 +54,7 @@ exports.register = async (req, res) => {
     }
 };
 
-// Step 1 of login: email + password. Never returns a session token -
+//  of login: email + password. Never returns a session token -
 // only a masked email + pre-auth token, once an OTP has been emailed.
 exports.login = async (req, res) => {
     try {
@@ -84,7 +84,7 @@ exports.login = async (req, res) => {
     }
 };
 
-// Step 2 of login: OTP verification. Only here is a real session issued.
+// of login: OTP verification. Only here is a real session issued.
 exports.verifyLoginOtp = async (req, res) => {
     try {
         const { pre_auth_token, code } = req.body;
@@ -98,7 +98,7 @@ exports.verifyLoginOtp = async (req, res) => {
             metadata: { role: result.user?.role }
         });
 
-        // Phase 4 (Testing & Session Hardening): the session token now
+        // (Testing & Session Hardening): the session token now
         // travels as an httpOnly cookie rather than in the response body
         // - keeping it out of reach of any JS running on the page (a
         // successful XSS can no longer just read it out of localStorage
@@ -145,7 +145,7 @@ exports.verifyLoginOtp = async (req, res) => {
 
 exports.resendLoginOtp = async (req, res) => {
     try {
-        // Phase 5 (OTP resend/expiry UX) - previously discarded, so the
+        // (OTP resend/expiry UX) - previously discarded, so the
         // frontend had no way to restart its countdown after a resend.
         const { expiresInSeconds } = await loginService.resendLoginOtp(req.body.pre_auth_token);
 
@@ -166,7 +166,7 @@ exports.resendLoginOtp = async (req, res) => {
 // Always responds success regardless of whether the email exists -
 // see passwordReset.service.js for why (prevents email enumeration).
 exports.forgotPassword = async (req, res) => {
-    // Phase 5 (OTP resend/expiry UX) - defaults to the same fixed
+    // (OTP resend/expiry UX) - defaults to the same fixed
     // constant requestPasswordReset would have returned, so a thrown/
     // swallowed error below still gives the frontend a valid countdown
     // instead of `undefined` - it never varies with whether the account
@@ -201,7 +201,7 @@ exports.resetPassword = async (req, res) => {
     }
 };
 
-// Phase 4 (Testing & Session Hardening): logout is now a real endpoint
+// (Testing & Session Hardening): logout is now a real endpoint
 // rather than a purely client-side "forget the token" - the session
 // cookie is httpOnly, so no amount of frontend JS can clear it; only a
 // Set-Cookie response from the server (via res.clearCookie, which
@@ -216,7 +216,7 @@ exports.logout = (req, res) => {
     res.json({ success: true, message: "Signed out." });
 };
 
-// Phase 4 (Testing & Session Hardening): with the session token no
+// (Testing & Session Hardening): with the session token no
 // longer readable by frontend JS, the frontend can't just check "is
 // there a token in localStorage" to know if someone's still signed in -
 // it has to ask the server. AuthContext calls this on app load; a 401

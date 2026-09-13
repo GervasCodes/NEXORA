@@ -1,5 +1,5 @@
 /**
- * Inbound WhatsApp message handling (Phase Q3).
+ * Inbound WhatsApp message handling .
  *
  * A tiny, explicit state machine over whatsapp_sessions - not a real NLU
  * bot. At every step the user is shown a numbered menu and the next
@@ -81,7 +81,7 @@ const ORDER_STATUS_LABELS = {
 exports.handleIncomingMessage = async (fromPhone, text) => {
     const trimmed = (text || "").trim();
 
-    // Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel) - a
+    // Roadmap (WhatsApp/SMS as an Offer-Accept Channel) - a
     // delivery agent replying "YES <offerId>"/"NO <offerId>" to a pickup
     // offer takes priority over the buyer-facing numbered menu below;
     // handleOfferReplyByPhone returns null for anything that isn't that

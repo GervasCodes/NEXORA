@@ -7,7 +7,7 @@ const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = requir
 const { parseSort } = require("../../utils/productSort");
 const cache = require("../../utils/cache");
 
-// Phase RF5: namespace for cached browse/search reads below (listProducts
+// namespace for cached browse/search reads below (listProducts
 // + the two filter-dropdown endpoints). Deliberately excludes
 // getProductBySlug (the product-detail page) - that's the page a shopper
 // is on right before adding to cart, and its stock figure is closer to
@@ -83,7 +83,7 @@ exports.createProduct = async (sellerId, data) => {
         cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
     ]);
 
-    // Follow-store notifications (Phase 6, UI/UX remediation) -
+    // Follow-store notifications (UI/UX remediation) -
     // fire-and-forget, deliberately not awaited (same reasoning as
     // every other "notify someone" call in this codebase).
     const storeService = require("../store/store.service");
@@ -130,7 +130,7 @@ exports.listProducts = async (query) => {
     };
 };
 
-// Filter-dropdown data (Phase 3A): every seller with at least one active
+// Filter-dropdown data : every seller with at least one active
 // product, optionally narrowed to a single category/department.
 exports.listFilterSellers = async (query) => {
     const categoryId = query.category_id || null;
@@ -141,7 +141,7 @@ exports.listFilterSellers = async (query) => {
     );
 };
 
-// Filter-dropdown data (Phase 3B): every region with at least one active
+// Filter-dropdown data : every region with at least one active
 // product, optionally narrowed to a single category/department.
 exports.listFilterRegions = async (query) => {
     const categoryId = query.category_id || null;
@@ -159,7 +159,7 @@ exports.getProductBySlug = async (slug) => {
         throw new Error("Product not found");
     }
 
-    // Images, videos (Phase 6A), and audio (Phase 6B) all load together
+    // Images, videos , and audio  all load together
     // since the product-detail page needs all three on first render.
     const [images, videos, audio] = await Promise.all([
         productRepository.findImagesByProductId(product.id),
@@ -167,7 +167,7 @@ exports.getProductBySlug = async (slug) => {
         productRepository.findAudioByProductId(product.id)
     ]);
 
-    // Variants (Phase 2, UI/UX remediation) - only queried for products
+    // Variants ( UI/UX remediation) - only queried for products
     // that actually have them (has_variants flag, see migration 095),
     // so the common single-SKU product page doesn't pay for three extra
     // empty-result queries.
@@ -256,7 +256,7 @@ exports.reorderProductImages = async (sellerId, productId, orderedIds) => {
     await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
-// Phase 6A - Product Videos. Same ownership check as addProductImage,
+// Product Videos. Same ownership check as addProductImage,
 // plus a small per-product cap (unlike photos, which have no cap) -
 // video is the most storage/bandwidth-expensive media type a seller can
 // upload here, so a hard ceiling keeps one listing from growing an
@@ -296,7 +296,7 @@ exports.reorderProductVideos = async (sellerId, productId, orderedIds) => {
     await productRepository.reorderProductVideos(productId, orderedIds);
 };
 
-// Phase 6B - Product Audio. Same ownership check and per-product cap
+// Product Audio. Same ownership check and per-product cap
 // pattern as addProductVideo. Cloudinary has no separate "audio"
 // resource type of its own - audio files are uploaded as resourceType
 // "video" too (Cloudinary's own docs: audio is handled by the same
@@ -375,7 +375,7 @@ exports.bulkSetProductActiveBySeller = async (sellerId, productIds, isActive) =>
     return { updated: ids.length };
 };
 
-// Phase 11 (UI/UX remediation) - bulk price adjustment, same
+// (UI/UX remediation) - bulk price adjustment, same
 // ids-dedup-and-validate shape as bulkSetProductActiveBySeller above.
 exports.bulkAdjustPriceBySeller = async (sellerId, productIds, adjustType, adjustValue) => {
     const ids = [...new Set((productIds || []).map(Number))].filter((id) => Number.isInteger(id) && id > 0);
@@ -444,7 +444,7 @@ exports.updateProduct = async (sellerId, productId, data) => {
 
     const updated = await productRepository.findById(productId);
 
-    // Back-in-stock / price-drop alerts (Phase 5, UI/UX remediation) -
+    // Back-in-stock / price-drop alerts ( UI/UX remediation) -
     // fire-and-forget, deliberately not awaited (same reasoning as
     // every other "notify someone" call in this codebase - see
     // productAlert.service.js's own comment). Compares this edit's old

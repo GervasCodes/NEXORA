@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import Input from "../../components/ui/Input";
 
 // (Onboarding) - the three choices map straight
 // onto seller_profiles.merchant_type (migration 062: product/service/
@@ -107,13 +108,12 @@ export default function SellerSetup() {
                     </div>
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">Store name</label>
-                    <input required minLength={3} maxLength={150}
-                        value={form.store_name}
-                        onChange={(e) => setForm({ ...form, store_name: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                </div>
+                <Input
+                    label="Store name"
+                    required minLength={3} maxLength={150}
+                    value={form.store_name}
+                    onChange={(e) => setForm({ ...form, store_name: e.target.value })}
+                />
 
                 <div>
                     <label className="block text-sm mb-1">Store type</label>
@@ -129,13 +129,13 @@ export default function SellerSetup() {
                     </select>
                 </div>
 
-                <div>
-                    <label className="block text-sm mb-1">Store description (optional)</label>
-                    <textarea rows={4} maxLength={1000}
-                        value={form.store_description}
-                        onChange={(e) => setForm({ ...form, store_description: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
-                </div>
+                <Input
+                    as="textarea"
+                    label="Store description (optional)"
+                    rows={4} maxLength={1000}
+                    value={form.store_description}
+                    onChange={(e) => setForm({ ...form, store_description: e.target.value })}
+                />
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 

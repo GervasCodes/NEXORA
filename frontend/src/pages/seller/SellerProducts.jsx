@@ -8,6 +8,7 @@ import SavedFilters from "../../components/seller/SavedFilters";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
+import Input from "../../components/ui/Input";
 
 const PAGE_SIZE = 20;
 
@@ -163,13 +164,14 @@ export default function SellerProducts() {
 
             <div className="border border-line rounded-lg p-4 mb-6">
                 <div className="flex flex-wrap gap-3">
-                    <input
+                <div className="flex-1 min-w-[180px] sm:min-w-[220px]">
+                    <Input
                         type="text"
                         placeholder={t("seller.products.searchPlaceholder")}
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
-                        className="flex-1 min-w-[180px] sm:min-w-[220px] border border-line rounded-md px-3 py-1.5 text-sm"
                     />
+                </div>
                     <select
                         value={categoryId}
                         onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
@@ -249,14 +251,15 @@ export default function SellerProducts() {
                                     <option value="percent">%</option>
                                     <option value="flat">TZS</option>
                                 </select>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    value={bulkPriceValue}
-                                    onChange={(e) => setBulkPriceValue(e.target.value)}
-                                    placeholder={bulkPriceType === "percent" ? "e.g. -10 or 5" : "e.g. -500 or 500"}
-                                    className="border border-line rounded-md px-2 py-1 text-xs w-32"
-                                />
+                                <div className="w-32">
+                                    <Input
+                                        type="number"
+                                        step="any"
+                                        value={bulkPriceValue}
+                                        onChange={(e) => setBulkPriceValue(e.target.value)}
+                                        placeholder={bulkPriceType === "percent" ? "e.g. -10 or 5" : "e.g. -500 or 500"}
+                                    />
+                                </div>
                                 <button type="submit" disabled={bulkBusy || !bulkPriceValue} className="text-xs text-teal hover:underline disabled:opacity-50">
                                     Apply
                                 </button>
@@ -278,13 +281,14 @@ export default function SellerProducts() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-medium truncate">{p.name}</p>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${p.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
+                                    {p.is_active ? t("seller.products.active") : t("seller.products.inactive")}
+                                </span>
+                            </div>
                             <p className="price text-xs text-ash">{formatMoney(p.discount_price || p.price)} · {t("seller.products.stockSuffix", { count: p.stock })}</p>
                         </div>
-
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${p.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
-                            {p.is_active ? t("seller.products.active") : t("seller.products.inactive")}
-                        </span>
 
                         <div className="flex items-center gap-2 w-full sm:w-auto">
                             <Link

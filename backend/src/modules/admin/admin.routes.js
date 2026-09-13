@@ -30,12 +30,12 @@ router.use(authMiddleware, authorize("admin"));
 router.get("/dashboard", adminController.getDashboard);
 router.get("/dispatch", adminController.getDispatchOverview);
 
-// Roadmap Phase 4 (Predictive Coverage Dashboard for Ops) - read-only
+// Roadmap (Predictive Coverage Dashboard for Ops) - read-only
 // historical demand-vs-coverage heatmap, separate from the live
 // dispatch overview above.
 router.get("/dispatch/coverage-heatmap", adminController.getCoverageHeatmap);
 
-// Phase 3 (Admin Manual Override & Ops Visibility)
+// (Admin Manual Override & Ops Visibility)
 router.put(
     "/dispatch/:id/assign",
     manualAssignDeliveryValidation,
@@ -45,13 +45,13 @@ router.put(
 router.get("/analytics", adminController.getAnalytics);
 router.get("/analytics/services", adminController.getServicesAnalytics);
 
-// Phase 4 (Analytics & Business Metrics) - GMV, take rate, repeat-buyer,
+// (Analytics & Business Metrics) - GMV, take rate, repeat-buyer,
 // and provider-retention metrics, plus a CSV export of the underlying
 // daily GMV series.
 router.get("/analytics/business", adminController.getBusinessMetrics);
 router.get("/analytics/business/export", adminController.exportGmvCsv);
 
-// Phase A5 (Advanced Analytics) - period comparison (week/month over
+// (Advanced Analytics) - period comparison (week/month over
 // week/month), platform-wide top customers, and the admin-only seller
 // performance leaderboard, plus a CSV export of the latter two.
 router.get("/analytics/advanced", adminController.getAdvancedAnalytics);
@@ -79,7 +79,7 @@ router.get("/subscriptions", subscriptionController.listAllSubscriptions);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 
-// Phase Q9 (Admin Tools) - anomaly-detection dashboard over the same
+// (Admin Tools) - anomaly-detection dashboard over the same
 // fraud_flags data, visualized trend/breakdown + spike detection rather
 // than the flat open-queue list above.
 router.get("/fraud-dashboard", adminController.getFraudDashboard);
@@ -91,7 +91,7 @@ router.post("/refunds/:id/retry", adminController.retryRefund);
 
 router.get("/users", adminController.listUsers);
 
-// Suspend/Unsuspend (Phase 1 - Admin Account Control). Replaces the old
+// Suspend/Unsuspend (Admin Account Control). Replaces the old
 // bare deactivate/activate toggle - suspending requires a reason, and
 // records the acting admin + a timestamp (migration 058).
 router.put("/users/:id/suspend", suspendUserValidation, validationMiddleware, adminController.suspendUser);
@@ -110,7 +110,7 @@ router.delete(
     adminController.permanentlyDeleteUser
 );
 
-// Phase 3 - Soft Account Deletion: accounts the user deleted themselves,
+// Soft Account Deletion: accounts the user deleted themselves,
 // separated out from the regular Users list above (see
 // admin.repository.js#findAllUsers). Read-only here; permanently
 // removing one uses the same action as above.
@@ -152,7 +152,7 @@ router.get("/orders", adminController.listOrders);
 // .releaseOrderEarnings).
 router.put("/orders/:id/release-escrow", orderIdValidation, validationMiddleware, adminController.releaseOrderEscrow);
 
-// Booking equivalent (Phase 3 - Financial Integration) - same manual
+// Booking equivalent (Financial Integration) - same manual
 // early-release lever, for one booking's held provider earnings.
 router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddleware, adminController.releaseBookingEscrow);
 

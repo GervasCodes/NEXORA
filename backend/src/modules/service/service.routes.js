@@ -14,7 +14,7 @@ const serviceController = require("./service.controller");
 // Public
 router.get("/", serviceController.listServices);
 
-// Phase 4 (Customer Experience) - must come before the "/:slug"
+// Must come before the "/:slug"
 // catch-all below, same ordering reasoning product.routes.js's own
 // "/filters/regions" documents.
 router.get("/filters/regions", serviceController.listFilterRegions);
@@ -114,7 +114,7 @@ router.put(
     serviceController.activateMyService
 );
 
-// --- Dynamic pricing rules (Phase 5 - Growth) --------------------------
+// --- Dynamic pricing rules  --------------------------
 
 router.post(
     "/:id/pricing-rules",

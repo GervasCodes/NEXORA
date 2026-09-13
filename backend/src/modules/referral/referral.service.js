@@ -1,5 +1,5 @@
 /**
- * Referral & loyalty points program (Phase Q7).
+ * Referral & loyalty points program .
  *
  * Referral: every user gets a referral_code at signup. Sharing it and
  * having someone register with it links referred_by_user_id + a

@@ -2,7 +2,7 @@
 // hardcoded ORDER BY s.created_at DESC with no sort option, unlike
 // products (utils/productSort.js). Same whitelist-lookup pattern here.
 //
-// Phase 4 (Customer Experience): "rating" is now available since
+// (Customer Experience): "rating" is now available since
 // services have reviews (via bookings), and the clause set gained a
 // relevance-aware default now that the listing supports FULLTEXT search
 // (utils/productSearch.js's buildProductSearchPlan, reused as-is by

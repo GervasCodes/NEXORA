@@ -10,7 +10,7 @@ const { createValidation, setStatusValidation, sessionIdValidation } = require("
 
 router.get("/", liveSellingController.listUpcoming);
 
-// Reminders (Phase 9, UI/UX remediation) - buyer-facing, so these need
+// Reminders (UI/UX remediation) - buyer-facing, so these need
 // their own auth gate rather than the authorize("seller") one below,
 // which would otherwise wrongly restrict "notify me" to sellers.
 router.get("/:id/remind", authMiddleware, authorize("buyer"), sessionIdValidation, validationMiddleware, liveSellingController.getReminderStatus);

@@ -12,7 +12,7 @@ exports.addToCartValidation = [
         .isInt({ gt: 0 })
         .withMessage("Quantity must be a positive whole number"),
 
-    // Optional (Phase 2 continuation, UI/UX remediation): only present
+    // Optional (continuation, UI/UX remediation): only present
     // when the buyer selected a variant on the product detail page -
     // absent entirely for the many products with no variants at all.
     body("variant_id")

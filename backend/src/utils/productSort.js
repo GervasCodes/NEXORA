@@ -1,4 +1,4 @@
-// Phase 3C: sort-order logic for the public product listing, pulled out
+// Sort-order logic for the public product listing, pulled out
 // of product.repository.js so it's unit-testable without a database -
 // same pattern as utils/productSearch.js and utils/productFilters.js.
 //

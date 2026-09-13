@@ -21,7 +21,7 @@ router.get("/", categoryController.listPublic);
 router.get("/departments", categoryController.listDepartments);
 
 // Public - single department page: same summary fields plus the
-// Phase 2C sections (promotions, sponsored, featured stores)
+// sections (promotions, sponsored, featured stores)
 router.get("/departments/:slug", categoryController.getDepartment);
 
 // Admin only

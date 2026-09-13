@@ -13,15 +13,26 @@ const statusStyles = {
     cancelled: "bg-coral/10 text-coral"
 };
 
+const SORT_OPTIONS = [
+    { value: "newest", label: "Newest first" },
+    { value: "oldest", label: "Oldest first" },
+    { value: "item_name", label: "Item name (A-Z)" },
+    { value: "status", label: "Status" },
+    { value: "amount_high", label: "Amount (high to low)" },
+    { value: "amount_low", label: "Amount (low to high)" }
+];
+
 export default function AdminOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [releasing, setReleasing] = useState(null);
     const [releaseNotes, setReleaseNotes] = useState({});
+    const [sort, setSort] = useState("newest");
 
     useEffect(() => {
-        api.get("/admin/orders").then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
-    }, []);
+        setLoading(true);
+        api.get("/admin/orders", { params: { sort } }).then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
+    }, [sort]);
 
     //  manual early release - bypasses the normal delivered +
     // escrow_hold_days timing gate for one order, but the backend still
@@ -52,7 +63,19 @@ export default function AdminOrders() {
     return (
         <div>
             <PageMeta title="Orders" noIndex />
-            <h1 className="font-display text-2xl mb-6">All orders</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <h1 className="font-display text-2xl">All orders</h1>
+                <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
+                    aria-label="Sort"
+                >
+                    {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                </select>
+            </div>
 
             {orders.length === 0 && <EmptyState title="No orders yet." />}
 
@@ -63,6 +86,9 @@ export default function AdminOrders() {
                             <p className="text-sm font-medium truncate">
                                 {o.first_name} {o.last_name}
                             </p>
+                            {o.primary_item_name && (
+                                <p className="text-xs text-ash truncate">{o.primary_item_name}</p>
+                            )}
                             <p className="price text-xs text-ash truncate">
                                 <span>{o.order_number}</span> · <span>{o.email}</span>
                             </p>

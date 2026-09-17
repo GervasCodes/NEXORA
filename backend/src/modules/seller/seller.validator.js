@@ -82,7 +82,26 @@ exports.updateSellerValidation = [
         .optional({ nullable: true })
         .trim()
         .isLength({ max: 20 })
-        .withMessage("Invalid WhatsApp number.")
+        .withMessage("Invalid WhatsApp number."),
+
+    // Pre-order / made-to-order (Phase 8) - store-level toggle + defaults.
+    body("accepts_preorders")
+        .optional()
+        .isBoolean()
+        .withMessage("accepts_preorders must be true or false.")
+        .toBoolean(),
+
+    body("preorder_deposit_percent")
+        .optional()
+        .isFloat({ min: 1, max: 100 })
+        .withMessage("Deposit percent must be between 1 and 100.")
+        .toFloat(),
+
+    body("preorder_default_lead_time_days")
+        .optional({ nullable: true })
+        .isInt({ min: 1, max: 365 })
+        .withMessage("Lead time must be between 1 and 365 days.")
+        .toInt()
 ];
 
 exports.addDeliveryAgentValidation = [

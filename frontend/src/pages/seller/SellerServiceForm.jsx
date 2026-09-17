@@ -169,8 +169,8 @@ export default function SellerServiceForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">Category</label>
-                        <select value={form.category_id} onChange={update("category_id")}
+                        <label htmlFor="serviceCategory" className="block text-sm mb-1">Category</label>
+                        <select id="serviceCategory" value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="">Select…</option>
                             {categories.map((c) => (
@@ -179,8 +179,8 @@ export default function SellerServiceForm() {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Pricing model</label>
-                        <select value={form.pricing_model} onChange={update("pricing_model")}
+                        <label htmlFor="servicePricingModel" className="block text-sm mb-1">Pricing model</label>
+                        <select id="servicePricingModel" value={form.pricing_model} onChange={update("pricing_model")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             {PRICING_MODELS.map((p) => (
                                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -252,6 +252,7 @@ export default function SellerServiceForm() {
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {videos.map((vid, i) => (
+                            // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded service clip, no caption track available
                             <video key={i} src={vid.media_url} controls
                                 className="w-40 h-24 rounded-md border border-line object-cover" />
                         ))}

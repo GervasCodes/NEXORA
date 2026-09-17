@@ -1,8 +1,30 @@
 const notificationRepository = require("./notification.repository");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 const logger = require("../../utils/logger").child({ module: "notification" });
 const sendEmail = require("../../utils/sendEmail");
 const pushService = require("../push/push.service");
 const { t, resolveLocale } = require("../../i18n");
+
+// Notification consolidation (Phase 3, per the Phase 1.2 decision):
+// AdminNotificationBell was merged into the regular NotificationBell on
+// the frontend, so this module - not adminNotification.controller.js's
+// own routes - is now the single read path both a buyer/seller AND an
+// admin hit for "my notifications". admin_notifications itself is
+// UNCHANGED: still one shared table/feed with one shared read state (see
+// migration 059's rationale for why it was never fanned out per-admin),
+// still written to via adminNotificationService.notify() from every
+// existing call site. Only how it's *read* changes - merged in here
+// alongside the personal `notifications` table for admin users.
+//
+// The two tables both use their own AUTO_INCREMENT id, so a plain
+// personal id (42) and a shared admin id (42) can collide. Personal ids
+// are left exactly as they've always been (plain numbers - no other
+// client of `notifications` should have to change), and an admin-sourced
+// item is tagged with an `admin:` string prefix instead. markAsRead/
+// deleteNotification below dispatch on that prefix.
+const ADMIN_ID_PREFIX = "admin:";
+const isAdminNotificationId = (id) => typeof id === "string" && id.startsWith(ADMIN_ID_PREFIX);
+const stripAdminPrefix = (id) => id.slice(ADMIN_ID_PREFIX.length);
 
 // Reusable helper: other modules (order, payment, delivery, dispute,
 // wallet, seller, admin, accountVerification) call this directly to
@@ -79,6 +101,7 @@ exports.notify = async ({
     title,
     message,
     relatedOrderId,
+    relatedConversationId,
     withEmail,
     withWhatsApp,
     url
@@ -99,7 +122,8 @@ exports.notify = async ({
         type,
         resolvedTitle,
         resolvedMessage,
-        relatedOrderId
+        relatedOrderId,
+        relatedConversationId
     );
 
     // Real-time fan-out. Every existing call site across the app (orders,
@@ -121,6 +145,7 @@ exports.notify = async ({
             title: resolvedTitle,
             message: resolvedMessage,
             related_order_id: relatedOrderId || null,
+            related_conversation_id: relatedConversationId || null,
             is_read: false,
             created_at: new Date(),
             url: resolvedUrl
@@ -161,15 +186,52 @@ exports.notify = async ({
     }
 };
 
-exports.getMyNotifications = async (userId) => {
-    return notificationRepository.findByUser(userId);
+exports.getMyNotifications = async (userId, role) => {
+    const personal = (await notificationRepository.findByUser(userId)).map((n) => ({
+        ...n,
+        id: String(n.id),
+        source: "personal"
+    }));
+
+    if (role !== "admin") return personal;
+
+    // Merged in, not paginated together: the shared feed keeps its own
+    // 100-row cap (adminNotificationService.getRecent's default, same as
+    // findByUser's own LIMIT 100) rather than the two competing for one
+    // combined limit - an admin with a very active personal history
+    // shouldn't crowd out the shared team feed, or vice versa.
+    const shared = (await adminNotificationService.getRecent({ limit: 100 })).map((n) => ({
+        ...n,
+        id: `${ADMIN_ID_PREFIX}${n.id}`,
+        source: "admin"
+    }));
+
+    return [...personal, ...shared].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
 };
 
-exports.getUnreadCount = async (userId) => {
-    return notificationRepository.countUnread(userId);
+exports.getUnreadCount = async (userId, role) => {
+    const personalUnread = await notificationRepository.countUnread(userId);
+    if (role !== "admin") return personalUnread;
+
+    const sharedUnread = await adminNotificationService.getUnreadCount();
+    return personalUnread + sharedUnread;
 };
 
-exports.markAsRead = async (notificationId, userId) => {
+exports.markAsRead = async (notificationId, userId, role) => {
+    if (isAdminNotificationId(notificationId)) {
+        // The route itself is admin-gated (authorize("admin")) same as
+        // every other /notifications endpoint an admin account can hit,
+        // but role is re-checked here too so a stale/forged admin: id on
+        // a non-admin session 404s instead of silently reaching into the
+        // shared feed's mark-as-read.
+        if (role !== "admin") {
+            throw Object.assign(new Error("Notification not found"), { code: "NOTIFICATION_NOT_FOUND", status: 404 });
+        }
+        return adminNotificationService.markAsRead(stripAdminPrefix(notificationId), userId);
+    }
+
     const notification = await notificationRepository.findById(notificationId);
 
     if (!notification || notification.user_id !== userId) {
@@ -179,11 +241,29 @@ exports.markAsRead = async (notificationId, userId) => {
     await notificationRepository.markAsRead(notificationId);
 };
 
-exports.markAllAsRead = async (userId) => {
+exports.markAllAsRead = async (userId, role) => {
     await notificationRepository.markAllAsRead(userId);
+
+    // Shared feed is genuinely shared - "mark all read" from any one
+    // admin's bell clears it for every admin, same as it always did
+    // behind AdminNotificationBell.jsx's own "mark all" button.
+    if (role === "admin") {
+        await adminNotificationService.markAllAsRead(userId);
+    }
 };
 
 exports.deleteNotification = async (notificationId, userId) => {
+    if (isAdminNotificationId(notificationId)) {
+        // Shared items were never individually deletable (there's no
+        // per-admin copy to delete - deleting it would remove it from
+        // every admin's feed at once), so this stays a clear 400 rather
+        // than quietly no-op'ing or, worse, actually deleting the row.
+        throw Object.assign(
+            new Error("Shared admin notifications can't be deleted individually"),
+            { status: 400 }
+        );
+    }
+
     const notification = await notificationRepository.findById(notificationId);
 
     if (!notification || notification.user_id !== userId) {

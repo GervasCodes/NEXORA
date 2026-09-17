@@ -20,7 +20,22 @@ exports.createProductValidation = [
     body("stock")
         .optional()
         .isNumeric()
-        .withMessage("Stock must be a number")
+        .withMessage("Stock must be a number"),
+
+    // Pre-order / made-to-order (Phase 8). Whether the seller's store is
+    // actually allowed to set this is a service-layer check (needs a DB
+    // lookup) - see product.service.js#assertSellerAcceptsPreorders.
+    body("is_preorder")
+        .optional()
+        .isBoolean()
+        .withMessage("is_preorder must be true or false")
+        .toBoolean(),
+
+    body("preorder_lead_time_days")
+        .optional({ nullable: true })
+        .isInt({ min: 1, max: 365 })
+        .withMessage("Lead time must be between 1 and 365 days")
+        .toInt()
 ];
 
 exports.bulkProductStatusValidation = [

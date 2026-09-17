@@ -4,6 +4,30 @@ import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 
+// Human-readable labels for ai.service.js's internal `feature` tags -
+// see aiQuality (GET /admin/settings, ai.service.js#getQualityOverview).
+// A feature missing from this map (e.g. a newly added one) still
+// renders fine, just under its raw tag.
+const AI_FEATURE_LABELS = {
+    chat: "Nexora Assistant chat",
+    search: "Smart search",
+    recommend: "Recommendation \"why\" phrasing",
+    order_status: "Order status explainer",
+    product_explain: "Product page explainer",
+    booking_explain: "Booking status explainer",
+    listing_draft: "Listing description drafts",
+    marketing_copy: "Marketing copy drafts",
+    analytics_summary: "Seller analytics summary",
+    seller_demand_forecast: "Seller demand forecast",
+    availability_suggestion: "Availability suggestion",
+    delivery_route: "Delivery route summary",
+    admin_dispute_summary: "Dispute triage summary",
+    admin_dispute_suggest_resolution: "Dispute resolution suggestion",
+    admin_fraud_explain: "Fraud queue explainer",
+    admin_forecast_explain: "Revenue forecast explainer",
+    admin_personalization_explain: "Personalization health explainer"
+};
+
 export default function AdminSettings() {
     const [settings, setSettings] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -22,6 +46,7 @@ export default function AdminSettings() {
     const [aiDailyCapGlobal, setAiDailyCapGlobal] = useState("");
     const [aiMonthlyCapGlobal, setAiMonthlyCapGlobal] = useState("");
     const [aiUsage, setAiUsage] = useState(null);
+    const [aiQuality, setAiQuality] = useState([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
@@ -43,6 +68,7 @@ export default function AdminSettings() {
                 setAiDailyCapGlobal(data.data.ai_daily_token_cap_global);
                 setAiMonthlyCapGlobal(data.data.ai_monthly_token_cap_global);
                 setAiUsage(data.data.aiUsage || null);
+                setAiQuality(data.data.aiQuality || []);
 
                 const parsed = typeof data.data.delivery_distance_bands === "string"
                     ? JSON.parse(data.data.delivery_distance_bands)
@@ -120,8 +146,9 @@ export default function AdminSettings() {
                 {saved && <p className="text-teal text-sm">Settings saved.</p>}
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Platform commission (%)</label>
+                    <label htmlFor="commissionRate" className="text-xs text-ash block mb-1">Platform commission (%)</label>
                     <input
+                        id="commissionRate"
                         type="number"
                         min="0"
                         max="100"
@@ -135,8 +162,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Fallback rider delivery fee (TZS)</label>
+                    <label htmlFor="riderFee" className="text-xs text-ash block mb-1">Fallback rider delivery fee (TZS)</label>
                     <input
+                        id="riderFee"
                         type="number"
                         min="0"
                         step="50"
@@ -152,7 +180,7 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-2">Distance-based delivery pricing (Tanzania)</label>
+                    <p className="text-xs text-ash block mb-2">Distance-based delivery pricing (Tanzania)</p>
                     <div className="space-y-3">
                         {bands.map((band, i) => (
                             <div key={i} className="flex flex-wrap items-center gap-2">
@@ -197,8 +225,9 @@ export default function AdminSettings() {
                     </button>
 
                     <div className="mt-3">
-                        <label className="text-xs text-ash block mb-1">Rate beyond the last band (TZS per km)</label>
+                        <label htmlFor="perKmBeyond" className="text-xs text-ash block mb-1">Rate beyond the last band (TZS per km)</label>
                         <input
+                        id="perKmBeyond"
                             type="number"
                             min="0"
                             step="10"
@@ -216,8 +245,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Seller verification fee (TZS)</label>
+                    <label htmlFor="verificationFee" className="text-xs text-ash block mb-1">Seller verification fee (TZS)</label>
                     <input
+                        id="verificationFee"
                         type="number"
                         min="0"
                         step="500"
@@ -230,8 +260,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">USD exchange rate (TZS per $1)</label>
+                    <label htmlFor="usdRate" className="text-xs text-ash block mb-1">USD exchange rate (TZS per $1)</label>
                     <input
+                        id="usdRate"
                         type="number"
                         min="1"
                         step="1"
@@ -247,8 +278,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Sponsorship daily rate (TZS)</label>
+                    <label htmlFor="sponsorshipRate" className="text-xs text-ash block mb-1">Sponsorship daily rate (TZS)</label>
                     <input
+                        id="sponsorshipRate"
                         type="number"
                         min="0"
                         step="500"
@@ -264,8 +296,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Featured store daily rate (TZS)</label>
+                    <label htmlFor="featuredStoreRate" className="text-xs text-ash block mb-1">Featured store daily rate (TZS)</label>
                     <input
+                        id="featuredStoreRate"
                         type="number"
                         min="0"
                         step="500"
@@ -282,8 +315,9 @@ export default function AdminSettings() {
                 </div>
 
                 <div>
-                    <label className="text-xs text-ash block mb-1">Department sponsorship daily rate (TZS)</label>
+                    <label htmlFor="departmentSponsorshipRate" className="text-xs text-ash block mb-1">Department sponsorship daily rate (TZS)</label>
                     <input
+                        id="departmentSponsorshipRate"
                         type="number"
                         min="0"
                         step="500"
@@ -302,7 +336,7 @@ export default function AdminSettings() {
                 <div className="border-t border-line pt-5">
                     <div className="flex items-start justify-between gap-4 mb-1">
                         <div>
-                            <label className="text-xs text-ash block mb-1">Nexora Assistant</label>
+                            <p className="text-xs text-ash block mb-1">Nexora Assistant</p>
                             <p className="text-xs text-ash">
                                 Master switch for the AI assistant across the app. Still requires a provider to be
                                 configured server-side - turning this off disables AI features immediately even if one is.
@@ -324,8 +358,9 @@ export default function AdminSettings() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className="text-xs text-ash block mb-1">Daily token cap per user</label>
+                        <label htmlFor="aiDailyCapUser" className="text-xs text-ash block mb-1">Daily token cap per user</label>
                         <input
+                        id="aiDailyCapUser"
                             type="number"
                             min="0"
                             step="1000"
@@ -337,8 +372,9 @@ export default function AdminSettings() {
                     </div>
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Monthly token cap per user</label>
+                        <label htmlFor="aiMonthlyCapUser" className="text-xs text-ash block mb-1">Monthly token cap per user</label>
                         <input
+                        id="aiMonthlyCapUser"
                             type="number"
                             min="0"
                             step="1000"
@@ -350,8 +386,9 @@ export default function AdminSettings() {
                     </div>
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Daily token cap (global)</label>
+                        <label htmlFor="aiDailyCapGlobal" className="text-xs text-ash block mb-1">Daily token cap (global)</label>
                         <input
+                        id="aiDailyCapGlobal"
                             type="number"
                             min="0"
                             step="1000"
@@ -363,8 +400,9 @@ export default function AdminSettings() {
                     </div>
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Monthly token cap (global)</label>
+                        <label htmlFor="aiMonthlyCapGlobal" className="text-xs text-ash block mb-1">Monthly token cap (global)</label>
                         <input
+                        id="aiMonthlyCapGlobal"
                             type="number"
                             min="0"
                             step="1000"
@@ -400,6 +438,34 @@ export default function AdminSettings() {
                                     {Number(aiMonthlyCapGlobal || 0).toLocaleString()} tokens
                                 </p>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {aiQuality.length > 0 && (
+                    <div className="border border-line rounded-md p-3 bg-paper">
+                        <p className="text-xs text-ash font-medium mb-1">AI quality — last 7 days</p>
+                        <p className="text-[11px] text-ash mb-2">
+                            How often each feature actually got an AI reply vs. fell back to its plain-template
+                            behavior (provider unavailable, a spend cap, or a reply that couldn't be used).
+                            A feature stuck near 100% isn't broken - it's silently getting no AI benefit, which
+                            is worth investigating (provider config, spend caps).
+                        </p>
+                        <div className="space-y-1.5">
+                            {aiQuality.map((row) => (
+                                <div key={row.feature} className="flex items-center justify-between gap-3 text-xs">
+                                    <span className="text-ink truncate">
+                                        {AI_FEATURE_LABELS[row.feature] || row.feature}
+                                    </span>
+                                    <span
+                                        className={`shrink-0 font-medium ${
+                                            row.fallbackRatePercent >= 50 ? "text-coral" : "text-ash"
+                                        }`}
+                                    >
+                                        {row.fallbackRatePercent}% fallback ({row.total} call{row.total === 1 ? "" : "s"})
+                                    </span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

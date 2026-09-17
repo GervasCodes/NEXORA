@@ -71,14 +71,20 @@ function ApprovedDeliveryLayout() {
                 </p>
             )}
 
-            <nav className="flex gap-1 mb-8 border-b border-line">
+            {/* overflow-x-auto: "Available"/"My deliveries"/"Earnings"/
+                "Ratings" doesn't fit a narrow phone width without either
+                this or letting the whole page scroll sideways - a native
+                horizontally-scrollable tab strip is the standard mobile
+                pattern here (matches how MobileBottomNav's own icons
+                stay tap-sized rather than shrinking to fit). */}
+            <nav className="flex gap-1 mb-8 border-b border-line overflow-x-auto">
                 {tabs.map((tab) => (
                     <NavLink
                         key={tab.to}
                         to={tab.to}
                         end={tab.end}
                         className={({ isActive }) =>
-                            `text-sm px-4 py-3 -mb-px border-b-2 transition-colors ${
+                            `shrink-0 whitespace-nowrap text-sm px-4 py-3 -mb-px border-b-2 transition-colors ${
                                 isActive ? "border-mango text-ink font-medium" : "border-transparent text-ash hover:text-ink"
                             }`
                         }

@@ -108,24 +108,26 @@ export default function SellerOverview() {
                     <p className="text-xs uppercase tracking-widest text-ash w-full sm:w-auto sm:mr-1">
                         Filter revenue by date
                     </p>
-                    <label className="text-xs text-ash flex flex-col gap-1">
-                        From
+                    <div className="text-xs text-ash flex flex-col gap-1">
+                        <label htmlFor="revenueFrom">From</label>
                         <Input
+                            id="revenueFrom"
                             type="date"
                             value={revenueFrom}
                             max={revenueTo || undefined}
                             onChange={(e) => setRevenueFrom(e.target.value)}
                         />
-                    </label>
-                    <label className="text-xs text-ash flex flex-col gap-1">
-                        To
+                    </div>
+                    <div className="text-xs text-ash flex flex-col gap-1">
+                        <label htmlFor="revenueTo">To</label>
                         <Input
+                            id="revenueTo"
                             type="date"
                             value={revenueTo}
                             min={revenueFrom || undefined}
                             onChange={(e) => setRevenueTo(e.target.value)}
                         />
-                    </label>
+                    </div>
                     {(revenueFrom || revenueTo) && (
                         <button
                             type="button"

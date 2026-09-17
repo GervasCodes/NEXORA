@@ -161,34 +161,53 @@ exports.sendMessage = async (conversationId, senderId, message, attachment) => {
     const recipientIds = [conversation.buyer_id, conversation.seller_id, conversation.delivery_agent_id].filter(
         (id) => id && id !== senderId
     );
-    const attachmentLabel = { image: "📷 Photo", video: "🎥 Video", audio: "🎵 Audio", file: "📎 File" }[
-        attachment?.type
-    ];
-    const preview = text
-        ? (text.length > 120 ? `${text.slice(0, 117)}...` : text)
-        : (attachmentLabel || "New message");
-    recipientIds.forEach((recipientId) => {
-        // Muted conversations (Phase 8, UI/UX remediation) - the socket
-        // emit above already reached an open tab regardless (mute stops
-        // notifications, not delivery to a thread someone has open);
-        // this only gates the notificationService call, which is what
-        // produces the push/notification-bell entry.
-        const mutedColumn = chatRepository.mutedColumnFor(conversation, recipientId);
-        if (mutedColumn && conversation[mutedColumn]) {
-            return;
-        }
 
-        notificationService
-            .notify({
-                userId: recipientId,
-                type: "message",
-                titleKey: "message.new.title",
-                messageKey: "message.new.message",
-                messageParams: { preview },
-                url: `/messages/${conversationId}`
-            })
-            .catch((error) => logger.warn({ err: error, conversationId }, "message notification error"));
-    });
+    if (recipientIds.length > 0) {
+        const attachmentLabel = { image: "📷 Photo", video: "🎥 Video", audio: "🎵 Audio", file: "📎 File" }[
+            attachment?.type
+        ];
+        const preview = text
+            ? (text.length > 120 ? `${text.slice(0, 117)}...` : text)
+            : (attachmentLabel || "New message");
+
+        // Who the message is from (Phase 6, UI/UX remediation) - a
+        // generic "New message" title gave a recipient no way to tell
+        // whether to open it now or later without opening it first. One
+        // lookup, shared by every recipient below, since the sender is
+        // the same person regardless of who's being notified. Chained
+        // rather than awaited so this stays fire-and-forget, same as the
+        // notify() calls it feeds - sendMessage still returns `saved` the
+        // instant the message itself is persisted, not once every
+        // recipient's notification has gone out.
+        chatRepository.findUserFullName(senderId).catch(() => null).then((sender) => {
+            const senderName = [sender?.first_name, sender?.last_name].filter(Boolean).join(" ") || "Someone";
+
+            recipientIds.forEach((recipientId) => {
+                // Muted conversations (Phase 8, UI/UX remediation) - the socket
+                // emit above already reached an open tab regardless (mute stops
+                // notifications, not delivery to a thread someone has open);
+                // this only gates the notificationService call, which is what
+                // produces the push/notification-bell entry.
+                const mutedColumn = chatRepository.mutedColumnFor(conversation, recipientId);
+                if (mutedColumn && conversation[mutedColumn]) {
+                    return;
+                }
+
+                notificationService
+                    .notify({
+                        userId: recipientId,
+                        type: "message",
+                        titleKey: "message.new.title",
+                        titleParams: { senderName },
+                        messageKey: "message.new.message",
+                        messageParams: { preview },
+                        relatedConversationId: conversationId,
+                        url: `/messages/${conversationId}`
+                    })
+                    .catch((error) => logger.warn({ err: error, conversationId }, "message notification error"));
+            });
+        });
+    }
 
     return saved;
 };

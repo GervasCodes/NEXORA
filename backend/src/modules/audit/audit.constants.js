@@ -21,6 +21,18 @@ const EVENT_TYPE_GROUPS = {
         "admin_account_deleted"
     ],
     auth: ["login_success", "login_failed"],
+    // Clear-data tooling (dataReset module). Each reset writes two
+    // entries: the `*.seller`/`*.platform` one recorded (and awaited)
+    // BEFORE anything is deleted, and the `*_completed` one written after
+    // the transaction commits with the real row counts. A lone
+    // non-completed entry therefore means a reset was authorised and then
+    // failed or rolled back - worth being able to filter for on its own.
+    data_reset: [
+        "data_reset.seller",
+        "data_reset.seller_completed",
+        "data_reset.platform",
+        "data_reset.platform_completed"
+    ],
     orders: ["order_created", "order_delivery_manually_assigned"],
     payments: ["payment_processed"],
     refunds: [

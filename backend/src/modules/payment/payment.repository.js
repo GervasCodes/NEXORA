@@ -1,18 +1,25 @@
 const db = require("../../config/db");
 
+// Pre-order / made-to-order (Phase 8) - an order can now have more than
+// one payment row (a deposit leg, then later a balance leg - see
+// payment_leg on migration 106), so this returns the LATEST row for the
+// order rather than "the" row. That's a no-op change for every non-
+// pre-order order (still exactly one row, so "latest" = "the only one"),
+// but it's what lets a completed deposit row stop shadowing the pending
+// balance row that gets created after it.
 exports.findByOrderId = async (orderId) => {
     const [rows] = await db.query(
-        "SELECT * FROM payments WHERE order_id = ?",
+        "SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1",
         [orderId]
     );
     return rows[0];
 };
 
-exports.create = async (orderId, method, amount) => {
+exports.create = async (orderId, method, amount, paymentLeg = "full") => {
     const [result] = await db.query(
-        `INSERT INTO payments (order_id, method, status, amount, purpose)
-        VALUES (?, ?, 'pending', ?, 'order_payment')`,
-        [orderId, method, amount]
+        `INSERT INTO payments (order_id, method, status, amount, purpose, payment_leg)
+        VALUES (?, ?, 'pending', ?, 'order_payment', ?)`,
+        [orderId, method, amount, paymentLeg]
     );
     return result.insertId;
 };

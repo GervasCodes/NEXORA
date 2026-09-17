@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -8,10 +8,14 @@ import MessageBubble from "../components/chat/MessageBubble";
 import TypingIndicator from "../components/chat/TypingIndicator";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import MessageSearch from "../components/chat/MessageSearch";
+import DateSeparator from "../components/chat/DateSeparator";
+import ChatWallpaperPicker from "../components/chat/ChatWallpaperPicker";
 import PageLoader from "../components/PageLoader";
 import Button from "../components/ui/Button";
 import PageMeta from "../components/PageMeta";
 import { ImageIcon, PaperclipIcon } from "../components/Icons";
+import { formatDate } from "../utils/format";
+import { getWallpaper, loadStoredWallpaperId, storeWallpaperId } from "../utils/chatWallpaper";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -43,15 +47,22 @@ export default function ConversationThread() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const [highlightedId, setHighlightedId] = useState(null);
+    const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
+    const [wallpaperId, setWallpaperId] = useState(loadStoredWallpaperId);
 
     const bottomRef = useRef(null);
     const fileInputRef = useRef(null);
     const typingStopTimer = useRef(null);
     const otherTypingTimer = useRef(null);
     const isTypingRef = useRef(false);
+    // Whether the very first (history) render of this conversation has
+    // already been scrolled into place - see the scrollIntoView effect
+    // below for why this matters.
+    const hasAutoScrolledRef = useRef(false);
 
     useEffect(() => {
         setLoading(true);
+        hasAutoScrolledRef.current = false;
         api.get(`/chat/conversations/${id}/messages`)
             .then(({ data }) => setMessages(data.data))
             .catch(() => setError(t("chat.loadError")))
@@ -127,9 +138,50 @@ export default function ConversationThread() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, id]);
 
+    // Phase 12 (Messaging UI Modernization) auto-scroll fix: this used to
+    // always scroll with behavior: "smooth", including the very first
+    // render of a conversation's full history - on a long thread, that
+    // meant the browser visibly animated all the way down from the top
+    // of the list before settling at the bottom (a "flash" through the
+    // whole history) every time the page opened. Now the first
+    // population of `messages` for a given conversation (tracked by
+    // hasAutoScrolledRef, reset whenever `id` changes above) jumps
+    // straight to the bottom with no animation; only messages arriving
+    // after that point - a new send/receive - animate smoothly.
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (messages.length === 0) return;
+        bottomRef.current?.scrollIntoView({ behavior: hasAutoScrolledRef.current ? "smooth" : "auto" });
+        hasAutoScrolledRef.current = true;
     }, [messages.length]);
+
+    // Local-day comparison (not a UTC one) so "Today"/"Yesterday" match
+    // what the reader's own clock says, the same reasoning
+    // formatTimeRemaining (utils/format.js) already applies elsewhere.
+    const isSameDay = (a, b) => {
+        const da = new Date(a);
+        const db = new Date(b);
+        return (
+            da.getFullYear() === db.getFullYear() &&
+            da.getMonth() === db.getMonth() &&
+            da.getDate() === db.getDate()
+        );
+    };
+
+    const dateSeparatorLabel = (dateString) => {
+        const now = new Date();
+        if (isSameDay(dateString, now)) return t("chat.today");
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        if (isSameDay(dateString, yesterday)) return t("chat.yesterday");
+        return formatDate(dateString);
+    };
+
+    const wallpaper = getWallpaper(wallpaperId);
+    const handleSelectWallpaper = (id) => {
+        setWallpaperId(id);
+        storeWallpaperId(id);
+        setWallpaperPickerOpen(false);
+    };
 
     // Raw reaction rows -> the same { emoji, count, userIds, mine } shape
     // the initial REST fetch already returns (see chat.service.js's
@@ -335,6 +387,23 @@ export default function ConversationThread() {
                         >
                             {t("chat.search")}
                         </button>
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setWallpaperPickerOpen((v) => !v)}
+                                className="text-xs text-ash hover:text-ink transition-colors"
+                                aria-label={t("chat.wallpaperAria")}
+                            >
+                                {t("chat.wallpaper")}
+                            </button>
+                            {wallpaperPickerOpen && (
+                                <ChatWallpaperPicker
+                                    activeId={wallpaperId}
+                                    onSelect={handleSelectWallpaper}
+                                    onClose={() => setWallpaperPickerOpen(false)}
+                                />
+                            )}
+                        </div>
                         <button
                             type="button"
                             onClick={() => setConfirmingClear(true)}
@@ -391,23 +460,31 @@ export default function ConversationThread() {
                 <MessageSearch conversationId={id} onJumpTo={jumpToMessage} onClose={() => setSearchOpen(false)} />
             )}
 
-            <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+            <div
+                className={`flex-1 overflow-y-auto space-y-3 pb-4 rounded-lg transition-colors ${wallpaper.className}`}
+                style={wallpaper.style || undefined}
+            >
                 {messages.length === 0 && (
                     <p className="text-ash text-sm text-center py-10">{t("chat.noMessages")}</p>
                 )}
 
-                {messages.map((m) => (
-                    <MessageBubble
-                        key={m.id}
-                        message={m}
-                        mine={m.sender_id === user.id}
-                        highlighted={highlightedId === m.id}
-                        onReact={handleReact}
-                        onRemoveReaction={handleRemoveReaction}
-                        onDeleteMessage={handleDeleteMessage}
-                        onOpenLightbox={setLightboxSrc}
-                    />
-                ))}
+                {messages.map((m, i) => {
+                    const showDateSeparator = i === 0 || !isSameDay(m.created_at, messages[i - 1].created_at);
+                    return (
+                        <Fragment key={m.id}>
+                            {showDateSeparator && <DateSeparator label={dateSeparatorLabel(m.created_at)} />}
+                            <MessageBubble
+                                message={m}
+                                mine={m.sender_id === user.id}
+                                highlighted={highlightedId === m.id}
+                                onReact={handleReact}
+                                onRemoveReaction={handleRemoveReaction}
+                                onDeleteMessage={handleDeleteMessage}
+                                onOpenLightbox={setLightboxSrc}
+                            />
+                        </Fragment>
+                    );
+                })}
 
                 {otherTyping && <TypingIndicator />}
 

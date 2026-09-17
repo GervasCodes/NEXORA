@@ -15,6 +15,18 @@ exports.listUsers = async (req, res) => {
     }
 };
 
+// Phase 5 (map showing users).
+exports.getUserMap = async (req, res) => {
+    try {
+        const points = await adminService.getUserMap();
+
+        return res.json({ success: true, data: points });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.listDeletedUsers = async (req, res) => {
     try {
         const users = await adminService.listDeletedUsers();
@@ -412,12 +424,13 @@ exports.exportAdvancedAnalyticsCsv = async (req, res) => {
 
 exports.getSettings = async (req, res) => {
     try {
-        const [settings, aiUsage] = await Promise.all([
+        const [settings, aiUsage, aiQuality] = await Promise.all([
             adminService.getSettings(),
-            adminService.getAiUsageSummary()
+            adminService.getAiUsageSummary(),
+            adminService.getAiQualitySummary()
         ]);
 
-        return res.json({ success: true, data: { ...settings, aiUsage } });
+        return res.json({ success: true, data: { ...settings, aiUsage, aiQuality } });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

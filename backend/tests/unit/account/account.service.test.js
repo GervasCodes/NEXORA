@@ -236,3 +236,24 @@ describe("account.service.deleteAccount (Phase 3 - soft account deletion)", () =
         );
     });
 });
+
+// Phase 5 (map showing users) - opt-out gating. The actual guard lives
+// in the repository's single UPDATE ... WHERE location_sharing_enabled
+// = 1 AND role IN (...) (see account.repository.test.js for that SQL
+// itself); this just verifies the service is a thin, faithful relay of
+// whatever the repository reports back, since socket.js's broadcast
+// decision depends entirely on that boolean.
+describe("account.service.updateLocation", () => {
+    it("reports the position was recorded when the repository update affected a row", async () => {
+        accountRepository.updateLocation.mockResolvedValue(true);
+
+        await expect(accountService.updateLocation(1, -6.79, 39.2)).resolves.toBe(true);
+        expect(accountRepository.updateLocation).toHaveBeenCalledWith(1, -6.79, 39.2);
+    });
+
+    it("reports the position was NOT recorded for an opted-out (or role-mismatched) account", async () => {
+        accountRepository.updateLocation.mockResolvedValue(false);
+
+        await expect(accountService.updateLocation(1, -6.79, 39.2)).resolves.toBe(false);
+    });
+});

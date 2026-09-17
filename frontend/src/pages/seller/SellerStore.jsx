@@ -108,7 +108,10 @@ export default function SellerStore() {
         store_theme: profile.store_theme || "default",
         social_instagram: profile.social_instagram || "",
         social_facebook: profile.social_facebook || "",
-        social_whatsapp: profile.social_whatsapp || ""
+        social_whatsapp: profile.social_whatsapp || "",
+        accepts_preorders: Boolean(profile.accepts_preorders),
+        preorder_deposit_percent: profile.preorder_deposit_percent ?? 30,
+        preorder_default_lead_time_days: profile.preorder_default_lead_time_days ?? ""
     });
     const [pickupPin, setPickupPin] = useState(
         profile.pickup_lat != null && profile.pickup_lng != null
@@ -126,6 +129,7 @@ export default function SellerStore() {
     }, []);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+    const updateChecked = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -135,6 +139,7 @@ export default function SellerStore() {
         try {
             await api.put("/seller/profile", {
                 ...form,
+                preorder_default_lead_time_days: form.preorder_default_lead_time_days === "" ? null : form.preorder_default_lead_time_days,
                 pickup_lat: pickupPin?.lat ?? null,
                 pickup_lng: pickupPin?.lng ?? null
             });
@@ -298,6 +303,32 @@ export default function SellerStore() {
                             placeholder={t("seller.store.whatsappPlaceholder")} maxLength={20}
                         />
                     </div>
+                </div>
+
+                <div className="border rounded-lg p-4 space-y-3">
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={form.accepts_preorders} onChange={updateChecked("accepts_preorders")} />
+                        <span className="text-sm font-medium">{t("seller.store.acceptsPreorders")}</span>
+                    </label>
+                    <p className="text-xs text-ash">{t("seller.store.acceptsPreordersHint")}</p>
+
+                    {form.accepts_preorders && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input
+                                label={t("seller.store.preorderDepositPercent")}
+                                type="number" min={1} max={100} step="1"
+                                value={form.preorder_deposit_percent}
+                                onChange={update("preorder_deposit_percent")}
+                            />
+                            <Input
+                                label={t("seller.store.preorderDefaultLeadTime")}
+                                type="number" min={1} max={365} step="1"
+                                value={form.preorder_default_lead_time_days}
+                                onChange={update("preorder_default_lead_time_days")}
+                                placeholder={t("seller.store.preorderDefaultLeadTimePlaceholder")}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

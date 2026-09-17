@@ -20,6 +20,27 @@ exports.findAllUsers = async () => {
     return rows;
 };
 
+// Phase 5 (map showing users) - every buyer/seller currently visible on
+// the admin map: opted in (location_sharing_enabled = 1, the opt-out
+// default per PHASE1_DECISIONS.md's amended #4), not suspended/
+// deactivated, and with an actual position on file (a user who's never
+// sent a ping yet has NULL coordinates and has nothing to plot). Row
+// order doesn't matter to the map, so no ORDER BY.
+exports.findUserMapPoints = async () => {
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, role, location_lat, location_lng,
+                location_lat_updated_at AS location_updated_at
+        FROM users
+        WHERE role IN ('buyer', 'seller')
+          AND deleted_at IS NULL
+          AND is_active = TRUE
+          AND location_sharing_enabled = 1
+          AND location_lat IS NOT NULL
+          AND location_lng IS NOT NULL`
+    );
+    return rows;
+};
+
 // Every account a user has soft-deleted for themselves (Phase 3 -
 // account.service.js#deleteAccount). permanently_deleted_at distinguishes
 // ones still awaiting review from ones an admin has already permanently

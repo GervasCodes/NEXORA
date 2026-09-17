@@ -33,7 +33,10 @@ exports.updateSettingsValidation = [
     body("notifyOrderUpdates").optional().isBoolean().withMessage("notifyOrderUpdates must be a boolean"),
     body("notifyMessages").optional().isBoolean().withMessage("notifyMessages must be a boolean"),
     body("notifyPriceStockAlerts").optional().isBoolean().withMessage("notifyPriceStockAlerts must be a boolean"),
-    body("notifyStoreUpdates").optional().isBoolean().withMessage("notifyStoreUpdates must be a boolean")
+    body("notifyStoreUpdates").optional().isBoolean().withMessage("notifyStoreUpdates must be a boolean"),
+
+    // Phase 5 (map showing users) - opt-out location sharing toggle.
+    body("locationSharingEnabled").optional().isBoolean().withMessage("locationSharingEnabled must be a boolean")
 ];
 
 exports.verifyPasswordChangeOtpValidation = [

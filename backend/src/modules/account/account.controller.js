@@ -47,6 +47,21 @@ exports.uploadProfilePhoto = async (req, res) => {
     }
 };
 
+// Phase 6 (profile photo delete + full view).
+exports.deleteProfilePhoto = async (req, res) => {
+    try {
+        await accountService.deleteProfilePhoto(req.user.id);
+
+        return res.json({ success: true, message: "Photo removed." });
+
+    } catch (error) {
+        return res.status(error.status || 400).json({
+            success: false,
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+        });
+    }
+};
+
 exports.updateSettings = async (req, res) => {
     try {
         const profile = await accountService.updateSettings(req.user.id, req.body);

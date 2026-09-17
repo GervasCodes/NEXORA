@@ -8,7 +8,8 @@ exports.findById = async (userId) => {
                 language, theme, currency, is_active, created_at,
                 vehicle_type, vehicle_plate_number, whatsapp_order_updates, data_saver_enabled,
                 notify_order_updates, notify_messages, notify_price_stock_alerts, notify_store_updates,
-                referral_code, loyalty_points, business_account_status
+                referral_code, loyalty_points, business_account_status,
+                location_sharing_enabled
         FROM users WHERE id = ?`,
         [userId]
     );
@@ -69,7 +70,19 @@ exports.updatePhotoUrl = async (userId, photoUrl) => {
     );
 };
 
-exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled, notifyOrderUpdates, notifyMessages, notifyPriceStockAlerts, notifyStoreUpdates }) => {
+// Phase 6 (profile photo delete) - separate from updatePhotoUrl above
+// only in that it always writes NULL, never a caller-supplied value;
+// kept as its own function rather than reusing updatePhotoUrl(userId,
+// null) so callers/tests can see "delete" and "set" as distinct intents
+// where they show up in mocks/assertions.
+exports.deletePhotoUrl = async (userId) => {
+    await db.query(
+        "UPDATE users SET photo_url = NULL WHERE id = ?",
+        [userId]
+    );
+};
+
+exports.updateSettings = async (userId, { language, theme, currency, dataSaverEnabled, notifyOrderUpdates, notifyMessages, notifyPriceStockAlerts, notifyStoreUpdates, locationSharingEnabled }) => {
     const fields = [];
     const params = [];
 
@@ -85,11 +98,47 @@ exports.updateSettings = async (userId, { language, theme, currency, dataSaverEn
     if (notifyPriceStockAlerts !== undefined) { fields.push("notify_price_stock_alerts = ?"); params.push(notifyPriceStockAlerts ? 1 : 0); }
     if (notifyStoreUpdates !== undefined) { fields.push("notify_store_updates = ?"); params.push(notifyStoreUpdates ? 1 : 0); }
 
+    // Phase 5 (map showing users) - opt-out toggle. Turning it off also
+    // clears any last-known position in the same UPDATE: without this,
+    // a user who opts out would still show up on the admin map at their
+    // last recorded spot until it happened to get overwritten (it never
+    // would, since a client stops pinging once its own toggle reads
+    // false) - the whole point of turning it off is to disappear from
+    // the map immediately, not just to stop updating.
+    if (locationSharingEnabled !== undefined) {
+        fields.push("location_sharing_enabled = ?");
+        params.push(locationSharingEnabled ? 1 : 0);
+        if (!locationSharingEnabled) {
+            fields.push("location_lat = NULL", "location_lng = NULL", "location_lat_updated_at = NULL");
+        }
+    }
+
     if (fields.length === 0) return;
 
     params.push(userId);
 
     await db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, params);
+};
+
+// Phase 5 (map showing users) - records a buyer/seller's live position
+// from a socket ping. The `location_sharing_enabled = 1` guard is done
+// here, in the same UPDATE, rather than as a separate SELECT-then-write
+// in the service layer: that would leave a window where the toggle
+// flips to off between the check and the write, letting one more
+// position slip through after the user has already opted out. A single
+// guarded UPDATE closes that window - either the row is currently
+// opted in and gets written, or it isn't and nothing happens.
+// affectedRows tells the caller (socket.js) whether to actually
+// broadcast the new position, so an opted-out or role-mismatched
+// account's ping is silently dropped rather than half-applied.
+exports.updateLocation = async (userId, lat, lng) => {
+    const [result] = await db.query(
+        `UPDATE users
+         SET location_lat = ?, location_lng = ?, location_lat_updated_at = NOW()
+         WHERE id = ? AND location_sharing_enabled = 1 AND role IN ('buyer', 'seller')`,
+        [lat, lng, userId]
+    );
+    return result.affectedRows > 0;
 };
 
 exports.updatePassword = async (userId, hashedPassword) => {

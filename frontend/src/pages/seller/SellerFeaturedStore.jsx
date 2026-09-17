@@ -128,8 +128,9 @@ export default function SellerFeaturedStore({ embedded = false }) {
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Department</label>
+                        <label htmlFor="categoryId" className="text-xs text-ash block mb-1">Department</label>
                         <select
+                            id="categoryId"
                             required
                             value={categoryId}
                             onChange={(e) => setCategoryId(e.target.value)}

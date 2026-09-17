@@ -47,6 +47,7 @@ const groups = [
         label: "Trust & safety",
         tabs: [
             { to: "/admin/users", label: "Users" },
+            { to: "/admin/users/map", label: "User map" },
             { to: "/admin/deleted-accounts", label: "Deleted accounts" },
             { to: "/admin/sellers", label: "Sellers" },
             { to: "/admin/delivery-agents", label: "Delivery agents" },
@@ -68,6 +69,8 @@ const groups = [
             { to: "/admin/maintenance", label: "Maintenance" },
             { to: "/admin/status-incidents", label: "Status incidents" },
             { to: "/admin/audit-logs", label: "Audit logs" },
+            { to: "/admin/data-reset", label: "Data reset" },
+            { to: "/admin/broadcast", label: "Broadcast" },
             { to: "/admin/billing-control", label: "Billing control" },
             { to: "/admin/settings", label: "Settings" }
         ]

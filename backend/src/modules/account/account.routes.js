@@ -27,6 +27,7 @@ router.put("/settings", updateSettingsValidation, validationMiddleware, accountC
 // Goes through the same upload + file-content-validation middleware as
 // product images/seller logos (Global Rule #3) rather than a new path.
 router.post("/photo", upload.single("photo"), accountController.uploadProfilePhoto);
+router.delete("/photo", accountController.deleteProfilePhoto);
 
 // OTP-gated password change: request a code, verify it (get a short-lived
 // reauth token), then use that token to actually set the new password.

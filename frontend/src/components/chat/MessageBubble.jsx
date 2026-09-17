@@ -82,6 +82,7 @@ export default function MessageBubble({
             <div className="relative max-w-[75%]">
                 {pickerOpen && (
                     <>
+                        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- invisible click-catcher that closes the picker; keyboard users close it by tabbing out or pressing Escape */}
                         <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
                         <div className={`absolute -top-11 z-20 ${mine ? "right-0" : "left-0"}`}>
                             <EmojiPicker onSelect={handlePick} myReactions={myReactions} />
@@ -89,6 +90,7 @@ export default function MessageBubble({
                     </>
                 )}
 
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- long-press gesture to open reactions; the same action is available from the keyboard-reachable react button */}
                 <div
                     onMouseDown={!m.is_deleted ? startLongPress : undefined}
                     onMouseUp={cancelLongPress}

@@ -35,11 +35,13 @@ export default function AttachmentBubble({ attachment, onOpenLightbox, mine }) {
 
     if (type === "video") {
         return (
+            // eslint-disable-next-line jsx-a11y/media-has-caption -- user-sent chat attachment, no caption track available
             <video src={url} controls className="max-w-[240px] rounded-xl" preload="metadata" />
         );
     }
 
     if (type === "audio") {
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- user-sent voice note, no caption track available
         return <audio src={url} controls className="max-w-[240px]" preload="metadata" />;
     }
 

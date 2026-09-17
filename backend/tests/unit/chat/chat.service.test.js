@@ -1,12 +1,21 @@
 jest.mock("../../../src/modules/chat/chat.repository");
 jest.mock("../../../src/socket/socket");
 jest.mock("../../../src/utils/cloudinaryUpload");
+jest.mock("../../../src/modules/notification/notification.service");
 
 const chatRepository = require("../../../src/modules/chat/chat.repository");
 const socket = require("../../../src/socket/socket");
 const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
+const notificationService = require("../../../src/modules/notification/notification.service");
 
 const chatService = require("../../../src/modules/chat/chat.service");
+
+// sendMessage's post-save notification dispatch (see below) is
+// deliberately fire-and-forget - it's chained off a repository call
+// rather than awaited, so sendMessage itself doesn't wait on it. Tests
+// that care about it need to flush the microtask queue once after
+// calling sendMessage.
+const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 // getMessages() fires markDelivered() and chains .catch() onto it without
 // awaiting - the auto-mock otherwise resolves to `undefined` (not a
@@ -16,6 +25,13 @@ const chatService = require("../../../src/modules/chat/chat.service");
 beforeEach(() => {
     chatRepository.markDelivered.mockResolvedValue(undefined);
     chatRepository.findReactionsForConversation.mockResolvedValue([]);
+    // sendMessage's sender-name lookup (Phase 6, UI/UX remediation) chains
+    // .catch()/.then() straight off this call - same reasoning as
+    // markDelivered above, the auto-mock otherwise resolves to `undefined`
+    // (not a Promise), which throws immediately in every sendMessage test.
+    chatRepository.findUserFullName.mockResolvedValue(null);
+    // notify()'s result is always chained with .catch() - same reasoning.
+    notificationService.notify.mockResolvedValue(undefined);
 });
 
 describe("chat.service.startConversation", () => {
@@ -131,6 +147,65 @@ describe("chat.service.sendMessage", () => {
         await expect(chatService.sendMessage(1, 5, "hi")).resolves.toEqual(
             expect.objectContaining({ id: 500 })
         );
+    });
+});
+
+// Phase 6 (UI/UX remediation, notifications) - the message notification
+// now carries the sender's name (instead of a generic "New message")
+// and a related_conversation_id (so it's clickable to the exact
+// conversation later, not just live over the socket). Both genuinely
+// new pieces of behavior, so both get their own coverage here.
+describe("chat.service.sendMessage notification content", () => {
+    it("notifies the other participant with the sender's name and the conversation to route to", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.createMessage.mockResolvedValue(500);
+        chatRepository.findUserFullName.mockResolvedValue({ first_name: "Amina", last_name: "Juma" });
+        chatRepository.mutedColumnFor.mockReturnValue(null);
+
+        await chatService.sendMessage(1, 5, "hello there");
+        await flushMicrotasks();
+
+        expect(chatRepository.findUserFullName).toHaveBeenCalledWith(5);
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 10,
+                type: "message",
+                titleKey: "message.new.title",
+                titleParams: { senderName: "Amina Juma" },
+                messageKey: "message.new.message",
+                messageParams: { preview: "hello there" },
+                relatedConversationId: 1,
+                url: "/messages/1"
+            })
+        );
+    });
+
+    it("falls back to a generic sender name when the sender's name can't be looked up", async () => {
+        chatRepository.findConversationById.mockResolvedValue({ id: 1, buyer_id: 5, seller_id: 10 });
+        chatRepository.createMessage.mockResolvedValue(500);
+        chatRepository.findUserFullName.mockResolvedValue(null);
+        chatRepository.mutedColumnFor.mockReturnValue(null);
+
+        await chatService.sendMessage(1, 5, "hi");
+        await flushMicrotasks();
+
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({ titleParams: { senderName: "Someone" } })
+        );
+    });
+
+    it("does not notify a recipient whose muted column is set for this conversation", async () => {
+        chatRepository.findConversationById.mockResolvedValue({
+            id: 1, buyer_id: 5, seller_id: 10, seller_muted: true
+        });
+        chatRepository.createMessage.mockResolvedValue(500);
+        chatRepository.findUserFullName.mockResolvedValue({ first_name: "Amina" });
+        chatRepository.mutedColumnFor.mockReturnValue("seller_muted");
+
+        await chatService.sendMessage(1, 5, "hi");
+        await flushMicrotasks();
+
+        expect(notificationService.notify).not.toHaveBeenCalled();
     });
 });
 

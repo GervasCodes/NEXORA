@@ -75,6 +75,21 @@ export default function SellerOrders() {
         }
     };
 
+    // Pre-order / made-to-order (Phase 8) - "the item's ready, please pay
+    // the rest" - see order.service.js#requestPreorderBalance.
+    const requestBalance = async (orderId) => {
+        setBusyId(orderId);
+        try {
+            await api.post(`/orders/${orderId}/request-balance`);
+            toast?.success("Buyer has been notified that the balance is due");
+            load();
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     if (loading) return <PageLoader />;
 
     return (
@@ -188,6 +203,20 @@ export default function SellerOrders() {
 
                             {order.status === "processing" && (
                                 <>
+                                    {order.order_type === "pre_order" && order.payment_status === "deposit_paid" && (
+                                        order.balance_requested_at ? (
+                                            <span className="text-xs text-ash italic">Balance requested - awaiting payment</span>
+                                        ) : (
+                                            <Button
+                                                onClick={() => requestBalance(order.id)}
+                                                disabled={busyId === order.id}
+                                                variant="secondary"
+                                                size="sm"
+                                            >
+                                                Request balance payment
+                                            </Button>
+                                        )
+                                    )}
                                     {roster.length > 0 && (
                                         <select
                                             value={shipChoice[order.id] || ""}

@@ -91,6 +91,11 @@ router.post("/refunds/:id/retry", adminController.retryRefund);
 
 router.get("/users", adminController.listUsers);
 
+// Phase 5 (map showing users) - placed before /users/:id-shaped routes
+// isn't a concern here since none exist on this exact path, but kept
+// directly beside /users for discoverability.
+router.get("/users/map", adminController.getUserMap);
+
 // Suspend/Unsuspend (Admin Account Control). Replaces the old
 // bare deactivate/activate toggle - suspending requires a reason, and
 // records the acting admin + a timestamp (migration 058).

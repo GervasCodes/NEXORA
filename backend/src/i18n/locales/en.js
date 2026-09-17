@@ -52,7 +52,7 @@ module.exports = {
     },
 
     notifications: {
-        "message.new.title": "New message",
+        "message.new.title": "New message from {senderName}",
         "message.new.message": "{preview}",
 
         "verification.approved.title": "Verification approved",
@@ -123,12 +123,19 @@ module.exports = {
 
         "order.placed.title": "Order placed",
         "order.placed.messageMultiVendor": "Your order {orderNumber} ({vendorCount} vendors) has been placed successfully.",
-        "order.placed.messageSingle": "Your order {orderNumber} has been placed successfully.",
+        "order.placed.messageSingle": "Your order {orderNumber} ({itemSummary}) has been placed successfully.",
         "order.cancelled.title": "Order cancelled",
         "order.cancelled.message": "Your order {orderNumber} has been cancelled.",
+        "order.cancelled.messageWithItem": "Your order {orderNumber} ({itemSummary}) has been cancelled.",
         "order.cancelledUnpaid.message": "Your order {orderNumber} was cancelled because payment was never completed. Feel free to place it again.",
+        "order.cancelledUnpaid.messageWithItem": "Your order {orderNumber} ({itemSummary}) was cancelled because payment was never completed. Feel free to place it again.",
         "order.statusUpdated.title": "Order status updated",
         "order.statusUpdated.message": "Your order {orderNumber} is now \"{status}\".",
+        "order.statusUpdated.messageWithItem": "Your order {orderNumber} ({itemSummary}) is now \"{status}\".",
+        "order.preorderDepositPaid.title": "Deposit received",
+        "order.preorderDepositPaid.message": "We've received your deposit for order {orderNumber}. We'll let you know once it's ready and the remaining balance is due.",
+        "order.preorderBalanceDue.title": "Balance payment due",
+        "order.preorderBalanceDue.message": "Your made-to-order item for order {orderNumber} is ready! Please pay the remaining balance of {balanceAmount} to have it shipped.",
 
         "wallet.credited.title": "Wallet credited",
         "wallet.credited.message": "Your wallet has been credited for order #{orderId}.",

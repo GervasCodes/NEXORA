@@ -114,6 +114,51 @@ exports.uploadStoreBanner = async (req, res) => {
         });
     }
 };
+exports.uploadPromoVideo = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "A video file is required"
+            });
+        }
+
+        const promoVideoUrl = await sellerService.uploadPromoVideo(
+            req.user.id,
+            req.file
+        );
+
+        return res.json({
+            success: true,
+            message: "Promo video uploaded successfully",
+            data: { promoVideoUrl }
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+exports.deletePromoVideo = async (req, res) => {
+    try {
+        await sellerService.deletePromoVideo(req.user.id);
+
+        return res.json({
+            success: true,
+            message: "Promo video removed"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getDeliveryRoster = async (req, res) => {
     try {
         const roster = await sellerService.getRoster(req.user.id);

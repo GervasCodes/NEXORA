@@ -89,6 +89,35 @@ exports.uploadStoreBanner = async (userId, file) => {
 
     return result.secure_url;
 };
+
+// Phase 7 (Promo Video Unification) - same ownership check and
+// Cloudinary round-trip as uploadStoreLogo/uploadStoreBanner above,
+// with "video" as the resource type instead of the image default -
+// same call shape addProductVideo (product.service.js) already uses,
+// no parallel upload logic built for this.
+exports.uploadPromoVideo = async (userId, file) => {
+    const seller = await sellerRepository.findByUserId(userId);
+
+    if (!seller) {
+        throw new Error("Seller profile not found");
+    }
+
+    const result = await uploadToCloudinary(file.buffer, "seller/promo-videos", "video");
+
+    await sellerRepository.updatePromoVideo(userId, result.secure_url);
+
+    return result.secure_url;
+};
+
+exports.deletePromoVideo = async (userId) => {
+    const seller = await sellerRepository.findByUserId(userId);
+
+    if (!seller) {
+        throw new Error("Seller profile not found");
+    }
+
+    await sellerRepository.updatePromoVideo(userId, null);
+};
 // --- Delivery agent roster ---
 
 exports.getRoster = async (sellerId) => {

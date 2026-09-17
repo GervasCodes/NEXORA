@@ -1,10 +1,10 @@
 const db = require("../../config/db");
 
-exports.create = async (userId, type, title, message, relatedOrderId) => {
+exports.create = async (userId, type, title, message, relatedOrderId, relatedConversationId) => {
     const [result] = await db.query(
-        `INSERT INTO notifications (user_id, type, title, message, related_order_id)
-        VALUES (?, ?, ?, ?, ?)`,
-        [userId, type, title, message, relatedOrderId || null]
+        `INSERT INTO notifications (user_id, type, title, message, related_order_id, related_conversation_id)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        [userId, type, title, message, relatedOrderId || null, relatedConversationId || null]
     );
     return result.insertId;
 };

@@ -807,4 +807,237 @@ describe("order.service.updateOrderStatusBySeller", () => {
             })
         );
     });
+
+    // Pre-order / made-to-order (Phase 8) - a pre-order can move into
+    // processing off the deposit alone, but must not ship until the
+    // balance is fully paid.
+    it("allows a pre-order into processing once the deposit is paid, without the full amount", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1",
+            payment_status: "deposit_paid", payment_method: "mobile_money", order_type: "pre_order"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await orderService.updateOrderStatusBySeller(1, 10, "processing");
+
+        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "processing");
+    });
+
+    it("rejects shipping a pre-order that only has its deposit paid", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1",
+            payment_status: "deposit_paid", payment_method: "mobile_money", order_type: "pre_order"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(orderService.updateOrderStatusBySeller(1, 10, "shipped")).rejects.toThrow(
+            "The remaining balance must be paid before this order can be shipped"
+        );
+        expect(orderRepository.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it("allows shipping a pre-order once the balance is fully paid", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1",
+            payment_status: "paid", payment_method: "mobile_money", order_type: "pre_order"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+        deliveryService.startMatching.mockResolvedValue(undefined);
+
+        await orderService.updateOrderStatusBySeller(1, 10, "shipped");
+
+        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "shipped");
+    });
+
+    it("still blocks a standard order that isn't paid at all, even without a payment_method other than online", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, status: "pending", buyer_id: 5, order_number: "ORD-1",
+            payment_status: "unpaid", payment_method: "mobile_money", order_type: "standard"
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(orderService.updateOrderStatusBySeller(1, 10, "processing")).rejects.toThrow(
+            "This order can't be accepted yet - payment hasn't been verified"
+        );
+    });
+});
+
+describe("order.service.checkout - pre-order / made-to-order (Phase 8)", () => {
+    const preorderProductRow = (overrides = {}) => productRow({ is_preorder: true, preorder_lead_time_days: null, ...overrides });
+
+    it("computes the deposit/balance split off the seller's store settings and marks the order as a pre-order", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 10000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([preorderProductRow({ id: 1, price: 10000, stock: 5 })]);
+        sellerRepository.findByUserId.mockResolvedValue({
+            id: 10, accepts_preorders: true, preorder_deposit_percent: 40, preorder_default_lead_time_days: 10
+        });
+        orderRepository.createOrder.mockResolvedValue(200);
+
+        await orderService.checkout(1, { payment_method: "mobile_money" });
+
+        expect(orderRepository.createOrder).toHaveBeenCalledTimes(1);
+        const call = orderRepository.createOrder.mock.calls[0];
+        const totalAmount = call[4];
+        const preorder = call[10];
+
+        expect(totalAmount).toBe(10000);
+        expect(preorder).toEqual(expect.objectContaining({
+            leadTimeDays: 10,
+            depositAmount: 4000, // 40% of 10000
+            balanceAmount: 6000
+        }));
+        expect(preorder.readyBy).toEqual(expect.any(String));
+    });
+
+    it("a product's own lead time overrides the store default when it's longer", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 5000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([
+            preorderProductRow({ id: 1, price: 5000, stock: 5, preorder_lead_time_days: 21 })
+        ]);
+        sellerRepository.findByUserId.mockResolvedValue({
+            id: 10, accepts_preorders: true, preorder_deposit_percent: 30, preorder_default_lead_time_days: 7
+        });
+        orderRepository.createOrder.mockResolvedValue(201);
+
+        await orderService.checkout(1, { payment_method: "mobile_money" });
+
+        const preorder = orderRepository.createOrder.mock.calls[0][10];
+        expect(preorder.leadTimeDays).toBe(21);
+    });
+
+    it("falls back to the platform default deposit percent/lead time when the seller row has none set", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([preorderProductRow({ id: 1, price: 1000, stock: 5 })]);
+        sellerRepository.findByUserId.mockResolvedValue({ id: 10, accepts_preorders: true, preorder_deposit_percent: null, preorder_default_lead_time_days: null });
+        orderRepository.createOrder.mockResolvedValue(202);
+
+        await orderService.checkout(1, { payment_method: "mobile_money" });
+
+        const preorder = orderRepository.createOrder.mock.calls[0][10];
+        expect(preorder.depositAmount).toBe(300); // 30% default of 1000
+        expect(preorder.leadTimeDays).toBe(7); // 7-day default
+    });
+
+    it("rejects a cart mixing pre-order items with regular items from the same seller", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 }),
+            cartRow({ product_id: 2, seller_id: 10, quantity: 1, price: 500 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([
+            preorderProductRow({ id: 1, price: 1000, stock: 5 }),
+            productRow({ id: 2, price: 500, stock: 5 })
+        ]);
+
+        await expect(orderService.checkout(1, { payment_method: "mobile_money" })).rejects.toThrow(
+            "Made-to-order items can't be checked out together with regular items or items from other sellers - please order them separately"
+        );
+        expect(orderRepository.createOrder).not.toHaveBeenCalled();
+    });
+
+    it("rejects a multi-vendor cart that includes a pre-order item", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 }),
+            cartRow({ product_id: 2, seller_id: 20, quantity: 1, price: 500 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([
+            preorderProductRow({ id: 1, price: 1000, stock: 5 }),
+            preorderProductRow({ id: 2, price: 500, stock: 5 })
+        ]);
+
+        await expect(orderService.checkout(1, { payment_method: "mobile_money" })).rejects.toThrow(
+            "Made-to-order items can't be checked out together with regular items or items from other sellers - please order them separately"
+        );
+        expect(orderRepository.createSplitOrder).not.toHaveBeenCalled();
+    });
+
+    it("rejects Cash on Delivery for a pre-order cart", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([preorderProductRow({ id: 1, price: 1000, stock: 5 })]);
+        sellerRepository.findByUserId.mockResolvedValue({ id: 10, accepts_preorders: true, preorder_deposit_percent: 30 });
+
+        await expect(orderService.checkout(1, { payment_method: "cash_on_delivery" })).rejects.toThrow(
+            "Made-to-order items require an online payment method for the deposit - Cash on Delivery isn't available for these items"
+        );
+        expect(orderRepository.createOrder).not.toHaveBeenCalled();
+    });
+
+    it("rejects when the store no longer accepts pre-orders", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([preorderProductRow({ id: 1, price: 1000, stock: 5 })]);
+        sellerRepository.findByUserId.mockResolvedValue({ id: 10, accepts_preorders: false });
+
+        await expect(orderService.checkout(1, { payment_method: "mobile_money" })).rejects.toThrow(
+            "This store's made-to-order items are currently unavailable for pre-order checkout"
+        );
+        expect(orderRepository.createOrder).not.toHaveBeenCalled();
+    });
+
+    it("leaves a regular (non-pre-order) cart completely unaffected - no preorder object passed", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1, price: 1000, stock: 5 })]);
+        orderRepository.createOrder.mockResolvedValue(300);
+
+        await orderService.checkout(1, { payment_method: "mobile_money" });
+
+        expect(sellerRepository.findByUserId).not.toHaveBeenCalled();
+        const preorder = orderRepository.createOrder.mock.calls[0][10];
+        expect(preorder).toBeNull();
+    });
+});
+
+describe("order.service.requestPreorderBalance", () => {
+    it("rejects when the order isn't a pre-order", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, order_type: "standard" });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(orderService.requestPreorderBalance(1, 10)).rejects.toThrow("This order isn't a pre-order");
+    });
+
+    it("rejects when the deposit hasn't been paid yet", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, order_type: "pre_order", payment_status: "unpaid" });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(orderService.requestPreorderBalance(1, 10)).rejects.toThrow("The deposit for this order hasn't been paid yet");
+    });
+
+    it("rejects when the balance has already been paid", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, order_type: "pre_order", payment_status: "paid" });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        await expect(orderService.requestPreorderBalance(1, 10)).rejects.toThrow("The balance for this order has already been paid");
+    });
+
+    it("marks the balance requested and notifies the buyer with the amount due, once the deposit is in", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, order_type: "pre_order", payment_status: "deposit_paid",
+            buyer_id: 5, order_number: "ORD-1", balance_amount: 6000
+        });
+        orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
+
+        const result = await orderService.requestPreorderBalance(1, 10);
+
+        expect(orderRepository.markBalanceRequested).toHaveBeenCalledWith(1);
+        expect(notificationService.notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 5,
+                type: "preorder_balance_due",
+                messageKey: "notifications.order.preorderBalanceDue.message",
+                messageParams: { orderNumber: "ORD-1", balanceAmount: 6000 },
+                relatedOrderId: 1
+            })
+        );
+        expect(result).toEqual({ orderId: 1, balanceAmount: 6000 });
+    });
 });

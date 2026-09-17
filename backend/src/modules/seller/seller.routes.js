@@ -24,6 +24,7 @@ const {
     updateSellerProfile
 } = require("./seller.controller");
 const upload = require("../../middleware/upload.middleware");
+const uploadVideo = require("../../middleware/uploadVideo.middleware");
 
 // Upload logo
 router.post(
@@ -65,6 +66,26 @@ router.post(
     authorize("seller"),
     upload.single("banner"),
     sellerController.uploadStoreBanner
+);
+
+// Store promo video (Phase 7 - Promo Video Unification), managed from
+// the Promote hub (SellerPromote.jsx) - uploadVideo.single, not
+// upload.single, since this is video/* not image/* (see
+// uploadVideo.middleware.js for the size cap + content-type check
+// difference).
+router.post(
+    "/promo-video",
+    authMiddleware,
+    authorize("seller"),
+    uploadVideo.single("video"),
+    sellerController.uploadPromoVideo
+);
+
+router.delete(
+    "/promo-video",
+    authMiddleware,
+    authorize("seller"),
+    sellerController.deletePromoVideo
 );
 
 router.get(

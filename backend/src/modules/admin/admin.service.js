@@ -28,7 +28,33 @@ const deliveryService = require("../delivery/delivery.service");
 const STALLED_ORDER_MINUTES = 20;
 
 exports.listUsers = async () => {
-    return adminRepository.findAllUsers();
+    const users = await adminRepository.findAllUsers();
+
+    // Admin "active users" view (Phase 4, per the Phase 1.3 decision:
+    // presence/socket-based, not a filtered account-status list). Lazy
+    // require, same reasoning as every other socket.js reference in this
+    // codebase (adminNotification.service.js, notification.service.js) -
+    // socket.js requires chat.service.js at module load time, so a
+    // top-level require here risks a partially-loaded module during
+    // circular resolution.
+    const socket = require("../../socket/socket");
+    return users.map((u) => ({ ...u, is_online: socket.isUserOnline(u.id) }));
+};
+
+// Phase 5 (map showing users) - opted-in buyers/sellers with a live
+// position, per the overridden Phase 1.4 decision (opt-out, both
+// roles, precise coordinates - see PHASE1_DECISIONS.md #4). All the
+// actual gating (role, opt-out flag, non-null coordinates) happens in
+// the repository query; this just annotates each point with the same
+// live is_online flag the users list already gets, since "is this
+// person online right now" is a natural thing to want on a live map
+// too and the presence set is already computed for exactly this
+// purpose.
+exports.getUserMap = async () => {
+    const points = await adminRepository.findUserMapPoints();
+
+    const socket = require("../../socket/socket");
+    return points.map((p) => ({ ...p, is_online: socket.isUserOnline(p.id) }));
 };
 
 // Deleted Accounts section. permanentlyDeleteUser below 
@@ -1021,6 +1047,16 @@ exports.updateSettings = async (data) => {
 exports.getAiUsageSummary = async () => {
     const aiService = require("../ai/ai.service");
     return aiService.getUsageOverview();
+};
+
+// Read-only per-feature success/fallback breakdown (last 7 days) for
+// the Admin Settings page's AI quality panel - see
+// ai.service.js#getQualityOverview for why this didn't exist until the
+// Phase 13 AI-quality audit. Lazily required for the same reason as
+// getAiUsageSummary above.
+exports.getAiQualitySummary = async () => {
+    const aiService = require("../ai/ai.service");
+    return aiService.getQualityOverview();
 };
 
 // --- Monetization Master Switch (Admin Billing Control Center) ---

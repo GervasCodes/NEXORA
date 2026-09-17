@@ -20,7 +20,9 @@ const {
     SELLER_STATUS_TRANSITIONS,
     BUYER_PROTECTION_FEE_RATE,
     BUYER_PROTECTION_FEE_MIN,
-    BUYER_PROTECTION_FEE_MAX
+    BUYER_PROTECTION_FEE_MAX,
+    DEFAULT_PREORDER_DEPOSIT_PERCENT,
+    DEFAULT_PREORDER_LEAD_TIME_DAYS
 } = require("../../constants/orderStatus");
 
 const generateOrderNumber = () => {
@@ -130,7 +132,12 @@ exports.checkout = async (buyerId, shippingInfo) => {
             name: item.name,
             quantity: item.quantity,
             unit_price: unitPrice,
-            subtotal
+            subtotal,
+            // Pre-order / made-to-order (Phase 8) - carried on the cart
+            // item (not just looked up again later) so the deposit/mixed-
+            // cart checks below don't need to re-touch productsById.
+            is_preorder: Boolean(product.is_preorder),
+            preorder_lead_time_days: product.preorder_lead_time_days || null
         };
 
         cartItems.push(cartItem);
@@ -226,6 +233,58 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const loyalty = { pointsRedeemed, discountAmount: loyaltyDiscount };
     const couponInfo = { couponId: coupon?.id ?? null, discountAmount: couponDiscount };
 
+    // Pre-order / made-to-order (Phase 8). Scope deliberately narrow for
+    // v1: a pre-order cart must be single-vendor and every line item in
+    // it must itself be a pre-order product - no mixing pre-order with
+    // regular items, and no pre-order in a multi-vendor split cart. Both
+    // would need the deposit/balance split to somehow propagate across
+    // parent/child orders, which is a substantially harder problem than
+    // this phase's roadmap entry calls for; a buyer with a mixed cart is
+    // asked to check out the pre-order item(s) separately instead.
+    const preorderItemCount = cartItems.filter((item) => item.is_preorder).length;
+    const cartIsPreorder = preorderItemCount > 0;
+
+    if (cartIsPreorder && (isMultiVendor || preorderItemCount !== cartItems.length)) {
+        throw new Error(
+            "Made-to-order items can't be checked out together with regular items or items from other sellers - please order them separately"
+        );
+    }
+
+    // Cash on Delivery has no upfront charge to collect a deposit through
+    // - the whole point of COD is the agent collects cash on handover,
+    // which doesn't fit "pay part now, pay the rest once it's made".
+    if (cartIsPreorder && shippingInfo.payment_method === "cash_on_delivery") {
+        throw new Error("Made-to-order items require an online payment method for the deposit - Cash on Delivery isn't available for these items");
+    }
+
+    let preorder = null;
+
+    if (cartIsPreorder) {
+        const seller = await sellerRepository.findByUserId(cartItems[0].seller_id);
+
+        if (!seller || !seller.accepts_preorders) {
+            throw new Error("This store's made-to-order items are currently unavailable for pre-order checkout");
+        }
+
+        const depositPercent = Number(seller.preorder_deposit_percent) || DEFAULT_PREORDER_DEPOSIT_PERCENT;
+        const leadTimeDays = Math.max(
+            ...cartItems.map((item) => item.preorder_lead_time_days || seller.preorder_default_lead_time_days || DEFAULT_PREORDER_LEAD_TIME_DAYS)
+        );
+
+        const depositAmount = Number((roundedTotal * (depositPercent / 100)).toFixed(2));
+        const balanceAmount = Number((roundedTotal - depositAmount).toFixed(2));
+
+        const readyBy = new Date();
+        readyBy.setDate(readyBy.getDate() + leadTimeDays);
+
+        preorder = {
+            leadTimeDays,
+            readyBy: readyBy.toISOString().slice(0, 10),
+            depositAmount,
+            balanceAmount
+        };
+    }
+
     let orderId;
     let vendorCount = 1;
 
@@ -255,7 +314,8 @@ exports.checkout = async (buyerId, shippingInfo) => {
             pickupPointId,
             loyalty,
             buyerAddressId,
-            couponInfo
+            couponInfo,
+            preorder
         );
     }
 
@@ -558,7 +618,16 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
     // this is the enforcement point (not just a listing/detail filter),
     // since a seller could otherwise still hit this endpoint directly
     // with an order id they'd learned some other way.
-    if (order.payment_method !== "cash_on_delivery" && order.payment_status !== "paid") {
+    //
+    // Pre-order / made-to-order (Phase 8): a pre-order only needs the
+    // deposit in to start being worked on - "paid" (full amount) isn't
+    // reached until the balance is settled, which normally happens much
+    // later, once the item is actually made. Gating shipment specifically
+    // on full payment is handled separately, just below.
+    const hasEnoughToStart = order.payment_status === "paid"
+        || (order.order_type === "pre_order" && order.payment_status === "deposit_paid");
+
+    if (order.payment_method !== "cash_on_delivery" && !hasEnoughToStart) {
         throw new Error("This order can't be accepted yet - payment hasn't been verified");
     }
 
@@ -568,6 +637,14 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         throw new Error(
             `Cannot move order from "${order.status}" to "${newStatus}"`
         );
+    }
+
+    // A pre-order can't ship until the remaining balance is paid -
+    // shipping is what hands the order to a delivery agent and (once
+    // delivered) starts the seller's escrow release clock, both of which
+    // assume the order is fully paid for.
+    if (newStatus === "shipped" && order.order_type === "pre_order" && order.payment_status !== "paid") {
+        throw new Error("The remaining balance must be paid before this order can be shipped");
     }
 
     // Moving to "shipped" is the point where a seller can hand this off to
@@ -641,6 +718,58 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         withEmail: true,
         withWhatsApp: true
     });
+};
+
+// Pre-order / made-to-order (Phase 8) - the seller-triggered "it's ready,
+// please pay the rest" step. Deliberately a separate explicit action
+// rather than something that fires automatically off a status change:
+// the seller knows when the item is actually finished, which doesn't
+// necessarily line up with any particular order-status transition.
+exports.requestPreorderBalance = async (orderId, sellerId) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order) {
+        throw new Error("Order not found");
+    }
+
+    const ownsItem = await orderRepository.sellerHasItemInOrder(orderId, sellerId);
+    if (!ownsItem) {
+        throw new Error("Order not found");
+    }
+
+    if (order.order_type !== "pre_order") {
+        throw new Error("This order isn't a pre-order");
+    }
+
+    if (order.payment_status !== "deposit_paid") {
+        throw new Error(
+            order.payment_status === "paid"
+                ? "The balance for this order has already been paid"
+                : "The deposit for this order hasn't been paid yet"
+        );
+    }
+
+    await orderRepository.markBalanceRequested(orderId);
+
+    await notificationService.notify({
+        userId: order.buyer_id,
+        type: "preorder_balance_due",
+        titleKey: "notifications.order.preorderBalanceDue.title",
+        messageKey: "notifications.order.preorderBalanceDue.message",
+        messageParams: { orderNumber: order.order_number, balanceAmount: order.balance_amount },
+        relatedOrderId: orderId,
+        withEmail: true,
+        withWhatsApp: true
+    });
+
+    auditService.log({
+        userId: sellerId,
+        eventType: "preorder_balance_requested",
+        description: `Balance payment requested for pre-order ${order.order_number}`,
+        metadata: { orderId, balanceAmount: order.balance_amount }
+    });
+
+    return { orderId, balanceAmount: order.balance_amount };
 };
 
 // (Checkout & Order Timeline UX): a pre-payment estimate of how

@@ -329,6 +329,7 @@ export default function ProductDetail() {
                             <h2 className="font-display text-lg mb-3">{product.videos.length > 1 ? t("product.videoTitleMany") : t("product.videoTitleOne")}</h2>
                             <div className="space-y-3">
                                 {product.videos.map((vid) => (
+                                    // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded product clip, no caption track available
                                     <video key={vid.id} src={vid.video_url} controls
                                         className="w-full rounded-lg border border-line" />
                                 ))}
@@ -340,6 +341,7 @@ export default function ProductDetail() {
                             <h2 className="font-display text-lg mb-3">{t("product.audioTitle")}</h2>
                             <div className="space-y-3">
                                 {product.audio.map((clip) => (
+                                    // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded audio clip, no caption track available
                                     <audio key={clip.id} src={clip.audio_url} controls className="w-full" />
                                 ))}
                             </div>

@@ -52,7 +52,7 @@ module.exports = {
     },
 
     notifications: {
-        "message.new.title": "Ujumbe mpya",
+        "message.new.title": "Ujumbe mpya kutoka kwa {senderName}",
         "message.new.message": "{preview}",
 
         "verification.approved.title": "Uthibitisho umekubaliwa",
@@ -123,12 +123,19 @@ module.exports = {
 
         "order.placed.title": "Agizo limewekwa",
         "order.placed.messageMultiVendor": "Agizo lako {orderNumber} (wachuuzi {vendorCount}) limewekwa kwa mafanikio.",
-        "order.placed.messageSingle": "Agizo lako {orderNumber} limewekwa kwa mafanikio.",
+        "order.placed.messageSingle": "Agizo lako {orderNumber} ({itemSummary}) limewekwa kwa mafanikio.",
         "order.cancelled.title": "Agizo limeghairiwa",
         "order.cancelled.message": "Agizo lako {orderNumber} limeghairiwa.",
+        "order.cancelled.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) limeghairiwa.",
         "order.cancelledUnpaid.message": "Agizo lako {orderNumber} limeghairiwa kwa sababu malipo hayakukamilika. Jisikie huru kuliweka tena.",
+        "order.cancelledUnpaid.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) limeghairiwa kwa sababu malipo hayakukamilika. Jisikie huru kuliweka tena.",
         "order.statusUpdated.title": "Hali ya agizo imesasishwa",
         "order.statusUpdated.message": "Agizo lako {orderNumber} sasa ni \"{status}\".",
+        "order.statusUpdated.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) sasa ni \"{status}\".",
+        "order.preorderDepositPaid.title": "Malipo ya awali yamepokelewa",
+        "order.preorderDepositPaid.message": "Tumepokea malipo yako ya awali kwa agizo {orderNumber}. Tutakujulisha litakapokuwa tayari na salio linalobaki litahitajika.",
+        "order.preorderBalanceDue.title": "Salio la malipo linahitajika",
+        "order.preorderBalanceDue.message": "Bidhaa yako maalum ya agizo {orderNumber} iko tayari! Tafadhali lipa salio linalobaki la {balanceAmount} ili itumwe.",
 
         "wallet.credited.title": "Pochi imeongezwa fedha",
         "wallet.credited.message": "Pochi yako imeongezwa fedha kwa ajili ya agizo #{orderId}.",

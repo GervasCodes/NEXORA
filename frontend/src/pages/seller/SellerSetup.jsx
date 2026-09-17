@@ -89,7 +89,7 @@ export default function SellerSetup() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm mb-1">What will you offer?</label>
+                    <p className="block text-sm mb-1">What will you offer?</p>
                     <div className="grid gap-2">
                         {MERCHANT_TYPE_OPTIONS.map((option) => (
                             <button
@@ -116,8 +116,9 @@ export default function SellerSetup() {
                 />
 
                 <div>
-                    <label className="block text-sm mb-1">Store type</label>
+                    <label htmlFor="storeTypeId" className="block text-sm mb-1">Store type</label>
                     <select
+                        id="storeTypeId"
                         value={form.store_type_id}
                         onChange={(e) => setForm({ ...form, store_type_id: e.target.value })}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"

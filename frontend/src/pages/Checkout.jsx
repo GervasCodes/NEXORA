@@ -646,18 +646,17 @@ export default function Checkout() {
                 </fieldset>
 
                 <fieldset className="border border-line rounded-md p-3">
-                    <label className="flex items-start gap-3 cursor-pointer">
+                    <label htmlFor="buyerProtectionAddon" className="flex items-start gap-3 cursor-pointer">
                         <input
+                            id="buyerProtectionAddon"
                             type="checkbox"
                             className="mt-1"
                             checked={form.buyer_protection_addon}
                             onChange={(e) => setForm({ ...form, buyer_protection_addon: e.target.checked })}
                         />
-                        <span className="text-sm">
-                            <span className="font-medium">{t("checkout.buyerProtection.title")}</span>
-                            <span className="block text-ash text-xs mt-0.5">
-                                {t("checkout.buyerProtection.description")} · +{format(estimateBuyerProtectionFee(total))}
-                            </span>
+                        <span className="text-sm font-medium">{t("checkout.buyerProtection.title")}</span>
+                        <span className="block text-ash text-xs mt-0.5">
+                            {t("checkout.buyerProtection.description")} · +{format(estimateBuyerProtectionFee(total))}
                         </span>
                     </label>
                 </fieldset>

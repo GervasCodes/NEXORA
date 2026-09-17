@@ -15,9 +15,9 @@ export default function EmojiPicker({ onSelect, myReactions = [], className = ""
                 <button
                     key={emoji}
                     type="button"
-                    role="menuitem"
+                    role="menuitemcheckbox"
                     onClick={() => onSelect(emoji)}
-                    aria-pressed={myReactions.includes(emoji)}
+                    aria-checked={myReactions.includes(emoji)}
                     className={`text-lg leading-none w-11 h-11 shrink-0 rounded-full flex items-center justify-center transition-transform hover:scale-125 active:scale-95 ${
                         myReactions.includes(emoji) ? "bg-mango/20" : "hover:bg-line/40"
                     }`}

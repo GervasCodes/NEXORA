@@ -110,4 +110,15 @@ router.put(
     orderController.updateOrderStatus
 );
 
+// Pre-order / made-to-order (Phase 8).
+router.post(
+    "/:id/request-balance",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    orderIdValidation,
+    validationMiddleware,
+    orderController.requestPreorderBalance
+);
+
 module.exports = router;

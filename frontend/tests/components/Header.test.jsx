@@ -17,12 +17,13 @@ vi.mock("../../src/hooks/useUnreadMessagesCount", () => ({
     useUnreadMessagesCount: () => 0
 }));
 
-// SearchBox/NotificationBell/AdminNotificationBell/MobileBottomNav pull in
-// their own API calls and aren't what this test is about - stub them out
-// so this stays focused on Header's own nav-link wiring (A2).
+// SearchBox/NotificationBell/MobileBottomNav pull in their own API calls
+// and aren't what this test is about - stub them out so this stays
+// focused on Header's own nav-link wiring (A2). NotificationBell now
+// covers what AdminNotificationBell used to (Phase 3 notification
+// consolidation) - there's no separate component to mock anymore.
 vi.mock("../../src/components/SearchBox", () => ({ default: () => null }));
 vi.mock("../../src/components/NotificationBell", () => ({ default: () => null }));
-vi.mock("../../src/components/AdminNotificationBell", () => ({ default: () => null }));
 vi.mock("../../src/components/MobileBottomNav", () => ({ default: () => null }));
 
 import Header from "../../src/components/Header";

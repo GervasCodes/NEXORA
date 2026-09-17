@@ -40,8 +40,29 @@ const assertCategoryIsActive = async (categoryId) => {
     }
 };
 
+// Pre-order / made-to-order (Phase 8) - a product can only be flagged
+// is_preorder if its store has the feature turned on (SellerStore.jsx's
+// toggle, seller.service.js#updateSellerProfile). Schema allows it either
+// way (see migration 106's comment); this is the actual gate, same
+// "schema permits, service layer enforces" split assertCategoryIsActive
+// above uses for category_id.
+const assertSellerAcceptsPreorders = async (sellerId) => {
+    const sellerRepository = require("../seller/seller.repository");
+    const seller = await sellerRepository.findByUserId(sellerId);
+    if (!seller || !seller.accepts_preorders) {
+        throw Object.assign(new Error("Enable made-to-order in your store settings before marking a product as pre-order"), {
+            code: "PREORDERS_NOT_ENABLED",
+            status: 400
+        });
+    }
+};
+
 exports.createProduct = async (sellerId, data) => {
     await assertCategoryIsActive(data.category_id);
+
+    if (data.is_preorder) {
+        await assertSellerAcceptsPreorders(sellerId);
+    }
 
     // Revenue & Product Enhancements roadmap: a seller's subscription
     // plan caps how many active listings (products + services combined)
@@ -73,7 +94,9 @@ exports.createProduct = async (sellerId, data) => {
         discount_price: data.discount_price,
         stock: data.stock || 0,
         brand: data.brand,
-        product_condition: data.product_condition || "new"
+        product_condition: data.product_condition || "new",
+        is_preorder: Boolean(data.is_preorder),
+        preorder_lead_time_days: data.preorder_lead_time_days || null
     });
 
     // New products change the browse/search result set and the owning
@@ -426,6 +449,14 @@ exports.updateProduct = async (sellerId, productId, data) => {
 
     if (data.category_id) {
         await assertCategoryIsActive(data.category_id);
+    }
+
+    // Only re-check the store gate when this edit is actually turning
+    // pre-order on (data.is_preorder === true) - an edit that leaves an
+    // already-pre-order product's flag untouched, or one that turns it
+    // off, doesn't need the store to currently have the feature enabled.
+    if (data.is_preorder) {
+        await assertSellerAcceptsPreorders(sellerId);
     }
 
     await productRepository.update(productId, data);

@@ -130,8 +130,9 @@ export default function SellerSponsorship({ embedded = false }) {
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Product</label>
+                        <label htmlFor="productId" className="text-xs text-ash block mb-1">Product</label>
                         <select
+                            id="productId"
                             required
                             value={productId}
                             onChange={(e) => setProductId(e.target.value)}

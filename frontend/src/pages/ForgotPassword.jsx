@@ -136,8 +136,9 @@ export default function ForgotPassword() {
             ) : (
                 <form onSubmit={handleReset} className="space-y-4">
                     <div>
-                        <label className="block text-sm mb-1">Verification code</label>
+                        <label htmlFor="resetCode" className="block text-sm mb-1">Verification code</label>
                         <input
+                            id="resetCode"
                             type="text"
                             inputMode="numeric"
                             autoComplete="one-time-code"

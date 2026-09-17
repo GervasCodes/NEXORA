@@ -7,6 +7,35 @@ const authRepository = require("../modules/auth/auth.repository");
 
 let io = null;
 
+// ---- Presence tracking (admin "active users now" view, Phase 4) ---------
+// A plain in-process Map, not a DB column: online/offline is a fact about
+// THIS server instance's live socket connections, true only for as long
+// as they stay open - persisting it would just be a second, immediately
+// stale copy of what's already true here. userId -> Set<socketId>, not a
+// single socket id, because one account can have several sockets open at
+// once (two browser tabs, phone + laptop) - it only leaves "online" once
+// every one of them has disconnected, not on the first tab closed.
+const onlineUserSockets = new Map();
+
+const markOnline = (userId, socketId) => {
+    if (!onlineUserSockets.has(userId)) onlineUserSockets.set(userId, new Set());
+    onlineUserSockets.get(userId).add(socketId);
+};
+
+const markOffline = (userId, socketId) => {
+    const sockets = onlineUserSockets.get(userId);
+    if (!sockets) return;
+    sockets.delete(socketId);
+    if (sockets.size === 0) onlineUserSockets.delete(userId);
+};
+
+// Read side, used by admin.service.js#listUsers to annotate each row with
+// is_online without adding a dedicated endpoint - the presence set is
+// small (one entry per currently-connected account) and cheap to check.
+exports.isUserOnline = (userId) => onlineUserSockets.has(Number(userId));
+exports.getOnlineUserIds = () => [...onlineUserSockets.keys()];
+exports.getOnlineCount = () => onlineUserSockets.size;
+
 // Shift-persistence fix  a page refresh always fires the
 // socket's "disconnect" event before the new page's socket reconnects -
 // treating that the same as the agent actually going offline (closing
@@ -187,6 +216,20 @@ exports.init = (httpServer) => {
         // Personal room — lets any module message this exact user.
         socket.join(`user:${socket.user.id}`);
 
+        // Presence: every role, not just delivery agents (see
+        // DISCONNECT_GRACE_MS's debounced offline handling below, which
+        // stays delivery-agent-only and unrelated to this). No grace
+        // period here deliberately - "online now" is meant to reflect the
+        // literal current socket state, not a smoothed/debounced view of
+        // it, and a brief flicker across a page refresh is an acceptable
+        // trade-off for a metric nothing else (matching/payouts/offers)
+        // depends on.
+        markOnline(socket.user.id, socket.id);
+
+        socket.on("disconnect", () => {
+            markOffline(socket.user.id, socket.id);
+        });
+
         // A delivery agent reconnecting (page refresh, brief network
         // blip, new tab) cancels any pending "mark offline" scheduled by
         // a previous socket's disconnect - see DISCONNECT_GRACE_MS above.
@@ -353,6 +396,36 @@ if (
                     lng,
                     timestamp
                 });
+            } catch (error) {
+                socket.emit("error_message", error.message);
+            }
+        });
+
+        // Phase 5 (map showing users) - buyer/seller's app pings its
+        // position periodically while the account has location sharing
+        // on (opt-out per PHASE1_DECISIONS.md #4's override, so this
+        // fires for most buyers/sellers by default, not just ones who
+        // explicitly enabled anything). accountService.updateLocation
+        // does the actual opt-out/role gating as one guarded UPDATE
+        // (see account.repository.js) and reports back whether it
+        // stuck - only then is the new position broadcast, so a ping
+        // that arrives just after the account opted out (or from a
+        // role this was never meant for) is silently dropped rather
+        // than momentarily flashing onto the admin map.
+        socket.on("user:location", async ({ lat, lng }) => {
+            if (!["buyer", "seller"].includes(socket.user.role)) return;
+            try {
+                const accountService = require("../modules/account/account.service");
+                const recorded = await accountService.updateLocation(socket.user.id, lat, lng);
+                if (recorded) {
+                    io.to("admins").emit("map:user_position", {
+                        userId: socket.user.id,
+                        role: socket.user.role,
+                        lat,
+                        lng,
+                        timestamp: Date.now()
+                    });
+                }
             } catch (error) {
                 socket.emit("error_message", error.message);
             }

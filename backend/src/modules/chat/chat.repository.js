@@ -61,6 +61,19 @@ exports.findUserRole = async (userId) => {
     return rows[0]?.role;
 };
 
+// Sender's display name for message notification content (Phase 6,
+// UI/UX remediation) - sendMessage previously had no reason to know
+// anything about the sender beyond their id, so the notification it
+// raised for the other participant(s) could only ever say "New message"
+// with no indication of who from.
+exports.findUserFullName = async (userId) => {
+    const [rows] = await db.query(
+        "SELECT first_name, last_name FROM users WHERE id = ?",
+        [userId]
+    );
+    return rows[0] || null;
+};
+
 exports.findConversation = async (buyerId, otherUserId, otherRole, contextId) => {
     const otherCol = otherColumn(otherRole);
     const ctxCol = contextColumn(otherRole);

@@ -51,7 +51,8 @@ exports.update = async (userId, data) => {
         "store_name", "store_description", "business_email",
         "business_phone", "country", "region", "city", "address", "store_type_id",
         "pickup_lat", "pickup_lng", "store_theme",
-        "store_tagline", "social_instagram", "social_facebook", "social_whatsapp"
+        "store_tagline", "social_instagram", "social_facebook", "social_whatsapp",
+        "accepts_preorders", "preorder_deposit_percent", "preorder_default_lead_time_days"
     ];
 
     for (const key of allowed) {
@@ -96,6 +97,17 @@ exports.updateBanner = async (userId, bannerUrl) => {
     await db.query(
         "UPDATE seller_profiles SET store_banner = ? WHERE user_id = ?",
         [bannerUrl, userId]
+    );
+};
+
+// Phase 7 (Promo Video Unification) - same shape as updateLogo/
+// updateBanner above. updatePromoVideo also doubles as the "remove"
+// path: deletePromoVideo (seller.service.js) calls it with null rather
+// than needing a separate clear/reset query.
+exports.updatePromoVideo = async (userId, promoVideoUrl) => {
+    await db.query(
+        "UPDATE seller_profiles SET promo_video_url = ? WHERE user_id = ?",
+        [promoVideoUrl, userId]
     );
 };
 // --- Seller's own delivery agent roster (their hired staff) ---

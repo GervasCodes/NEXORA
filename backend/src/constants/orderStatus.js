@@ -8,6 +8,19 @@ exports.ORDER_STATUSES = [
 
 exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "snippe", "malipopay_card", "paypal", "wallet"];
 
+// Pre-order / made-to-order (Phase 8). A pre-order charges a deposit at
+// checkout and the remaining balance later, once the seller has the item
+// ready - see order.service.js#checkout and #requestPreorderBalance.
+exports.ORDER_TYPES = ["standard", "pre_order"];
+exports.PAYMENT_STATUSES = ["unpaid", "deposit_paid", "paid"];
+
+// Fallbacks used when a seller has accepts_preorders on but hasn't set
+// their own deposit percent / lead time (shouldn't normally happen - the
+// seller-settings form has its own defaults - but keeps checkout safe
+// against a directly-edited/legacy row).
+exports.DEFAULT_PREORDER_DEPOSIT_PERCENT = 30;
+exports.DEFAULT_PREORDER_LEAD_TIME_DAYS = 7;
+
 // Statuses a buyer is allowed to cancel from
 exports.CANCELLABLE_STATUSES = ["pending", "processing"];
 

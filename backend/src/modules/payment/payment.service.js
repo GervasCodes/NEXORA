@@ -18,6 +18,58 @@ const generateReceiptNumber = () => {
     return `RCPT-${timestamp}-${random}`;
 };
 
+// Pre-order / made-to-order (Phase 8) - what a checkout/payment attempt
+// against this order should actually charge right now. A standard order
+// (or a pre-order that's already fully paid, though every initiate*
+// function below already blocks that separately) just charges the full
+// total, unchanged from before this feature existed. A pre-order still
+// sitting at "unpaid" owes its deposit; one already at "deposit_paid"
+// owes the remaining balance.
+const resolveChargeAmount = (order) => {
+    if (order.order_type === "pre_order") {
+        if (order.payment_status === "deposit_paid") {
+            return order.balance_amount;
+        }
+        return order.deposit_amount;
+    }
+    return order.total_amount;
+};
+
+const resolvePaymentLeg = (order) => {
+    if (order.order_type !== "pre_order") return "full";
+    return order.payment_status === "deposit_paid" ? "balance" : "deposit";
+};
+
+// Every initiate*OrderPayment function below used to do
+// `let payment = await paymentRepository.findByOrderId(orderId); if
+// (!payment) { create }` - reusing whatever single row already existed,
+// including a still-pending or even a previously-failed one (a retry
+// just overwrites that row's status). That's still correct and
+// unchanged here. The one case that now needs to NOT reuse the existing
+// row is a completed one: now that a pre-order can have two rows
+// (deposit, then balance - see payment.repository.js#findByOrderId's
+// comment), a completed deposit row must never be silently reused for
+// the balance charge - it needs a fresh row of its own. A standard
+// order never reaches this function with a completed row in the first
+// place (every initiate* function already rejects payment_status ===
+// "paid" earlier), so this only ever actually branches for the
+// deposit -> balance handoff.
+const getOrCreateOrderPayment = async (order, method) => {
+    const existing = await paymentRepository.findByOrderId(order.id);
+
+    if (existing && existing.status !== "completed") {
+        return existing;
+    }
+
+    const paymentId = await paymentRepository.create(
+        order.id,
+        method,
+        resolveChargeAmount(order),
+        resolvePaymentLeg(order)
+    );
+    return { id: paymentId };
+};
+
 exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     const order = await orderRepository.findOrderById(orderId);
 
@@ -37,16 +89,8 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    let payment = await paymentRepository.findByOrderId(orderId);
-
-    if (!payment) {
-        const paymentId = await paymentRepository.create(
-            orderId,
-            "mobile_money",
-            order.total_amount
-        );
-        payment = { id: paymentId };
-    }
+    const payment = await getOrCreateOrderPayment(order, "mobile_money");
+    const chargeAmount = resolveChargeAmount(order);
 
     // This reference is what ties the provider's webhook back to this
     // order/payment when the buyer actually confirms on their phone -
@@ -58,7 +102,7 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     try {
         providerResult = await mobileMoneyProvider.initiate(
             order.shipping_phone,
-            order.total_amount,
+            chargeAmount,
             { reference, description: `NEXORA order #${orderId}` }
         );
     } catch (error) {
@@ -217,21 +261,18 @@ exports.initiateWalletOrderPayment = async (orderId, buyerId) => {
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    let payment = await paymentRepository.findByOrderId(orderId);
-    if (!payment) {
-        const paymentId = await paymentRepository.create(orderId, "wallet", order.total_amount);
-        payment = { id: paymentId };
-    }
+    await getOrCreateOrderPayment(order, "wallet");
+    const chargeAmount = resolveChargeAmount(order);
 
     const buyerWalletService = require("../buyerWallet/buyerWallet.service");
-    await buyerWalletService.debitForOrder(buyerId, order.total_amount, orderId);
+    await buyerWalletService.debitForOrder(buyerId, chargeAmount, orderId);
 
     // Delegates the rest (mark completed, seller wallet crediting, order
     // status transition, buyer/seller notifications) to the exact same
     // path a real provider webhook takes - the wallet debit above is the
     // only thing that differs from a mobile-money/card order, everything
     // downstream of "payment succeeded" is identical.
-    return exports._handleOrderPaymentWebhook(orderId, true, `WALLET-${orderId}`);
+    return exports._handleOrderPaymentWebhook(orderId, true, `WALLET-${orderId}`, null, chargeAmount);
 };
 
 
@@ -802,7 +843,58 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     const receiptNumber = generateReceiptNumber();
 
     await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
-    await orderRepository.updatePaymentStatus(orderId, "paid");
+
+    // Pre-order / made-to-order (Phase 8) - orderForNotify was fetched
+    // above, BEFORE this payment was applied, so its payment_status still
+    // reflects the state this charge is resolving: 'unpaid' means this
+    // was the deposit leg, anything else (a standard order, or a
+    // pre-order already at 'deposit_paid') means this charge is what
+    // finally brings the order to 'paid' and everything below - wallet
+    // crediting, EFD receipt, referral/loyalty - should run exactly as
+    // it always has.
+    const isPreorderDepositLeg = orderForNotify
+        && orderForNotify.order_type === "pre_order"
+        && orderForNotify.payment_status === "unpaid";
+
+    if (isPreorderDepositLeg) {
+        await orderRepository.markDepositPaid(orderId);
+
+        auditService.log({
+            eventType: "payment_processed",
+            description: `Deposit received for pre-order ${orderForNotify.order_number}`,
+            metadata: { orderId, success: true, transactionReference, receiptNumber, chargedCurrency, chargedAmount, paymentLeg: "deposit" }
+        });
+
+        require("../../socket/socket").emitToUser(orderForNotify.buyer_id, "payment:updated", {
+            orderId, success: true, paymentStatus: "deposit_paid", receiptNumber
+        });
+
+        // No wallet crediting / EFD receipt / referral points here - a
+        // deposit isn't the order being "paid for" yet, just the first
+        // half of it. Those all fire once the balance leg completes,
+        // below, exactly like a normal order's single payment does.
+        require("../notification/notification.service").notify({
+            userId: orderForNotify.buyer_id,
+            type: "preorder_deposit_paid",
+            titleKey: "notifications.order.preorderDepositPaid.title",
+            messageKey: "notifications.order.preorderDepositPaid.message",
+            messageParams: { orderNumber: orderForNotify.order_number },
+            relatedOrderId: orderId,
+            withEmail: true
+        }).catch((err) => logger.error({ err, orderId }, "preorder deposit notification error"));
+
+        return { orderId, success: true, receiptNumber, paymentLeg: "deposit" };
+    }
+
+    // Pre-order balance leg reaching 'paid' also wants its own
+    // balance_paid_at timestamp - markBalancePaid sets both payment_status
+    // and that timestamp in one go; a standard order has no such column
+    // to fill in, so it just gets the plain payment_status update.
+    if (orderForNotify && orderForNotify.order_type === "pre_order") {
+        await orderRepository.markBalancePaid(orderId);
+    } else {
+        await orderRepository.updatePaymentStatus(orderId, "paid");
+    }
 
     // A multi-vendor cart is paid for once, on the parent order - but each
     // vendor child order has its own order_items (for wallet crediting)
@@ -849,7 +941,11 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     // back (see chargedAmount's other uses above).
     if (order) {
         const referralService = require("../referral/referral.service");
-        const chargedForPoints = chargedAmount || order.total_amount;
+        // Pre-order balance leg: chargedAmount here is just the balance
+        // portion, but loyalty points should reflect the whole order
+        // (deposit + balance) since this is the point the order is fully
+        // paid for - order.total_amount is that whole-order figure.
+        const chargedForPoints = order.order_type === "pre_order" ? order.total_amount : (chargedAmount || order.total_amount);
         referralService.awardPointsForOrder(order.buyer_id, orderId, chargedForPoints).catch((err) => {
             logger.error({ err, orderId }, "Loyalty points award error");
         });
@@ -929,16 +1025,13 @@ exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, canc
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    let payment = await paymentRepository.findByOrderId(orderId);
-    if (!payment) {
-        const paymentId = await paymentRepository.create(orderId, "snippe", order.total_amount);
-        payment = { id: paymentId };
-    }
+    const payment = await getOrCreateOrderPayment(order, "snippe");
+    const chargeAmount = resolveChargeAmount(order);
 
     const reference = `ORDER-${orderId}`;
 
     const session = await snippeProvider.createCheckoutSession({
-        amountTzs: order.total_amount,
+        amountTzs: chargeAmount,
         reference,
         description: `NEXORA order #${orderId}`,
         successUrl,
@@ -1014,16 +1107,13 @@ exports.initiateMalipopayCardOrderPayment = async (orderId, buyerId, { successUr
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    let payment = await paymentRepository.findByOrderId(orderId);
-    if (!payment) {
-        const paymentId = await paymentRepository.create(orderId, "malipopay_card", order.total_amount);
-        payment = { id: paymentId };
-    }
+    const payment = await getOrCreateOrderPayment(order, "malipopay_card");
+    const chargeAmount = resolveChargeAmount(order);
 
     const reference = `ORDER-${orderId}`;
 
     const session = await malipopayCardProvider.createCheckoutSession({
-        amountTzs: order.total_amount,
+        amountTzs: chargeAmount,
         reference,
         description: `NEXORA order #${orderId}`,
         successUrl,
@@ -1102,17 +1192,14 @@ exports.initiatePaypalOrderPayment = async (orderId, buyerId, { returnUrl, cance
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    let payment = await paymentRepository.findByOrderId(orderId);
-    if (!payment) {
-        const paymentId = await paymentRepository.create(orderId, "paypal", order.total_amount);
-        payment = { id: paymentId };
-    }
+    const payment = await getOrCreateOrderPayment(order, "paypal");
+    const chargeAmount = resolveChargeAmount(order);
 
     const usdExchangeRate = await settingsService.getUsdExchangeRate();
     const reference = `ORDER-${orderId}`;
 
     const result = await paypalProvider.createOrder({
-        amountTzs: order.total_amount,
+        amountTzs: chargeAmount,
         usdExchangeRate,
         reference,
         description: `NEXORA order #${orderId}`,

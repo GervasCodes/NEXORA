@@ -5,6 +5,7 @@ import DepartmentCard from "../components/DepartmentCard";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
+import HomeCarousel from "../components/HomeCarousel";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
@@ -121,7 +122,7 @@ export default function Home() {
                             background: "radial-gradient(60% 100% at 15% 0%, rgba(110,168,254,0.35) 0%, rgba(7,9,18,0) 60%), radial-gradient(50% 90% at 100% 100%, rgba(29,78,216,0.35) 0%, rgba(7,9,18,0) 60%)"
                         }}
                     />
-                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-6 lg:gap-10 items-center">
                         <div>
                             <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
                             {user?.first_name && (
@@ -152,57 +153,25 @@ export default function Home() {
                         </div>
 
                         {/*
-                          (Visual Polish & Metadata) introduced this photo
-                          showcase but shipped it pointing at three placeholder
-                          paths under /public/images/hero/ that were never filled
-                          in (404s hidden by the onError handlers below).
-                          (Real Imagery & Avatars) follow-up: replaced
-                          with real, verified, freely-licensed photos (Unsplash
-                          License - free for commercial use, no attribution
-                          required: https://unsplash.com/license), sourced the
-                          same way as DepartmentCard.jsx's curated covers -
-                          "Marketing Flatlay" by Campaign Creators
-                          (https://unsplash.com/photos/RSc6D7bO0fA), "Ships out
-                          today" by Bench Accounting
-                          (https://unsplash.com/photos/MGaFENpDCsw), and "GRAB
-                          courier makes delivery" by Kseniia Ilinykh
-                          (https://unsplash.com/photos/62JneRv7jW4). The onError
-                          fallback (hide the broken image) stays in place as a
-                          safety net rather than being removed, in case any of
-                          these ever go down. The collage still hides below `lg`
-                          rather than resizing awkwardly, so small screens fall
-                          back to the text-only hero that was already there.
+                          Phase 11 (Home Redesign) replaced the static
+                          three-photo collage this hero briefly shipped
+                          with (a stopgap for placeholder paths under
+                          /public/images/hero/ that were never filled in)
+                          with a real, live carousel - promo videos,
+                          sponsored/on-sale products, and featured stores,
+                          each linking straight to the product/store page
+                          (see GET /categories/home-highlights). Unlike the
+                          old collage, which only showed above `lg` and
+                          fell back to a text-only hero on small screens,
+                          this is real marketing content sellers are
+                          paying to place, so it's shown at every
+                          breakpoint - stacked below the hero text on
+                          mobile, side-by-side with it from `lg` up. It
+                          renders its own skeleton/fallback if the API has
+                          no live campaigns yet, so there's no empty-state
+                          gap to handle here.
                         */}
-                        <div className="hidden lg:grid grid-cols-2 gap-3 h-[420px]">
-                            <div className="relative rounded-2xl overflow-hidden row-span-2 border border-frost/10 bg-azure/10">
-                                <img
-                                    src="https://images.unsplash.com/photo-1533750516457-a7f992034fec?q=80&w=1200&auto=format&fit=crop"
-                                    alt="Products available on NEXORA"
-                                    className="w-full h-full object-cover"
-                                    loading="eager"
-                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-abyss/50 via-transparent to-transparent" />
-                            </div>
-                            <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
-                                <img
-                                    src="https://images.unsplash.com/photo-1449247666642-264389f5f5b1?q=80&w=1200&auto=format&fit=crop"
-                                    alt="A NEXORA seller preparing an order"
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                />
-                            </div>
-                            <div className="relative rounded-2xl overflow-hidden border border-frost/10 bg-azure/10">
-                                <img
-                                    src="https://images.unsplash.com/photo-1587476351660-e9fa4bb8b26c?q=80&w=1200&auto=format&fit=crop"
-                                    alt="A NEXORA delivery agent on a doorstep drop-off"
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                />
-                            </div>
-                        </div>
+                        <HomeCarousel />
                     </div>
                 </div>
             )}

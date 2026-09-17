@@ -3,7 +3,7 @@ const { t } = require("../../i18n");
 
 exports.getMyNotifications = async (req, res) => {
     try {
-        const notifications = await notificationService.getMyNotifications(req.user.id);
+        const notifications = await notificationService.getMyNotifications(req.user.id, req.user.role);
 
         return res.json({
             success: true,
@@ -20,7 +20,7 @@ exports.getMyNotifications = async (req, res) => {
 
 exports.getUnreadCount = async (req, res) => {
     try {
-        const count = await notificationService.getUnreadCount(req.user.id);
+        const count = await notificationService.getUnreadCount(req.user.id, req.user.role);
 
         return res.json({
             success: true,
@@ -37,7 +37,7 @@ exports.getUnreadCount = async (req, res) => {
 
 exports.markAsRead = async (req, res) => {
     try {
-        await notificationService.markAsRead(req.params.id, req.user.id);
+        await notificationService.markAsRead(req.params.id, req.user.id, req.user.role);
 
         return res.json({
             success: true,
@@ -54,7 +54,7 @@ exports.markAsRead = async (req, res) => {
 
 exports.markAllAsRead = async (req, res) => {
     try {
-        await notificationService.markAllAsRead(req.user.id);
+        await notificationService.markAllAsRead(req.user.id, req.user.role);
 
         return res.json({
             success: true,

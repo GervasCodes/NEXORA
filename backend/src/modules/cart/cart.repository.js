@@ -112,7 +112,10 @@ exports.findProductsByIds = async (productIds) => {
     }
 
     const [rows] = await db.query(
-        "SELECT id, price, discount_price, stock, is_active, has_variants FROM products WHERE id IN (?)",
+        // is_preorder/preorder_lead_time_days (Phase 8) - checkout needs
+        // these to detect a pre-order cart and compute its deposit, see
+        // order.service.js#checkout.
+        "SELECT id, price, discount_price, stock, is_active, has_variants, is_preorder, preorder_lead_time_days FROM products WHERE id IN (?)",
         [productIds]
     );
     return rows;

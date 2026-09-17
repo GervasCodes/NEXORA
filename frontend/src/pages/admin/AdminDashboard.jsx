@@ -258,7 +258,11 @@ export default function AdminDashboard() {
                     <p className="text-xs uppercase tracking-widest text-ash mb-3">
                         Active users · anyone with an authenticated request in the window
                     </p>
-                    <div className="grid grid-cols-3 gap-4 mb-6">
+                    {/* 2 columns on narrow phones (3 equal columns left each
+                        DAU/WAU/MAU figure too cramped to read comfortably
+                        at ~110px wide), 3 from sm: up - matches the
+                        grid-cols-1 sm:grid-cols-3 block just below it. */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
                         <Stat label="Daily active" value={businessMetrics.activeUsers.total.dau} />
                         <Stat label="Weekly active" value={businessMetrics.activeUsers.total.wau} />
                         <Stat label="Monthly active" value={businessMetrics.activeUsers.total.mau} />

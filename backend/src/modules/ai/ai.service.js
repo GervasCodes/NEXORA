@@ -90,10 +90,16 @@ exports.checkSpendGuard = async (userId) => {
 // "AI wasn't available this time" case.
 const callProvider = async ({ userId, feature, system, userMessage, messages, maxTokens }) => {
     const provider = registry.getActiveProvider();
-    if (!provider) return { text: null, truncated: false, unavailableReason: null };
+    if (!provider) {
+        aiRepository.recordOutcome({ feature, outcome: "fallback_no_provider" });
+        return { text: null, truncated: false, unavailableReason: null };
+    }
 
     const guard = await exports.checkSpendGuard(userId);
-    if (!guard.allowed) return { text: null, truncated: false, unavailableReason: guard.reason };
+    if (!guard.allowed) {
+        aiRepository.recordOutcome({ feature, outcome: `fallback_${guard.reason.toLowerCase()}` });
+        return { text: null, truncated: false, unavailableReason: guard.reason };
+    }
 
     try {
         const result = await provider.complete({
@@ -107,10 +113,12 @@ const callProvider = async ({ userId, feature, system, userMessage, messages, ma
             feature,
             tokensUsed: (result.inputTokens || 0) + (result.outputTokens || 0)
         });
+        aiRepository.recordOutcome({ feature, outcome: "success" });
 
         return { text: result.text?.trim() || null, truncated: Boolean(result.truncated), unavailableReason: null };
     } catch (error) {
         logger.warn({ err: error, feature }, "[ai] provider call failed - falling back to non-AI behavior");
+        aiRepository.recordOutcome({ feature, outcome: "fallback_provider_error" });
         return { text: null, truncated: false, unavailableReason: null };
     }
 };
@@ -127,6 +135,45 @@ exports.getUsageOverview = async () => {
         aiRepository.getGlobalTokensSince(startOfMonth())
     ]);
     return { dailyTokensUsedGlobal, monthlyTokensUsedGlobal };
+};
+
+// Per-feature success/fallback breakdown for the Admin Settings AI
+// quality panel (Phase 13 audit finding: migration 081 recorded a
+// `feature` tag on every usage row specifically so this could be built
+// later, but nothing ever read it - and ai_usage_log only ever recorded
+// successful calls anyway, so a feature stuck permanently falling back
+// wouldn't show up there at all). Reads the last 7 days of
+// ai_call_outcomes (migration 108) - every callProvider() return path,
+// success or fallback, plus the two JSON-parse fallbacks and the
+// recommendation-shape-mismatch fallback that happen after a
+// successful call. A feature with no rows in the window is omitted
+// entirely (nothing to report), not shown as 0%.
+const QUALITY_WINDOW_DAYS = 7;
+
+exports.getQualityOverview = async () => {
+    try {
+        const rows = await aiRepository.getOutcomeCountsSince(asOf(QUALITY_WINDOW_DAYS));
+
+        const byFeature = new Map();
+        for (const row of rows) {
+            const entry = byFeature.get(row.feature) || { feature: row.feature, total: 0, success: 0, fallback: 0 };
+            entry.total += row.count;
+            if (row.outcome === "success") entry.success += row.count;
+            else entry.fallback += row.count;
+            byFeature.set(row.feature, entry);
+        }
+
+        return [...byFeature.values()]
+            .map((entry) => ({ ...entry, fallbackRatePercent: Math.round((entry.fallback / entry.total) * 100) }))
+            .sort((a, b) => b.fallbackRatePercent - a.fallbackRatePercent);
+    } catch (error) {
+        // Same "never break the page over this" reasoning as
+        // checkSpendGuard above - a quality-panel query failing (e.g.
+        // migration 108 hasn't run yet on an older environment) must
+        // never break the whole Admin Settings page load.
+        logger.warn({ err: error }, "[ai] quality overview query failed - returning empty");
+        return [];
+    }
 };
 
 // ---  FAQ / support assistant --------------------------------
@@ -255,6 +302,7 @@ exports.parseSearchQuery = async ({ userId, text }) => {
             };
         } catch (error) {
             logger.warn({ err: error }, "[ai] search-parse response was not valid JSON - falling back");
+            aiRepository.recordOutcome({ feature: "search", outcome: "fallback_invalid_output" });
         }
     }
 
@@ -297,6 +345,7 @@ exports.explainRecommendations = async ({ userId, forProductSlug }) => {
                 truncated: Boolean(result?.truncated)
             };
         }
+        aiRepository.recordOutcome({ feature: "recommend", outcome: "fallback_invalid_output" });
     }
 
     const fallbackWhy = forProductSlug ? "Related to this product" : "Picked for you";
@@ -929,6 +978,7 @@ exports.suggestDisputeResolution = async ({ userId, disputeId }) => {
             }
         } catch (error) {
             logger.warn({ err: error }, "[ai] dispute-resolution-suggestion response was not valid JSON - falling back");
+            aiRepository.recordOutcome({ feature: "admin_dispute_suggest_resolution", outcome: "fallback_invalid_output" });
         }
     }
 

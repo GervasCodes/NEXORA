@@ -62,10 +62,11 @@ export default function OrderDetail() {
     );
     const [busy, setBusy] = useState(false);
 
-    // (Honest Status Transparency): not a persisted order field
-    // (orders.payment_status is only ever 'unpaid'/'paid' - see
-    // database/schema/orders.sql) - this is the transient "we just heard
-    // it failed/was cancelled" signal from a redirect or the
+    // (Honest Status Transparency): not a persisted order field - separate
+    // from orders.payment_status, which can be 'unpaid', 'deposit_paid'
+    // (pre-order only - see migration 106) or 'paid' (see
+    // database/schema/orders.sql + migration 106) - this is the transient
+    // "we just heard it failed/was cancelled" signal from a redirect or the
     // payment:updated socket event below, kept distinct from
     // actionError's free-text message so the PaymentStatusBanner can
     // render its own dedicated failed-state visual instead of relying on
@@ -76,7 +77,7 @@ export default function OrderDetail() {
     const load = () => {
         api.get(`/orders/${id}`).then(({ data }) => {
             setOrder(data.data);
-            if (data.data.payment_status === "paid") setPaymentFailed(false);
+            if (data.data.payment_status === "paid" || data.data.payment_status === "deposit_paid") setPaymentFailed(false);
             if (!data.data.is_parent) {
                 api.get(`/delivery/${id}`).then(({ data: d }) => setDelivery(d.data)).catch(() => setDelivery(null));
             } else {
@@ -96,9 +97,14 @@ export default function OrderDetail() {
     const pollForPaymentConfirmation = (attempt = 0) => {
         api.get(`/orders/${id}`).then(({ data }) => {
             const fresh = data.data;
-            if (fresh.payment_status === "paid") {
+            // Pre-order / made-to-order (Phase 8) - a pre-order's deposit
+            // landing sets payment_status to 'deposit_paid', not 'paid'
+            // (the balance is a separate, later payment) - either one
+            // means THIS charge succeeded, so both are a terminal success
+            // for what this poll is waiting on.
+            if (fresh.payment_status === "paid" || fresh.payment_status === "deposit_paid") {
                 setOrder(fresh);
-                setActionMessage("Payment successful.");
+                setActionMessage(fresh.payment_status === "deposit_paid" ? "Deposit received." : "Payment successful.");
                 setPaymentFailed(false);
                 return;
             }
@@ -447,7 +453,7 @@ export default function OrderDetail() {
                 <div>
                     <p className="text-ash mb-0.5">Payment</p>
                     <p className="capitalize font-medium">
-                        {order.payment_status} · {order.payment_method.replace("_", " ")}
+                        {order.payment_status === "deposit_paid" ? "Deposit paid, balance due" : order.payment_status} · {order.payment_method.replace("_", " ")}
                     </p>
                     {order.buyer_confirmed_at && (
                         <p className="text-xs text-teal mt-0.5">Receipt confirmed {formatDate(order.buyer_confirmed_at)}</p>
@@ -512,6 +518,25 @@ export default function OrderDetail() {
                 <span className="price text-xl font-medium">{format(order.total_amount)}</span>
             </div>
 
+            {order.order_type === "pre_order" && (
+                <div className="border border-line rounded-lg p-4 mb-8 text-sm space-y-1">
+                    <p className="text-xs uppercase tracking-widest text-ash mb-1">Made to order</p>
+                    <div className="flex justify-between">
+                        <span className="text-ash">Deposit {order.payment_status !== "unpaid" ? "(paid)" : "(due now)"}</span>
+                        <span className="price">{format(order.deposit_amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-ash">
+                            Balance {order.payment_status === "paid" ? "(paid)" : order.balance_requested_at ? "(due now)" : "(due once ready)"}
+                        </span>
+                        <span className="price">{format(order.balance_amount)}</span>
+                    </div>
+                    {order.preorder_ready_by && order.payment_status !== "paid" && (
+                        <p className="text-xs text-ash pt-1">Expected ready by {formatDate(order.preorder_ready_by)}</p>
+                    )}
+                </div>
+            )}
+
             {showTracking && (
                 <div className="mb-8">
                     <p className="text-xs uppercase tracking-widest text-ash mb-2">Live tracking</p>
@@ -552,24 +577,24 @@ export default function OrderDetail() {
             )}
 
             <div className="flex flex-wrap gap-3">
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "mobile_money" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "mobile_money" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
                     <Button onClick={handleRetryPayment} disabled={busy}>
-                        {busy ? "Processing…" : "Pay with Mobile Money"}
+                        {busy ? "Processing…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Mobile Money"}
                     </Button>
                 )}
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "snippe" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "snippe" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
                     <Button onClick={handleRetrySnippe} disabled={busy}>
-                        {busy ? "Redirecting…" : "Pay with Card (Snippe)"}
+                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Card (Snippe)"}
                     </Button>
                 )}
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "malipopay_card" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "malipopay_card" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
                     <Button onClick={handleRetryMalipopayCard} disabled={busy}>
-                        {busy ? "Redirecting…" : "Pay with Card (MalipoPay)"}
+                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Card (MalipoPay)"}
                     </Button>
                 )}
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "paypal" && order.payment_status === "unpaid" && (
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "paypal" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
                     <Button onClick={handleRetryPaypal} disabled={busy}>
-                        {busy ? "Redirecting…" : "Pay with PayPal"}
+                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with PayPal"}
                     </Button>
                 )}
                 {!order.parent_order_id && CANCELLABLE.includes(order.status) && (

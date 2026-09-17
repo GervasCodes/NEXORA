@@ -190,6 +190,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                     type="text"
                     role="combobox"
                     aria-expanded={open}
+                    aria-controls="searchbox-suggestions"
                     aria-autocomplete="list"
                     placeholder={placeholder}
                     autoComplete="off"
@@ -216,7 +217,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
             </form>
 
             {open && value.trim().length === 0 && recent.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
+                <div id="searchbox-suggestions" className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
                     <div className="flex items-center justify-between px-3 py-2 border-b border-line/60">
                         <span className="text-xs uppercase tracking-wide text-ash">{t("search.recent")}</span>
                         <button type="button" onMouseDown={handleClearRecent} className="text-xs text-teal hover:underline">
@@ -240,7 +241,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
             )}
 
             {open && suggestions.length > 0 && value.trim().length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50 max-h-96 overflow-y-auto">
+                <div id="searchbox-suggestions" className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50 max-h-96 overflow-y-auto">
                     {suggestions.map((result, i) => (
                         <button
                             key={result.id}

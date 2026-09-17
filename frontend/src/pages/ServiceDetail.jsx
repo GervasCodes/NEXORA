@@ -203,6 +203,7 @@ function BookingWidget({ service }) {
 
 export default function ServiceDetail() {
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const { slug } = useParams();
     const { user } = useAuth();
     const wishlist = useWishlist();
@@ -305,6 +306,7 @@ export default function ServiceDetail() {
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
                         {current.media_url ? (
                             current.media_type === "video" ? (
+                                // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded service clip, no caption track available
                                 <video src={current.media_url} controls className="w-full h-full object-cover" />
                             ) : (
                                 <img src={current.media_url} alt={service.title} className="w-full h-full object-cover" />
@@ -326,6 +328,7 @@ export default function ServiceDetail() {
                                     }`}
                                 >
                                     {item.media_type === "video" ? (
+                                        // eslint-disable-next-line jsx-a11y/media-has-caption -- muted thumbnail preview, no caption track available
                                         <video src={item.media_url} className="w-full h-full object-cover" />
                                     ) : (
                                         <img src={item.media_url} alt="" className="w-full h-full object-cover" />

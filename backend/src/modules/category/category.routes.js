@@ -20,6 +20,10 @@ router.get("/", categoryController.listPublic);
 // Public - homepage department cards (cover, live product count, trending preview)
 router.get("/departments", categoryController.listDepartments);
 
+// Public - homepage hero carousel (promo videos, sponsored/on-sale
+// products, featured stores) - see category.service.js#getHomeHighlights
+router.get("/home-highlights", categoryController.getHomeHighlights);
+
 // Public - single department page: same summary fields plus the
 // sections (promotions, sponsored, featured stores)
 router.get("/departments/:slug", categoryController.getDepartment);

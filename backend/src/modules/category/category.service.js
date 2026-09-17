@@ -122,6 +122,93 @@ exports.getDepartmentBySlug = async (slug) => {
     });
 };
 
+// Limits for each homepage hero-carousel source - kept small since
+// these are hero slides, not a listing row (unlike SECTION_LIMIT /
+// FEATURED_STORES_LIMIT above, which back full department-page rows).
+const HOME_VIDEO_LIMIT = 4;
+const HOME_SPONSORED_LIMIT = 4;
+const HOME_PROMOTION_LIMIT = 4;
+const HOME_FEATURED_STORE_LIMIT = 3;
+// Hard cap on the assembled deck regardless of how much each source has
+// available - a hero carousel longer than this stops being skimmable.
+const HOME_CAROUSEL_MAX_SLIDES = 8;
+
+// Homepage hero carousel (Phase 11 - Home Redesign): the image/video
+// scroll Home.jsx was missing. Reuses the exact same paid-placement +
+// promotions sources getDepartmentBySlug already renders per department
+// (see findGlobalPromotions/findGlobalSponsored/findGlobalFeaturedStores
+// in category.repository.js), generalized platform-wide, plus seller
+// promo videos (Phase 7) which have no per-department home at all.
+// Promo videos lead the deck - a moving thumbnail earns more attention
+// in a hero slot than a still image - then sponsored products, on-sale
+// products, and featured stores fill the rest up to the cap. Cached
+// under the same namespace/TTL as every other public category read
+// (see cache.js) - a ~45s staleness window on hero promo content is the
+// same tolerance the per-department sections already accept, not a new
+// consistency decision.
+exports.getHomeHighlights = async () => {
+    return cache.getOrSet(CACHE_NAMESPACE, "homeHighlights", async () => {
+        const [videos, sponsored, promotions, featuredStores] = await Promise.all([
+            categoryRepository.findActivePromoVideos(HOME_VIDEO_LIMIT),
+            categoryRepository.findGlobalSponsored(HOME_SPONSORED_LIMIT),
+            categoryRepository.findGlobalPromotions(HOME_PROMOTION_LIMIT),
+            categoryRepository.findGlobalFeaturedStores(HOME_FEATURED_STORE_LIMIT)
+        ]);
+
+        const slides = [
+            ...videos.map((v) => ({
+                type: "promo_video",
+                title: v.store_name,
+                subtitle: "Watch the store",
+                imageUrl: null,
+                videoUrl: v.promo_video_url,
+                href: `/stores/${v.store_slug}`,
+                badge: null,
+                price: null,
+                discountPrice: null
+            })),
+            ...sponsored.map((p) => ({
+                type: "sponsored_product",
+                title: p.name,
+                subtitle: p.store_name,
+                imageUrl: p.image_url,
+                videoUrl: null,
+                href: `/products/${p.slug}`,
+                badge: "Sponsored",
+                price: p.price,
+                discountPrice: p.discount_price
+            })),
+            ...promotions.map((p) => ({
+                type: "promotion_product",
+                title: p.name,
+                subtitle: p.store_name,
+                imageUrl: p.image_url,
+                videoUrl: null,
+                href: `/products/${p.slug}`,
+                badge: "On sale",
+                price: p.price,
+                discountPrice: p.discount_price
+            })),
+            ...featuredStores.map((s) => ({
+                type: "featured_store",
+                title: s.store_name,
+                subtitle: s.is_verified ? "Verified store" : "Featured store",
+                imageUrl: s.store_banner || s.store_logo,
+                videoUrl: null,
+                href: `/stores/${s.store_slug}`,
+                badge: "Featured store",
+                price: null,
+                discountPrice: null
+            }))
+            // A store/product missing both its banner-or-logo and any
+            // video has nothing to show on a slide - drop it rather
+            // than rendering a blank one.
+        ].filter((slide) => slide.videoUrl || slide.imageUrl);
+
+        return slides.slice(0, HOME_CAROUSEL_MAX_SLIDES);
+    });
+};
+
 exports.createCategory = async (name, description, displayOrder) => {
     const slug = toSlug(name);
 

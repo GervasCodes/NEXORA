@@ -77,17 +77,22 @@ export default function Affiliate() {
                 </button>
             </div>
 
+            {/* p-3/text-lg on mobile, growing to p-4/text-xl from sm: -
+                "Earned" holds a formatted currency figure that can run
+                long (e.g. "TZS 245,000"), which needs the extra room a
+                plain grid-cols-3 + p-4 + text-xl leaves it on a narrow
+                phone (~110px per column after gaps). */}
             <div className="grid grid-cols-3 gap-3 mb-8">
-                <div className="border border-line rounded-lg p-4 text-center">
-                    <p className="font-display text-xl">{dashboard.clickCount}</p>
+                <div className="border border-line rounded-lg p-3 sm:p-4 text-center">
+                    <p className="font-display text-lg sm:text-xl">{dashboard.clickCount}</p>
                     <p className="text-xs text-ash">Clicks</p>
                 </div>
-                <div className="border border-line rounded-lg p-4 text-center">
-                    <p className="font-display text-xl">{dashboard.conversions.length}</p>
+                <div className="border border-line rounded-lg p-3 sm:p-4 text-center">
+                    <p className="font-display text-lg sm:text-xl">{dashboard.conversions.length}</p>
                     <p className="text-xs text-ash">Orders</p>
                 </div>
-                <div className="border border-line rounded-lg p-4 text-center">
-                    <p className="font-display text-xl">{format(dashboard.totalEarnings)}</p>
+                <div className="border border-line rounded-lg p-3 sm:p-4 text-center">
+                    <p className="font-display text-lg sm:text-xl break-words">{format(dashboard.totalEarnings)}</p>
                     <p className="text-xs text-ash">Earned</p>
                 </div>
             </div>

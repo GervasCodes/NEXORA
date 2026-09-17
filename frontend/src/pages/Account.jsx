@@ -12,6 +12,7 @@ import PageMeta from "../components/PageMeta";
 import Avatar from "../components/ui/Avatar";
 import Input from "../components/ui/Input";
 import AddressBook from "../components/AddressBook";
+import ImageLightbox from "../components/chat/ImageLightbox";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -35,6 +36,8 @@ export default function Account() {
 
     const [busy, setBusy] = useState("");
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [deletingPhoto, setDeletingPhoto] = useState(false);
+    const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
 
     const load = () => {
         api.get("/account").then(({ data }) => {
@@ -90,6 +93,25 @@ export default function Account() {
         } finally {
             setUploadingPhoto(false);
             e.target.value = "";
+        }
+    };
+
+    // Phase 6 (profile photo delete + full view) - mirrors
+    // handlePhotoUpload's shape: optimistic local state update on
+    // success, toast on failure, busy flag scoped to this action only
+    // (not the shared `busy` state used by the profile/settings forms)
+    // so a slow delete doesn't disable unrelated buttons on the page.
+    const handleDeletePhoto = async () => {
+        setDeletingPhoto(true);
+        try {
+            await api.delete("/account/photo");
+            setProfile((prev) => ({ ...prev, photo_url: null }));
+            updateUser({ photo_url: null });
+            toast?.success("Photo removed.");
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setDeletingPhoto(false);
         }
     };
 
@@ -213,42 +235,68 @@ export default function Account() {
                     when present and falls back to initials otherwise, so
                     this is the only place a photo needs wiring in. */}
                 <div className="flex items-center gap-4 mb-6">
-                    <Avatar
-                        firstName={profile?.first_name}
-                        lastName={profile?.last_name}
-                        src={profile?.photo_url}
-                        size="lg"
-                    />
-                    <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploadingPhoto ? "Uploading…" : "Change photo"}
-                        <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto} className="hidden" />
-                    </label>
+                    <button
+                        type="button"
+                        onClick={() => profile?.photo_url && setPhotoLightboxOpen(true)}
+                        disabled={!profile?.photo_url}
+                        className="rounded-full disabled:cursor-default"
+                        aria-label={profile?.photo_url ? "View full-size photo" : undefined}
+                    >
+                        <Avatar
+                            firstName={profile?.first_name}
+                            lastName={profile?.last_name}
+                            src={profile?.photo_url}
+                            size="lg"
+                        />
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {uploadingPhoto ? "Uploading…" : "Change photo"}
+                            <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                        </label>
+                        {profile?.photo_url && (
+                            <button
+                                type="button"
+                                onClick={handleDeletePhoto}
+                                disabled={deletingPhoto}
+                                className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-red-400 hover:text-red-600 transition-colors disabled:opacity-60"
+                            >
+                                {deletingPhoto ? "Removing…" : "Remove"}
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                <ImageLightbox
+                    src={photoLightboxOpen ? profile?.photo_url : null}
+                    onClose={() => setPhotoLightboxOpen(false)}
+                />
 
                 <form onSubmit={saveProfile} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm mb-1">First name</label>
-                            <input value={profileForm.first_name}
+                            <label htmlFor="profileFirstName" className="block text-sm mb-1">First name</label>
+                            <input id="profileFirstName" value={profileForm.first_name}
                                 onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                         <div>
-                            <label className="block text-sm mb-1">Last name</label>
-                            <input value={profileForm.last_name}
+                            <label htmlFor="profileLastName" className="block text-sm mb-1">Last name</label>
+                            <input id="profileLastName" value={profileForm.last_name}
                                 onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Email</label>
-                        <input type="email" value={profileForm.email}
+                        <label htmlFor="profileEmail" className="block text-sm mb-1">Email</label>
+                        <input id="profileEmail" type="email" value={profileForm.email}
                             onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Phone</label>
+                        <label htmlFor="profilePhone" className="block text-sm mb-1">Phone</label>
                         <PhoneInput
+                            id="profilePhone"
                             value={profileForm.phone}
                             onChange={(phone) => setProfileForm({ ...profileForm, phone })}
                         />
@@ -335,6 +383,28 @@ export default function Account() {
                         </label>
                     </div>
 
+                    {/* Phase 5 (map showing users) - opt-out toggle. On
+                        by default (see migration 105); turning it off
+                        also clears any position already on file
+                        (account.repository.js#updateSettings), so the
+                        account disappears from the admin map right
+                        away, not just stops updating on it. */}
+                    {(user?.role === "buyer" || user?.role === "seller") && (
+                        <div>
+                            <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                <span className="text-sm">
+                                    Share my location
+                                    <span className="block text-ash text-xs mt-0.5">Lets Nexora staff see your current location on a map. On by default - turn off any time.</span>
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={profile?.location_sharing_enabled === undefined ? true : Boolean(profile.location_sharing_enabled)}
+                                    onChange={(e) => persistSettings({ locationSharingEnabled: e.target.checked })}
+                                />
+                            </label>
+                        </div>
+                    )}
+
                 </div>
             </section>
 
@@ -389,8 +459,8 @@ export default function Account() {
                 {pwdStep === "otp" && (
                     <form onSubmit={verifyPasswordOtp} className="space-y-3 max-w-xs">
                         <div>
-                            <label className="block text-sm mb-1">Verification code</label>
-                            <input type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6}
+                            <label htmlFor="pwdCode" className="block text-sm mb-1">Verification code</label>
+                            <input id="pwdCode" type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6}
                                 value={pwdCode}
                                 onChange={(e) => setPwdCode(e.target.value.replace(/\D/g, ""))}
                                 className="w-full border border-line rounded-md px-3 py-2 text-center text-lg tracking-[0.5em] font-mono focus-ring"

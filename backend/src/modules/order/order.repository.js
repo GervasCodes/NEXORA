@@ -6,14 +6,22 @@ const db = require("../../config/db");
 // buyer actually pays for (standalone order, or the parent of a split
 // cart) - child orders default to 0/false since the guarantee covers the
 // whole cart, not a single vendor's slice of it.
-const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, buyerAddressId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0, couponId = null, couponDiscountAmount = 0 }) => {
+const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, buyerAddressId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0, couponId = null, couponDiscountAmount = 0, preorder = null }) => {
+    // Pre-order / made-to-order (Phase 8) - only ever passed for a
+    // standalone order (see order.service.js#checkout: a split/multi-
+    // vendor cart can't contain pre-order items), so every other caller
+    // of insertOrderRow (createSplitOrder's parent + child rows) just
+    // gets the column defaults ('standard' order_type, NULL deposit).
+    const orderType = preorder ? "pre_order" : "standard";
+
     const [orderResult] = await connection.query(
         `INSERT INTO orders
         (order_number, buyer_id, parent_order_id, is_parent, status, payment_status, payment_method,
          shipping_address, shipping_city, shipping_region, shipping_phone, pickup_point_id, buyer_address_id,
          delivery_lat, delivery_lng, total_amount, buyer_protection_addon, buyer_protection_fee,
-         loyalty_points_redeemed, loyalty_discount_amount, coupon_id, coupon_discount_amount)
-        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         loyalty_points_redeemed, loyalty_discount_amount, coupon_id, coupon_discount_amount,
+         order_type, preorder_lead_time_days, preorder_ready_by, deposit_amount, balance_amount)
+        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             orderNumber,
             buyerId,
@@ -34,7 +42,12 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
             loyaltyPointsRedeemed,
             loyaltyDiscountAmount,
             couponId,
-            couponDiscountAmount
+            couponDiscountAmount,
+            orderType,
+            preorder ? preorder.leadTimeDays : null,
+            preorder ? preorder.readyBy : null,
+            preorder ? preorder.depositAmount : null,
+            preorder ? preorder.balanceAmount : null
         ]
     );
 
@@ -148,7 +161,7 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
 // Create a single (non-split) order + its items + decrement stock, all in
 // one transaction. cartItems: rows from cart_items joined with product
 // price/stock (see order.service.js). Used for single-vendor checkouts.
-exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}, buyerAddressId = null, coupon = {}) => {
+exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, totalAmount, buyerProtection = {}, pickupPointId = null, loyalty = {}, buyerAddressId = null, coupon = {}, preorder = null) => {
     const connection = await db.getConnection();
 
     try {
@@ -159,7 +172,8 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
             buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
             buyerAddressId,
             loyaltyPointsRedeemed: loyalty.pointsRedeemed, loyaltyDiscountAmount: loyalty.discountAmount,
-            couponId: coupon.couponId, couponDiscountAmount: coupon.discountAmount
+            couponId: coupon.couponId, couponDiscountAmount: coupon.discountAmount,
+            preorder
         });
 
         await insertOrderItems(connection, orderId, cartItems);
@@ -492,6 +506,37 @@ exports.updatePaymentStatus = async (orderId, paymentStatus) => {
     await db.query(
         "UPDATE orders SET payment_status = ? WHERE id = ?",
         [paymentStatus, orderId]
+    );
+};
+
+// Pre-order / made-to-order (Phase 8) - the three timestamps a pre-order
+// order's payment lifecycle passes through, on top of the payment_status
+// value itself. Kept separate from updatePaymentStatus (rather than
+// folding a timestamp param into it) since only pre-order transitions
+// ever set these - a standard order's single unpaid->paid jump never
+// touches them.
+exports.markDepositPaid = async (orderId) => {
+    await db.query(
+        "UPDATE orders SET payment_status = 'deposit_paid', deposit_paid_at = NOW() WHERE id = ?",
+        [orderId]
+    );
+};
+
+exports.markBalancePaid = async (orderId) => {
+    await db.query(
+        "UPDATE orders SET payment_status = 'paid', balance_paid_at = NOW() WHERE id = ?",
+        [orderId]
+    );
+};
+
+// Seller-triggered: "the item is ready, buyer needs to settle the
+// balance" (order.service.js#requestPreorderBalance). Just a timestamp -
+// doesn't touch payment_status - the buyer paying is what actually
+// advances that.
+exports.markBalanceRequested = async (orderId) => {
+    await db.query(
+        "UPDATE orders SET balance_requested_at = NOW() WHERE id = ?",
+        [orderId]
     );
 };
 

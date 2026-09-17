@@ -51,6 +51,23 @@ exports.listDepartments = async (req, res) => {
     }
 };
 
+exports.getHomeHighlights = async (req, res) => {
+    try {
+        const slides = await categoryService.getHomeHighlights();
+
+        return res.json({
+            success: true,
+            data: slides
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getDepartment = async (req, res) => {
     try {
         const department = await categoryService.getDepartmentBySlug(req.params.slug);

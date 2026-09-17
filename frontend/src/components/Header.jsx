@@ -6,7 +6,6 @@ import { useLanguage } from "../context/LanguageContext";
 import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
-import AdminNotificationBell from "./AdminNotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
@@ -265,7 +264,6 @@ export default function Header() {
                     <ToolsMenu links={secondaryLinks} isActive={isActive} />
 
                     {user && <NotificationBell />}
-                    {user?.role === "admin" && <AdminNotificationBell />}
 
                     {user && user.role !== "admin" && user.role !== "seller" ? (
                         <button
@@ -309,7 +307,6 @@ export default function Header() {
                     fixes buttons being unreachable in portrait mode. */}
                 <div className="flex items-center gap-3 ml-auto md:hidden">
                     {user && <NotificationBell />}
-                    {user?.role === "admin" && <AdminNotificationBell />}
 
                     {user?.role === "buyer" && (
                         <Link to="/cart" className="relative text-frost/90 shrink-0 transition-transform duration-150 ease-out active:scale-90" aria-label={t("nav.cart")}>

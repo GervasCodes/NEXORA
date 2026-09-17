@@ -10,6 +10,7 @@ const appError = require("../../utils/appError");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { deleteFromCloudinary } = require("../../utils/cloudinaryDelete");
 
 const REAUTH_TYP = "pwd_reauth";
 const REAUTH_EXPIRY = "10m";
@@ -57,10 +58,40 @@ exports.uploadProfilePhoto = async (userId, file) => {
     return result.secure_url;
 };
 
+// Phase 6 (profile photo delete + full view) - available to every
+// account type, same reasoning as uploadProfilePhoto above. Best-effort
+// Cloudinary cleanup (deleteFromCloudinary already swallows its own
+// failures - see cloudinaryDelete.js) so a Cloudinary outage never blocks
+// the person from clearing their own photo; the DB row is the source of
+// truth either way, and an orphaned Cloudinary asset is a much smaller
+// problem than a user who can't remove their own photo.
+exports.deleteProfilePhoto = async (userId) => {
+    const profile = await accountRepository.findById(userId);
+
+    if (!profile) {
+        throw appError("ACCOUNT_NOT_FOUND", 404);
+    }
+
+    if (profile.photo_url) {
+        await deleteFromCloudinary(profile.photo_url);
+    }
+
+    await accountRepository.deletePhotoUrl(userId);
+};
+
 // Language / theme / currency - available to every account type.
 exports.updateSettings = async (userId, data) => {
     await accountRepository.updateSettings(userId, data);
     return exports.getProfile(userId);
+};
+
+// Phase 5 (map showing users) - records a buyer/seller's live position
+// from a socket ping. Delegates the opt-out/role gating to the
+// repository's single guarded UPDATE (see account.repository.js for
+// why that check has to happen there, not here) and just relays
+// whether it actually stuck, so socket.js knows whether to broadcast.
+exports.updateLocation = async (userId, lat, lng) => {
+    return accountRepository.updateLocation(userId, lat, lng);
 };
 
 // --- OTP-gated password change ---

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../../api/client";
 import { PaperclipIcon } from "../Icons";
 
@@ -9,6 +9,14 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
+    const inputRef = useRef(null);
+
+    // The search panel only mounts once the user opens it, so taking focus
+    // here is the expected behavior - done via ref rather than autoFocus,
+    // which jsx-a11y flags because it fires on any mount regardless of intent.
+    useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
 
     useEffect(() => {
         const trimmed = query.trim();
@@ -51,7 +59,7 @@ export default function MessageSearch({ conversationId, onJumpTo, onClose }) {
                     <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <input
-                    autoFocus
+                    ref={inputRef}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search this conversation…"

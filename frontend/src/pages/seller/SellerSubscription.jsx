@@ -256,8 +256,9 @@ export default function SellerSubscription() {
 
                     <form onSubmit={payWithMobileMoney} className="space-y-3 mb-4">
                         <div>
-                            <label className="block text-sm mb-1">Mobile money phone number</label>
+                            <label htmlFor="subscriptionPhone" className="block text-sm mb-1">Mobile money phone number</label>
                             <PhoneInput
+                                id="subscriptionPhone"
                                 value={phone}
                                 onChange={setPhone}
                                 required

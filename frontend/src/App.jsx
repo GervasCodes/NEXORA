@@ -15,6 +15,7 @@ import SupportWidget from "./components/SupportWidget";
 import OnboardingTour from "./components/OnboardingTour";
 import AffiliateClickTracker from "./components/AffiliateClickTracker";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
+import LocationSharingListener from "./components/LocationSharingListener";
 import NexoraAIButton from "./components/ai/NexoraAIButton";
 import NexoraAIDrawer from "./components/ai/NexoraAIDrawer";
 import { useAuth } from "./context/AuthContext";
@@ -104,6 +105,7 @@ const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminUserMap = lazy(() => import("./pages/admin/AdminUserMap"));
 const AdminDeletedAccounts = lazy(() => import("./pages/admin/AdminDeletedAccounts"));
 const AdminSellers = lazy(() => import("./pages/admin/AdminSellers"));
 const AdminDeliveryAgents = lazy(() => import("./pages/admin/AdminDeliveryAgents"));
@@ -133,6 +135,8 @@ const AdminEfd = lazy(() => import("./pages/admin/AdminEfd"));
 const AdminPickupPoints = lazy(() => import("./pages/admin/AdminPickupPoints"));
 const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminDataReset = lazy(() => import("./pages/admin/AdminDataReset"));
+const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
 
 export default function App() {
     const [showSplash, setShowSplash] = useState(
@@ -230,6 +234,7 @@ export default function App() {
             <NetworkStatusNotice />
             <InstallPrompt />
             <DepartmentMaintenanceListener />
+            <LocationSharingListener />
 
             <Header />
             <SupportWidget />
@@ -337,6 +342,7 @@ export default function App() {
                             <Route index element={<AdminDashboard />} />
                             <Route path="dispatch" element={<AdminDispatch />} />
                             <Route path="users" element={<AdminUsers />} />
+                            <Route path="users/map" element={<AdminUserMap />} />
                             <Route path="deleted-accounts" element={<AdminDeletedAccounts />} />
                             <Route path="sellers" element={<AdminSellers />} />
                             <Route path="delivery-agents" element={<AdminDeliveryAgents />} />
@@ -366,6 +372,8 @@ export default function App() {
                             <Route path="pickup-points" element={<AdminPickupPoints />} />
                             <Route path="content" element={<AdminContent />} />
                             <Route path="audit-logs" element={<AdminAuditLogs />} />
+                            <Route path="data-reset" element={<AdminDataReset />} />
+                            <Route path="broadcast" element={<AdminBroadcast />} />
                         </Route>
 
                         <Route path="*" element={<NotFound />} />

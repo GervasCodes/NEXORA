@@ -80,7 +80,7 @@ exports.findPublicBySlug = async (slug) => {
         `SELECT
             sp.user_id, sp.store_name, sp.store_slug, sp.store_description,
             sp.store_tagline,
-            sp.store_logo, sp.store_banner, sp.store_theme,
+            sp.store_logo, sp.store_banner, sp.store_theme, sp.promo_video_url,
             sp.social_instagram, sp.social_facebook, sp.social_whatsapp,
             sp.country, sp.region, sp.city,
             sp.is_verified, sp.created_at,

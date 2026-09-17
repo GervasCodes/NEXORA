@@ -150,7 +150,6 @@ function MessagePrompt({ open, onCancel, onConfirm, itemName }) {
                     Optionally leave a note for anyone who tries to access it. Shown on the maintenance page.
                 </p>
                 <textarea
-                    autoFocus
                     rows={3}
                     maxLength={255}
                     value={message}
@@ -214,7 +213,6 @@ function DepartmentSchedulePrompt({ open, onCancel, onConfirm, itemName }) {
                     starts and ends. Shoppers get a toast the moment it enters or exits.
                 </p>
                 <textarea
-                    autoFocus
                     rows={3}
                     maxLength={255}
                     value={message}

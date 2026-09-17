@@ -23,13 +23,15 @@ exports.create = async (data) => {
         discount_price,
         stock,
         brand,
-        product_condition
+        product_condition,
+        is_preorder,
+        preorder_lead_time_days
     } = data;
 
     const [result] = await db.query(
         `INSERT INTO products 
-        (seller_id, category_id, name, slug, description, price, discount_price, stock, brand, product_condition)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (seller_id, category_id, name, slug, description, price, discount_price, stock, brand, product_condition, is_preorder, preorder_lead_time_days)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             seller_id,
             category_id,
@@ -40,7 +42,9 @@ exports.create = async (data) => {
             discount_price,
             stock,
             brand,
-            product_condition
+            product_condition,
+            is_preorder ? 1 : 0,
+            preorder_lead_time_days || null
         ]
     );
 
@@ -554,7 +558,8 @@ exports.update = async (productId, data) => {
 
     const allowed = [
         "name", "description", "price", "discount_price",
-        "stock", "brand", "product_condition", "category_id"
+        "stock", "brand", "product_condition", "category_id",
+        "is_preorder", "preorder_lead_time_days"
     ];
 
     for (const key of allowed) {

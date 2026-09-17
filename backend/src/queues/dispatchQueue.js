@@ -57,6 +57,21 @@ exports.getQueue = () => {
     if (!redisConfig.isConfigured()) return null;
     if (!queue) {
         queue = new Queue(QUEUE_NAME, { connection: getConnection() });
+
+        // BullMQ emits "error" for connection-level problems (Redis
+        // unreachable, auth failure, TLS handshake) - a completely
+        // separate channel from the per-job "failed" event on the Worker
+        // below. Without a listener here, ioredis/BullMQ errors surface
+        // only as an unhandled 'error' event on the EventEmitter, which
+        // is exactly the silent-failure case this hook exists to close:
+        // offer-expiry timers would stop being enqueued with nothing
+        // reported anywhere.
+        queue.on("error", (err) => {
+            logger.error({ err }, "dispatch queue connection error");
+            Sentry.captureException(err, {
+                tags: { area: "delivery", stage: "dispatch-queue-connection" }
+            });
+        });
     }
     return queue;
 };
@@ -102,6 +117,18 @@ exports.startDispatchWorker = (handlers) => {
         Sentry.captureException(err, {
             tags: { area: "delivery", stage: "dispatch-queue" },
             extra: { jobId: job?.id, jobName: job?.name }
+        });
+    });
+
+    // Connection-level failures on the consumer side. Distinct from
+    // "failed" above, which only fires once a job has actually been
+    // picked up and its handler threw - if Redis itself is unreachable
+    // no job is ever delivered, so "failed" stays silent while the
+    // worker quietly stops processing anything.
+    worker.on("error", (err) => {
+        logger.error({ err }, "dispatch worker connection error");
+        Sentry.captureException(err, {
+            tags: { area: "delivery", stage: "dispatch-worker-connection" }
         });
     });
 

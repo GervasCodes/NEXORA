@@ -12,6 +12,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
+import VideoLightbox from "../components/VideoLightbox";
 
 
 // Exported so Footer.jsx (Phase 5, Visual Polish & Metadata) can reuse it
@@ -84,6 +85,9 @@ export default function StorePage() {
     const { t } = useLanguage();
     const { user } = useAuth();
     const [store, setStore] = useState(null);
+    // Phase 7 (Promo Video Unification) - whether the store's promo
+    // video (if any) is currently open in the lightbox.
+    const [promoVideoOpen, setPromoVideoOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [catalogFilters, setCatalogFilters] = useState({});
     const [productCount, setProductCount] = useState(null);
@@ -213,11 +217,28 @@ export default function StorePage() {
             <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
                 <Breadcrumbs items={[{ label: t("nav.home"), href: "/" }, { label: store.store_name }]} />
             </div>
-            <div className="h-40 sm:h-56 bg-line/40 overflow-hidden">
+            <div className="relative h-40 sm:h-56 bg-line/40 overflow-hidden">
                 {store.store_banner ? (
                     <img src={store.store_banner} alt="" className="w-full h-full object-cover" />
                 ) : null}
+                {store.promo_video_url && (
+                    <button
+                        type="button"
+                        onClick={() => setPromoVideoOpen(true)}
+                        aria-label={t("store.watchPromoVideo")}
+                        className="absolute inset-0 flex items-center justify-center bg-abyss/20 hover:bg-abyss/35 transition-colors group"
+                    >
+                        <span className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-frost/90 group-hover:bg-frost flex items-center justify-center shadow-md transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 sm:w-6 sm:h-6 text-ink ml-0.5">
+                                <path d="M8 5.5v13l11-6.5-11-6.5Z" />
+                            </svg>
+                        </span>
+                    </button>
+                )}
             </div>
+            {store.promo_video_url && promoVideoOpen && (
+                <VideoLightbox src={store.promo_video_url} onClose={() => setPromoVideoOpen(false)} />
+            )}
 
             <div className="max-w-6xl mx-auto px-4 sm:px-6">
                 <div className="flex items-end gap-4 -mt-10 mb-6">

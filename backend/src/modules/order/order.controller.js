@@ -170,3 +170,23 @@ exports.updateOrderStatus = async (req, res) => {
         });
     }
 };
+
+// Pre-order / made-to-order (Phase 8) - seller tells the buyer the item
+// is ready and the balance is due. See order.service.js#requestPreorderBalance.
+exports.requestPreorderBalance = async (req, res) => {
+    try {
+        const result = await orderService.requestPreorderBalance(req.params.id, req.user.id);
+
+        return res.json({
+            success: true,
+            message: "Buyer has been notified that the balance is due",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};

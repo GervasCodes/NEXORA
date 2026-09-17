@@ -165,8 +165,9 @@ export default function VerificationFeeGate({ requiredFee, onPaid, returnPath })
 
             <form onSubmit={payWithMobileMoney} className="space-y-3 mb-4">
                 <div>
-                    <label className="block text-sm mb-1">Mobile money phone number</label>
+                    <label htmlFor="verificationFeePhone" className="block text-sm mb-1">Mobile money phone number</label>
                     <PhoneInput
+                        id="verificationFeePhone"
                         value={phone}
                         onChange={setPhone}
                         required

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useToast } from "../../context/ToastContext";
 
@@ -17,7 +17,14 @@ export default function SavedFilters({ pageKey, currentFilters, onApply }) {
     const [naming, setNaming] = useState(false);
     const [name, setName] = useState("");
     const [busy, setBusy] = useState(false);
+    const nameInputRef = useRef(null);
     const toast = useToast();
+
+    // Focus the name field when the seller opens the inline save form -
+    // ref + effect rather than autoFocus, which jsx-a11y flags.
+    useEffect(() => {
+        if (naming) nameInputRef.current?.focus();
+    }, [naming]);
 
     const load = () => {
         api.get(`/seller-filters/${pageKey}`).then(({ data }) => setSaved(data.data)).catch(() => {});
@@ -83,7 +90,7 @@ export default function SavedFilters({ pageKey, currentFilters, onApply }) {
                 <form onSubmit={handleSave} className="flex items-center gap-1.5">
                     <input
                         type="text"
-                        autoFocus
+                        ref={nameInputRef}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Name this view"

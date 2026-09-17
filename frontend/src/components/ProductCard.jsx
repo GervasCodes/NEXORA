@@ -156,6 +156,7 @@ function ProductCard({ product, layout = "grid" }) {
     );
 
     const compareToggle = (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, so ticking Compare doesn't also open the product link; the checkbox itself stays keyboard-operable
         <label
             onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1.5 text-xs text-ash mt-1.5 cursor-pointer w-fit"

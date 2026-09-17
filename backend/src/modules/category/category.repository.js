@@ -223,6 +223,88 @@ exports.findAllActiveWithSponsorship = async () => {
     return rows;
 };
 
+// --- Homepage hero carousel (Phase 11 - Home Redesign) ---
+// Platform-wide equivalents of findPromotionsByCategory /
+// findSponsoredByCategory / findFeaturedStoresByCategory above: the
+// homepage hero has no single department to scope by, so these drop the
+// category_id filter but otherwise reuse the exact same shape/ordering
+// those already-shipped queries use, plus one new source (seller promo
+// videos, Phase 7) that doesn't fit the per-department page at all.
+
+exports.findGlobalPromotions = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT
+            p.id, p.name, p.slug, p.price, p.discount_price,
+            sp.store_name,
+            (
+                SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = p.id AND pi.is_primary = 1
+                LIMIT 1
+            ) AS image_url
+        FROM products p
+        JOIN seller_profiles sp ON sp.user_id = p.seller_id
+        WHERE p.is_active = 1
+            AND p.discount_price IS NOT NULL AND p.discount_price < p.price
+        ORDER BY ((p.price - p.discount_price) / p.price) DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+exports.findGlobalSponsored = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT
+            p.id, p.name, p.slug, p.price, p.discount_price,
+            sp.store_name,
+            (
+                SELECT pi.image_url FROM product_images pi
+                WHERE pi.product_id = p.id AND pi.is_primary = 1
+                LIMIT 1
+            ) AS image_url
+        FROM products p
+        JOIN seller_profiles sp ON sp.user_id = p.seller_id
+        WHERE p.is_active = 1 AND p.is_sponsored = 1
+        ORDER BY p.created_at DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+// Unlike findFeaturedStoresByCategory (rated within one department),
+// this ranks purely by paid placement + verification - there's no
+// single category to average a rating within platform-wide.
+exports.findGlobalFeaturedStores = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified,
+            MAX(sfc.id IS NOT NULL) AS is_featured
+        FROM seller_profiles sp
+        JOIN products p ON p.seller_id = sp.user_id AND p.is_active = 1
+        LEFT JOIN store_featured_campaigns sfc
+            ON sfc.seller_id = sp.user_id
+            AND sfc.status = 'active' AND sfc.ends_at > NOW()
+        GROUP BY sp.id
+        ORDER BY is_featured DESC, sp.is_verified DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
+exports.findActivePromoVideos = async (limit) => {
+    const [rows] = await db.query(
+        `SELECT user_id, store_name, store_slug, promo_video_url
+        FROM seller_profiles
+        WHERE promo_video_url IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT ?`,
+        [limit]
+    );
+    return rows;
+};
+
 exports.findById = async (id) => {
     const [rows] = await db.query("SELECT * FROM categories WHERE id = ?", [id]);
     return rows[0];

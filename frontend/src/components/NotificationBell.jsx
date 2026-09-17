@@ -9,6 +9,29 @@ import { formatDate } from "../utils/format";
 
 const POLL_INTERVAL_MS = 30000;
 
+// Notification consolidation (Phase 3): this component used to be
+// buyer/seller-only, with a separate AdminNotificationBell.jsx duplicating
+// almost all of this file just to point at the admin-only shared feed
+// (see migration 059/admin_notifications - one shared row per event, one
+// shared read state across every admin, not per-admin). Per the Phase 1
+// decision, admin alerts now fold into this single bell instead: for an
+// admin account, /notifications, /notifications/unread-count and the
+// real-time socket events below all include that shared feed merged in
+// alongside the admin's own personal notifications (see
+// notification.service.js#getMyNotifications on the backend, which does
+// the actual merging). The underlying admin_notifications table and its
+// shared-across-every-admin read state are UNCHANGED - only where an
+// admin goes to read/acknowledge it changed.
+//
+// Severity dot color for shared/admin-sourced items only - personal
+// items keep the plain teal-dot-if-unread look they've always had, kept
+// as a lookup so an unhandled severity value fails visibly (undefined
+// class) instead of silently falling through to the wrong color.
+const SEVERITY_DOT = {
+    info: "bg-teal",
+    warning: "bg-mango",
+    critical: "bg-coral"
+};
 
 export default function NotificationBell() {
     const { user, sessionReady } = useAuth();
@@ -16,6 +39,8 @@ export default function NotificationBell() {
     const { t, language } = useLanguage();
     const toast = useToast();
     const navigate = useNavigate();
+
+    const isAdmin = user?.role === "admin";
 
     const [open, setOpen] = useState(false);
     const [items, setItems] = useState([]);
@@ -70,15 +95,34 @@ export default function NotificationBell() {
             prevUnreadRef.current += 1;
             setUnread((c) => c + 1);
             setJustBumped(true);
-            // Only splice into the visible list if the panel's open and
-            // already loaded - otherwise the next `open` -> fetchList()
-            // will pick it up naturally.
-            setItems((prev) => (prev.length > 0 || open ? [notification, ...prev] : prev));
+            setItems((prev) => (prev.length > 0 || open
+                ? [{ ...notification, id: String(notification.id), source: "personal" }, ...prev]
+                : prev));
         };
 
         socket.on("notification:new", handleNew);
         return () => socket.off("notification:new", handleNew);
     }, [user, socket, open]);
+
+    // Shared admin feed, merged in for admin accounts only. Tagged with the
+    // same `admin:` id prefix and `source: "admin"` the merged GET
+    // /notifications response uses, so a socket-delivered item and a
+    // fetched one are indistinguishable to handleItemClick/markAsRead below.
+    useEffect(() => {
+        if (!isAdmin || !socket) return undefined;
+
+        const handleNew = (notification) => {
+            prevUnreadRef.current += 1;
+            setUnread((c) => c + 1);
+            setJustBumped(true);
+            setItems((prev) => (prev.length > 0 || open
+                ? [{ ...notification, id: `admin:${notification.id}`, source: "admin" }, ...prev]
+                : prev));
+        };
+
+        socket.on("admin_notification:new", handleNew);
+        return () => socket.off("admin_notification:new", handleNew);
+    }, [isAdmin, socket, open]);
 
     useEffect(() => {
         if (open) fetchList();
@@ -107,12 +151,22 @@ export default function NotificationBell() {
             setUnread((c) => Math.max(0, c - 1));
             api.put(`/notifications/${item.id}/read`).catch(() => {});
         }
-        // Message-type notifications (Phase 6, UI/UX remediation) carry a
-        // related_conversation_id instead of a related_order_id - route
-        // those straight to the conversation thread rather than falling
-        // through with nowhere to go. related_order_id still wins when
-        // somehow both are present, matching the order-first precedent
-        // this branch already had.
+
+        if (item.source === "admin") {
+            // Same routing AdminNotificationBell.jsx used: a shared event
+            // about an admin account itself goes to the admins list, any
+            // other user-related event goes to the regular users list.
+            if (item.related_user_id) {
+                navigate(item.type?.startsWith("admin_") ? "/admin/admins" : "/admin/users");
+            }
+            return;
+        }
+
+        // Message-type notifications carry a related_conversation_id
+        // instead of a related_order_id - route those straight to the
+        // conversation thread rather than falling through with nowhere to
+        // go. related_order_id still wins when somehow both are present,
+        // matching the order-first precedent this branch already had.
         if (item.related_order_id) navigate(`/orders/${item.related_order_id}`);
         else if (item.related_conversation_id) navigate(`/messages/${item.related_conversation_id}`);
     };
@@ -130,10 +184,10 @@ export default function NotificationBell() {
 
     return (
         <div className="relative" ref={rootRef}>
-            {/* (UI/UX remediation): announce unread-count changes to
-                screen readers, matching the cart/messages announcers added
-                to Header.jsx - the visual badge below already told sighted
-                users a new notification arrived. */}
+            {/* announce unread-count changes to screen readers, matching the
+                cart/messages announcers added to Header.jsx - the visual
+                badge below already told sighted users a new notification
+                arrived. */}
             <span className="sr-only" role="status" aria-live="polite">
                 {unread > 0 ? t("notifications.unreadAnnouncement", { count: unread }) : ""}
             </span>
@@ -192,7 +246,9 @@ export default function NotificationBell() {
                                 className="w-full text-left px-4 py-3 border-b border-line/40 last:border-0 hover:bg-line/20 transition-colors flex gap-2.5 animate-fade-in"
                                 style={{ animationDelay: `${Math.min(i, 6) * 30}ms` }}
                             >
-                                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.is_read ? "bg-transparent" : "bg-teal"}`} />
+                                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                                    item.is_read ? "bg-transparent" : (item.source === "admin" ? (SEVERITY_DOT[item.severity] || "bg-teal") : "bg-teal")
+                                }`} />
                                 <span className="flex-1 min-w-0">
                                     <span className={`block text-sm truncate ${item.is_read ? "text-ink/70" : "text-ink font-medium"}`}>
                                         {item.title}

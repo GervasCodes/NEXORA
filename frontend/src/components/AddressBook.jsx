@@ -168,8 +168,9 @@ export default function AddressBook() {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-ink mb-1.5">Phone</label>
+                        <label htmlFor="addressPhone" className="block text-sm font-medium text-ink mb-1.5">Phone</label>
                         <PhoneInput
+                            id="addressPhone"
                             value={form.phone}
                             onChange={(phone) => setForm({ ...form, phone })}
                             required

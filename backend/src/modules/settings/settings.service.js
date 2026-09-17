@@ -332,7 +332,7 @@ exports.updateMonetizationSettings = async (data, adminId) => {
     for (const key of flagKeys) {
         if (data[key] === undefined) continue;
 
-        const nextValue = Boolean(data[key]) ? "true" : "false";
+        const nextValue = data[key] ? "true" : "false";
         const previousValue = map[key];
         if (nextValue === previousValue) continue;
 
@@ -411,7 +411,7 @@ exports.updateSettings = async (data) => {
     // Nexora Assistant admin controls (Phase 7) - see the DEFAULTS comment
     // above and exports.getAiSettings, the only reader of these five keys.
     if (data.ai_enabled !== undefined) {
-        await settingsRepository.upsert("ai_enabled", Boolean(data.ai_enabled) ? "true" : "false");
+        await settingsRepository.upsert("ai_enabled", data.ai_enabled ? "true" : "false");
     }
     if (data.ai_daily_token_cap_per_user !== undefined) {
         await settingsRepository.upsert("ai_daily_token_cap_per_user", String(data.ai_daily_token_cap_per_user));

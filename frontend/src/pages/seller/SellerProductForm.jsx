@@ -9,7 +9,8 @@ import Input from "../../components/ui/Input";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
-    stock: "", brand: "", product_condition: "new", category_id: ""
+    stock: "", brand: "", product_condition: "new", category_id: "",
+    is_preorder: false, preorder_lead_time_days: ""
 };
 
 // Swaps the item at `index` with its neighbour in `direction` ("up"/"down")
@@ -64,7 +65,9 @@ export default function SellerProductForm() {
                 stock: p.stock ?? "",
                 brand: p.brand || "",
                 product_condition: p.product_condition || "new",
-                category_id: p.category_id || ""
+                category_id: p.category_id || "",
+                is_preorder: Boolean(p.is_preorder),
+                preorder_lead_time_days: p.preorder_lead_time_days ?? ""
             });
             setImages(p.images || []);
             setVideos(p.videos || []);
@@ -73,18 +76,24 @@ export default function SellerProductForm() {
     }, [id, isEdit]);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+    const updateChecked = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError("");
 
+        const payload = {
+            ...form,
+            preorder_lead_time_days: form.preorder_lead_time_days === "" ? null : form.preorder_lead_time_days
+        };
+
         try {
             if (isEdit) {
-                await api.put(`/products/${id}`, form);
+                await api.put(`/products/${id}`, payload);
                 navigate("/seller/products");
             } else {
-                const { data } = await api.post("/products", form);
+                const { data } = await api.post("/products", payload);
                 setSavedId(data.data.productId);
             }
         } catch (err) {
@@ -337,18 +346,36 @@ export default function SellerProductForm() {
                     />
                 </div>
 
+                <div className="border rounded-lg p-4 space-y-3">
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={form.is_preorder} onChange={updateChecked("is_preorder")} />
+                        <span className="text-sm font-medium">Made to order / pre-order</span>
+                    </label>
+                    <p className="text-xs text-ash">
+                        Buyers pay a deposit at checkout and the remaining balance once it's ready. Requires
+                        made-to-order to be turned on in your <Link to="/seller/store" className="underline">store settings</Link> first.
+                    </p>
+                    {form.is_preorder && (
+                        <Input
+                            label="Lead time for this product (days, optional - overrides your store default)"
+                            type="number" min="1" max="365" value={form.preorder_lead_time_days}
+                            onChange={update("preorder_lead_time_days")}
+                        />
+                    )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm mb-1">Condition</label>
-                        <select value={form.product_condition} onChange={update("product_condition")}
+                        <label htmlFor="productCondition" className="block text-sm mb-1">Condition</label>
+                        <select id="productCondition" value={form.product_condition} onChange={update("product_condition")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="new">New</option>
                             <option value="used">Used</option>
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm mb-1">Category</label>
-                        <select required value={form.category_id} onChange={update("category_id")}
+                        <label htmlFor="productCategory" className="block text-sm mb-1">Category</label>
+                        <select id="productCategory" required value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="">Select…</option>
                             {categories.map((c) => (
@@ -448,6 +475,7 @@ export default function SellerProductForm() {
                             const busy = mediaBusyKey === `video-${vid.id}`;
                             return (
                                 <div key={vid.id} className="flex items-center gap-2">
+                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded product clip, no caption track available */}
                                     <video src={vid.video_url} controls
                                         className="w-40 h-24 rounded-md border border-line object-cover" />
                                     <div className="flex flex-col gap-1">
@@ -503,6 +531,7 @@ export default function SellerProductForm() {
                             const busy = mediaBusyKey === `audio-${clip.id}`;
                             return (
                                 <div key={clip.id} className="flex items-center gap-2">
+                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded voice note, no caption track available */}
                                     <audio src={clip.audio_url} controls className="flex-1" />
                                     <button
                                         type="button"

@@ -128,8 +128,9 @@ export default function SellerWallet() {
                     />
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Payout method</label>
+                        <label htmlFor="payoutMethod" className="text-xs text-ash block mb-1">Payout method</label>
                         <select
+                            id="payoutMethod"
                             value={payoutMethod}
                             onChange={(e) => setPayoutMethod(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
@@ -140,8 +141,9 @@ export default function SellerWallet() {
                     </div>
 
                     <div>
-                        <label className="text-xs text-ash block mb-1">Payout currency</label>
+                        <label htmlFor="payoutCurrency" className="text-xs text-ash block mb-1">Payout currency</label>
                         <select
+                            id="payoutCurrency"
                             value={payoutCurrency}
                             onChange={(e) => setPayoutCurrency(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"

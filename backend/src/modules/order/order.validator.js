@@ -7,6 +7,24 @@ exports.checkoutValidation = [
         .isIn(PAYMENT_METHODS)
         .withMessage("Invalid payment method"),
 
+    // Phase 2 (Legal & Consumer Trust): explicit, required consent to the
+    // Terms of Service, Privacy Policy, and Refund Policy at the point of
+    // purchase - the same shape auth.validator.js#registerValidation
+    // already enforces for `terms_accepted` at signup, including
+    // accepting both a real boolean (JSON body) and the string "true"
+    // (older/multipart clients), so the two consent gates behave
+    // identically rather than diverging.
+    //
+    // NOT `.optional()`: a checkout request that doesn't carry this is
+    // rejected. That is deliberate and does mean any client older than
+    // this change stops being able to place orders until it sends the
+    // field - which is the correct trade-off for a consent record (an
+    // optional consent flag is not a consent record at all). Flagged in
+    // PHASE_2_NOTES.md.
+    body("checkout_terms_accepted")
+        .custom((value) => value === true || value === "true")
+        .withMessage("You must accept the Terms of Service, Privacy Policy, and Refund Policy"),
+
     body("shipping_address")
         .notEmpty()
         .withMessage("Shipping address is required"),

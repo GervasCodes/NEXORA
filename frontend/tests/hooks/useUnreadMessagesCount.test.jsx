@@ -27,7 +27,10 @@ describe("useUnreadMessagesCount", () => {
         const { result } = renderHook(() => useUnreadMessagesCount(true), { wrapper: MemoryRouter });
 
         await waitFor(() => expect(result.current).toBe(4));
-        expect(mockGet).toHaveBeenCalledWith("/chat/unread-count");
+        // Phase 5 added a per-request timeout to this call (see
+        // useUnreadMessagesCount.js) so a stalled poll fails fast instead
+        // of hanging - the test needs the full args, not just the URL.
+        expect(mockGet).toHaveBeenCalledWith("/chat/unread-count", { timeout: 10000 });
     });
 
     it("swallows a failed request rather than throwing, leaving the count as-is", async () => {

@@ -371,6 +371,14 @@ export default function SellerStore() {
                     <LocationPicker
                         value={pickupPin}
                         onChange={setPickupPin}
+                        onAddressResolved={({ address, city, region }) =>
+                            setForm((f) => ({
+                                ...f,
+                                address: address || f.address,
+                                city: city || f.city,
+                                region: region || f.region
+                            }))
+                        }
                         label={t("seller.store.pickupLocationLabel")}
                         placedHint={t("seller.store.pickupPlacedHint")}
                         emptyHint={t("seller.store.pickupEmptyHint")}

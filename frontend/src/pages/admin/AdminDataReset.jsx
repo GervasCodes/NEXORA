@@ -14,6 +14,7 @@ import { useToast } from "../../context/ToastContext";
 
 const COUNT_LABELS = {
     orders: "Orders",
+    bookings: "Bookings",
     reviews: "Reviews",
     conversations: "Conversations",
     disputes: "Disputes",
@@ -221,7 +222,7 @@ export default function AdminDataReset() {
             <PageMeta title="Data Reset" noIndex />
             <h1 className="font-display text-2xl mb-1">Data reset</h1>
             <p className="text-sm text-ash mb-6">
-                Permanently removes orders, reviews, chats, disputes, returns and wallet history.
+                Permanently removes orders, bookings, reviews, chats, disputes, returns and wallet history.
                 Every action here is a hard delete — there is no archive, no undo, and no recovery
                 short of restoring a database backup.
             </p>
@@ -240,7 +241,7 @@ export default function AdminDataReset() {
                     />
                     <ResetPanel
                         title="Reset this seller"
-                        description="Deletes orders containing this seller's items, their reviews, conversations, disputes, returns and wallet ledger."
+                        description="Deletes orders and bookings containing this seller's items or services, their reviews, conversations, disputes, returns and wallet ledger."
                         testOnly={sellerTestOnly}
                         onTestOnlyChange={setSellerTestOnly}
                         onPreview={previewSeller}

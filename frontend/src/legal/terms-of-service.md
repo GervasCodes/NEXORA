@@ -56,16 +56,23 @@ routing, tracking, and payout infrastructure but does not itself transport goods
 ## 5. Damaged items, delayed deliveries, defective products, and refunds
 
 Responsibility for these four situations is shared between NEXORA, the Seller, and the
-Delivery Agent depending on where in the order lifecycle the problem occurred. The
-authoritative, detailed rules live in our **[Delivery Liability Policy](/legal/delivery-liability-policy)**
-and **[Vendor Agreement](/legal/vendor-agreement)**; this section summarizes them.
+Delivery Agent depending on where in the order lifecycle the problem occurred.
 
-| Situation | Who is primarily responsible | How it's resolved |
-|---|---|---|
-| **Item arrives damaged** | The party in possession of the item when the damage occurred — the Seller if packaged unsafely or already damaged at handoff, the Delivery Agent if damaged in transit (see the Delivery Liability Policy's damage-attribution rules). | File a dispute (`damaged_item`) with photo evidence within the window stated in the Delivery Liability Policy. |
-| **Delivery is delayed** | The Delivery Agent for control-of-route delays; the Seller for late handoff to the courier. NEXORA does not guarantee delivery windows shown at checkout — they are estimates. | File a dispute (`delayed_delivery`), or contact the Seller directly through in-app messaging. Compensation, if any, follows the Delivery Liability Policy. |
-| **Item is defective / not as described** | The Seller. Product quality, safety, and accuracy of description are the Seller's responsibility under the Vendor Agreement. | File a dispute (`defective_product`) with evidence. Sellers must accept returns or provide a remedy per the Vendor Agreement's defect-handling clause. |
-| **Refunds** | NEXORA administers the refund mechanism; funds come from the responsible party's wallet balance (Seller) or are absorbed per the Delivery Liability Policy (Delivery Agent/logistics fault). | An admin reviews the dispute and resolves it as full refund, partial refund, replacement, compensation, or rejection, per our Dispute Resolution Policy (Section 6). |
+The full rules — when you can cancel, the return windows, how disputes are decided, and
+how a refund is actually paid out — live in our **[Refund Policy](/legal/refund-policy)**.
+Fault attribution between the Seller and the Delivery Agent is set out in the
+**[Delivery Liability Policy](/legal/delivery-liability-policy)**, and the Seller's own
+quality and defect-handling obligations in the **[Vendor Agreement](/legal/vendor-agreement)**.
+
+In summary:
+
+- **Damaged, defective, wrong, missing, or badly delayed orders** are raised through the
+  **Report a problem** flow on the order (Section 6 below).
+- **Returns** on a delivered order are raised through the return flow, within the return
+  window shown for that order.
+- **NEXORA administers the refund mechanism**; a refund is settled against the responsible
+  party — normally the Seller's wallet earnings.
+- **Delivery windows shown at checkout are estimates**, not guarantees.
 
 **None of this waives your rights under applicable consumer-protection law**, which take
 precedence over anything in these Terms to the extent they conflict.

@@ -88,8 +88,13 @@ exports.checkSpendGuard = async (userId) => {
 // failure (no provider configured, a provider error/timeout), so a
 // caller can tell a genuine spend-guard block apart from any other
 // "AI wasn't available this time" case.
-const callProvider = async ({ userId, feature, system, userMessage, messages, maxTokens }) => {
-    const provider = registry.getActiveProvider();
+const callProvider = async ({ userId, feature, system, userMessage, messages, maxTokens, providerOrder }) => {
+    // `providerOrder` (Phase 5, production error fixes) lets a specific
+    // feature prefer a named provider chain over the single globally-
+    // configured AI_PROVIDER - see registry.js#getProviderChain. Falls
+    // back to the normal single active provider when not given, so
+    // every other feature call is unaffected.
+    const provider = providerOrder ? registry.getProviderChain(providerOrder) : registry.getActiveProvider();
     if (!provider) {
         aiRepository.recordOutcome({ feature, outcome: "fallback_no_provider" });
         return { text: null, truncated: false, unavailableReason: null };
@@ -861,7 +866,14 @@ exports.explainForecast = async ({ userId, vertical }) => {
         feature: "admin_forecast_explain",
         system: `Phrase this statistical revenue forecast for an admin in 1-2 short plain-text sentences, using ONLY the numbers given below. This forecast is a simple trend-line projection, not a guarantee - say so if the direction is notable. Do not invent a cause for the trend or any number not present in the facts.\n\nFacts:\n${facts}`,
         userMessage: "Explain this forecast.",
-        maxTokens: 150
+        maxTokens: 150,
+        // Phase 5 (production error fixes): Gemini was consistently
+        // returning 429 (quota exceeded) for this feature - not
+        // intermittent, every call. Prefer Groq, then OpenRouter, and
+        // only fall back to whatever AI_PROVIDER is globally set to
+        // (kept last so this still works if neither is configured in a
+        // given environment) - see registry.js#getProviderChain.
+        providerOrder: ["groq", "openrouter", process.env.AI_PROVIDER]
     });
     const reply = result?.text || null;
 
@@ -897,7 +909,11 @@ exports.explainPersonalizationHealth = async ({ userId }) => {
         feature: "admin_personalization_explain",
         system: `Explain in 2-3 short plain-text sentences what these buyer stats imply for personalized recommendations, using ONLY the facts given. NEXORA's recommendation engine is rule-based: a buyer with purchase history gets results from their own top categories, a buyer with no history gets platform-wide trending instead - so buyers without purchase history are the ones currently seeing trending, not personalized, results. Do not invent a click-through rate, conversion number, or any figure not present in the facts.\n\nFacts:\n${facts}`,
         userMessage: "Explain personalization coverage.",
-        maxTokens: 200
+        maxTokens: 200,
+        // Phase 5 (production error fixes): same reasoning as
+        // explainForecast above - Gemini's 429s are consistent, not
+        // occasional, for this feature too.
+        providerOrder: ["groq", "openrouter", process.env.AI_PROVIDER]
     });
     const reply = result?.text || null;
 

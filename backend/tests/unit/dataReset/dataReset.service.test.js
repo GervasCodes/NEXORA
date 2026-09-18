@@ -38,6 +38,9 @@ const trackCalls = () => {
     dataResetRepository.deleteOrderTree.mockImplementation(
         track("delete.orders", async (_conn, ids) => ({ orders: ids.length }))
     );
+    dataResetRepository.deleteBookingTree.mockImplementation(
+        track("delete.bookings", async (_conn, ids) => ({ bookings: ids.length }))
+    );
     dataResetRepository.deleteBuyerLedgerForOrders.mockImplementation(
         track("delete.buyerLedger", async () => 0)
     );
@@ -55,10 +58,12 @@ beforeEach(() => {
     dataResetRepository.findSeller.mockResolvedValue(seller);
     dataResetRepository.findSellerOrderIds.mockResolvedValue([11, 12]);
     dataResetRepository.findAllOrderIds.mockResolvedValue([11, 12, 13]);
+    dataResetRepository.findSellerBookingIds.mockResolvedValue([21]);
+    dataResetRepository.findAllBookingIds.mockResolvedValue([21, 22]);
     dataResetRepository.findParentIdsOf.mockResolvedValue([]);
     dataResetRepository.findOrphanedParentOrderIds.mockResolvedValue([]);
-    dataResetRepository.countSellerScope.mockResolvedValue({ orders: 2, reviews: 1 });
-    dataResetRepository.countPlatformScope.mockResolvedValue({ orders: 3, reviews: 4 });
+    dataResetRepository.countSellerScope.mockResolvedValue({ orders: 2, bookings: 1, reviews: 1 });
+    dataResetRepository.countPlatformScope.mockResolvedValue({ orders: 3, bookings: 2, reviews: 4 });
     dataResetRepository.deleteSellerReviews.mockResolvedValue(1);
     dataResetRepository.deleteSellerConversations.mockResolvedValue(2);
     dataResetRepository.deleteSellerDisputes.mockResolvedValue(0);
@@ -190,6 +195,63 @@ describe("scoping", () => {
     });
 });
 
+describe("bookings", () => {
+    it("only deletes bookings resolved for this provider, never all bookings", async () => {
+        await dataResetService.resetSeller(7, sellerArgs(), actor);
+
+        expect(dataResetRepository.findSellerBookingIds).toHaveBeenCalledWith(7, { testOnly: true });
+        expect(dataResetRepository.findAllBookingIds).not.toHaveBeenCalled();
+        expect(dataResetRepository.deleteBookingTree).toHaveBeenCalledWith(connection, [21]);
+    });
+
+    it("includes the bookings count in the seller preview and the completed deletion", async () => {
+        const preview = await dataResetService.previewSellerReset(7, { testOnly: true });
+        expect(preview.counts).toMatchObject({ bookings: 1 });
+
+        const result = await dataResetService.resetSeller(7, sellerArgs(), actor);
+        expect(result.deleted).toMatchObject({ bookings: 1 });
+
+        expect(auditService.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    deleted_counts: expect.objectContaining({ bookings: 1 })
+                })
+            })
+        );
+    });
+
+    it("deletes bookings on the same transaction connection as everything else", async () => {
+        await dataResetService.resetSeller(7, sellerArgs(), actor);
+
+        for (const call of dataResetRepository.deleteBookingTree.mock.calls) {
+            expect(call[0]).toBe(connection);
+        }
+    });
+
+    it("resolves all bookings platform-wide, not scoped to one provider", async () => {
+        const result = await dataResetService.resetPlatform(
+            { testOnly: false, confirmation: "RESET ENTIRE PLATFORM" },
+            actor
+        );
+
+        expect(dataResetRepository.findAllBookingIds).toHaveBeenCalledWith({ testOnly: false });
+        expect(dataResetRepository.deleteBookingTree).toHaveBeenCalledWith(connection, [21, 22]);
+        expect(result.deleted).toMatchObject({ bookings: 2 });
+    });
+
+    it("rolls back and does not commit if booking deletion fails", async () => {
+        dataResetRepository.deleteBookingTree.mockRejectedValue(new Error("FK constraint fails"));
+
+        await expect(dataResetService.resetSeller(7, sellerArgs(), actor)).rejects.toThrow(
+            "FK constraint fails"
+        );
+
+        expect(connection.rollback).toHaveBeenCalled();
+        expect(connection.commit).not.toHaveBeenCalled();
+        expect(auditService.log).not.toHaveBeenCalled();
+    });
+});
+
 describe("audit logging", () => {
     it("writes the audit entry before any data is deleted", async () => {
         await dataResetService.resetSeller(7, sellerArgs(), actor);
@@ -211,7 +273,7 @@ describe("audit logging", () => {
                     seller_id: 7,
                     test_only: true,
                     hard_delete: true,
-                    planned_counts: { orders: 2, reviews: 1 }
+                    planned_counts: { orders: 2, bookings: 1, reviews: 1 }
                 })
             })
         );

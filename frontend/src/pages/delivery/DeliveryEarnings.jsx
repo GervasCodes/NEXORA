@@ -28,7 +28,12 @@ export default function DeliveryEarnings() {
     return (
         <div className="animate-fade-in">
             <PageMeta title="Earnings" noIndex />
-            <h1 className="font-display text-2xl mb-1">{t("delivery.agent.earnings.title")}</h1>
+            {/* Phase 4 (SEO Supporting, H1 audit): DeliveryLayout.jsx renders
+                its own <h1>Your delivery rounds</h1> around every /delivery/*
+                route's <Outlet/>, so this was a second <h1> in the same
+                render - demoted to <h2>, subordinate to the layout's title,
+                same as the visual hierarchy already implies. */}
+            <h2 className="font-display text-2xl mb-1">{t("delivery.agent.earnings.title")}</h2>
             <p className="text-ash text-sm mb-8">{t("delivery.agent.earnings.subtitle")}</p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">

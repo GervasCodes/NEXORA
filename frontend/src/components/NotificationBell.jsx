@@ -7,7 +7,12 @@ import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { formatDate } from "../utils/format";
 
-const POLL_INTERVAL_MS = 30000;
+const POLL_INTERVAL_MS = 45000;
+// Phase 5 (production error fixes): same reasoning as
+// useUnreadMessagesCount.js - a per-request timeout so a stalled poll
+// (ERR_QUIC_PROTOCOL_ERROR on flaky mobile connections, per the
+// production logs) fails fast rather than hanging.
+const REQUEST_TIMEOUT_MS = 10000;
 
 // Notification consolidation (Phase 3): this component used to be
 // buyer/seller-only, with a separate AdminNotificationBell.jsx duplicating
@@ -52,7 +57,7 @@ export default function NotificationBell() {
 
     const fetchUnread = useCallback(async () => {
         try {
-            const { data } = await api.get("/notifications/unread-count");
+            const { data } = await api.get("/notifications/unread-count", { timeout: REQUEST_TIMEOUT_MS });
             const count = data.data.unread;
             if (count > prevUnreadRef.current) setJustBumped(true);
             prevUnreadRef.current = count;

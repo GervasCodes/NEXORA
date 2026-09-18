@@ -81,6 +81,9 @@ const fillRequiredFields = async (user) => {
     await user.type(city, "Dar es Salaam");
     await user.type(region, "Dar es Salaam");
     await user.type(phone, "0712345678");
+    // Phase 2 consent gate: the submit button stays disabled until the
+    // buyer explicitly accepts the Terms/Privacy/Refund policies.
+    await user.click(screen.getByLabelText(/I agree to the/));
 };
 
 const originalLocation = window.location;

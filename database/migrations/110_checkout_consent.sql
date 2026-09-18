@@ -1,0 +1,50 @@
+-- Migration 110: checkout consent (Phase 2 — Legal & Consumer Trust)
+--
+-- Signup consent has been a recorded, auditable fact per user since
+-- migration 036 (users.terms_accepted_at / users.terms_version). The
+-- point of *purchase* had no equivalent: a buyer placed an order without
+-- ever being shown, or asked to agree to, the Terms of Service, Privacy
+-- Policy, or the refund terms that govern that specific transaction.
+-- Consent given at signup, possibly months earlier and to an older
+-- version of the documents, is not the same thing as consent to the
+-- terms of the order actually being placed.
+--
+-- This adds the order-level counterpart, deliberately mirroring 036's
+-- column shape rather than inventing a new one:
+--
+--   checkout_terms_accepted_at  - server-set timestamp, NOT client-
+--                                 supplied (see order.repository.js's
+--                                 insertOrderRow: by the time the INSERT
+--                                 runs, consent has already been verified
+--                                 by order.validator.js, so "now" IS the
+--                                 moment of record).
+--   checkout_terms_version      - which version of the consent bundle
+--                                 (ToS + Privacy + Refund Policy) was
+--                                 agreed to, from
+--                                 CURRENT_CHECKOUT_TERMS_VERSION in
+--                                 order.repository.js. Same reasoning as
+--                                 036's terms_version: a future
+--                                 re-consent flow can compare a stored
+--                                 value against the current constant
+--                                 without needing another migration.
+--
+-- NULL-able with a NULL default on purpose. Every order placed BEFORE
+-- this phase legitimately has no consent record, and back-filling a
+-- timestamp for those would fabricate consent that was never given -
+-- which is worse than an honest NULL. NULL here means "placed before
+-- checkout consent existed", not "consent was refused".
+--
+-- NULL also (correctly) covers orders created through the group-buy
+-- claim path (groupBuy.service.js#claim), which has no consent checkbox
+-- of its own - see order.repository.js#insertOrderRow's comment and
+-- PHASE_2_NOTES.md, where closing that gap is flagged as a follow-up.
+--
+-- Only the top-level order row a buyer actually agreed to and paid for
+-- carries these values. A multi-vendor cart's per-vendor CHILD orders
+-- leave them NULL - they are an internal split of one purchase, not
+-- separate consents (same reasoning buyer_protection_addon /
+-- buyer_protection_fee already follow; see insertOrderRow's comment).
+
+ALTER TABLE orders
+    ADD COLUMN checkout_terms_accepted_at TIMESTAMP NULL DEFAULT NULL,
+    ADD COLUMN checkout_terms_version VARCHAR(20) NULL DEFAULT NULL AFTER checkout_terms_accepted_at;

@@ -29,6 +29,32 @@ const COMPANY_SOCIAL_LINKS = [
     { key: "youtube", label: "YouTube", href: "https://www.youtube.com/@Nexoramarketplace" }
 ];
 
+// Phase 2 (Legal & Consumer Trust): legal-entity disclosure block.
+//
+// **EVERY VALUE BELOW IS A PLACEHOLDER.** These are real business facts
+// that exist nowhere in this repository - there is no settings table, env
+// var, or config file holding the registered company name, BRELA
+// registration number, TIN, or a physical address (checked
+// backend/src/modules/settings, config/, and the .env examples). They
+// have to come from the business owner before launch. Inventing
+// real-looking values here would be worse than leaving the gap visible,
+// so they are deliberately loud.
+//
+// Consumer-facing marketplaces are generally expected to disclose the
+// legal entity behind the site and a way to reach it; a footer that says
+// only "NEXORA" identifies no one a buyer could actually pursue.
+//
+// See PHASE_2_NOTES.md - this is the phase's one hard blocker on
+// information only the owner can supply.
+const BUSINESS_DETAILS = {
+    legalName: "[BUSINESS NAME - TO BE FILLED]",
+    registrationNumber: "[BRELA REG. NO. - TO BE FILLED]",
+    taxId: "[TIN - TO BE FILLED]",
+    address: "[REGISTERED PHYSICAL ADDRESS - TO BE FILLED]",
+    supportEmail: "[SUPPORT EMAIL - TO BE FILLED]",
+    supportPhone: "[SUPPORT PHONE - TO BE FILLED]"
+};
+
 function InstallCallout() {
     const { canInstall, promptInstall } = useInstallPrompt();
 
@@ -100,6 +126,25 @@ export default function Footer() {
                                 </a>
                             ))}
                         </div>
+                    </div>
+                </div>
+
+                <div className="border-t border-frost/10 pt-5 grid gap-x-8 gap-y-2 sm:grid-cols-2 text-xs text-frost/50">
+                    <div className="space-y-1">
+                        <p className="text-frost/70 font-medium">{BUSINESS_DETAILS.legalName}</p>
+                        <p>Reg. no. {BUSINESS_DETAILS.registrationNumber}</p>
+                        <p>TIN {BUSINESS_DETAILS.taxId}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p>{BUSINESS_DETAILS.address}</p>
+                        <p>
+                            <span className="sr-only">Support email: </span>
+                            {BUSINESS_DETAILS.supportEmail}
+                        </p>
+                        <p>
+                            <span className="sr-only">Support phone: </span>
+                            {BUSINESS_DETAILS.supportPhone}
+                        </p>
                     </div>
                 </div>
 

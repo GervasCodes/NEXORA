@@ -26,7 +26,12 @@ export default function NotFound() {
                 <path d="M9.5 14.5l2.2-5 2.8 2-2.2 5-2.8-2Z" />
                 <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none" />
             </svg>
-            <p className="font-display text-2xl mb-2">Page not found</p>
+            {/* Phase 4 (SEO Supporting, H1 audit): this line was a <p>
+                styled to look like a heading, so the page had no real
+                heading element at all - a screen-reader user landing here
+                after a broken link got no "page title" announcement, just
+                body text. Promoted to <h1>; visual style unchanged. */}
+            <h1 className="font-display text-2xl mb-2">Page not found</h1>
             <p className="text-ash text-sm mb-6">The page you're looking for doesn't exist or may have moved.</p>
             <Button as={Link} to="/">
                 Go to Home

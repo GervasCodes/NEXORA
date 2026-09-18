@@ -22,7 +22,15 @@ const initialForm = {
     buyer_protection_addon: false,
     pickup_point_id: "",
     address_id: "",
-    coupon_code: ""
+    coupon_code: "",
+    // Phase 2 (Legal & Consumer Trust): mirrors Register.jsx's
+    // `terms_accepted` - an explicit, required consent, not implied by
+    // submitting the form. Validated server-side in
+    // order.validator.js#checkoutValidation and stamped onto the order
+    // row (checkout_terms_accepted_at / checkout_terms_version) by
+    // order.repository.js, the same way auth stamps terms_accepted_at /
+    // terms_version onto the user row.
+    checkout_terms_accepted: false
 };
 
 // Mirrors order.service.js#calculateBuyerProtectionFee - client-side
@@ -338,6 +346,16 @@ export default function Checkout() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Client-side guard so the buyer gets an immediate, in-context
+        // message instead of a 400 from the API. The backend enforces
+        // this independently (order.validator.js + order.repository.js) -
+        // this is convenience, not the control.
+        if (!form.checkout_terms_accepted) {
+            toast?.error("Please accept the Terms of Service, Privacy Policy, and Refund Policy to place your order");
+            return;
+        }
+
         setSubmitting(true);
 
         // Declared outside the try block so the catch below can tell
@@ -594,7 +612,24 @@ export default function Checkout() {
                     />
                 </div>
 
-                <LocationPicker value={pin} onChange={setPin} />
+                <LocationPicker
+                    value={pin}
+                    onChange={setPin}
+                    onAddressResolved={({ address, city, region }) => {
+                        // Only auto-fills the free-text fields when they're
+                        // actually the ones on screen (a new address being
+                        // entered) - if the buyer picked a saved address,
+                        // moving the pin shouldn't silently overwrite the
+                        // address they already chose.
+                        if (!addingNewAddress && savedAddresses.length > 0) return;
+                        setForm((f) => ({
+                            ...f,
+                            shipping_address: address || f.shipping_address,
+                            shipping_city: city || f.shipping_city,
+                            shipping_region: region || f.shipping_region
+                        }));
+                    }}
+                />
 
                 {deliveryType === "home" && pin && (
                     <div className="border border-line rounded-md px-3 py-2 text-sm animate-fade-in">
@@ -681,7 +716,33 @@ export default function Checkout() {
                     </fieldset>
                 )}
 
-                <Button type="submit" disabled={busy} fullWidth className="gap-2 active:scale-[0.99]">
+                <div className="flex items-start gap-2">
+                    <input
+                        type="checkbox"
+                        id="checkout_terms_accepted"
+                        checked={form.checkout_terms_accepted}
+                        onChange={(e) => setForm({ ...form, checkout_terms_accepted: e.target.checked })}
+                        className="mt-1 focus-ring"
+                        required
+                    />
+                    <label htmlFor="checkout_terms_accepted" className="text-xs text-ash">
+                        I agree to the{" "}
+                        <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">
+                            Terms of Service
+                        </Link>
+                        ,{" "}
+                        <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">
+                            Privacy Policy
+                        </Link>
+                        , and{" "}
+                        <Link to="/legal/refund-policy" target="_blank" className="text-teal hover:underline">
+                            Refund Policy
+                        </Link>
+                        .
+                    </label>
+                </div>
+
+                <Button type="submit" disabled={busy || !form.checkout_terms_accepted} fullWidth className="gap-2 active:scale-[0.99]">
                     {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(grandTotal)}`}
                 </Button>

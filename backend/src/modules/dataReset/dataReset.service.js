@@ -49,7 +49,8 @@ exports.previewSellerReset = async (sellerId, { testOnly = true } = {}) => {
     if (!seller) throw notFound("Seller not found.");
 
     const orderIds = await dataResetRepository.findSellerOrderIds(sellerId, { testOnly });
-    const counts = await dataResetRepository.countSellerScope(sellerId, { testOnly, orderIds });
+    const bookingIds = await dataResetRepository.findSellerBookingIds(sellerId, { testOnly });
+    const counts = await dataResetRepository.countSellerScope(sellerId, { testOnly, orderIds, bookingIds });
 
     return {
         scope: "seller",
@@ -69,7 +70,8 @@ exports.previewSellerReset = async (sellerId, { testOnly = true } = {}) => {
 
 exports.previewPlatformReset = async ({ testOnly = true } = {}) => {
     const orderIds = await dataResetRepository.findAllOrderIds({ testOnly });
-    const counts = await dataResetRepository.countPlatformScope({ testOnly, orderIds });
+    const bookingIds = await dataResetRepository.findAllBookingIds({ testOnly });
+    const counts = await dataResetRepository.countPlatformScope({ testOnly, orderIds, bookingIds });
 
     return {
         scope: "platform",
@@ -123,7 +125,8 @@ exports.resetSeller = async (sellerId, { testOnly = true, confirmation } = {}, {
 
     const orderIds = await dataResetRepository.findSellerOrderIds(sellerId, { testOnly });
     const parentCandidates = await dataResetRepository.findParentIdsOf(orderIds);
-    const planned = await dataResetRepository.countSellerScope(sellerId, { testOnly, orderIds });
+    const bookingIds = await dataResetRepository.findSellerBookingIds(sellerId, { testOnly });
+    const planned = await dataResetRepository.countSellerScope(sellerId, { testOnly, orderIds, bookingIds });
 
     await recordIntent({
         req,
@@ -150,6 +153,7 @@ exports.resetSeller = async (sellerId, { testOnly = true, confirmation } = {}, {
 
         await dataResetRepository.deleteBuyerLedgerForOrders(connection, orderIds);
         const { orders } = await dataResetRepository.deleteOrderTree(connection, orderIds);
+        const { bookings } = await dataResetRepository.deleteBookingTree(connection, bookingIds);
 
         // Only after the children are gone can we tell which parents are
         // now empty - a parent shared with another seller still has that
@@ -176,6 +180,7 @@ exports.resetSeller = async (sellerId, { testOnly = true, confirmation } = {}, {
 
         deleted = {
             orders: orders + parentsDeleted,
+            bookings,
             reviews,
             conversations,
             disputes,
@@ -219,7 +224,8 @@ exports.resetPlatform = async ({ testOnly = true, confirmation } = {}, { actorId
     requireConfirmation(confirmation, PLATFORM_CONFIRMATION_PHRASE);
 
     const orderIds = await dataResetRepository.findAllOrderIds({ testOnly });
-    const planned = await dataResetRepository.countPlatformScope({ testOnly, orderIds });
+    const bookingIds = await dataResetRepository.findAllBookingIds({ testOnly });
+    const planned = await dataResetRepository.countPlatformScope({ testOnly, orderIds, bookingIds });
 
     await recordIntent({
         req,
@@ -239,6 +245,7 @@ exports.resetPlatform = async ({ testOnly = true, confirmation } = {}, { actorId
         // there's no orphaned-parent pass to do here: a parent whose
         // children are all in scope is itself in scope already.
         const { orders } = await dataResetRepository.deleteOrderTree(connection, orderIds);
+        const { bookings } = await dataResetRepository.deleteBookingTree(connection, bookingIds);
 
         const reviews = await dataResetRepository.deleteAllReviews(connection, { testOnly });
         const conversations = await dataResetRepository.deleteAllConversations(connection, { testOnly });
@@ -254,6 +261,7 @@ exports.resetPlatform = async ({ testOnly = true, confirmation } = {}, { actorId
 
         deleted = {
             orders,
+            bookings,
             reviews,
             conversations,
             disputes,

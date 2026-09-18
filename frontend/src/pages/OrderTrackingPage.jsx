@@ -158,7 +158,10 @@ export default function OrderTrackingPage() {
     if (error || !order) {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-                <p className="font-display text-2xl mb-2">{t("delivery.tracking.unavailable")}</p>
+                {/* Phase 4 (SEO Supporting, H1 audit): this page had no <h1>
+                    on any of its render branches, including this one - the
+                    "unavailable" message doubles as the page's title here. */}
+                <h1 className="font-display text-2xl mb-2">{t("delivery.tracking.unavailable")}</h1>
                 {error && <p className="text-sm text-coral mb-4">{error}</p>}
                 <Link to={`/orders/${id}`} className="text-teal hover:underline text-sm">
                     {t("delivery.tracking.back")}
@@ -203,7 +206,7 @@ export default function OrderTrackingPage() {
                         </svg>
                     </div>
                     <PaymentConfirmedPill />
-                    <p className="font-display text-xl mb-1">{t(SEARCH_STAGE_COPY_KEY[searchStage])}</p>
+                    <h1 className="font-display text-xl mb-1">{t(SEARCH_STAGE_COPY_KEY[searchStage])}</h1>
                     <p className="text-sm text-ash max-w-sm">{t("delivery.tracking.searching.subtitle")}</p>
                 </div>
             </div>
@@ -217,7 +220,7 @@ export default function OrderTrackingPage() {
     if (orderState !== ORDER_STATE.ASSIGNED) {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center">
-                <p className="font-display text-2xl mb-2">{t("delivery.tracking.unavailable")}</p>
+                <h1 className="font-display text-2xl mb-2">{t("delivery.tracking.unavailable")}</h1>
                 <Link to={`/orders/${id}`} className="text-teal hover:underline text-sm">
                     {t("delivery.tracking.back")}
                 </Link>
@@ -242,6 +245,18 @@ export default function OrderTrackingPage() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
             <PageMeta title="Track Order" noIndex />
+            {/* Phase 4 (SEO Supporting, H1 audit): the live-tracking view has
+                no title-like text anywhere in its visible layout (just the
+                back button + a live/connecting badge) - a sighted user reads
+                the map itself as "this is the tracking page", which a screen
+                reader can't. Visually hidden so the existing design is
+                untouched. Hardcoded English rather than routed through t() -
+                this page's own <PageMeta title="Track Order" /> two lines
+                above is already hardcoded English, not an i18n key, so this
+                matches the existing convention on this specific page rather
+                than inventing a dictionary key that doesn't exist in
+                en.js/sw.js. */}
+            <h1 className="sr-only">Track your order</h1>
             <div className="flex items-center justify-between mb-4">
                 {backButton}
                 <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? "text-teal" : "text-ash"}`}>

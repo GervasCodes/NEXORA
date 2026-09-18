@@ -49,7 +49,19 @@ const NETWORK_ONLY_PATTERNS = [
     /\/api\/v1\/orders?(\/|\?|$)/,
     /\/api\/v1\/webhooks?(\/|\?|$)/,
     /\/api\/v1\/auth(\/|\?|$)/,
-    /\/api\/v1\/cart(\/|\?|$)/
+    /\/api\/v1\/cart(\/|\?|$)/,
+    // Phase 5 (production error fixes): confirmed real bug - a fetch to
+    // /admin/broadcast (and, by the same reasoning, any other admin
+    // route) that wasn't a `navigate`-mode request was falling through
+    // every branch below into the generic same-origin cache-first
+    // handler, whose catch resolves with Response.error() - a
+    // network-error-typed Response. That produced exactly the console
+    // error seen in production ("resulted in a network error
+    // response"). Admin pages are authenticated, never meant to be
+    // cached, and (per the belt-and-suspenders comment above) belong in
+    // this same "always go straight to the network, untouched" list,
+    // not the generic asset-caching path.
+    /^\/admin(\/|$)/
 ];
 const isNetworkOnly = (url) => NETWORK_ONLY_PATTERNS.some((re) => re.test(url.pathname));
 

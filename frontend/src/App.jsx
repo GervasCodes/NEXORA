@@ -11,6 +11,7 @@ import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
+import CookieConsentBanner from "./components/CookieConsentBanner";
 import SupportWidget from "./components/SupportWidget";
 import OnboardingTour from "./components/OnboardingTour";
 import AffiliateClickTracker from "./components/AffiliateClickTracker";
@@ -233,6 +234,7 @@ export default function App() {
             <UpdateAvailableBanner />
             <NetworkStatusNotice />
             <InstallPrompt />
+            <CookieConsentBanner />
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
 

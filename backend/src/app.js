@@ -69,6 +69,10 @@ const subscriptionRoutes = require("./modules/subscription/subscription.routes")
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
 const statusRoutes = require("./modules/status/status.routes");
 const aiRoutes = require("./modules/ai/ai.routes");
+// Phase 1 (SEO Critical). Controller only - this is a single public
+// GET mounted directly below, not a full router, since /sitemap.xml is
+// one endpoint with no sub-routes.
+const sitemapController = require("./modules/sitemap/sitemap.controller");
 const errorHandler = require("./middleware/errorHandler");
 
 const authorizeMiddleware = require("./middleware/authorize.middleware");
@@ -308,6 +312,13 @@ app.get("/", (req, res) => {
     });
 });
 
+// Phase 1 (SEO Critical). Mounted at the app root, unversioned and
+// outside /api/v1/*, and above the apiLimiter above only applies to
+// "/api/" - deliberately, since search engines fetch this exact path
+// and this frontend proxies its own /sitemap.xml straight through to
+// it (see frontend/public/_redirects) rather than to any API route.
+app.get("/sitemap.xml", sitemapController.getSitemap);
+
 app.use("/api/v1/auth", authRoutes);
 // Must be mounted BEFORE /api/v1/seller: it is a more specific prefix
 // of that path, and Express falls through an unmatched router to the
@@ -372,6 +383,22 @@ app.use("/api/v1/admin/maintenance", maintenanceRoutes);
 // Same more-specific-prefix-first reasoning as the two mounts above.
 app.use("/api/v1/admin/data-reset", dataResetRoutes);
 app.use("/api/v1/admin/broadcasts", broadcastRoutes);
+// Brevo delivery-status webhook (Phase 5, production error fixes) -
+// intentionally NOT under the admin-authenticated broadcastRoutes above
+// (Brevo's own servers call this, not a signed-in admin) and not
+// gated behind authMiddleware/authorize("admin") at all. Authenticated
+// instead via the existing generic shared-secret-header check
+// (webhookAuth.middleware.js#verifySharedSecretHeader) - configure the
+// same value as a custom header on Brevo's webhook settings and as
+// BREVO_WEBHOOK_SECRET here. Placed after express.json() (unlike the
+// Snippe/MalipoPay Card/WhatsApp webhooks above) since Brevo doesn't
+// sign the raw request body - the shared header is the whole check -
+// so there's no need for the raw-body parser those three require.
+app.post(
+    "/api/v1/webhooks/brevo",
+    require("./middleware/webhookAuth.middleware").verifySharedSecretHeader("BREVO_WEBHOOK_SECRET", "brevo"),
+    require("./modules/broadcast/brevoWebhook.controller").handleEvent
+);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/wallet", walletRoutes);
 app.use("/api/v1/earnings", earningsRoutes);

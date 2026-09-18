@@ -27,7 +27,7 @@ const MAX_ATTACHMENT_MB = 15;
 
 export default function ConversationThread() {
     const { id } = useParams();
-    const { user } = useAuth();
+    const { user, sessionReady } = useAuth();
     const { t } = useLanguage();
     const { socket } = useSocket();
     const navigate = useNavigate();
@@ -67,9 +67,29 @@ export default function ConversationThread() {
             .then(({ data }) => setMessages(data.data))
             .catch(() => setError(t("chat.loadError")))
             .finally(() => setLoading(false));
-
-        api.put(`/chat/conversations/${id}/read`).catch(() => {});
     }, [id]);
+
+    // Phase 5 (production error fixes): split out from the fetch effect
+    // above. `PUT .../read` is a mutating request, so it needs the
+    // X-CSRF-Token header - but that header is only populated once
+    // AuthContext's own /auth/me bootstrap resolves and calls
+    // setCsrfToken() (see api/client.js / AuthContext.jsx). On a fresh
+    // load straight into a conversation (a deep link, or a hard
+    // refresh while already on a thread), this effect used to fire the
+    // PUT immediately alongside the GET above, before that token existed
+    // - producing a real, and confirmed-recurring, 403
+    // CSRF_TOKEN_INVALID that then triggered AuthContext's "please
+    // refresh the page" prompt for what was really just an unhydrated
+    // token, not an actually invalid session. Gating on `sessionReady`
+    // (the same flag AuthContext's own comment says every consumer of a
+    // protected endpoint should gate on) waits for that bootstrap to
+    // finish first. The message list itself is fetched via GET above,
+    // which carries no CSRF requirement, so it's left ungated and loads
+    // immediately as before.
+    useEffect(() => {
+        if (!sessionReady) return;
+        api.put(`/chat/conversations/${id}/read`).catch(() => {});
+    }, [id, sessionReady]);
 
     useEffect(() => {
         if (!socket) return;
@@ -372,6 +392,15 @@ export default function ConversationThread() {
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
             <PageMeta title="Conversation" noIndex />
+            {/* Phase 4 (SEO Supporting, H1 audit): this page has no heading
+                anywhere - just a "← All messages" back link and the action
+                bar. A screen reader gets no page-title announcement at all
+                on navigating in. This component doesn't load the other
+                participant's name (only message content), so rather than
+                fabricate one, this mirrors PageMeta's own "Conversation"
+                title above - visually hidden so the existing header layout
+                is untouched. */}
+            <h1 className="sr-only">Conversation</h1>
             <div className="flex items-center justify-between mb-2 gap-2">
                 <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0">
                     ← {t("chat.allMessages")}

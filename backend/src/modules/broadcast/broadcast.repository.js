@@ -68,3 +68,21 @@ exports.findAll = async ({ limit = 50 } = {}) => {
     );
     return rows;
 };
+
+// --- Brevo delivery-status webhook (Phase 5, production error fixes) ---
+// Deliberately NOT attributed to a specific `broadcasts` row - see
+// database/migrations/111_broadcast_delivery_events.sql for why (real
+// per-broadcast attribution needs outgoing mail tagged with a
+// broadcast id at send time, which would require reordering
+// broadcast.service.js#sendBroadcast to create its row before sending
+// rather than after, and updating that function's existing test to
+// match - flagged in PHASE_5_NOTES.md as a follow-up rather than done
+// silently here). This just records that Brevo told us what happened
+// to a given send, system-wide.
+exports.recordDeliveryEvent = async ({ eventType, recipientEmail, brevoMessageId, rawEvent }) => {
+    await db.query(
+        `INSERT INTO email_delivery_events (event_type, recipient_email, brevo_message_id, raw_event)
+        VALUES (?, ?, ?, ?)`,
+        [eventType, recipientEmail, brevoMessageId || null, rawEvent ? JSON.stringify(rawEvent) : null]
+    );
+};

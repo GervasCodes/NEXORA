@@ -1,0 +1,45 @@
+# NEXORA  (SEO )
+#
+# Public, unauthenticated pages (home, /products, /products/:slug,
+# /services, /services/:slug, /stores/:slug, /departments/:slug,
+# /guides, /group-buys, /legal/:slug, /status, /login, /register) are
+# left crawlable by default below — there's no Disallow for them.
+#
+# Everything Disallow'd here is a route that only ever renders behind
+# RequireAuth/RequireBuyer/RequireSeller/RequireDeliveryAgent/RequireAdmin
+# (see frontend/src/App.jsx) — a crawler can't authenticate, so there's
+# nothing indexable behind these paths anyway; blocking them just saves
+# crawl budget. This list mirrors the same route groups already marked
+# `noIndex` in the pages' own <PageMeta noIndex /> usage.
+#
+# Two routes are marked `noIndex` but are NOT behind an auth gate —
+# /compare and /group-buys/:id (see ComparePage.jsx and
+# GroupBuyDetail.jsx). Those are deliberately left OUT of Disallow
+# below: unlike the auth-gated routes, a crawler CAN reach them, so
+# blocking the crawl would stop Google from ever seeing the noindex
+# meta tag on the page itself — the well-known robots.txt-vs-meta-
+# noindex conflict. Leaving them crawlable lets the per-page noindex
+# tag do its job as intended.
+User-agent: *
+Allow: /
+
+Disallow: /account
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /bookings
+Disallow: /disputes
+Disallow: /returns
+Disallow: /saved
+Disallow: /loyalty
+Disallow: /affiliate
+Disallow: /messages
+Disallow: /seller
+Disallow: /delivery
+Disallow: /admin
+
+# replacing with the real production frontend domain before deploying
+# (same domain this file itself is served from).
+# this is proxied through to the backend-generated sitemap via
+# frontend/public/redirects, so the same domain applies here.
+Sitemap: https://nexoramarketplace.online/sitemap.xml

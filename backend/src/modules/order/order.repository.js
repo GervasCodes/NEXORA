@@ -1,5 +1,15 @@
 const db = require("../../config/db");
 
+// Phase 2 (Legal & Consumer Trust): the version of the consent bundle
+// (Terms of Service + Privacy Policy + Refund Policy) a buyer agrees to
+// at checkout. Mirrors auth.service.js's CURRENT_TERMS_VERSION - bump it
+// when the consented documents materially change, and every order placed
+// from then on records the new version without a migration.
+//
+// Lives here rather than in order.service.js purely to respect Phase 2's
+// file-scope list (order.service.js isn't in it). See PHASE_2_NOTES.md.
+const CURRENT_CHECKOUT_TERMS_VERSION = "2026-09-18";
+
 // Shared by createOrder/createSplitOrder below: insert one `orders` row
 // (optionally as a child of `parentOrderId`) and return its insertId.
 // buyerProtectionAddon/Fee (Phase Q1) only apply to the top-level row a
@@ -7,6 +17,47 @@ const db = require("../../config/db");
 // cart) - child orders default to 0/false since the guarantee covers the
 // whole cart, not a single vendor's slice of it.
 const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, orderNumber, shippingInfo, totalAmount, buyerProtectionAddon = false, buyerProtectionFee = 0, pickupPointId = null, buyerAddressId = null, loyaltyPointsRedeemed = 0, loyaltyDiscountAmount = 0, couponId = null, couponDiscountAmount = 0, preorder = null }) => {
+    // Checkout consent (Phase 2). Only the top-level row a buyer actually
+    // agreed to and paid for carries the consent record - exactly the
+    // same reasoning as buyerProtectionAddon/Fee above: a child order is
+    // an internal per-vendor split of one purchase, not a second thing
+    // the buyer consented to, so stamping it on each child would
+    // overstate how many consents were actually given.
+    const isTopLevel = parentOrderId === null;
+
+    // Accepts a real boolean (JSON body) or the string "true" (multipart/
+    // older clients), matching how auth.validator.js treats the signup
+    // `terms_accepted` field, so the two consent gates never diverge on
+    // what counts as consent.
+    const consentGiven = shippingInfo.checkout_terms_accepted === true
+        || shippingInfo.checkout_terms_accepted === "true";
+
+    // Deliberately STAMPS rather than ENFORCES. Enforcement lives in
+    // order.validator.js#checkoutValidation, at the HTTP layer.
+    //
+    // Why no belt-and-suspenders throw here (unlike auth.service.js's
+    // re-check of signup consent): insertOrderRow is shared by a SECOND
+    // purchase path that legitimately has no consent field -
+    // groupBuy.service.js#claim calls createOrder directly with its own
+    // shippingInfo, built from GroupBuyDetail.jsx's claim form, which has
+    // no consent checkbox. Throwing here would break group-buy claims
+    // outright, and both groupBuy.service.js and order.service.js are
+    // outside Phase 2's file list, so neither can be given a consent gate
+    // in this phase.
+    //
+    // A group-buy-claimed order therefore stores NULL in both columns -
+    // honestly recording "no consent was captured on this path" rather
+    // than fabricating one. **That gap is real and is flagged as a
+    // follow-up in PHASE_2_NOTES.md.**
+    const checkoutTermsVersion = isTopLevel && consentGiven ? CURRENT_CHECKOUT_TERMS_VERSION : null;
+
+    // Timestamped server-side rather than trusted from the client, for
+    // the same reason auth.repository.js sets terms_accepted_at to "now"
+    // instead of accepting a client-supplied value: by the time this
+    // runs, order.validator.js has already verified consent, so "now" IS
+    // the moment of record.
+    const checkoutTermsAcceptedAt = isTopLevel && consentGiven ? new Date() : null;
+
     // Pre-order / made-to-order (Phase 8) - only ever passed for a
     // standalone order (see order.service.js#checkout: a split/multi-
     // vendor cart can't contain pre-order items), so every other caller
@@ -20,8 +71,10 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
          shipping_address, shipping_city, shipping_region, shipping_phone, pickup_point_id, buyer_address_id,
          delivery_lat, delivery_lng, total_amount, buyer_protection_addon, buyer_protection_fee,
          loyalty_points_redeemed, loyalty_discount_amount, coupon_id, coupon_discount_amount,
-         order_type, preorder_lead_time_days, preorder_ready_by, deposit_amount, balance_amount)
-        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         order_type, preorder_lead_time_days, preorder_ready_by, deposit_amount, balance_amount,
+         checkout_terms_accepted_at, checkout_terms_version)
+        VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?)`,
         [
             orderNumber,
             buyerId,
@@ -47,7 +100,9 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
             preorder ? preorder.leadTimeDays : null,
             preorder ? preorder.readyBy : null,
             preorder ? preorder.depositAmount : null,
-            preorder ? preorder.balanceAmount : null
+            preorder ? preorder.balanceAmount : null,
+            checkoutTermsAcceptedAt,
+            checkoutTermsVersion
         ]
     );
 
@@ -696,3 +751,8 @@ exports.getPrimaryItemSummary = async (orderId) => {
     );
     return rows[0] || { itemName: null, itemCount: 0 };
 };
+
+// Exported for the unit tests and so a future re-consent flow can compare
+// an order's stored version against the current one without duplicating
+// the literal.
+exports.CURRENT_CHECKOUT_TERMS_VERSION = CURRENT_CHECKOUT_TERMS_VERSION;

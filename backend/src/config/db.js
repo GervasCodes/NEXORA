@@ -38,11 +38,16 @@ const pool = mysql.createPool({
     ssl: buildSslConfig(),
     waitForConnections: true,
     // (red-flag remediation): was a hardcoded 10 with no way to
-    // tune it without a code change. Default unchanged - this just makes
-    // it configurable once real concurrent-usage data says it needs to
-    // move. See docs/DEPLOYMENT.md for how to read the saturation
+    // tune it without a code change. Bumped the fallback default from 10
+    // to 25 (Phase 5, production error fixes) after production logs
+    // showed the pool saturating under real concurrent admin+buyer
+    // traffic - a single admin's dashboard load alone fires five
+    // analytics endpoints (admin.controller.js) in parallel, which was
+    // enough to exhaust a 10-connection pool by itself. Still fully
+    // overridable via DB_POOL_CONNECTION_LIMIT without another code
+    // change. See docs/DEPLOYMENT.md for how to read the saturation
     // warning below when deciding on a new value.
-    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 10
+    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 25
 });
 
 // the pool had zero visibility into its own saturation before

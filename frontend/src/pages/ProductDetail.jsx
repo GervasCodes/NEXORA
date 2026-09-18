@@ -13,6 +13,7 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import Button from "../components/ui/Button";
 import QuantityStepper from "../components/ui/QuantityStepper";
 import RecommendedProducts from "../components/RecommendedProducts";
+import ProductRow from "../components/ProductRow";
 import ProductQA from "../components/ProductQA";
 import PageMeta from "../components/PageMeta";
 import ImageLightbox from "../components/chat/ImageLightbox";
@@ -34,6 +35,17 @@ export default function ProductDetail() {
 
     const [product, setProduct] = useState(null);
     const [reviews, setReviews] = useState(null);
+    // Phase 4 (SEO Supporting, internal linking pass): "More from this
+    // store" shelf below. Store name/slug were already linked from this
+    // page (see the store name link a few lines down) but nothing
+    // surfaced any of the store's OTHER products - a dead end for a
+    // shopper who liked this item and might like more from the same
+    // seller. Fed by the exact same public products endpoint + seller_id
+    // filter StorePage.jsx already uses for its own catalog grid, and
+    // rendered with the exact same ProductRow component StorePage.jsx
+    // already uses for its collection shelves - no new backend endpoint,
+    // no new component.
+    const [storeProducts, setStoreProducts] = useState([]);
     const [reviewSort, setReviewSort] = useState("newest");
     const [activeImage, setActiveImage] = useState(0);
     const [lightboxSrc, setLightboxSrc] = useState(null);
@@ -78,6 +90,25 @@ export default function ProductDetail() {
             .catch(() => setProduct(null))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    useEffect(() => {
+        if (!product?.seller_id) {
+            setStoreProducts([]);
+            return;
+        }
+        // The public products endpoint has no "exclude this id" filter
+        // (checked product.repository.js#findAll), so this asks for one
+        // extra item and drops the current product client-side rather
+        // than adding a new backend query param for a single shelf.
+        api.get("/products", { params: { seller_id: product.seller_id, limit: 9 } })
+            .then(({ data }) => {
+                const items = (data.data || [])
+                    .filter((p) => p.id !== product.id)
+                    .slice(0, 8);
+                setStoreProducts(items);
+            })
+            .catch(() => setStoreProducts([]));
+    }, [product?.seller_id, product?.id]);
 
     const loadReviews = () => {
         if (!product) return;
@@ -276,6 +307,66 @@ export default function ProductDetail() {
         : (hasDiscount ? product.discount_price : product.price);
     const effectiveStock = hasVariants ? (selectedVariant?.stock ?? 0) : product.stock;
 
+    // Phase 1 (SEO Critical). Same trail as the Breadcrumbs component
+    // below, built once and reused for both the visible UI and the
+    // BreadcrumbList structured data - one source of truth so the two
+    // can never drift apart.
+    const breadcrumbItems = [
+        { label: t("nav.home"), href: "/" },
+        ...(product.category_slug
+            ? [{ label: product.category_name, href: `/departments/${product.category_slug}` }]
+            : []),
+        { label: product.name }
+    ];
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const breadcrumbJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems.map((item, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: item.label,
+            ...(item.href ? { item: `${origin}${item.href}` } : {})
+        }))
+    };
+
+    // Price/stock reflect the base product (not a variant-adjusted
+    // price) - the same simplification the page's own effectivePrice
+    // already falls back to before a variant is selected. Currency is
+    // always TZS: that's the currency prices are actually stored and
+    // transacted in (see CurrencyContext.jsx) - the buyer-facing
+    // currency toggle elsewhere on the page is a display conversion
+    // only, not what a crawler should see as the real price/currency.
+    const productJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: product.name,
+        description: product.description || undefined,
+        image: images.filter((img) => img.image_url).map((img) => img.image_url),
+        sku: String(product.id),
+        brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
+        ...(product.review_count > 0
+            ? {
+                aggregateRating: {
+                    "@type": "AggregateRating",
+                    ratingValue: Number(product.average_rating).toFixed(1),
+                    reviewCount: product.review_count
+                }
+            }
+            : {}),
+        offers: {
+            "@type": "Offer",
+            url: typeof window !== "undefined" ? window.location.href : undefined,
+            priceCurrency: "TZS",
+            price: String(hasDiscount ? product.discount_price : product.price),
+            availability: product.stock > 0
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+            ...(product.store_name ? { seller: { "@type": "Organization", name: product.store_name } } : {})
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta
@@ -283,16 +374,9 @@ export default function ProductDetail() {
                 description={product.description ? product.description.slice(0, 160) : `${product.name} on NEXORA — ${format(hasDiscount ? product.discount_price : product.price)}`}
                 image={images[0]?.image_url}
                 type="product"
+                jsonLd={[productJsonLd, breadcrumbJsonLd]}
             />
-            <Breadcrumbs
-                items={[
-                    { label: t("nav.home"), href: "/" },
-                    ...(product.category_slug
-                        ? [{ label: product.category_name, href: `/departments/${product.category_slug}` }]
-                        : []),
-                    { label: product.name }
-                ]}
-            />
+            <Breadcrumbs items={breadcrumbItems} />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
@@ -670,6 +754,8 @@ export default function ProductDetail() {
             </section>
 
             <ProductQA productId={product.id} />
+
+            <ProductRow title={product.store_name ? `More from ${product.store_name}` : "More from this store"} products={storeProducts} />
 
             <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title={t("product.youMayAlsoLike")} />
 

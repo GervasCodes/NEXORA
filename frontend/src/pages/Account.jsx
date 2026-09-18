@@ -270,6 +270,7 @@ export default function Account() {
                 <ImageLightbox
                     src={photoLightboxOpen ? profile?.photo_url : null}
                     onClose={() => setPhotoLightboxOpen(false)}
+                    alt="Your profile photo — enlarged"
                 />
 
                 <form onSubmit={saveProfile} className="space-y-3">

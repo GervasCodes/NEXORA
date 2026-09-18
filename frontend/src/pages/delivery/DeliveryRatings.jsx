@@ -27,7 +27,10 @@ export default function DeliveryRatings() {
     return (
         <div className="animate-fade-in">
             <PageMeta title="My Ratings" noIndex />
-            <h1 className="font-display text-2xl mb-1">{t("delivery.agent.ratings.title")}</h1>
+            {/* Phase 4 (SEO Supporting, H1 audit): same duplicate as
+                DeliveryEarnings.jsx - DeliveryLayout.jsx already renders an
+                <h1> around every /delivery/* route. Demoted to <h2>. */}
+            <h2 className="font-display text-2xl mb-1">{t("delivery.agent.ratings.title")}</h2>
             <p className="text-ash text-sm mb-8">{t("delivery.agent.ratings.subtitle")}</p>
 
             <div className="grid grid-cols-2 gap-4 mb-10">

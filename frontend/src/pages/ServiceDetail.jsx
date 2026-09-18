@@ -283,6 +283,62 @@ export default function ServiceDetail() {
 
     const locationLine = [service.city, service.region, service.country].filter(Boolean).join(", ");
 
+    // Phase 1 (SEO Critical). Same trail as the Breadcrumbs component
+    // below, built once and reused for both the visible UI and the
+    // BreadcrumbList structured data - one source of truth so the two
+    // can never drift apart.
+    const breadcrumbItems = [
+        { label: t("nav.home"), href: "/" },
+        { label: t("nav.services"), href: "/services" },
+        ...(service.category_slug
+            ? [{ label: service.category_name, href: `/services/category/${service.category_slug}` }]
+            : []),
+        { label: service.title }
+    ];
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const breadcrumbJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems.map((item, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: item.label,
+            ...(item.href ? { item: `${origin}${item.href}` } : {})
+        }))
+    };
+
+    // Currency is always TZS - see the same note in ProductDetail.jsx;
+    // prices are stored/transacted in TZS regardless of the buyer's
+    // chosen display currency. `price` uses base_price - the same
+    // "before any per-date/per-person pricing-rule adjustment" figure
+    // the page's own priceSuffix/hasDiscount logic already treats as
+    // the headline price.
+    const serviceJsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        name: service.title,
+        description: service.description || undefined,
+        image: media.filter((m) => m.media_type === "image" && m.media_url).map((m) => m.media_url),
+        provider: service.store_name ? { "@type": "Organization", name: service.store_name } : undefined,
+        areaServed: locationLine || undefined,
+        ...(service.review_count > 0
+            ? {
+                aggregateRating: {
+                    "@type": "AggregateRating",
+                    ratingValue: Number(service.average_rating).toFixed(1),
+                    reviewCount: service.review_count
+                }
+            }
+            : {}),
+        offers: {
+            "@type": "Offer",
+            url: typeof window !== "undefined" ? window.location.href : undefined,
+            priceCurrency: "TZS",
+            price: String(hasDiscount ? service.discount_price : service.base_price)
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta
@@ -290,17 +346,9 @@ export default function ServiceDetail() {
                 description={service.description ? service.description.slice(0, 160) : `${service.title} by ${service.store_name} on NEXORA.`}
                 image={current.media_type === "image" ? current.media_url : undefined}
                 type="product"
+                jsonLd={[serviceJsonLd, breadcrumbJsonLd]}
             />
-            <Breadcrumbs
-                items={[
-                    { label: t("nav.home"), href: "/" },
-                    { label: t("nav.services"), href: "/services" },
-                    ...(service.category_slug
-                        ? [{ label: service.category_name, href: `/services/category/${service.category_slug}` }]
-                        : []),
-                    { label: service.title }
-                ]}
-            />
+            <Breadcrumbs items={breadcrumbItems} />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
                     <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
@@ -323,6 +371,12 @@ export default function ServiceDetail() {
                                     key={item.id || i}
                                     type="button"
                                     onClick={() => setActiveMedia(i)}
+                                    // Phase 3 (alt-text pass): same defect as
+                                    // ProductDetail.jsx's gallery - the button's only child
+                                    // is an alt="" image or a <video>, so it had no
+                                    // accessible name. The name belongs on the control.
+                                    aria-label={`Show ${item.media_type === "video" ? "video" : "image"} ${i + 1} of ${media.length}`}
+                                    aria-current={i === activeMedia}
                                     className={`w-16 h-16 shrink-0 rounded-md overflow-hidden border-2 transition-colors ${
                                         i === activeMedia ? "border-ink" : "border-transparent"
                                     }`}
@@ -456,11 +510,13 @@ export default function ServiceDetail() {
                             {r.comment && <p className="text-sm text-ink/80">{r.comment}</p>}
                             {r.photos?.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    {r.photos.map((photo) => (
+                                    {r.photos.map((photo, pi) => (
                                         <img
                                             key={photo.id}
                                             src={photo.photo_url}
-                                            alt=""
+                                            // Phase 3 (alt-text pass): review photos are
+                                            // content, not decoration.
+                                            alt={`Photo ${pi + 1} from ${r.first_name}'s review`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />

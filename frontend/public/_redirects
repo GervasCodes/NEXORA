@@ -1,1 +1,17 @@
+# (SEO Critical). /sitemap.xml is generated dynamically by the
+# backend (see backend/src/modules/sitemap), but robots.txt's Sitemap:
+# directive needs it served from this same frontend domain to be
+# reliably respected — a cross-host Sitemap: entry generally isn't. This
+# proxies the request through to the backend so it appears same-origin
+# to crawlers while the content stays live/dynamic. A rewrite (200), not
+# a redirect (301/302): the browser/crawler keeps seeing this domain's
+# own /sitemap.xml URL, never sees the backend's URL.
+#
+# REQUIRED MANUAL STEP: replace the placeholder domain below with your
+# actual deployed backend API URL (same value as VITE_API_URL /
+# connect-src in _headers) before deploying — see PHASE_1_NOTES.md. This
+# line must come before the catch-all rewrite below, since Netlify uses
+# the first matching rule.
+/sitemap.xml   https://api.nexoramarketplace.online//sitemap.xml   200
+
 /*   /index.html   200

@@ -43,6 +43,25 @@ exports.getActiveProvider = () => {
 
 exports.isAnyConfigured = () => Boolean(exports.getActiveProvider());
 
+// Phase 5 (production error fixes): a small, opt-in escape hatch for the
+// handful of features that need to prefer a specific provider over
+// whatever AI_PROVIDER is globally set to - e.g. when the global
+// provider is hitting a hard quota ceiling (429s) but is otherwise fine
+// for lower-volume features, so it isn't worth flipping AI_PROVIDER
+// itself. `names` is tried in order; the first entry that's both a
+// recognized key AND passes its own isConfigured() wins. Returns null
+// (same contract as getActiveProvider) if none of them are usable, so
+// callers can fall through to their existing non-AI template behavior
+// exactly as before. Does not change getActiveProvider() or any
+// feature that doesn't explicitly opt in.
+exports.getProviderChain = (names = []) => {
+    for (const name of names) {
+        const provider = PROVIDERS[name];
+        if (provider && provider.isConfigured()) return provider;
+    }
+    return null;
+};
+
 // Fail-fast startup check (mirrors paymentProviderRegistry.validateRegistry
 // in server.js) - catches AI_PROVIDER set to a typo'd/unsupported value
 // loudly at boot instead of every AI request silently falling back.

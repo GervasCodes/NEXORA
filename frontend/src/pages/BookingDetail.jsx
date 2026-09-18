@@ -521,11 +521,13 @@ export default function BookingDetail() {
 
                             {booking.review.photos?.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-3">
-                                    {booking.review.photos.map((photo) => (
+                                    {booking.review.photos.map((photo, pi) => (
                                         <img
                                             key={photo.id}
                                             src={photo.photo_url}
-                                            alt=""
+                                            // Phase 3 (alt-text pass): review photos are
+                                            // content, not decoration.
+                                            alt={`Photo ${pi + 1} from this review`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />

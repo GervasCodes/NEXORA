@@ -57,6 +57,25 @@
     <meta name="twitter:title" content="NEXORA — Marketplace" />
     <meta name="twitter:description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
     <meta name="twitter:image" content="/og-banner.png" />
+    <!--
+      (SEO Critical): site-wide Organization structured data.
+      Static (not per-page like PageMeta.jsx's optional `jsonLd` prop)
+      since it describes NEXORA itself, not the current page - present
+      on every route including ones link-preview bots/crawlers see
+      before any JS runs. sameAs is left empty (no official social
+      profile URLs exist in this codebase to point to) rather than
+      guessed - see PHASE_1_NOTES.md.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "NEXORA",
+        "url": "/",
+        "logo": "/icon-512.png",
+        "description": "NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners."
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -89,7 +89,11 @@ export default function KycStatus() {
                     </svg>
                 </div>
                 <div>
-                    <p className="font-display text-lg mb-1">Verification level</p>
+                    {/* Phase 4 (SEO Supporting, H1 audit): this was a <p> styled
+                        as a heading, and it's this page's title - the page had
+                        no <h1> at all, even though an <h2> ("Upgrade to …")
+                        appears further down. Promoted; visual style unchanged. */}
+                    <h1 className="font-display text-lg mb-1">Verification level</h1>
                     <p className="text-ash text-sm">
                         Higher verification tiers raise how much you can spend in a single order.
                     </p>

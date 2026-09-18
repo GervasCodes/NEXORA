@@ -48,7 +48,7 @@ describe("account.repository.updateSettings location clearing", () => {
         expect(sql).toContain("location_sharing_enabled = ?");
         expect(sql).toContain("location_lat = NULL");
         expect(sql).toContain("location_lng = NULL");
-        expect(sql).toContain("location_updated_at = NULL");
+        expect(sql).toContain("location_lat_updated_at = NULL");
     });
 
     it("does not touch location columns when opting in", async () => {

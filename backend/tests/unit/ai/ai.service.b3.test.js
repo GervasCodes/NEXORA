@@ -131,6 +131,13 @@ describe("ai.service.explainForecast", () => {
     it("defaults to products, reading the existing forecastRevenue output unchanged", async () => {
         adminService.getAnalytics.mockResolvedValue(analytics);
         registry.getActiveProvider.mockReturnValue(null);
+        // explainForecast resolves its provider via getProviderChain, not
+        // getActiveProvider (see the providerOrder comment further down)
+        // - stub it explicitly rather than relying on jest's default
+        // automock return value, since a *later* test in this file sets
+        // getProviderChain's return value and jest.config's clearMocks
+        // only clears call history, not that return value.
+        registry.getProviderChain.mockReturnValue(null);
 
         const result = await aiService.explainForecast({ userId: 1, vertical: undefined });
 
@@ -145,6 +152,7 @@ describe("ai.service.explainForecast", () => {
     it("reads the services forecast when vertical=services", async () => {
         adminService.getServicesAnalytics.mockResolvedValue(servicesAnalytics);
         registry.getActiveProvider.mockReturnValue(null);
+        registry.getProviderChain.mockReturnValue(null);
 
         const result = await aiService.explainForecast({ userId: 1, vertical: "services" });
 
@@ -156,7 +164,11 @@ describe("ai.service.explainForecast", () => {
     it("only gives the provider the real forecast numbers already computed", async () => {
         adminService.getAnalytics.mockResolvedValue(analytics);
         const complete = jest.fn().mockResolvedValue({ text: "Revenue is trending up.", inputTokens: 5, outputTokens: 5 });
-        registry.getActiveProvider.mockReturnValue({ complete });
+        // explainForecast passes its own providerOrder (Phase 5: prefers
+        // groq/openrouter over the globally-configured AI_PROVIDER), so
+        // callProvider resolves it via getProviderChain, not
+        // getActiveProvider - see ai.service.js#explainForecast.
+        registry.getProviderChain.mockReturnValue({ complete });
 
         await aiService.explainForecast({ userId: 1, vertical: "products" });
 
@@ -178,6 +190,13 @@ describe("ai.service.explainPersonalizationHealth", () => {
     it("reads real business metrics and falls back to a plain-number explanation with no provider", async () => {
         adminService.getBusinessMetrics.mockResolvedValue(metrics);
         registry.getActiveProvider.mockReturnValue(null);
+        // Same reasoning as explainForecast's "no provider" tests above:
+        // this feature also resolves via getProviderChain, and without
+        // this the previous describe block's getProviderChain.
+        // mockReturnValue({ complete }) leaks in (clearMocks doesn't
+        // reset return values), so this test would otherwise silently
+        // exercise the AI branch instead of the fallback it's named for.
+        registry.getProviderChain.mockReturnValue(null);
 
         const result = await aiService.explainPersonalizationHealth({ userId: 1 });
 
@@ -191,7 +210,10 @@ describe("ai.service.explainPersonalizationHealth", () => {
     it("never lets the provider redefine the recommendation ranking rule itself", async () => {
         adminService.getBusinessMetrics.mockResolvedValue(metrics);
         const complete = jest.fn().mockResolvedValue({ text: "Most buyers still see trending, not personalized, results.", inputTokens: 5, outputTokens: 5 });
-        registry.getActiveProvider.mockReturnValue({ complete });
+        // explainPersonalizationHealth passes its own providerOrder too
+        // (same Phase 5 groq/openrouter preference as explainForecast
+        // above) - resolved via getProviderChain, not getActiveProvider.
+        registry.getProviderChain.mockReturnValue({ complete });
 
         const result = await aiService.explainPersonalizationHealth({ userId: 1 });
 

@@ -85,6 +85,25 @@ exports.findOrphanedParentOrderIds = async (connection, parentIds) => {
     return found;
 };
 
+// A provider's bookings, mirroring findSellerOrderIds above - bookings
+// have no parent/child split the way multi-vendor orders do (each
+// booking is against exactly one service/provider), so this is the
+// whole story: no orphaned-parent pass needed for bookings.
+exports.findSellerBookingIds = async (providerId, { testOnly }) => {
+    const [rows] = await db.query(
+        `SELECT id FROM bookings WHERE provider_id = ?${testOnly ? " AND is_test = TRUE" : ""}`,
+        [providerId]
+    );
+    return rows.map((r) => r.id);
+};
+
+exports.findAllBookingIds = async ({ testOnly }) => {
+    const [rows] = await db.query(
+        `SELECT id FROM bookings ${testOnly ? "WHERE is_test = TRUE" : ""}`
+    );
+    return rows.map((r) => r.id);
+};
+
 exports.findParentIdsOf = async (orderIds) => {
     if (!orderIds.length) return [];
 
@@ -115,16 +134,26 @@ const countScoped = async (table, where, params) => {
     return total;
 };
 
-exports.countSellerScope = async (sellerId, { testOnly, orderIds }) => {
+exports.countSellerScope = async (sellerId, { testOnly, orderIds, bookingIds }) => {
     const testClause = (col = "is_test") => (testOnly ? ` AND ${col} = TRUE` : "");
 
     return {
         orders: orderIds.length,
-        reviews: await countScoped(
-            "reviews r",
-            `WHERE r.product_id IN (SELECT id FROM products WHERE seller_id = ?)${testOnly ? " AND r.is_test = TRUE" : ""}`,
-            [sellerId]
-        ),
+        bookings: bookingIds.length,
+        // Product reviews (via seller_id -> products.seller_id) plus
+        // booking-keyed reviews (066) for this provider's own bookings -
+        // the latter counted from bookingIds rather than re-joining
+        // bookings here, so this count always matches exactly what
+        // deleteOrderTree/deleteBookingTree's cascade is about to remove.
+        reviews:
+            (await countScoped(
+                "reviews r",
+                `WHERE r.product_id IN (SELECT id FROM products WHERE seller_id = ?)${testOnly ? " AND r.is_test = TRUE" : ""}`,
+                [sellerId]
+            )) +
+            (bookingIds.length
+                ? await countScoped("reviews", "WHERE booking_id IN (?)", [bookingIds])
+                : 0),
         conversations: await countScoped(
             "conversations",
             `WHERE seller_id = ?${testClause()}`,
@@ -145,11 +174,12 @@ exports.countSellerScope = async (sellerId, { testOnly, orderIds }) => {
     };
 };
 
-exports.countPlatformScope = async ({ testOnly, orderIds }) => {
+exports.countPlatformScope = async ({ testOnly, orderIds, bookingIds }) => {
     const where = testOnly ? "WHERE is_test = TRUE" : "";
 
     return {
         orders: orderIds.length,
+        bookings: bookingIds.length,
         reviews: await countScoped("reviews", where, []),
         conversations: await countScoped("conversations", where, []),
         disputes: await countScoped("disputes", where, []),
@@ -208,6 +238,22 @@ exports.deleteOrderTree = async (connection, orderIds) => {
     const orders = await runInChunks(connection, "DELETE FROM orders WHERE id IN (?)", orderIds);
 
     return { orders };
+};
+
+// ---- Booking tree deletion --------------------------------------------------
+// Simpler than deleteOrderTree: bookings has no RESTRICT-level dependents
+// (booking_items, the booking's payments row, and any booking-keyed
+// review all CASCADE from bookings.id - see 063/064/066), and bookings
+// don't split into parent/child rows the way multi-vendor orders do, so
+// there's nothing to clear first and no orphaned-parent pass to run.
+// Booking-sourced wallet ledger rows are ordinary wallet_transactions
+// rows (seller_id = provider_id, reference_type = 'booking') and are
+// already covered by deleteSellerWalletLedger/deleteAllWalletLedger
+// below - no separate cleanup needed for those.
+exports.deleteBookingTree = async (connection, bookingIds) => {
+    if (!bookingIds.length) return { bookings: 0 };
+    const bookings = await runInChunks(connection, "DELETE FROM bookings WHERE id IN (?)", bookingIds);
+    return { bookings };
 };
 
 // ---- Per-seller deletes ---------------------------------------------------

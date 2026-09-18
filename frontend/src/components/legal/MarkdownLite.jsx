@@ -14,6 +14,46 @@
  */
 import { Link } from "react-router-dom";
 
+// Phase 3 (Security Hardening) — link-target allow-list.
+//
+// Audit finding: MarkdownLite never parses raw HTML. Every node it emits
+// is constructed as a JSX element, and all text reaches the DOM through
+// plain `{value}` interpolation, so React escapes it. A document
+// containing `<script>` renders those characters as literal text. There
+// is no `dangerouslySetInnerHTML` anywhere in this component (or, as it
+// turns out, anywhere in frontend/src at all — see PHASE_3_NOTES.md).
+//
+// The one construct that did NOT pass through React's escaping was the
+// `href` of a `[text](url)` link: it was taken verbatim from the document
+// and handed to `<a href>`. A `javascript:` or `data:text/html` URL there
+// executes on click — React does not block those.
+//
+// This is hardening, NOT a live vulnerability: MarkdownLite is only ever
+// rendered by LegalPage.jsx with static, repo-authored content from
+// LEGAL_DOCS, so no user-supplied string can currently reach it. The
+// guard exists so that stays safe if this component is ever pointed at
+// seller- or buyer-authored text (a store description, say), which is a
+// very natural future reuse of "a tiny markdown renderer we already
+// have".
+//
+// Allow-list rather than deny-list: anything not explicitly permitted
+// renders as plain text instead of a link, so a novel scheme can't slip
+// through by not being on a blocklist.
+const isSafeHref = (href) => {
+    const value = String(href).trim();
+
+    // Internal router paths ("/legal/refund-policy"). Rejects "//evil.com",
+    // which a browser treats as a protocol-relative external URL.
+    if (value.startsWith("/")) return !value.startsWith("//");
+
+    // Same-document anchors.
+    if (value.startsWith("#")) return true;
+
+    // Absolute URLs: only these three schemes. Case-insensitive, since
+    // "JavaScript:" and "jAvAsCrIpT:" are equally executable.
+    return /^(https?:|mailto:|tel:)/i.test(value);
+};
+
 function renderInline(text, keyPrefix) {
     // Split on **bold** and [text](url) without a regex library.
     const parts = [];
@@ -35,7 +75,13 @@ function renderInline(text, keyPrefix) {
             parts.push(<strong key={`${keyPrefix}-${i++}`}>{match[2]}</strong>);
         } else if (match[3]) {
             const [, , , , label, href] = match;
-            if (href.startsWith("/")) {
+            if (!isSafeHref(href)) {
+                // Disallowed scheme: render the label as plain text so the
+                // document still reads correctly, but there is nothing to
+                // click. Deliberately not silently dropped — a reader
+                // should still see the words.
+                parts.push(label);
+            } else if (href.startsWith("/")) {
                 parts.push(
                     <Link key={`${keyPrefix}-${i++}`} to={href} className="text-teal hover:underline">
                         {label}

@@ -5,13 +5,13 @@
 // primary-pool write function left in this file to justify also
 // importing ../../config/db - dbRead alone covers everything here.
 const dbRead = require("../../config/dbRead");
-// Phase 6 (UI/UX remediation) - store follows are this file's first
+// (UI/UX remediation) - store follows are this file's first
 // actual writes (everything above was read-only, see the file's own
 // top comment on why only dbRead was imported before). Reads stay on
 // dbRead; only the follow/unfollow writes below use the primary pool.
 const db = require("../../config/db");
 
-// Public store profile - Phase 5A (basics) + Phase 5B (trust info).
+// Public store profile - basics + trust info.
 //
 // Deliberately a narrower column list than seller.repository.js's
 // findByUserId (the seller's own authenticated view): no
@@ -22,7 +22,7 @@ const db = require("../../config/db");
 // detail, same granularity already exposed via product listings' `region`
 // field since ).
 //
-// `is_verified` (the paid "Verified Seller" badge, same one ProductCard
+// `is_verified` (the free "Verified Seller" badge, same one ProductCard
 // already renders per-product) and `created_at` (store creation date,
 // shown as "Member since") were left out of Phase 5A on purpose so this
 // phase - the one named "Trust Info" - would have its own fields to add
@@ -83,7 +83,7 @@ exports.findPublicBySlug = async (slug) => {
             sp.store_logo, sp.store_banner, sp.store_theme, sp.promo_video_url,
             sp.social_instagram, sp.social_facebook, sp.social_whatsapp,
             sp.country, sp.region, sp.city,
-            sp.is_verified, sp.created_at,
+            sp.is_verified, sp.is_business_verified, sp.created_at,
             (sp.pickup_lat IS NOT NULL AND sp.pickup_lng IS NOT NULL) AS has_pickup_pin,
             (u.account_verification_status = 'approved') AS identity_verified,
             st.name AS store_type_name,
@@ -130,7 +130,7 @@ exports.findCollectionsBySlug = async (slug) => {
         `SELECT
             sc.id AS collection_id, sc.name AS collection_name,
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified, sp.region,
+            sp.store_name, sp.is_verified, sp.is_business_verified, sp.region,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -168,6 +168,7 @@ exports.findCollectionsBySlug = async (slug) => {
             stock: row.stock,
             store_name: row.store_name,
             is_verified: row.is_verified,
+            is_business_verified: row.is_business_verified,
             region: row.region,
             image_url: row.image_url,
             average_rating: row.average_rating,
@@ -229,7 +230,7 @@ exports.findFollowerIds = async (storeUserId) => {
 // reasoning as content.repository.js's guide search.
 exports.search = async ({ search, limit = 5 }) => {
     const [rows] = await dbRead.query(
-        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified
+        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified
          FROM seller_profiles sp
          JOIN users u ON u.id = sp.user_id AND u.is_active = 1
          WHERE sp.store_name LIKE ?

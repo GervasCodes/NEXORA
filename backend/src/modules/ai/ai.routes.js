@@ -5,7 +5,7 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
 const requireApprovedDeliveryAgent = require("../../middleware/requireApprovedDeliveryAgent.middleware");
-const requireVerificationFeePaid = require("../../middleware/requireVerificationFeePaid.middleware");
+const requireSubscriptionTier = require("../../middleware/requireSubscriptionTier.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const { aiLimiter } = require("./ai.middleware");
 
@@ -78,8 +78,8 @@ router.post(
 // --- seller/provider AI (draft-generation, no auto-execute) ---
 // account-approval gates mirror the exact chains seller.routes.js /
 // availability.routes.js already use for the equivalent non-AI
-// endpoints - see requireApprovedSeller/requireVerificationFeePaid's own
-// comments for why analytics specifically needs the extra fee gate.
+// endpoints - see requireApprovedSeller/requireSubscriptionTier's own
+// comments for why analytics specifically needs the extra tier gate.
 
 router.post(
     "/seller/listing-draft",
@@ -108,20 +108,20 @@ router.get(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
-    requireVerificationFeePaid,
+    requireSubscriptionTier,
     aiLimiter,
     aiController.summarizeSellerAnalytics
 );
 
 // (AI demand forecasting). Same auth/gating as the analytics
 // summary right above it - a seller-facing advisory feature, same
-// verification-fee-paid gate the rest of this seller AI surface uses.
+// subscription-tier gate the rest of this seller AI surface uses.
 router.get(
     "/seller/demand-forecast",
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
-    requireVerificationFeePaid,
+    requireSubscriptionTier,
     aiLimiter,
     aiController.suggestRestockAndPricing
 );

@@ -147,7 +147,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
     const [rows] = await dbRead.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
-            sp.store_name, sp.is_verified, sp.region,
+            sp.store_name, sp.is_verified, sp.is_business_verified, sp.region,
             ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
                 SELECT pi.image_url FROM product_images pi
@@ -244,7 +244,7 @@ exports.findBySlug = async (slug) => {
     const [rows] = await dbRead.query(
         `SELECT
             p.*,
-            sp.store_name, sp.store_slug, sp.is_verified,
+            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified,
             c.name AS category_name, c.slug AS category_slug,
             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count

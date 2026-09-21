@@ -252,28 +252,25 @@ exports.removeProductFromCollection = async (collectionId, productId) => {
     return result.affectedRows;
 };
 
-// --- Verification fee / paid badge ---
+// --- Verified Seller badge ---
 // (The old document-based verification_status flow was removed in
-// migration 029 - account-level verification now lives on `users`,
-// see accountVerification module. This fee/badge pair is the separate,
-// still-needed concept.)
+// migration 029 - account-level verification now lives on `users`, see
+// accountVerification module. The one-time fee that used to also gate
+// this badge was retired - see seller.service.js#syncBadge.)
 
-exports.setVerificationFeePaid = async (userId, amount, reference) => {
-    await db.query(
-        `UPDATE seller_profiles
-        SET verification_fee_amount = ?, verification_fee_paid = TRUE,
-            verification_fee_reference = ?, verification_fee_paid_at = NOW()
-        WHERE user_id = ?`,
-        [amount, reference, userId]
-    );
-};
-
-// Awards/removes the paid "Verified Seller" badge once both approval and
-// fee payment are true (or either becomes false again).
+// Awards/removes the Verified Seller badge to match account approval.
+//
+// is_business_verified follows it: the Verified Business badge is only
+// ever shown on top of a live Verified Seller badge, and comes back with
+// it when the account's tier is still business_verified.
 exports.setBadge = async (userId, isVerified) => {
     await db.query(
-        "UPDATE seller_profiles SET is_verified = ? WHERE user_id = ?",
-        [isVerified, userId]
+        `UPDATE seller_profiles sp
+        JOIN users u ON u.id = sp.user_id
+        SET sp.is_verified = ?,
+            sp.is_business_verified = (? = 1 AND u.verification_tier = 'business_verified')
+        WHERE sp.user_id = ?`,
+        [isVerified, isVerified ? 1 : 0, userId]
     );
 };
 

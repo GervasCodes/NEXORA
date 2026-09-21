@@ -104,6 +104,10 @@ export default function Register() {
             setError(t("auth.verify.idDocumentRequired"));
             return;
         }
+        if (files.id_document.type !== "application/pdf") {
+            setError(t("auth.verify.idDocumentPdfOnly"));
+            return;
+        }
 
         if (form.role === "delivery_agent" && !form.vehicle_plate_number.trim()) {
             setError(t("auth.verify.plateNumberRequired"));
@@ -196,11 +200,12 @@ export default function Register() {
                         </select>
                         <input
                             type="file"
-                            accept="image/*,application/pdf"
+                            accept="application/pdf"
                             required
                             onChange={updateFile("id_document")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                         />
+                        <p className="text-xs text-ash mt-1">{t("auth.verify.idDocumentHint")}</p>
                     </div>
 
                     {form.role === "delivery_agent" && (
@@ -208,11 +213,12 @@ export default function Register() {
                             <label className="block text-sm mb-1">{t("auth.verify.driversLicense")}</label>
                             <input
                                 type="file"
-                                accept="image/*,application/pdf"
+                                accept="application/pdf"
                                 required
                                 onChange={updateFile("drivers_license")}
                                 className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
                             />
+                            <p className="text-xs text-ash mt-1">{t("auth.verify.driversLicenseHint")}</p>
                         </div>
                     )}
 

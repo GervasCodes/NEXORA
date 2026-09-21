@@ -24,30 +24,8 @@ exports.create = async (orderId, method, amount, paymentLeg = "full") => {
     return result.insertId;
 };
 
-// Seller verification fee payments have no order - they're tied to a
-// seller instead, and identified by purpose. `method` defaults to
-// 'mobile_money' for backwards compatibility with existing callers, but
-// Snippe/PayPal verification fee payments pass their own method.
-exports.createVerificationFeePayment = async (sellerId, amount, method = "mobile_money") => {
-    const [result] = await db.query(
-        `INSERT INTO payments (order_id, seller_id, method, status, amount, purpose)
-        VALUES (NULL, ?, ?, 'pending', ?, 'seller_verification_fee')`,
-        [sellerId, method, amount]
-    );
-    return result.insertId;
-};
-
-exports.findPendingVerificationFeePayment = async (sellerId) => {
-    const [rows] = await db.query(
-        `SELECT * FROM payments
-        WHERE seller_id = ? AND purpose = 'seller_verification_fee' AND status = 'pending'
-        ORDER BY created_at DESC LIMIT 1`,
-        [sellerId]
-    );
-    return rows[0];
-};
 // ---- Wallet top-up payment  -------------------------------
-// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// Mirrors the order-payment create/find pattern above
 // exactly - a top-up has no order, just a buyer (via seller_id, reused
 // as "the human this payment is for" the same way it already is for a
 // verification fee - see 084's migration note on `topup_id` for why a
@@ -72,7 +50,7 @@ exports.findPendingTopUpPayment = async (topupId) => {
 };
 
 // ---- Subscription payments (Revenue & Product Enhancements) ---------------
-// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// Mirrors the order-payment create/find pattern above
 // exactly - a subscription payment has no order/booking, just a seller
 // and a subscription_id, the same shape as a verification fee's
 // seller_id.
@@ -102,7 +80,7 @@ exports.findPendingSubscriptionPayment = async (subscriptionId) => {
 // or a frontend return-URL query param) and we need to find our own
 // payment row and its order_id/seller_id/purpose.
 // ---- Booking payments (Financial Integration) --------------------
-// Mirrors createVerificationFeePayment/findPendingVerificationFeePayment
+// Mirrors the order-payment create/find pattern above
 // exactly (see migration 064's design notes for why bookings follow the
 // verification-fee shape - no predetermined payment_method column to
 // check against - rather than the order shape).

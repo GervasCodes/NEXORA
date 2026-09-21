@@ -129,49 +129,8 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     };
 };
 
-// Seller verification fee, mobile-money route. Mirrors
-// initiateMobileMoneyPayment above: `initiate()` only means the USSD
-// prompt was sent to the seller's phone, NOT that they've paid. The fee
-// is only marked paid - and the badge only synced - once the provider's
-// webhook confirms success below. (Previously this flow marked the fee
-// paid immediately after initiate() returned, before the seller had
-// actually entered their PIN - this is the fix for that.)
-exports.initiateVerificationFeePayment = async (sellerId, phone, amount) => {
-    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
-    const paymentId = existingPending
-        ? existingPending.id
-        : await paymentRepository.createVerificationFeePayment(sellerId, amount);
-
-    const reference = `VERIFY-${sellerId}`;
-
-    let providerResult;
-    try {
-        providerResult = await mobileMoneyProvider.initiate(phone, amount, {
-            reference,
-            purpose: "seller_verification_fee",
-            description: "NEXORA seller verification fee"
-        });
-    } catch (error) {
-        await paymentRepository.markFailed(paymentId);
-        throw error;
-    }
-
-    if (!providerResult.success) {
-        await paymentRepository.markFailed(paymentId);
-        throw new Error("Payment could not be initiated. Please try again");
-    }
-
-    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
-
-    return {
-        status: "pending",
-        message: "Check your phone to complete the payment. Your Verified Seller badge will unlock automatically once payment is confirmed.",
-        transactionReference: providerResult.transactionReference
-    };
-};
-
 // ---- Wallet top-up & wallet-funded order payment (Phase Q2) -------------
-// initiateWalletTopUp mirrors initiateVerificationFeePayment's shape -
+// initiateWalletTopUp mirrors initiateMobileMoneyPayment's shape -
 // mobile money is the only way to fund the wallet (you can't top up the
 // wallet from the wallet). initiateWalletOrderPayment is different: a
 // wallet-funded order never touches an external provider at all, so it's
@@ -276,7 +235,7 @@ exports.initiateWalletOrderPayment = async (orderId, buyerId) => {
 };
 
 
-// Follows initiateVerificationFeePayment's shape exactly - a
+// Follows initiateMobileMoneyPayment's shape exactly - a
 // subscription_id (not an order_id/booking_id) identifies what's being
 // paid for, and the SUB-<subscriptionId> reference routes the webhook
 // back here (see handleProviderWebhook below).
@@ -428,7 +387,7 @@ exports._handleSubscriptionPaymentWebhook = async (subscriptionId, success, tran
 };
 
 // ---- Booking payments Financial Integration) --------------------
-// Follow initiateVerificationFeePayment's shape, not the order-payment
+// Follow initiateMobileMoneyPayment's shape, not the order-payment
 // functions' - see migration 064's design notes: a booking has no
 // predetermined payment_method column to validate against (unlike
 // orders.payment_method, chosen once at checkout), so any of these three
@@ -598,23 +557,17 @@ exports.getBookingPayment = async (bookingId, userId) => {
 // the payment on their end, or by the PayPal capture flow once we've
 // confirmed a capture server-side. `providerReference` is the reference WE
 // sent when initiating the payment: "ORDER-42" for order payments,
-// "VERIFY-7" for a seller's verification fee, "BOOKING-15" for a booking
-// payment  - see the `reference` values above/in the order
-// functions further down. `chargedCurrency`/`chargedAmount` are only
+// "BOOKING-15" for a booking payment  - see the `reference` values
+// above/in the order functions further down. `chargedCurrency`/`chargedAmount` are only
 // passed for foreign-currency gateways (PayPal) - see migration 028.
 exports.handleProviderWebhook = async ({ providerReference, success, transactionReference, chargedCurrency, chargedAmount }) => {
     const orderMatch = /^ORDER-(\d+)$/.exec(providerReference || "");
-    const verifyMatch = /^VERIFY-(\d+)$/.exec(providerReference || "");
     const bookingMatch = /^BOOKING-(\d+)$/.exec(providerReference || "");
     const subscriptionMatch = /^SUB-(\d+)$/.exec(providerReference || "");
     const topupMatch = /^TOPUP-(\d+)$/.exec(providerReference || "");
 
     if (orderMatch) {
         return exports._handleOrderPaymentWebhook(Number(orderMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
-    }
-
-    if (verifyMatch) {
-        return exports._handleVerificationFeeWebhook(Number(verifyMatch[1]), success, transactionReference, chargedCurrency, chargedAmount);
     }
 
     if (bookingMatch) {
@@ -975,36 +928,9 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     return { orderId, success: true, receiptNumber };
 };
 
-exports._handleVerificationFeeWebhook = async (sellerId, success, transactionReference, chargedCurrency = null, chargedAmount = null) => {
-    const payment = await paymentRepository.findPendingVerificationFeePayment(sellerId);
-
-    if (!payment) {
-        // Already processed (or never initiated) - no-op, same reasoning
-        // as the order-payment path above.
-        return { alreadyProcessed: true };
-    }
-
-    if (!success) {
-        await paymentRepository.markFailed(payment.id);
-        return { sellerId, success: false };
-    }
-
-    const receiptNumber = generateReceiptNumber();
-    await paymentRepository.markCompleted(payment.id, transactionReference, receiptNumber, chargedCurrency, chargedAmount);
-
-    // Lazy require to avoid a circular dependency (seller.service also
-    // calls into payment.service to initiate the fee payment) - same
-    // pattern chat.service uses for the socket layer.
-    const sellerService = require("../seller/seller.service");
-    await sellerService.confirmVerificationFeePaid(sellerId, payment.amount, transactionReference);
-
-    return { sellerId, success: true, receiptNumber };
-};
-
 // --- Snippe (card payments) --------------------------------------------
-// Used for both order checkout and the seller verification fee. Amounts
-// are sent to Snippe as decimal TZS, so no currency conversion is needed
-// (contrast with PayPal below).
+// Used for order checkout. Amounts are sent to Snippe as decimal TZS, so
+// no currency conversion is needed (contrast with PayPal below).
 
 exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
     const order = await orderRepository.findOrderById(orderId);
@@ -1039,27 +965,6 @@ exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, canc
     });
 
     await paymentRepository.markPending(payment.id, session.sessionId);
-
-    return { status: "redirect", url: session.url };
-};
-
-exports.initiateSnippeVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
-    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
-    const paymentId = existingPending
-        ? existingPending.id
-        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "snippe");
-
-    const reference = `VERIFY-${sellerId}`;
-
-    const session = await snippeProvider.createCheckoutSession({
-        amountTzs: amount,
-        reference,
-        description: "NEXORA seller verification fee",
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
 
     return { status: "redirect", url: session.url };
 };
@@ -1121,27 +1026,6 @@ exports.initiateMalipopayCardOrderPayment = async (orderId, buyerId, { successUr
     });
 
     await paymentRepository.markPending(payment.id, session.sessionId);
-
-    return { status: "redirect", url: session.url };
-};
-
-exports.initiateMalipopayCardVerificationFeePayment = async (sellerId, amount, { successUrl, cancelUrl }) => {
-    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
-    const paymentId = existingPending
-        ? existingPending.id
-        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "malipopay_card");
-
-    const reference = `VERIFY-${sellerId}`;
-
-    const session = await malipopayCardProvider.createCheckoutSession({
-        amountTzs: amount,
-        reference,
-        description: "NEXORA seller verification fee",
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
 
     return { status: "redirect", url: session.url };
 };
@@ -1212,29 +1096,6 @@ exports.initiatePaypalOrderPayment = async (orderId, buyerId, { returnUrl, cance
     return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
 };
 
-exports.initiatePaypalVerificationFeePayment = async (sellerId, amount, { returnUrl, cancelUrl }) => {
-    const existingPending = await paymentRepository.findPendingVerificationFeePayment(sellerId);
-    const paymentId = existingPending
-        ? existingPending.id
-        : await paymentRepository.createVerificationFeePayment(sellerId, amount, "paypal");
-
-    const usdExchangeRate = await settingsService.getUsdExchangeRate();
-    const reference = `VERIFY-${sellerId}`;
-
-    const result = await paypalProvider.createOrder({
-        amountTzs: amount,
-        usdExchangeRate,
-        reference,
-        description: "NEXORA seller verification fee",
-        returnUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, result.paypalOrderId);
-
-    return { status: "redirect", url: result.approveUrl, usdAmount: result.usdAmount };
-};
-
 // Called by our own /paypal/capture endpoint once the buyer/seller is
 // redirected back from PayPal's approval page (?token=<paypalOrderId>).
 exports.capturePaypalPayment = async (paypalOrderId) => {
@@ -1247,9 +1108,7 @@ exports.capturePaypalPayment = async (paypalOrderId) => {
     if (!reference) {
         const payment = await paymentRepository.findByTransactionReference(paypalOrderId);
         if (payment) {
-            if (payment.purpose === "seller_verification_fee") {
-                reference = `VERIFY-${payment.seller_id}`;
-            } else if (payment.purpose === "booking_payment") {
+            if (payment.purpose === "booking_payment") {
                 reference = `BOOKING-${payment.booking_id}`;
             } else {
                 reference = `ORDER-${payment.order_id}`;

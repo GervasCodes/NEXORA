@@ -37,6 +37,7 @@ const adminRoutes = require("./modules/admin/admin.routes");
 const adminNotificationRoutes = require("./modules/adminNotification/adminNotification.routes");
 const dataResetRoutes = require("./modules/dataReset/dataReset.routes");
 const broadcastRoutes = require("./modules/broadcast/broadcast.routes");const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
+const accountVerificationSellerRoutes = require("./modules/accountVerification/accountVerification.seller.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
@@ -338,6 +339,9 @@ app.use("/api/v1/seller/featured-store", featuredStoreRoutes);
 // module already requires authorize("seller") + requireApprovedSeller
 // itself (departmentSponsorship.routes.js).
 app.use("/api/v1/seller/department-sponsorship", departmentSponsorshipRoutes);
+// Same more-specific-prefix-first reasoning as the mounts above. Every
+// route here already requires authorize("seller") + requireApprovedSeller.
+app.use("/api/v1/seller/business-verification", accountVerificationSellerRoutes);
 app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);

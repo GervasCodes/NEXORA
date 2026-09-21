@@ -5,7 +5,7 @@ const authMiddleware = require("../../middleware/auth.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
-const requireVerificationFeePaid = require("../../middleware/requireVerificationFeePaid.middleware");
+const requireSubscriptionTier = require("../../middleware/requireSubscriptionTier.middleware");
 const sellerController = require("./seller.controller");
 
 const {
@@ -14,7 +14,6 @@ const {
     addDeliveryAgentValidation,
     createCollectionValidation,
     addCollectionProductValidation,
-    payVerificationFeeValidation,
     merchantTypeValidation
 } = require("./seller.validator");
 
@@ -163,16 +162,16 @@ router.delete(
     sellerController.removeProductFromCollection
 );
 
-// Account approval (requireApprovedSeller) is enforced here; the paid
-// Verified Seller fee gate (requireVerificationFeePaid) is additionally
-// required for Analytics specifically - see requireVerificationFeePaid
-// for why the two are separate middlewares.
+// Account approval (requireApprovedSeller) is enforced here; a paid
+// subscription tier (requireSubscriptionTier) is additionally required
+// for Analytics specifically - the one-time verification fee that used
+// to gate this was retired; see requireSubscriptionTier.middleware.js.
 router.get(
     "/analytics",
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
-    requireVerificationFeePaid,
+    requireSubscriptionTier,
     sellerController.getAnalytics
 );
 
@@ -183,7 +182,7 @@ router.get(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
-    requireVerificationFeePaid,
+    requireSubscriptionTier,
     sellerController.getAdvancedAnalytics
 );
 
@@ -192,24 +191,8 @@ router.get(
     authMiddleware,
     authorize("seller"),
     requireApprovedSeller,
-    requireVerificationFeePaid,
+    requireSubscriptionTier,
     sellerController.exportAnalyticsCsv
-);
-
-// --- Verification fee (paid "Verified Seller" badge) ---
-// The old post-registration document-upload flow (national ID, voter
-// ID, business registration) that used to live here was removed -
-// account-level verification now happens at registration itself and is
-// reviewed via the accountVerification module. This fee is a separate,
-// still-needed concept: it unlocks the paid badge (and, since Phase 3,
-// Analytics) once the account is already approved.
-router.post(
-    "/verification/fee",
-    authMiddleware,
-    authorize("seller"),
-    payVerificationFeeValidation,
-    validationMiddleware,
-    sellerController.payVerificationFee
 );
 
 // --- Nexora Services  Merchant Type System ---

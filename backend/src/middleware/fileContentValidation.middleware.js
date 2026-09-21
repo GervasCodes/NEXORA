@@ -26,7 +26,11 @@ const collectFiles = (req) => {
 // "text/plain" and whose content passes the plain-text heuristic (no
 // magic number exists for text, so this is the one category that can't
 // be verified by signature alone).
-exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {}) => async (req, res, next) => {
+//
+// pdfOnlyFields: upload field names that must be a real PDF specifically
+// (not merely any "document" - the classifier also recognizes office
+// containers - and never an image), judged by the file's actual bytes.
+exports.validateFileContent = (allowedCategories, { allowPlainText = false, pdfOnlyFields = [] } = {}) => async (req, res, next) => {
     const files = collectFiles(req);
 
     if (files.length === 0) {
@@ -45,6 +49,21 @@ exports.validateFileContent = (allowedCategories, { allowPlainText = false } = {
         }
 
         const detected = classify(buffer);
+
+        if (pdfOnlyFields.includes(file.fieldname) && detected?.ext !== "pdf") {
+            logRejection({
+                reqId: req.id,
+                field: file.fieldname,
+                declaredMimetype: file.mimetype,
+                detectedCategory: detected?.category || null
+            });
+
+            return res.status(400).json({
+                success: false,
+                message: `${file.originalname || "The uploaded file"} must be a PDF document, not a photo or image.`
+            });
+        }
+
         const typeOk =
             (detected && allowedCategories.includes(detected.category)) ||
             (!detected && allowPlainText && file.mimetype === "text/plain" && looksLikePlainText(buffer));

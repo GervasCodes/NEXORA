@@ -109,10 +109,17 @@ exports.findSellerProfileByUserId = async (userId) => {
     return rows[0];
 };
 
+// Keeps sp.is_business_verified consistent with is_verified: the Verified
+// Business badge only shows on top of a live Verified Seller badge (see
+// seller.repository.js#setBadge).
 exports.setSellerVerified = async (userId, isVerified) => {
     await db.query(
-        "UPDATE seller_profiles SET is_verified = ? WHERE user_id = ?",
-        [isVerified, userId]
+        `UPDATE seller_profiles sp
+        JOIN users u ON u.id = sp.user_id
+        SET sp.is_verified = ?,
+            sp.is_business_verified = (? = 1 AND u.verification_tier = 'business_verified')
+        WHERE sp.user_id = ?`,
+        [isVerified, isVerified ? 1 : 0, userId]
     );
 };
 

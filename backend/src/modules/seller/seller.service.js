@@ -373,21 +373,28 @@ exports.exportAnalyticsCsv = async (sellerId, type) => {
     return lines.join("\n");
 };
 
-// --- Verification fee / paid "Verified Seller" badge ---
+// --- Verified Seller badge ---
 // The document-based per-seller verification_status flow this used to
 // depend on was removed in migration 029 - approval now comes from the
 // centralized users.account_verification_status gate (set at
 // registration, reviewed via accountVerification module) instead.
+//
+// The one-time verification fee that used to additionally gate this
+// badge was retired: the badge is now free and activates automatically
+// as soon as account-level verification is approved, same as it always
+// should have needed to be to actually reflect "this account is who it
+// says it is" rather than "this account paid." A higher, real-KYC-backed
+// "Verified Business" tier (BRELA/TIN/business license) sits above this
+// badge as a separate concept - see the accountVerification module for
+// that once it lands; nothing here grants it.
 
-// Reconciles the paid badge: only true once the account-level
-// verification has been approved AND the fee has been paid, in either
-// order.
+// Reconciles the badge with the account-level verification status.
 const syncBadge = async (userId) => {
     const [seller, user] = await Promise.all([
         sellerRepository.findByUserId(userId),
         authRepository.findById(userId)
     ]);
-    const shouldBeVerified = user?.account_verification_status === "approved" && !!seller.verification_fee_paid;
+    const shouldBeVerified = user?.account_verification_status === "approved";
 
     if (!!seller.is_verified !== shouldBeVerified) {
         await sellerRepository.setBadge(userId, shouldBeVerified);
@@ -404,47 +411,6 @@ const syncBadge = async (userId) => {
     }
 
     return shouldBeVerified;
-};
-
-// Kicks off the fee payment - or, while monetization_verification_fee_enabled
-// is off (Monetization Master Switch), skips payment entirely and marks
-// the fee waived immediately, syncing the badge right away instead of
-// waiting on a webhook. amount is recorded as 0 with a "waived_free_launch"
-// reference so it's visibly distinct from a real payment in the ledger/history.
-exports.payVerificationFee = async (userId, phone) => {
-    const seller = await sellerRepository.findByUserId(userId);
-
-    if (!seller) {
-        throw new Error("Seller profile not found. Set up your store first.");
-    }
-
-    if (seller.verification_fee_paid) {
-        throw new Error("The verification fee has already been paid.");
-    }
-
-    const verificationFeeEnabled = await settingsService.isVerificationFeeMonetizationEnabled();
-    if (!verificationFeeEnabled) {
-        await exports.confirmVerificationFeePaid(userId, 0, "waived_free_launch");
-        return { status: "waived", message: "Verification is free during launch - your badge is now active." };
-    }
-
-    if (!phone) {
-        throw new Error("A mobile money phone number is required.");
-    }
-
-    const feeAmount = await settingsService.getVerificationFee();
-
-    // Lazy require to avoid a circular dependency: payment.service also
-    // requires seller.service to call confirmVerificationFeePaid below.
-    const paymentService = require("../payment/payment.service");
-    return paymentService.initiateVerificationFeePayment(userId, phone, feeAmount);
-};
-
-// Called by payment.service once the mobile money provider's webhook
-// confirms the verification fee payment actually completed.
-exports.confirmVerificationFeePaid = async (userId, amount, transactionReference) => {
-    await sellerRepository.setVerificationFeePaid(userId, amount, transactionReference);
-    await syncBadge(userId);
 };
 
 exports.syncBadgeForSeller = syncBadge;

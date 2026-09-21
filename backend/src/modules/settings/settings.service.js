@@ -8,7 +8,6 @@ const { OFFER_RADIUS_KM, OFFER_TIMEOUT_MS } = require("../../constants/orderStat
 const DEFAULTS = {
     commission_rate: "10",
     rider_delivery_fee: "3000",
-    seller_verification_fee: "20000",
     // TZS per 1 USD. Only used to convert a TZS amount into USD for
     // PayPal, which (unlike Snippe) doesn't support TZS as a transaction
     // currency - see providers/paypal.provider.js. Admin-editable so it
@@ -81,7 +80,6 @@ const DEFAULTS = {
     monetization_subscriptions_enabled: "false",
     monetization_commission_enabled: "false",
     monetization_sponsorship_enabled: "false",
-    monetization_verification_fee_enabled: "false",
 
     // Nexora AI . ai_enabled is a master switch
     // independent of whether a provider is actually configured via env
@@ -142,12 +140,6 @@ exports.getCommissionRate = async () => {
 exports.getRiderDeliveryFee = async () => {
     const map = await getCachedAll();
     return Number(map.rider_delivery_fee);
-};
-
-// Flat fee (TZS) a seller pays once to receive the paid Verified Seller badge
-exports.getVerificationFee = async () => {
-    const map = await getCachedAll();
-    return Number(map.seller_verification_fee);
 };
 
 // TZS per 1 USD - see DEFAULTS comment above.
@@ -229,8 +221,10 @@ exports.getEscrowHoldDays = async () => {
 //   - subscription.service.js#getEffectiveCommissionRate reads commission
 //   - subscription.controller.js's subscribe* actions read subscriptions
 //   - sponsorship/featuredStore/departmentSponsorship .service.js#createCampaign read sponsorship
-//   - requireVerificationFeePaid.middleware.js + seller.service.js#payVerificationFee read verificationFee
 // All default OFF (see DEFAULTS above) so a fresh launch is free by default.
+// (The one-time seller verification fee that used to be a fourth flag
+// here was retired - the Verified Seller badge is now free and follows
+// account approval alone, see seller.service.js#syncBadge.)
 
 exports.isSubscriptionsMonetizationEnabled = async () => {
     const map = await getCachedAll();
@@ -242,14 +236,15 @@ exports.isCommissionMonetizationEnabled = async () => {
     return isEnabled(map.monetization_commission_enabled);
 };
 
+// Whether sellers may buy sponsorship / featured-store / department
+// campaigns a la carte from their wallet. This does NOT gate the
+// subscription-included credits (1 credit = 1 campaign-day) - those are
+// already paid for through the plan, so they work with this flag off. Off
+// therefore no longer means "campaigns are free": it means only credits
+// can fund a campaign (see sponsorshipCredit.service.js#splitFunding).
 exports.isSponsorshipMonetizationEnabled = async () => {
     const map = await getCachedAll();
     return isEnabled(map.monetization_sponsorship_enabled);
-};
-
-exports.isVerificationFeeMonetizationEnabled = async () => {
-    const map = await getCachedAll();
-    return isEnabled(map.monetization_verification_fee_enabled);
 };
 
 // Nexora AI master switch + the four spend-guard caps in one call - see
@@ -278,8 +273,7 @@ exports.getMonetizationStatus = async () => {
     const flags = [
         "monetization_subscriptions_enabled",
         "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
+        "monetization_sponsorship_enabled"
     ];
 
     // search() (not findRecent()) since it LEFT JOINs users - gives the
@@ -325,8 +319,7 @@ exports.updateMonetizationSettings = async (data, adminId) => {
     const flagKeys = [
         "monetization_subscriptions_enabled",
         "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
+        "monetization_sponsorship_enabled"
     ];
 
     for (const key of flagKeys) {
@@ -361,8 +354,7 @@ exports.getPublicMonetizationStatus = async () => {
     const flagKeys = [
         "monetization_subscriptions_enabled",
         "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
+        "monetization_sponsorship_enabled"
     ];
 
     return flagKeys.reduce((acc, key) => {
@@ -377,9 +369,6 @@ exports.updateSettings = async (data) => {
     }
     if (data.rider_delivery_fee !== undefined) {
         await settingsRepository.upsert("rider_delivery_fee", String(data.rider_delivery_fee));
-    }
-    if (data.seller_verification_fee !== undefined) {
-        await settingsRepository.upsert("seller_verification_fee", String(data.seller_verification_fee));
     }
     if (data.usd_exchange_rate !== undefined) {
         await settingsRepository.upsert("usd_exchange_rate", String(data.usd_exchange_rate));

@@ -22,12 +22,17 @@ const queueAuthMiddlewareCheck = () => {
 // then sellerRepository.findByUserId (store profile exists).
 const queueApprovedSellerChecks = () => {
     db.query.mockResolvedValueOnce([[{ account_verification_status: "approved" }]]);
-    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 1 }]]);
+    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1 }]]);
 };
 
-// requireVerificationFeePaid re-reads the seller profile again.
-const queueVerificationFeeCheck = () => {
-    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 1 }]]);
+// requireSubscriptionTier: subscriptionRepository.findCurrentForSeller's
+// first (active-in-period) query. A single active, non-free-plan row
+// short-circuits the repository before its fallback "most recent plan
+// overall" query, so this queues exactly one db.query call - same
+// sequential-mock shape the old requireVerificationFeePaid's re-read
+// used to need here.
+const queueSubscriptionTierCheck = (planCode = "growth") => {
+    db.query.mockResolvedValueOnce([[{ id: 1, seller_id: 1, status: "active", plan_code: planCode, current_period_end: null }]]);
 };
 
 const queueApprovedDeliveryAgentCheck = () => {
@@ -99,27 +104,28 @@ describe("POST /api/v1/ai/seller/marketing-copy", () => {
 });
 
 describe("GET /api/v1/ai/seller/analytics/summary", () => {
-    it("requires the verification fee gate in addition to seller approval", async () => {
+    it("requires a paid subscription tier in addition to seller approval", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 0 }]]);
-        // Monetization master switch check inside requireVerificationFeePaid
+        // No active plan at all: findCurrentForSeller's active-in-period
+        // query comes back empty, then its fallback "most recent plan
+        // overall" query also comes back empty (implicit free plan).
+        db.query.mockResolvedValueOnce([[]]);
         db.query.mockResolvedValueOnce([[]]);
 
         const res = await request(app)
             .get("/api/v1/ai/seller/analytics/summary")
             .set("Authorization", `Bearer ${signToken()}`);
 
-        // Either blocked (fee monetization on) or allowed through
-        // (monetization off) - either way it must not 500, and the
-        // service call only happens if it passed the gate.
-        expect([200, 403]).toContain(res.status);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe("SUBSCRIPTION_REQUIRED");
+        expect(aiService.summarizeSellerAnalytics).not.toHaveBeenCalled();
     });
 
     it("returns the AI summary once every gate passes", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        queueVerificationFeeCheck();
+        queueSubscriptionTierCheck();
         aiService.summarizeSellerAnalytics.mockResolvedValue({ summary: "Solid month.", aiGenerated: true });
 
         const res = await request(app)

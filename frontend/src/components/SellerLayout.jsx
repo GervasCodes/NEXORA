@@ -9,6 +9,7 @@ import MobileBottomNav from "./MobileBottomNav";
 import ConfirmDialog from "./ConfirmDialog";
 import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
+import { getVerificationTier } from "../utils/verificationTier";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like /admin's) instead of an 18-item horizontal-scroll
@@ -84,7 +85,8 @@ const groups = [
     {
         label: "Settings",
         tabs: [
-            { to: "/seller/store", label: "Store settings" }
+            { to: "/seller/store", label: "Store settings" },
+            { to: "/seller/verification", label: "Verification" }
         ]
     }
 ];
@@ -238,17 +240,20 @@ export default function SellerLayout() {
         return null;
     }
 
-    const verifiedBadge = profile.is_verified ? (
-        <span className="text-teal inline-flex items-center gap-1">
-            <CheckIcon className="w-3.5 h-3.5" /> Verified Seller
+    const verificationTier = getVerificationTier(profile);
+    const verifiedBadge = verificationTier === "business" ? (
+        <span className="text-azure inline-flex items-center gap-1">
+            <CheckIcon className="w-3.5 h-3.5" /> Verified Business
         </span>
-    ) : (
-        <span className="text-ash">
-            Badge available ·{" "}
-            <NavLink to="/seller/analytics" className="text-azure hover:underline">
-                pay the fee
+    ) : verificationTier === "seller" ? (
+        <span className="text-teal inline-flex items-center gap-1">
+            <CheckIcon className="w-3.5 h-3.5" /> Verified Seller ·{" "}
+            <NavLink to="/seller/verification" className="text-azure hover:underline">
+                get Verified Business
             </NavLink>
         </span>
+    ) : (
+        <span className="text-ash">Awaiting ID verification</span>
     );
 
     return (

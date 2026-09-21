@@ -53,8 +53,7 @@ exports.bookingIdValidation = [
 const MONETIZATION_KEYS = [
     "monetization_subscriptions_enabled",
     "monetization_commission_enabled",
-    "monetization_sponsorship_enabled",
-    "monetization_verification_fee_enabled"
+    "monetization_sponsorship_enabled"
 ];
 
 exports.updateMonetizationSettingsValidation = MONETIZATION_KEYS.map((key) =>
@@ -87,11 +86,6 @@ exports.updateSettingsValidation = [
         .optional()
         .isFloat({ min: 0 })
         .withMessage("Rider delivery fee must be a positive amount"),
-
-    body("seller_verification_fee")
-        .optional()
-        .isFloat({ min: 0 })
-        .withMessage("Verification fee must be a positive amount"),
 
     body("usd_exchange_rate")
         .optional()

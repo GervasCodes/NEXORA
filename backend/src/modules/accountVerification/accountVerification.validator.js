@@ -13,3 +13,17 @@ exports.rejectValidation = [
         .isLength({ max: 255 })
         .withMessage("Reason must be under 255 characters")
 ];
+
+exports.requestIdValidation = [
+    param("requestId").isInt().withMessage("Invalid request id")
+];
+
+exports.rejectRequestValidation = [
+    param("requestId").isInt().withMessage("Invalid request id"),
+    body("reason")
+        .trim()
+        .notEmpty()
+        .withMessage("A rejection reason is required")
+        .isLength({ max: 255 })
+        .withMessage("Reason must be under 255 characters")
+];

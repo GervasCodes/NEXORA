@@ -6,6 +6,7 @@ const categoryRepository = require("../category/category.repository");
 const walletRepository = require("../wallet/wallet.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
+const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit.service");
 
 // Same bounds as sponsorship.service.js  and
 // featuredStore.service.js , for the same reason: long enough to
@@ -22,9 +23,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // live total as they change the duration, same shape
 // sponsorship.service.js#getPricing / featuredStore.service.js#getPricing
 // already use.
-exports.getPricing = async () => {
+exports.getPricing = async (sellerId) => {
     const dailyRate = await settingsService.getDepartmentSponsorshipDailyRate();
-    return { daily_rate: dailyRate, min_days: MIN_DAYS, max_days: MAX_DAYS };
+    const creditContext = await sponsorshipCreditService.getPricingContext(sellerId);
+    return { daily_rate: dailyRate, min_days: MIN_DAYS, max_days: MAX_DAYS, ...creditContext };
 };
 
 // Departments this seller can actually pay to sponsor - only ones they
@@ -74,8 +76,11 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
     }
 
     const dailyRate = await settingsService.getDepartmentSponsorshipDailyRate();
-    const sponsorshipEnabled = await settingsService.isSponsorshipMonetizationEnabled();
-    const totalCost = sponsorshipEnabled ? Number((dailyRate * parsedDays).toFixed(2)) : 0;
+    // Monetization Master Switch: monetization_sponsorship_enabled now
+    // means "may this seller buy sponsorship a la carte at all". Included
+    // subscription credits are already paid for, so they keep working
+    // when it's off - it only blocks the paid remainder.
+    const paidEnabled = await settingsService.isSponsorshipMonetizationEnabled();
 
     const connection = await db.getConnection();
 
@@ -85,10 +90,19 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
         await walletRepository.ensureWallet(sellerId, connection);
         const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
 
-        // Monetization Master Switch: while sponsorship monetization is
-        // off, campaigns are free - skip the balance check and debit
-        // entirely (totalCost is already 0 above) and auto-approve.
-        if (sponsorshipEnabled && totalCost > Number(wallet.balance)) {
+        // Funding: included credits first (1 credit = 1 campaign-day),
+        // then the paid a la carte flow for whatever days they don't
+        // cover, at this campaign type's daily rate. Credits are only
+        // planned here - nothing is consumed until the wallet check below
+        // passes, so a campaign that can't be paid for never touches the
+        // seller's allotment. Lock order (wallet, then credit period) is
+        // the same in all three campaign services.
+        const funding = await sponsorshipCreditService.planFunding(
+            sellerId, { days: parsedDays, dailyRate, paidEnabled }, connection
+        );
+        const { creditDays, paidDays, totalCost } = funding;
+
+        if (totalCost > Number(wallet.balance)) {
             throw new Error(
                 "Insufficient wallet balance to fund this campaign. Top up from your order earnings, or choose a shorter duration."
             );
@@ -97,12 +111,14 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
         const endsAt = new Date(Date.now() + parsedDays * MS_PER_DAY);
 
         const campaignId = await departmentSponsorshipRepository.create(
-            { sellerId, categoryId, dailyRate: sponsorshipEnabled ? dailyRate : 0, days: parsedDays, totalCost, endsAt },
+            { sellerId, categoryId, dailyRate, days: parsedDays, totalCost, creditsUsed: creditDays, endsAt },
             connection
         );
 
+        await sponsorshipCreditService.consumeCredits(funding.periodId, creditDays, connection);
+
         let balanceAfter = Number(wallet.balance);
-        if (sponsorshipEnabled && totalCost > 0) {
+        if (totalCost > 0) {
             balanceAfter = await walletRepository.incrementBalance(sellerId, -totalCost, connection);
 
             await walletRepository.insertTransaction({
@@ -112,7 +128,7 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
                 balanceAfter,
                 referenceType: "department_sponsorship_campaign",
                 referenceId: campaignId,
-                description: `Department sponsorship campaign #${campaignId} for "${category.name}" (${parsedDays} day${parsedDays === 1 ? "" : "s"} at ${dailyRate}/day)`
+                description: `Department sponsorship campaign #${campaignId} for "${category.name}" (${paidDays} paid day${paidDays === 1 ? "" : "s"} at ${dailyRate}/day)`
             }, connection);
         }
 
@@ -123,11 +139,11 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
             type: "department_sponsorship_started",
             titleKey: "notifications.departmentSponsorship.started.title",
             messageKey: "notifications.departmentSponsorship.started.message",
-            messageParams: { categoryName: category.name, days: parsedDays, amount: totalCost },
+            messageParams: { categoryName: category.name, days: parsedDays, creditDays, amount: totalCost },
             withEmail: false
         }).catch((err) => logger.warn({ err }, "department sponsorship start notify error"));
 
-        return { campaignId, totalCost, balance: balanceAfter, endsAt };
+        return { campaignId, totalCost, creditsUsed: creditDays, balance: balanceAfter, endsAt };
 
     } catch (error) {
         await connection.rollback();

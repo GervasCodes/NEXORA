@@ -95,6 +95,7 @@ const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 const SellerReturns = lazy(() => import("./pages/seller/SellerReturns"));
 const SellerTaxInfo = lazy(() => import("./pages/seller/SellerTaxInfo"));
+const SellerVerification = lazy(() => import("./pages/seller/SellerVerification"));
 const SellerGroupBuys = lazy(() => import("./pages/seller/SellerGroupBuys"));
 const SellerLiveSelling = lazy(() => import("./pages/seller/SellerLiveSelling"));
 
@@ -326,6 +327,7 @@ export default function App() {
                             <Route path="featured-store" element={<Navigate to="/seller/promote?tab=featured-store" replace />} />
                             <Route path="department-sponsorship" element={<Navigate to="/seller/promote?tab=department-sponsorship" replace />} />
                             <Route path="subscription" element={<SellerSubscription />} />
+                            <Route path="verification" element={<SellerVerification />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                             <Route path="returns" element={<SellerReturns />} />
                             <Route path="tax-info" element={<SellerTaxInfo />} />

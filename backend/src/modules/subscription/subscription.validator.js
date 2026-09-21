@@ -16,7 +16,8 @@ exports.createPlanValidation = [
     body("price").isFloat({ min: 0 }).withMessage("Enter a valid price"),
     body("billingCycle").optional().isIn(["monthly", "annual"]),
     body("commissionRateOverride").optional({ nullable: true }).isFloat({ min: 0, max: 100 }),
-    body("maxActiveListings").optional({ nullable: true }).isInt({ min: 1 })
+    body("maxActiveListings").optional({ nullable: true }).isInt({ min: 1 }),
+    body("sponsorshipCreditsPerMonth").optional().isInt({ min: 0, max: 1000 })
 ];
 
 exports.updatePlanValidation = [
@@ -25,5 +26,6 @@ exports.updatePlanValidation = [
     body("billingCycle").optional().isIn(["monthly", "annual"]),
     body("commissionRateOverride").optional({ nullable: true }).isFloat({ min: 0, max: 100 }),
     body("maxActiveListings").optional({ nullable: true }).isInt({ min: 1 }),
+    body("sponsorshipCreditsPerMonth").optional().isInt({ min: 0, max: 1000 }),
     body("isActive").optional().isBoolean()
 ];

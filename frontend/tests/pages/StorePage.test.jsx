@@ -20,7 +20,6 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "common.browseMarketplace": "Browse the marketplace",
                 "store.notFoundTitle": "Store not found",
                 "store.noLogo": "No logo",
-                "store.verifiedBadge": "Verified",
                 "store.memberSince": "Member since {date}",
                 "store.about": "About",
                 "store.deliveryTracked": "Delivery tracked door to door",
@@ -28,9 +27,9 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "store.deliveryDefaultNote": "Delivery fees are calculated at checkout.",
                 "store.trustSafety": "Trust & safety",
                 "store.verifiedSellerTitle": "Verified Seller",
-                "store.verifiedSellerHint": "This seller has paid NEXORA's verification fee and passed the Verified Seller review - the same badge shown on their individual products.",
+                "store.verifiedSellerHint": "This seller passed NEXORA's Verified Seller review - the same badge shown on their individual products.",
                 "store.identityVerifiedTitle": "Identity Verified",
-                "store.identityVerifiedHint": "NEXORA reviewed this seller's identity documents before their account was approved to sell - separate from, and required before, the paid Verified Seller badge above.",
+                "store.identityVerifiedHint": "NEXORA reviewed this seller's identity documents before their account was approved to sell - separate from, and required before, the Verified Seller badge above.",
                 "store.productsTitle": "Products",
                 "store.productCountOne": "1 product",
                 "store.productCountMany": "{count} products",
@@ -169,13 +168,13 @@ describe("StorePage trust info (Phase 5B)", () => {
 
         await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
 
-        expect(screen.getByText("Verified")).toBeInTheDocument();
+        expect(screen.getByText("Verified Seller")).toBeInTheDocument();
         expect(screen.getByText("4.6")).toBeInTheDocument();
         expect(screen.getByText("(18)")).toBeInTheDocument();
         expect(screen.getByText("Member since Mar 2024")).toBeInTheDocument();
     });
 
-    it("hides the verified badge for a store without the paid badge", async () => {
+    it("hides the verified badge for a store without the badge", async () => {
         api.get.mockImplementation((url) => {
             if (url === "/stores/mama-ntilies-kitchen") return Promise.resolve({ data: { data: { ...store, is_verified: 0 } } });
             if (url === "/products") return Promise.resolve({ data: { data: [], pagination: { total: 0, totalPages: 1 } } });
@@ -185,7 +184,7 @@ describe("StorePage trust info (Phase 5B)", () => {
         renderPage();
 
         await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
-        expect(screen.queryByText("Verified")).not.toBeInTheDocument();
+        expect(screen.queryByText("Verified Seller")).not.toBeInTheDocument();
     });
 
     it("hides the rating line (but still shows member since) for a store with no reviews yet", async () => {

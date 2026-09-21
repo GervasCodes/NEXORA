@@ -7,7 +7,7 @@ const db = require("../../config/db");
 const PRODUCT_CARD_SELECT = `
     SELECT
         p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
-        sp.store_name, sp.is_verified, sp.region,
+        sp.store_name, sp.is_verified, sp.is_business_verified, sp.region,
         (SELECT pi.image_url FROM product_images pi WHERE pi.product_id = p.id AND pi.is_primary = 1 LIMIT 1) AS image_url,
         (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
         (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count

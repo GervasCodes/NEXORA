@@ -35,11 +35,12 @@ exports.findPlanByCode = async (code) => {
 exports.createPlan = async (data) => {
     const [result] = await db.query(
         `INSERT INTO subscription_plans
-            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, features, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, sponsorship_credits_per_month, features, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             data.code, data.name, data.description || null, data.price, data.billingCycle || "monthly",
             data.commissionRateOverride ?? null, data.maxActiveListings ?? null,
+            data.sponsorshipCreditsPerMonth ?? 0,
             data.features ? JSON.stringify(data.features) : null, data.sortOrder ?? 0
         ]
     );
@@ -63,6 +64,7 @@ exports.updatePlan = async (planId, data) => {
     setIfPresent("billing_cycle", data.billingCycle);
     setIfPresent("commission_rate_override", data.commissionRateOverride);
     setIfPresent("max_active_listings", data.maxActiveListings);
+    setIfPresent("sponsorship_credits_per_month", data.sponsorshipCreditsPerMonth);
     if (data.features !== undefined) {
         fields.push("features = ?");
         values.push(data.features ? JSON.stringify(data.features) : null);
@@ -85,7 +87,7 @@ exports.updatePlan = async (planId, data) => {
 exports.findCurrentForSeller = async (sellerId) => {
     const [activeRows] = await db.query(
         `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
-                sp.commission_rate_override, sp.max_active_listings, sp.features
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features
         FROM seller_subscriptions ss
         JOIN subscription_plans sp ON sp.id = ss.plan_id
         WHERE ss.seller_id = ? AND ss.status = 'active'
@@ -97,7 +99,7 @@ exports.findCurrentForSeller = async (sellerId) => {
 
     const [rows] = await db.query(
         `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
-                sp.commission_rate_override, sp.max_active_listings, sp.features
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features
         FROM seller_subscriptions ss
         JOIN subscription_plans sp ON sp.id = ss.plan_id
         WHERE ss.seller_id = ?

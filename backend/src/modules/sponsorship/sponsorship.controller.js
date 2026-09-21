@@ -2,7 +2,7 @@ const sponsorshipService = require("./sponsorship.service");
 
 exports.getPricing = async (req, res) => {
     try {
-        const pricing = await sponsorshipService.getPricing();
+        const pricing = await sponsorshipService.getPricing(req.user.id);
 
         return res.json({ success: true, data: pricing });
 

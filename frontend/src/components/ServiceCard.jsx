@@ -5,6 +5,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useDataSaver } from "../context/DataSaverContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
+import VerificationBadge from "./VerificationBadge";
 
 // Human-readable label per pricing_model (migration 062). Kept here
 // rather than duplicated across ServiceCard/ServiceDetail.
@@ -48,14 +49,7 @@ function ServiceCard({ service, layout = "grid" }) {
                 </div>
             )}
 
-            {service.is_verified === 1 || service.is_verified === true ? (
-                <span className="absolute top-2 left-2 bg-teal text-frost text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
-                        <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
-                    </svg>
-                    Verified
-                </span>
-            ) : null}
+            <VerificationBadge entity={service} corner="top-left" />
 
             {/* Save for later ( UI/UX remediation) - same
                 affordance and styling ProductCard.jsx already has, so

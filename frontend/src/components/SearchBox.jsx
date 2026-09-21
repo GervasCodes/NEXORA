@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
+import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../utils/recentSearches";
 
 const DEBOUNCE_MS = 250;
@@ -77,7 +78,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                     ? (servicesRes.value.data.data?.services || []).map((s) => ({ type: "service", id: `service-${s.id}`, name: s.title, slug: s.slug, image_url: s.image_url, subtitle: s.store_name, price: s.discount_price || s.base_price }))
                     : [];
                 const stores = storesRes.status === "fulfilled"
-                    ? (storesRes.value.data.data || []).map((st) => ({ type: "store", id: `store-${st.user_id}`, name: st.store_name, slug: st.store_slug, image_url: st.store_logo, subtitle: st.is_verified ? t("product.verifiedStore") : null }))
+                    ? (storesRes.value.data.data || []).map((st) => ({ type: "store", id: `store-${st.user_id}`, name: st.store_name, slug: st.store_slug, image_url: st.store_logo, subtitle: getVerificationTier(st) ? t(VERIFICATION_LABEL_KEYS[getVerificationTier(st)]) : null }))
                     : [];
                 const guides = guidesRes.status === "fulfilled"
                     ? (guidesRes.value.data.data || []).map((g) => ({ type: "guide", id: `guide-${g.id}`, name: g.title, slug: g.slug, image_url: g.cover_image_url, subtitle: null }))

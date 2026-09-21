@@ -18,12 +18,7 @@ const FLAGS = [
     {
         key: "monetization_sponsorship_enabled",
         label: "Sponsorship & featured placement",
-        description: "When off, product sponsorship, featured-store, and department-sponsorship campaigns are free and auto-approved."
-    },
-    {
-        key: "monetization_verification_fee_enabled",
-        label: "Seller verification fee",
-        description: "When off, the one-time Verified Seller fee is waived - the badge activates as soon as account verification is approved."
+        description: "Controls paid a la carte purchases of product sponsorship, featured-store, and department-sponsorship campaigns. When off, sellers can still start campaigns with the sponsorship credits included in their subscription plan, but cannot buy extra days from their wallet."
     }
 ];
 

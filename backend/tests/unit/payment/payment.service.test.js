@@ -98,23 +98,19 @@ describe("payment.service - handleProviderWebhook (reference routing)", () => {
         expect(orderRepository.updatePaymentStatus).toHaveBeenCalledWith(5, "paid");
     });
 
-    it("routes a VERIFY-<id> reference to the verification-fee webhook handler", async () => {
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue({ id: 8, amount: 20000 });
-        jest.doMock("../../../src/modules/seller/seller.service", () => ({
-            confirmVerificationFeePaid: jest.fn().mockResolvedValue(undefined)
-        }), { virtual: true });
-
-        const result = await paymentService.handleProviderWebhook({
-            providerReference: "VERIFY-8", success: true, transactionReference: "TXN-10"
-        });
-
-        expect(result.sellerId).toBe(8);
-        expect(result.success).toBe(true);
-    });
-
     it("throws for an unrecognized reference format", async () => {
         await expect(
             paymentService.handleProviderWebhook({ providerReference: "garbage", success: true })
+        ).rejects.toThrow("Unrecognized payment reference");
+    });
+
+    // Regression coverage for the verification-fee retirement: a
+    // VERIFY-<id> reference (the old seller-verification-fee format)
+    // is no longer a recognized dispatch target - guards against the
+    // dispatch branch quietly coming back via a merge/rebase.
+    it("no longer routes a VERIFY-<id> reference anywhere (verification fee retired)", async () => {
+        await expect(
+            paymentService.handleProviderWebhook({ providerReference: "VERIFY-8", success: true })
         ).rejects.toThrow("Unrecognized payment reference");
     });
 });
@@ -193,25 +189,6 @@ describe("payment.service - _handleOrderPaymentWebhook", () => {
         await expect(paymentService._handleOrderPaymentWebhook(5, true, "TXN-1")).resolves.toMatchObject({ success: true });
 
         consoleSpy.mockRestore();
-    });
-});
-
-describe("payment.service - _handleVerificationFeeWebhook", () => {
-    it("is a no-op when there's no pending verification-fee payment (already processed or never initiated)", async () => {
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue(null);
-
-        const result = await paymentService._handleVerificationFeeWebhook(3, true, "TXN");
-
-        expect(result).toEqual({ alreadyProcessed: true });
-    });
-
-    it("marks failed on a failed verification-fee webhook", async () => {
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue({ id: 9, amount: 20000 });
-
-        const result = await paymentService._handleVerificationFeeWebhook(3, false, "TXN");
-
-        expect(paymentRepository.markFailed).toHaveBeenCalledWith(9);
-        expect(result).toEqual({ sellerId: 3, success: false });
     });
 });
 
@@ -337,15 +314,16 @@ describe("payment.service - capturePaypalPayment", () => {
         expect(paymentRepository.markCompleted).toHaveBeenCalledWith(1, "CAP-1", expect.any(String), "USD", 10);
     });
 
-    it("falls back to looking up the reference by our own stored payment row when PayPal doesn't echo one back", async () => {
+    it("falls back to looking up the reference by our own stored payment row when PayPal doesn't echo one back (order payment)", async () => {
         paypalProvider.captureOrder.mockResolvedValue({ success: true, reference: null, transactionReference: "CAP-2" });
-        paymentRepository.findByTransactionReference.mockResolvedValue({ purpose: "seller_verification_fee", seller_id: 8, amount: 20000 });
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue({ id: 9, amount: 20000 });
+        paymentRepository.findByTransactionReference.mockResolvedValue({ purpose: "order_payment", order_id: 8, amount: 20000 });
+        paymentRepository.findByOrderId.mockResolvedValue({ id: 9, status: "pending" });
+        orderRepository.findOrderById.mockResolvedValue({ id: 8, is_parent: false });
         settingsService.getUsdExchangeRate.mockResolvedValue(2300);
 
         const result = await paymentService.capturePaypalPayment("PP-2");
 
-        expect(result.sellerId).toBe(8);
+        expect(result.orderId).toBe(8);
         expect(result.success).toBe(true);
     });
 
@@ -354,27 +332,6 @@ describe("payment.service - capturePaypalPayment", () => {
         paymentRepository.findByTransactionReference.mockResolvedValue(null);
 
         await expect(paymentService.capturePaypalPayment("PP-3")).rejects.toThrow("Could not determine what this PayPal payment was for");
-    });
-});
-
-describe("payment.service - initiateVerificationFeePayment (mobile money)", () => {
-    it("marks failed and rethrows when the provider errors", async () => {
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue(null);
-        paymentRepository.createVerificationFeePayment.mockResolvedValue(11);
-        mobileMoneyProvider.initiate.mockRejectedValue(new Error("phone unreachable"));
-
-        await expect(paymentService.initiateVerificationFeePayment(8, "0700000000", 20000)).rejects.toThrow("phone unreachable");
-        expect(paymentRepository.markFailed).toHaveBeenCalledWith(11);
-    });
-
-    it("reuses an existing pending verification-fee payment instead of creating a duplicate", async () => {
-        paymentRepository.findPendingVerificationFeePayment.mockResolvedValue({ id: 22 });
-        mobileMoneyProvider.initiate.mockResolvedValue({ success: true, transactionReference: "TXN-22" });
-
-        await paymentService.initiateVerificationFeePayment(8, "0700000000", 20000);
-
-        expect(paymentRepository.createVerificationFeePayment).not.toHaveBeenCalled();
-        expect(paymentRepository.markPending).toHaveBeenCalledWith(22, "TXN-22");
     });
 });
 

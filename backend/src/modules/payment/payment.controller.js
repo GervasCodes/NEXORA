@@ -178,25 +178,6 @@ exports.initiateSnippeOrderPayment = async (req, res) => {
     }
 };
 
-exports.initiateSnippeVerificationFeePayment = async (req, res) => {
-    try {
-        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
-        const settingsService = require("../settings/settings.service");
-        const amount = await settingsService.getVerificationFee();
-
-        const result = await paymentService.initiateSnippeVerificationFeePayment(
-            req.user.id,
-            amount,
-            { successUrl, cancelUrl }
-        );
-
-        return res.status(201).json({ success: true, data: result });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
 // Snippe calls this URL directly (server-to-server), signed with
 // SNIPPE_WEBHOOK_SECRET. Give Snippe this exact path in their dashboard:
 //   https://<your-domain>/api/v1/payments/webhooks/snippe
@@ -285,25 +266,6 @@ exports.initiateMalipopayCardOrderPayment = async (req, res) => {
     }
 };
 
-exports.initiateMalipopayCardVerificationFeePayment = async (req, res) => {
-    try {
-        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
-        const settingsService = require("../settings/settings.service");
-        const amount = await settingsService.getVerificationFee();
-
-        const result = await paymentService.initiateMalipopayCardVerificationFeePayment(
-            req.user.id,
-            amount,
-            { successUrl, cancelUrl }
-        );
-
-        return res.status(201).json({ success: true, data: result });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
 // MalipoPay calls this URL directly (server-to-server), signed with
 // MALIPOPAY_CARD_WEBHOOK_SECRET. Give MalipoPay this exact path in their
 // dashboard's card-product webhook setting:
@@ -367,25 +329,6 @@ exports.initiatePaypalOrderPayment = async (req, res) => {
         const result = await paymentService.initiatePaypalOrderPayment(
             req.params.orderId,
             req.user.id,
-            { returnUrl, cancelUrl }
-        );
-
-        return res.status(201).json({ success: true, data: result });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.initiatePaypalVerificationFeePayment = async (req, res) => {
-    try {
-        const returnUrl = assertAllowedRedirect(req.body.returnUrl, "returnUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
-        const settingsService = require("../settings/settings.service");
-        const amount = await settingsService.getVerificationFee();
-
-        const result = await paymentService.initiatePaypalVerificationFeePayment(
-            req.user.id,
-            amount,
             { returnUrl, cancelUrl }
         );
 

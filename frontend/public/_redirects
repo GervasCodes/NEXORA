@@ -9,9 +9,9 @@
 #
 # REQUIRED MANUAL STEP: replace the placeholder domain below with your
 # actual deployed backend API URL (same value as VITE_API_URL /
-# connect-src in _headers) before deploying — see PHASE_1_NOTES.md. This
+# connect-src in _headers) before deploying. This
 # line must come before the catch-all rewrite below, since Netlify uses
 # the first matching rule.
-/sitemap.xml   https://api.nexoramarketplace.online//sitemap.xml   200
+/sitemap.xml   https://api.nexoramarketplace.online/sitemap.xml   200
 
 /*   /index.html   200

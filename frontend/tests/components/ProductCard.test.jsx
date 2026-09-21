@@ -2,6 +2,15 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({
+        t: (key) => ({
+            "verification.sellerBadge": "Verified Seller",
+            "verification.businessBadge": "Verified Business"
+        }[key] || key)
+    })
+}));
+
 vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ format: (v) => `TZS ${v}` })
 }));
@@ -79,7 +88,7 @@ describe("ProductCard layout prop (Phase 4A)", () => {
     it("shows the same data (badge, rating, price) in both layouts", () => {
         renderCard("list");
 
-        expect(screen.getByText("Verified")).toBeInTheDocument();
+        expect(screen.getByText("Verified Seller")).toBeInTheDocument();
         expect(screen.getByText("4.5")).toBeInTheDocument();
         expect(screen.getByText("TZS 10000")).toBeInTheDocument();
     });

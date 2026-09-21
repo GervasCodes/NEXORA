@@ -1,9 +1,11 @@
 jest.mock("../../../src/config/db", () => require("../../helpers/mockDb"));
 jest.mock("../../../src/modules/subscription/subscription.repository");
+jest.mock("../../../src/modules/sponsorshipCredit/sponsorshipCredit.repository");
 jest.mock("../../../src/modules/settings/settings.service");
 
 const db = require("../../../src/config/db");
 const subscriptionRepository = require("../../../src/modules/subscription/subscription.repository");
+const creditRepository = require("../../../src/modules/sponsorshipCredit/sponsorshipCredit.repository");
 const settingsService = require("../../../src/modules/settings/settings.service");
 
 const subscriptionService = require("../../../src/modules/subscription/subscription.service");
@@ -180,6 +182,14 @@ describe("subscription.service.canCreateListing", () => {
 });
 
 describe("subscription.service.activateSubscription", () => {
+    const PERIOD = { current_period_start: "2026-09-01 00:00:00", current_period_end: "2026-10-01 00:00:00" };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        subscriptionRepository.activateSubscription.mockResolvedValue(undefined);
+        creditRepository.insertPeriodIfAbsent.mockResolvedValue(undefined);
+    });
+
     it("throws when the subscription doesn't exist", async () => {
         subscriptionRepository.findById.mockResolvedValue(null);
 
@@ -187,8 +197,10 @@ describe("subscription.service.activateSubscription", () => {
     });
 
     it("activates within a transaction and commits", async () => {
-        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2 });
-        subscriptionRepository.findPlanById.mockResolvedValue({ id: 2, billing_cycle: "monthly" });
+        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2, ...PERIOD });
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 2, billing_cycle: "monthly", sponsorship_credits_per_month: 3
+        });
 
         await subscriptionService.activateSubscription(5);
 
@@ -198,7 +210,7 @@ describe("subscription.service.activateSubscription", () => {
     });
 
     it("rolls back and rethrows when activation fails mid-transaction", async () => {
-        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2 });
+        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2, ...PERIOD });
         subscriptionRepository.findPlanById.mockResolvedValue({ id: 2, billing_cycle: "monthly" });
         subscriptionRepository.activateSubscription.mockRejectedValue(new Error("db write failed"));
 
@@ -206,6 +218,115 @@ describe("subscription.service.activateSubscription", () => {
         expect(connection.rollback).toHaveBeenCalled();
         expect(connection.commit).not.toHaveBeenCalled();
         expect(connection.release).toHaveBeenCalled();
+        expect(creditRepository.insertPeriodIfAbsent).not.toHaveBeenCalled();
+    });
+
+    it("grants the plan's sponsorship-credit allotment for the new period in the same transaction", async () => {
+        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2, ...PERIOD });
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 2, billing_cycle: "monthly", sponsorship_credits_per_month: 10
+        });
+
+        await subscriptionService.activateSubscription(5);
+
+        expect(subscriptionRepository.findById).toHaveBeenCalledWith(5, connection);
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledWith({
+            sellerId: 10,
+            subscriptionId: 5,
+            creditsGranted: 10,
+            periodStart: PERIOD.current_period_start,
+            periodEnd: PERIOD.current_period_end
+        }, connection);
+        expect(connection.commit).toHaveBeenCalled();
+    });
+
+    // Allotment reset on renewal: a renewal (or plan change) is a fresh
+    // seller_subscriptions row, so it reaches activation under a NEW id
+    // and gets its own full allotment - the previous period's row (and
+    // whatever was left in it) is simply no longer the current one.
+    it("gives a renewal a fresh, full allotment as its own period row, separate from the previous period", async () => {
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 2, billing_cycle: "monthly", sponsorship_credits_per_month: 10
+        });
+
+        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2, ...PERIOD });
+        await subscriptionService.activateSubscription(5);
+
+        subscriptionRepository.findById.mockResolvedValue({
+            id: 6, seller_id: 10, plan_id: 2,
+            current_period_start: "2026-10-01 00:00:00", current_period_end: "2026-11-01 00:00:00"
+        });
+        await subscriptionService.activateSubscription(6);
+
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledTimes(2);
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenNthCalledWith(1,
+            expect.objectContaining({ subscriptionId: 5, creditsGranted: 10, periodEnd: "2026-10-01 00:00:00" }), connection);
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenNthCalledWith(2,
+            expect.objectContaining({ subscriptionId: 6, creditsGranted: 10, periodStart: "2026-10-01 00:00:00" }), connection);
+    });
+
+    it("grants the new plan's allotment when a seller changes plan (the new row is a new period)", async () => {
+        subscriptionRepository.findById.mockResolvedValue({ id: 7, seller_id: 10, plan_id: 4, ...PERIOD });
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 4, billing_cycle: "monthly", sponsorship_credits_per_month: 30
+        });
+
+        await subscriptionService.activateSubscription(7);
+
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledWith(
+            expect.objectContaining({ subscriptionId: 7, creditsGranted: 30 }), connection);
+    });
+
+    it("grants twelve months' worth for an annual plan", async () => {
+        subscriptionRepository.findById.mockResolvedValue({ id: 8, seller_id: 10, plan_id: 5, ...PERIOD });
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 5, billing_cycle: "annual", sponsorship_credits_per_month: 10
+        });
+
+        await subscriptionService.activateSubscription(8);
+
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledWith(
+            expect.objectContaining({ subscriptionId: 8, creditsGranted: 120 }), connection);
+    });
+
+    it("rolls the whole activation back if the credit grant fails, so a period never starts half-set-up", async () => {
+        subscriptionRepository.findById.mockResolvedValue({ id: 5, seller_id: 10, plan_id: 2, ...PERIOD });
+        subscriptionRepository.findPlanById.mockResolvedValue({
+            id: 2, billing_cycle: "monthly", sponsorship_credits_per_month: 10
+        });
+        creditRepository.insertPeriodIfAbsent.mockRejectedValue(new Error("grant failed"));
+
+        await expect(subscriptionService.activateSubscription(5)).rejects.toThrow("grant failed");
+        expect(connection.rollback).toHaveBeenCalled();
+        expect(connection.commit).not.toHaveBeenCalled();
+    });
+});
+
+describe("subscription.service.subscribeFree (free-launch activation)", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        subscriptionRepository.activateSubscription.mockResolvedValue(undefined);
+        creditRepository.insertPeriodIfAbsent.mockResolvedValue(undefined);
+    });
+
+    it("creates, activates, and grants the plan's credits for the new subscription in one transaction", async () => {
+        subscriptionRepository.findPlanByCode.mockResolvedValue({
+            id: 3, code: "growth", is_active: 1, billing_cycle: "monthly", sponsorship_credits_per_month: 10
+        });
+        subscriptionRepository.createSubscription.mockResolvedValue(9);
+        subscriptionRepository.findById.mockResolvedValue({
+            id: 9, seller_id: 10, plan_id: 3,
+            current_period_start: "2026-09-20 00:00:00", current_period_end: "2026-10-20 00:00:00"
+        });
+        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(0);
+
+        await subscriptionService.subscribeFree(10, "growth");
+
+        expect(subscriptionRepository.activateSubscription).toHaveBeenCalledWith(9, 10, "monthly", connection);
+        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledWith(
+            expect.objectContaining({ sellerId: 10, subscriptionId: 9, creditsGranted: 10 }), connection);
+        expect(connection.commit).toHaveBeenCalled();
     });
 });
 

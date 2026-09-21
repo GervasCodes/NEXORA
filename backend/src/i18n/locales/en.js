@@ -59,6 +59,10 @@ module.exports = {
         "verification.approved.message": "Your {role} account has been verified. You now have full access to {role} features.",
         "verification.rejected.title": "Verification rejected",
         "verification.rejected.message": "Your {role} account verification was rejected: {reason}. Please contact support.",
+        "verification.businessApproved.title": "Verified Business approved",
+        "verification.businessApproved.message": "Your business documents have been approved. Your store now shows the Verified Business badge.",
+        "verification.businessRejected.title": "Verified Business request rejected",
+        "verification.businessRejected.message": "Your Verified Business request was rejected: {reason}. You can submit a new request with corrected documents.",
 
         "account.unsuspended.title": "Account reinstated",
         "account.unsuspended.message": "Your account has been reinstated. Welcome back!",

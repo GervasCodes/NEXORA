@@ -14,7 +14,11 @@ import api from "../api/client";
 // flagKey - one of the four monetization_* setting keys.
 // label - what to call this billing stream in the banner copy, e.g.
 //   "Subscriptions", "Sponsorship", "Verification".
-export default function BillingStatusBanner({ flagKey, label }) {
+// offTitle - optional replacement for the default "{label} — free during
+//   launch" headline, for streams where "off" doesn't mean "free" (the
+//   sponsorship flag only gates paid a la carte purchases now - see
+//   settings.service.js#isSponsorshipMonetizationEnabled).
+export default function BillingStatusBanner({ flagKey, label, offTitle }) {
     const [status, setStatus] = useState(null);
 
     useEffect(() => {
@@ -37,7 +41,7 @@ export default function BillingStatusBanner({ flagKey, label }) {
 
     return (
         <div className="rounded-lg border border-teal/30 bg-teal/5 px-4 py-3 mb-4 text-sm">
-            <p className="font-medium text-teal">{label} — free during launch</p>
+            <p className="font-medium text-teal">{offTitle || `${label} — free during launch`}</p>
             {scheduled ? (
                 <p className="text-ash mt-0.5">
                     Billing starts on {new Date(status.scheduledAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}.

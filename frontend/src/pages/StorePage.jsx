@@ -9,6 +9,7 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
 import { useLanguage } from "../context/LanguageContext";
+import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
@@ -198,7 +199,8 @@ export default function StorePage() {
     }
 
     const location = [store.city, store.region, store.country].filter(Boolean).join(", ");
-    const isVerified = store.is_verified === 1 || store.is_verified === true;
+    const verificationTier = getVerificationTier(store);
+    const isVerified = verificationTier !== null;
     const theme = getStoreTheme(store.store_theme);
     const socialLinks = getSocialLinks(store);
 
@@ -260,7 +262,7 @@ export default function StorePage() {
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                                         <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
                                     </svg>
-                                    {t("store.verifiedBadge")}
+                                    {t(VERIFICATION_LABEL_KEYS[verificationTier])}
                                 </span>
                             )}
                         </div>
@@ -349,6 +351,18 @@ export default function StorePage() {
                                     <p className="font-medium text-ink">{t("store.verifiedSellerTitle")}</p>
                                     <p className="text-xs text-ash mt-0.5">
                                         {t("store.verifiedSellerHint")}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {verificationTier === "business" && (
+                            <div className="flex items-start gap-2.5 text-sm">
+                                <VerifiedIcon className={theme.text} />
+                                <div>
+                                    <p className="font-medium text-ink">{t("store.verifiedBusinessTitle")}</p>
+                                    <p className="text-xs text-ash mt-0.5">
+                                        {t("store.verifiedBusinessHint")}
                                     </p>
                                 </div>
                             </div>

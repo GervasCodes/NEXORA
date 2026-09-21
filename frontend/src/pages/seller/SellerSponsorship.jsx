@@ -7,6 +7,8 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
+import { IncludedCreditsBanner, FundingBreakdown } from "../../components/SponsorshipCredits";
+import { computeFunding } from "../../utils/sponsorshipCredits";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -15,7 +17,7 @@ const STATUS_STYLES = {
 };
 
 
-export default function SellerSponsorship({ embedded = false }) {
+export default function SellerSponsorship({ embedded = false, onCampaignsChanged }) {
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [myProducts, setMyProducts] = useState([]);
@@ -49,7 +51,7 @@ export default function SellerSponsorship({ embedded = false }) {
 
     useEffect(load, []);
 
-    const totalCost = pricing ? pricing.daily_rate * Number(days || 0) : 0;
+    const funding = pricing ? computeFunding(pricing, days) : null;
 
     const submitCampaign = async (e) => {
         e.preventDefault();
@@ -65,6 +67,9 @@ export default function SellerSponsorship({ embedded = false }) {
             setDays(7);
             setShowForm(false);
             load();
+            // Starting a campaign may have spent included credits - let the
+            // Promote hub (which shows the balance) refresh its copy.
+            onCampaignsChanged?.();
         } catch (err) {
             setFormError(extractErrorMessage(err));
         } finally {
@@ -99,10 +104,16 @@ export default function SellerSponsorship({ embedded = false }) {
             )}
             <p className="text-ash text-sm mb-8">
                 Pay to feature one of your products in each department's "Sponsored" row.
-                Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance.
+                Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance once your plan's included credits are used up.
             </p>
 
-            <BillingStatusBanner flagKey="monetization_sponsorship_enabled" label="Sponsorship" />
+            <BillingStatusBanner
+                flagKey="monetization_sponsorship_enabled"
+                label="Sponsorship"
+                offTitle="Paid sponsorship isn't available yet — included credits still work"
+            />
+            {/* Embedded in the Promote hub, which shows the balance once above the tabs. */}
+            {!embedded && <IncludedCreditsBanner credits={pricing.included_credits} />}
 
             <div className="border border-line rounded-lg p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -156,13 +167,11 @@ export default function SellerSponsorship({ embedded = false }) {
                         onChange={(e) => setDays(e.target.value)}
                     />
 
-                    <p className="text-sm">
-                        Total cost: <span className="price font-medium">{formatMoney(totalCost)}</span>
-                    </p>
+                    <FundingBreakdown pricing={pricing} days={days} />
 
                     <button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || funding?.blocked}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-medium disabled:opacity-50"
                     >
                         {submitting ? "Starting…" : "Start campaign"}
@@ -186,6 +195,7 @@ export default function SellerSponsorship({ embedded = false }) {
                             <p className="text-xs text-ash">
                                 {c.days} day{c.days === 1 ? "" : "s"} at {formatMoney(c.daily_rate)}/day ·
                                 {" "}total {formatMoney(c.total_cost)}
+                                {c.credits_used > 0 && ` · ${c.credits_used} day${c.credits_used === 1 ? "" : "s"} covered by included credits`}
                             </p>
                             <p className="text-xs text-ash mb-2">
                                 {formatDate(c.starts_at)} → {formatDate(c.ends_at)}

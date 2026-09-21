@@ -59,6 +59,10 @@ module.exports = {
         "verification.approved.message": "Akaunti yako ya {role} imethibitishwa. Sasa una ufikiaji kamili wa vipengele vya {role}.",
         "verification.rejected.title": "Uthibitisho umekataliwa",
         "verification.rejected.message": "Uthibitisho wa akaunti yako ya {role} umekataliwa: {reason}. Tafadhali wasiliana na msaada.",
+        "verification.businessApproved.title": "Biashara Iliyothibitishwa imekubaliwa",
+        "verification.businessApproved.message": "Nyaraka za biashara yako zimekubaliwa. Duka lako sasa linaonyesha alama ya Biashara Iliyothibitishwa.",
+        "verification.businessRejected.title": "Ombi la Biashara Iliyothibitishwa limekataliwa",
+        "verification.businessRejected.message": "Ombi lako la Biashara Iliyothibitishwa limekataliwa: {reason}. Unaweza kuwasilisha ombi jipya lenye nyaraka zilizosahihishwa.",
 
         "account.unsuspended.title": "Akaunti imerejeshwa",
         "account.unsuspended.message": "Akaunti yako imerejeshwa. Karibu tena!",

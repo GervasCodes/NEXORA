@@ -1,6 +1,22 @@
 const db = require("../../config/db");
 const subscriptionRepository = require("./subscription.repository");
 const settingsService = require("../settings/settings.service");
+const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit.service");
+
+// Activating a subscription row starts a billing period, and every
+// billing period comes with its own sponsorship-credit allotment - so the
+// two always happen together, in the caller's transaction. This is the
+// single "activation/renewal" hook: a renewal or plan change is a fresh
+// seller_subscriptions row (see migration 073), so it reaches here as a
+// new subscription id and gets a fresh grant; the old period's unused
+// credits are not carried over. Re-activating the same subscription id
+// (a replayed webhook) is harmless - the grant is idempotent per id.
+const activateAndGrantCredits = async (subscription, plan, connection) => {
+    await subscriptionRepository.activateSubscription(subscription.id, subscription.seller_id, plan.billing_cycle, connection);
+
+    const activated = await subscriptionRepository.findById(subscription.id, connection);
+    await sponsorshipCreditService.grantForSubscription({ subscription: activated, plan }, connection);
+};
 
 // ---- Public / seller-facing ---------------------------------------------
 
@@ -31,6 +47,7 @@ exports.getMySubscription = async (sellerId) => {
             billingCycle: current.billing_cycle,
             commissionRateOverride: current.commission_rate_override !== null ? Number(current.commission_rate_override) : null,
             maxActiveListings: current.max_active_listings,
+            sponsorshipCreditsPerMonth: Number(current.sponsorship_credits_per_month) || 0,
             features: current.features ? JSON.parse(current.features) : []
         },
         status: current.status,
@@ -109,7 +126,7 @@ exports.activateSubscription = async (subscriptionId) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
-        await subscriptionRepository.activateSubscription(subscriptionId, subscription.seller_id, plan.billing_cycle, connection);
+        await activateAndGrantCredits(subscription, plan, connection);
         await connection.commit();
     } catch (error) {
         await connection.rollback();
@@ -153,7 +170,7 @@ exports.subscribeFree = async (sellerId, planCode) => {
     try {
         await connection.beginTransaction();
         const subscriptionId = await subscriptionRepository.createSubscription(sellerId, plan.id, connection);
-        await subscriptionRepository.activateSubscription(subscriptionId, sellerId, plan.billing_cycle, connection);
+        await activateAndGrantCredits({ id: subscriptionId, seller_id: sellerId }, plan, connection);
         await connection.commit();
     } catch (error) {
         await connection.rollback();
@@ -195,6 +212,7 @@ const formatPlan = (plan) => ({
     billingCycle: plan.billing_cycle,
     commissionRateOverride: plan.commission_rate_override !== null ? Number(plan.commission_rate_override) : null,
     maxActiveListings: plan.max_active_listings,
+    sponsorshipCreditsPerMonth: Number(plan.sponsorship_credits_per_month) || 0,
     features: plan.features ? (typeof plan.features === "string" ? JSON.parse(plan.features) : plan.features) : [],
     isActive: Boolean(plan.is_active),
     sortOrder: plan.sort_order

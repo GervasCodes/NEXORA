@@ -7,14 +7,14 @@ const db = require("../../config/db");
 // order-items + wallet + ledger writes.
 
 exports.create = async (
-    { sellerId, productId, dailyRate, days, totalCost, endsAt },
+    { sellerId, productId, dailyRate, days, totalCost, creditsUsed = 0, endsAt },
     executor = db
 ) => {
     const [result] = await executor.query(
         `INSERT INTO sponsorship_campaigns
-        (seller_id, product_id, daily_rate, days, total_cost, ends_at)
-        VALUES (?, ?, ?, ?, ?, ?)`,
-        [sellerId, productId, dailyRate, days, totalCost, endsAt]
+        (seller_id, product_id, daily_rate, days, total_cost, credits_used, ends_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sellerId, productId, dailyRate, days, totalCost, creditsUsed, endsAt]
     );
     return result.insertId;
 };
@@ -60,7 +60,7 @@ exports.updateStatus = async (id, status, executor = db) => {
 
 exports.findBySeller = async (sellerId) => {
     const [rows] = await db.query(
-        `SELECT sc.id, sc.product_id, sc.daily_rate, sc.days, sc.total_cost,
+        `SELECT sc.id, sc.product_id, sc.daily_rate, sc.days, sc.total_cost, sc.credits_used,
                 sc.status, sc.starts_at, sc.ends_at, sc.created_at,
                 p.name AS product_name, p.slug AS product_slug
         FROM sponsorship_campaigns sc
@@ -90,7 +90,7 @@ exports.findExpiredActive = async (executor = db) => {
 
 exports.findAll = async () => {
     const [rows] = await db.query(
-        `SELECT sc.id, sc.seller_id, sc.product_id, sc.daily_rate, sc.days, sc.total_cost,
+        `SELECT sc.id, sc.seller_id, sc.product_id, sc.daily_rate, sc.days, sc.total_cost, sc.credits_used,
                 sc.status, sc.starts_at, sc.ends_at, sc.created_at,
                 p.name AS product_name, sp.store_name
         FROM sponsorship_campaigns sc

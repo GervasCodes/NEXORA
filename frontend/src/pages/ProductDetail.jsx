@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 import { useAIAssistant } from "../context/AIAssistantContext";
@@ -438,7 +439,7 @@ export default function ProductDetail() {
                         <Link to={`/stores/${product.store_slug}`} className="hover:underline hover:text-ink">
                             {product.store_name}
                         </Link>
-                        {product.is_verified ? ` · ✓ ${t("product.verifiedStore")}` : ""}
+                        {getVerificationTier(product) ? ` · ✓ ${t(VERIFICATION_LABEL_KEYS[getVerificationTier(product)])}` : ""}
                     </p>
                     <div className="flex items-start justify-between gap-3 mb-3">
                         <h1 className="font-display text-3xl">{product.name}</h1>

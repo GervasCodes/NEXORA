@@ -45,6 +45,7 @@ export default function AdminSubscriptions() {
             price: plan.price,
             commissionRateOverride: plan.commissionRateOverride ?? "",
             maxActiveListings: plan.maxActiveListings ?? "",
+            sponsorshipCreditsPerMonth: plan.sponsorshipCreditsPerMonth ?? 0,
             isActive: plan.isActive
         });
     };
@@ -56,6 +57,7 @@ export default function AdminSubscriptions() {
                 price: Number(draft.price),
                 commissionRateOverride: draft.commissionRateOverride === "" ? null : Number(draft.commissionRateOverride),
                 maxActiveListings: draft.maxActiveListings === "" ? null : Number(draft.maxActiveListings),
+                sponsorshipCreditsPerMonth: Number(draft.sponsorshipCreditsPerMonth || 0),
                 isActive: draft.isActive
             });
             setEditingId(null);
@@ -75,7 +77,7 @@ export default function AdminSubscriptions() {
             <div>
                 <h1 className="font-display text-2xl mb-1">Subscription plans</h1>
                 <p className="text-ash text-sm mb-6">
-                    Pricing, commission overrides, and listing limits for each tier. Changes apply to new/renewing subscriptions - already-active periods keep the rate a seller was quoted.
+                    Pricing, commission overrides, listing limits, and included sponsorship credits (1 credit = 1 campaign-day) for each tier. Changes apply to new/renewing subscriptions - already-active periods keep the rate a seller was quoted.
                 </p>
 
 
@@ -87,6 +89,7 @@ export default function AdminSubscriptions() {
                                 <th className="px-4 py-2">Price / cycle</th>
                                 <th className="px-4 py-2">Commission override</th>
                                 <th className="px-4 py-2">Max listings</th>
+                                <th className="px-4 py-2">Sponsorship credits / month</th>
                                 <th className="px-4 py-2">Active</th>
                                 <th className="px-4 py-2"></th>
                             </tr>
@@ -116,6 +119,11 @@ export default function AdminSubscriptions() {
                                                     className="w-24 border border-line rounded-md px-2 py-1 text-sm focus-ring" />
                                             </td>
                                             <td className="px-4 py-2">
+                                                <input type="number" min="0" step="1" value={draft.sponsorshipCreditsPerMonth}
+                                                    onChange={(e) => setDraft({ ...draft, sponsorshipCreditsPerMonth: e.target.value })}
+                                                    className="w-24 border border-line rounded-md px-2 py-1 text-sm focus-ring" />
+                                            </td>
+                                            <td className="px-4 py-2">
                                                 <input type="checkbox" checked={draft.isActive}
                                                     onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })} />
                                             </td>
@@ -130,6 +138,7 @@ export default function AdminSubscriptions() {
                                             <td className="px-4 py-2">{formatMoney(plan.price)} / {plan.billingCycle}</td>
                                             <td className="px-4 py-2">{plan.commissionRateOverride !== null ? `${plan.commissionRateOverride}%` : "platform default"}</td>
                                             <td className="px-4 py-2">{plan.maxActiveListings ?? "unlimited"}</td>
+                                            <td className="px-4 py-2">{plan.sponsorshipCreditsPerMonth} day{plan.sponsorshipCreditsPerMonth === 1 ? "" : "s"}</td>
                                             <td className="px-4 py-2">{plan.isActive ? "Yes" : "No"}</td>
                                             <td className="px-4 py-2">
                                                 {isSuperAdmin && (

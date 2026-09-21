@@ -45,7 +45,7 @@ exports.findTrendingByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -70,7 +70,7 @@ exports.findRecentByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.created_at,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -107,7 +107,7 @@ exports.findPromotionsByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -133,7 +133,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -169,7 +169,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
 exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified,
             COUNT(DISTINCT p.id) AS product_count,
             (
                 SELECT AVG(r.rating) FROM reviews r
@@ -278,7 +278,7 @@ exports.findGlobalSponsored = async (limit) => {
 exports.findGlobalFeaturedStores = async (limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified, sp.is_business_verified,
             MAX(sfc.id IS NOT NULL) AS is_featured
         FROM seller_profiles sp
         JOIN products p ON p.seller_id = sp.user_id AND p.is_active = 1

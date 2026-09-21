@@ -125,10 +125,6 @@ exports.addCollectionProductValidation = [
         .withMessage("A valid product_id is required.")
 ];
 
-exports.payVerificationFeeValidation = [
-    phoneValidator("phone", { optional: true })
-];
-
 // Nexora Services Phase 1 - Merchant Type System
 exports.merchantTypeValidation = [
     body("merchant_type")

@@ -5,6 +5,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useLanguage } from "../context/LanguageContext";
+import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { formatDate } from "../utils/format";
@@ -433,7 +434,7 @@ export default function ServiceDetail() {
 
                     <Link to={`/stores/${service.store_slug}`} className="text-sm text-teal hover:underline">
                         {service.store_name}
-                        {service.is_verified ? " · Verified" : ""}
+                        {getVerificationTier(service) ? ` · ${t(VERIFICATION_LABEL_KEYS[getVerificationTier(service)])}` : ""}
                     </Link>
 
                     {reviews?.average_rating && (

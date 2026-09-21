@@ -316,26 +316,6 @@ exports.removeProductFromCollection = async (req, res) => {
     }
 };
 
-// --- Verification fee (paid "Verified Seller" badge) ---
-
-exports.payVerificationFee = async (req, res) => {
-    try {
-        const result = await sellerService.payVerificationFee(req.user.id, req.body.phone);
-
-        return res.status(202).json({
-            success: true,
-            message: result.message,
-            data: result
-        });
-
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
 exports.getAnalytics = async (req, res) => {
     try {
         const analytics = await sellerService.getAnalytics(req.user.id);

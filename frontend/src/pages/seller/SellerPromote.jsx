@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import SellerSponsorship from "./SellerSponsorship";
 import SellerFeaturedStore from "./SellerFeaturedStore";
 import SellerDepartmentSponsorship from "./SellerDepartmentSponsorship";
+import { IncludedCreditsBanner } from "../../components/SponsorshipCredits";
 
-// Phase 7 (Promo Video Unification) - one store-level promo video,
+// (Promo Video Unification) - one store-level promo video,
 // managed here rather than added to any single campaign type below
 // (it isn't a paid campaign, so it doesn't get a fourth tab). Uploads
 // through the same uploadVideo.middleware.js + Cloudinary "video"
@@ -129,15 +130,32 @@ export default function SellerPromote() {
     const requestedTab = searchParams.get("tab");
     const activeTab = TABS.find((tab) => tab.key === requestedTab) || TABS[0];
 
+    // Subscription-included credits (1 credit = 1 campaign-day) are one
+    // shared balance across all three campaign types, so the hub shows
+    // them once above the tabs instead of each tab repeating them. Any
+    // campaign type's /pricing endpoint returns the same
+    // `included_credits`; the sponsorship one is used here. Best-effort:
+    // if it fails the tabs still work (each has its own pricing fetch).
+    const [includedCredits, setIncludedCredits] = useState(null);
+    const loadCredits = useCallback(() => {
+        api.get("/seller/sponsorship/pricing")
+            .then(({ data }) => setIncludedCredits(data.data?.included_credits || null))
+            .catch(() => {});
+    }, []);
+    useEffect(loadCredits, [loadCredits]);
+
     return (
         <div>
             <PageMeta title="Promote" noIndex />
             <h1 className="font-display text-2xl mb-1">Promote</h1>
             <p className="text-ash text-sm mb-6">
-                Pay from your wallet balance for extra visibility - a sponsored
-                product slot, top billing for your store, or a boosted
-                department on the homepage.
+                Extra visibility - a sponsored product slot, top billing for your
+                store, or a boosted department on the homepage. Your plan's
+                included credits are used first; any extra days are paid from
+                your wallet balance.
             </p>
+
+            <IncludedCreditsBanner credits={includedCredits} />
 
             <StorePromoVideoSection />
 
@@ -158,7 +176,7 @@ export default function SellerPromote() {
                 ))}
             </div>
 
-            <activeTab.Component embedded />
+            <activeTab.Component embedded onCampaignsChanged={loadCredits} />
         </div>
     );
 }

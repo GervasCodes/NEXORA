@@ -8,6 +8,7 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import SellerOnboardingChecklist from "../../components/seller/SellerOnboardingChecklist";
 import Input from "../../components/ui/Input";
+import { getVerificationTier } from "../../utils/verificationTier";
 
 // Merchant-Type-Aware Dashboard  - the same product/service
 // split SellerLayout's tabs already use (seller_profiles.merchant_type),
@@ -171,7 +172,7 @@ export default function SellerOverview() {
                     Account
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <Stat label="Status" value={profile.is_verified ? "Verified" : "Pending"} highlight={profile.is_verified} delay={nextDelay()} />
+                    <Stat label="Status" value={{ business: "Verified Business", seller: "Verified Seller" }[getVerificationTier(profile)] || "Pending"} highlight={!!getVerificationTier(profile)} delay={nextDelay()} />
                 </div>
             </div>
 

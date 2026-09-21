@@ -6,14 +6,14 @@ const db = require("../../config/db");
 // pattern sponsorship.repository.js (Phase 8A) already uses.
 
 exports.create = async (
-    { sellerId, categoryId, dailyRate, days, totalCost, endsAt },
+    { sellerId, categoryId, dailyRate, days, totalCost, creditsUsed = 0, endsAt },
     executor = db
 ) => {
     const [result] = await executor.query(
         `INSERT INTO store_featured_campaigns
-        (seller_id, category_id, daily_rate, days, total_cost, ends_at)
-        VALUES (?, ?, ?, ?, ?, ?)`,
-        [sellerId, categoryId, dailyRate, days, totalCost, endsAt]
+        (seller_id, category_id, daily_rate, days, total_cost, credits_used, ends_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sellerId, categoryId, dailyRate, days, totalCost, creditsUsed, endsAt]
     );
     return result.insertId;
 };
@@ -62,7 +62,7 @@ exports.updateStatus = async (id, status, executor = db) => {
 
 exports.findBySeller = async (sellerId) => {
     const [rows] = await db.query(
-        `SELECT sfc.id, sfc.category_id, sfc.daily_rate, sfc.days, sfc.total_cost,
+        `SELECT sfc.id, sfc.category_id, sfc.daily_rate, sfc.days, sfc.total_cost, sfc.credits_used,
                 sfc.status, sfc.starts_at, sfc.ends_at, sfc.created_at,
                 c.name AS category_name, c.slug AS category_slug
         FROM store_featured_campaigns sfc
@@ -92,7 +92,7 @@ exports.findExpiredActive = async (executor = db) => {
 
 exports.findAll = async () => {
     const [rows] = await db.query(
-        `SELECT sfc.id, sfc.seller_id, sfc.category_id, sfc.daily_rate, sfc.days, sfc.total_cost,
+        `SELECT sfc.id, sfc.seller_id, sfc.category_id, sfc.daily_rate, sfc.days, sfc.total_cost, sfc.credits_used,
                 sfc.status, sfc.starts_at, sfc.ends_at, sfc.created_at,
                 c.name AS category_name, sp.store_name
         FROM store_featured_campaigns sfc

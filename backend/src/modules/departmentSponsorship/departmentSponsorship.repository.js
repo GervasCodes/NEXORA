@@ -7,14 +7,14 @@ const db = require("../../config/db");
 // featuredStore.repository.js  already use.
 
 exports.create = async (
-    { sellerId, categoryId, dailyRate, days, totalCost, endsAt },
+    { sellerId, categoryId, dailyRate, days, totalCost, creditsUsed = 0, endsAt },
     executor = db
 ) => {
     const [result] = await executor.query(
         `INSERT INTO department_sponsorship_campaigns
-        (seller_id, category_id, daily_rate, days, total_cost, ends_at)
-        VALUES (?, ?, ?, ?, ?, ?)`,
-        [sellerId, categoryId, dailyRate, days, totalCost, endsAt]
+        (seller_id, category_id, daily_rate, days, total_cost, credits_used, ends_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sellerId, categoryId, dailyRate, days, totalCost, creditsUsed, endsAt]
     );
     return result.insertId;
 };
@@ -65,7 +65,7 @@ exports.updateStatus = async (id, status, executor = db) => {
 
 exports.findBySeller = async (sellerId) => {
     const [rows] = await db.query(
-        `SELECT dsc.id, dsc.category_id, dsc.daily_rate, dsc.days, dsc.total_cost,
+        `SELECT dsc.id, dsc.category_id, dsc.daily_rate, dsc.days, dsc.total_cost, dsc.credits_used,
                 dsc.status, dsc.starts_at, dsc.ends_at, dsc.created_at,
                 c.name AS category_name, c.slug AS category_slug
         FROM department_sponsorship_campaigns dsc
@@ -95,7 +95,7 @@ exports.findExpiredActive = async (executor = db) => {
 
 exports.findAll = async () => {
     const [rows] = await db.query(
-        `SELECT dsc.id, dsc.seller_id, dsc.category_id, dsc.daily_rate, dsc.days, dsc.total_cost,
+        `SELECT dsc.id, dsc.seller_id, dsc.category_id, dsc.daily_rate, dsc.days, dsc.total_cost, dsc.credits_used,
                 dsc.status, dsc.starts_at, dsc.ends_at, dsc.created_at,
                 c.name AS category_name, sp.store_name
         FROM department_sponsorship_campaigns dsc

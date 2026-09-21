@@ -8,7 +8,7 @@ import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
 import { useDataSaver } from "../context/DataSaverContext";
 import Button from "./ui/Button";
-import CornerBadge from "./ui/CornerBadge";
+import VerificationBadge from "./VerificationBadge";
 
 
 function ProductCard({ product, layout = "grid" }) {
@@ -94,19 +94,7 @@ function ProductCard({ product, layout = "grid" }) {
                 </button>
             )}
 
-            {product.is_verified === 1 || product.is_verified === true ? (
-                <CornerBadge
-                    corner="top-left"
-                    tone="bg-teal text-frost"
-                    compact={isList}
-                    label="Verified"
-                    icon={
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
-                            <path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" />
-                        </svg>
-                    }
-                />
-            ) : null}
+            <VerificationBadge entity={product} corner="top-left" compact={isList} />
         </div>
     );
 

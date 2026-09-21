@@ -33,7 +33,6 @@ export default function AdminSettings() {
     const [loading, setLoading] = useState(true);
     const [commissionRate, setCommissionRate] = useState("");
     const [riderFee, setRiderFee] = useState("");
-    const [verificationFee, setVerificationFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
     const [sponsorshipRate, setSponsorshipRate] = useState("");
     const [featuredStoreRate, setFeaturedStoreRate] = useState("");
@@ -57,7 +56,6 @@ export default function AdminSettings() {
                 setSettings(data.data);
                 setCommissionRate(data.data.commission_rate);
                 setRiderFee(data.data.rider_delivery_fee);
-                setVerificationFee(data.data.seller_verification_fee);
                 setUsdRate(data.data.usd_exchange_rate);
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
@@ -104,7 +102,6 @@ export default function AdminSettings() {
             const { data } = await api.put("/admin/settings", {
                 commission_rate: Number(commissionRate),
                 rider_delivery_fee: Number(riderFee),
-                seller_verification_fee: Number(verificationFee),
                 usd_exchange_rate: Number(usdRate),
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
@@ -242,21 +239,6 @@ export default function AdminSettings() {
                         A delivery is priced by the first band its distance fits under (seller's pickup
                         pin to the buyer's delivery pin). Past the last band, each extra km adds the rate above.
                     </p>
-                </div>
-
-                <div>
-                    <label htmlFor="verificationFee" className="text-xs text-ash block mb-1">Seller verification fee (TZS)</label>
-                    <input
-                        id="verificationFee"
-                        type="number"
-                        min="0"
-                        step="500"
-                        required
-                        value={verificationFee}
-                        onChange={(e) => setVerificationFee(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                    <p className="text-xs text-ash mt-1">One-time fee a seller pays to unlock the Verified Seller badge.</p>
                 </div>
 
                 <div>

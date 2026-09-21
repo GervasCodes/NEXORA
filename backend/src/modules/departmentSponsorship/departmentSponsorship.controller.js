@@ -2,7 +2,7 @@ const departmentSponsorshipService = require("./departmentSponsorship.service");
 
 exports.getPricing = async (req, res) => {
     try {
-        const pricing = await departmentSponsorshipService.getPricing();
+        const pricing = await departmentSponsorshipService.getPricing(req.user.id);
 
         return res.json({ success: true, data: pricing });
 

@@ -2,7 +2,7 @@ const featuredStoreService = require("./featuredStore.service");
 
 exports.getPricing = async (req, res) => {
     try {
-        const pricing = await featuredStoreService.getPricing();
+        const pricing = await featuredStoreService.getPricing(req.user.id);
 
         return res.json({ success: true, data: pricing });
 

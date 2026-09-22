@@ -42,4 +42,4 @@ Disallow: /admin
 # (same domain this file itself is served from). See PHASE_1_NOTES.md —
 # this is proxied through to the backend-generated sitemap via
 # frontend/public/_redirects, so the same domain applies here.
-Sitemap: https://your-production-domain.example/sitemap.xml
+Sitemap: https://api.nexoramarketplace.online/sitemap.xml

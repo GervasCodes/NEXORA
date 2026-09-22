@@ -38,8 +38,4 @@ Disallow: /seller
 Disallow: /delivery
 Disallow: /admin
 
-# TODO: replace with the real production frontend domain before deploying
-# (same domain this file itself is served from). See PHASE_1_NOTES.md —
-# this is proxied through to the backend-generated sitemap via
-# frontend/public/_redirects, so the same domain applies here.
-Sitemap: https://api.nexoramarketplace.online/sitemap.xml
+Sitemap: https://nexoramarketplace.online/sitemap.xml

@@ -2,6 +2,7 @@ const userRepository = require("./auth.repository");
 const accountRepository = require("../account/account.repository");
 const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
+const loginLockoutService = require("./loginLockout.service");
 
 // request a reset code by email. Always responds the same way
 // whether or not the email exists - this deliberately does NOT throw for
@@ -40,4 +41,9 @@ exports.resetPassword = async (email, code, newPassword) => {
 
     const hashed = await hashPassword(newPassword);
     await accountRepository.updatePassword(user.id, hashed);
+
+    // Proving control of the account's email is the escape hatch from a
+    // login lockout (see loginLockout.service.js) - someone locked out by
+    // guesses that weren't theirs can get back in without waiting it out.
+    await loginLockoutService.clearFailures(user);
 };

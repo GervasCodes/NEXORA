@@ -25,7 +25,8 @@ module.exports = {
         NOTIFICATION_NOT_FOUND: "Arifa haikupatikana",
         TERMS_NOT_ACCEPTED: "Lazima ukubali Masharti ya Huduma na Sera ya Faragha ili kuunda akaunti",
         CATEGORY_UNAVAILABLE: "Kundi ulilochagua halipatikani",
-        ACCOUNT_SUSPENDED: "Akaunti hii imesimamishwa."
+        ACCOUNT_SUSPENDED: "Akaunti hii imesimamishwa.",
+        ACCOUNT_LOCKED: "Umejaribu kuingia mara nyingi bila mafanikio. Tafadhali jaribu tena baada ya dakika {minutes}, au weka upya nenosiri lako ili uingie sasa."
     },
 
     labels: {

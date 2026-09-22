@@ -12,14 +12,16 @@ exports.findAllActive = async () => {
 
 // The 'services' row (migration 065) only exists so /departments/services
 // resolves via getDepartmentBySlug/findBySlug below - it isn't a real,
-// admin-manageable department. The homepage already excludes it from the
-// department grid (Home.jsx) and renders its own purpose-built Services
-// tile instead, so toggling this row's is_active or uploading a cover
-// image here has no visible effect anywhere. Excluding it from the admin
-// list too (this feeds both AdminCategories.jsx's "Categories" screen and
-// the Maintenance Management overview) removes a control that looked
-// live but did nothing - "Services" is reachable from exactly one place,
-// its homepage tile, same as the header nav link removed in 065.
+// admin-manageable department (no products, no maintenance/status
+// meaning the way a real department has). It's still excluded from this
+// admin list - toggling is_active/maintenance/display_order here has no
+// visible effect, since Home.jsx renders its own purpose-built Services
+// tile rather than looping it in with the department grid. Its cover
+// image is the one exception: that field IS wired up (round-3 phase 2 -
+// see category.service.js#getServicesTile and
+// AdminServiceCategories.jsx), uploaded through the same generic
+// /categories/:id/cover endpoint every other department uses, just not
+// surfaced in this particular list.
 exports.findAllForAdmin = async () => {
     const [rows] = await db.query("SELECT * FROM categories WHERE slug != 'services' ORDER BY display_order ASC, name ASC");
     return rows;

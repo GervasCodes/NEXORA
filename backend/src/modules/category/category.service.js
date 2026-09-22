@@ -33,6 +33,22 @@ exports.listForAdmin = async () => {
     return categoryRepository.findAllForAdmin();
 };
 
+// The homepage's hardcoded "Services" tile (Home.jsx's DepartmentDiscovery)
+// needs a cover image without pulling in the rest of a department object
+// (product counts/trending/etc. don't apply to it) and without the
+// 'services' row's other admin-facing fields, which stay deliberately
+// unused (see findAllForAdmin's comment) - id is included so
+// AdminServiceCategories.jsx can POST straight to the existing
+// /categories/:id/cover upload endpoint, no new upload route needed.
+// Round-3 phase 2.
+exports.getServicesTile = async () => {
+    return cache.getOrSet(CACHE_NAMESPACE, "servicesTile", async () => {
+        const category = await categoryRepository.findBySlug("services");
+        if (!category) return null;
+        return { id: category.id, coverUrl: category.cover_image_url };
+    });
+};
+
 // Homepage department cards: each active category plus its live product
 // count, a trending-products preview, recent products, and a "new this
 // week" count. N+1 by design - there are only a handful of departments,

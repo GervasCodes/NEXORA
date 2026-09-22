@@ -18,6 +18,17 @@ const MAX_DAYS = 30;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// The 'services' categories row (migration 065) is not a product
+// department: it exists so /departments/services resolves, and Home.jsx
+// renders its own dedicated Services tile while filtering this row out of
+// the department grid. That grid's ordering is the only thing a department
+// campaign buys (category.repository.js#findAllActiveWithSponsorship), and
+// eligibility below is derived from a seller's active *products* - which a
+// service provider doesn't have under this row. Selling it would charge
+// the seller for a placement that never shows anywhere, so it's kept out
+// of both the picker and the purchase itself (round-3 phase 6).
+const SERVICES_DEPARTMENT_SLUG = "services";
+
 // What a seller sees before committing to a campaign - the form on
 // SellerDepartmentSponsorship.jsx reads this to show "X/day" and compute a
 // live total as they change the duration, same shape
@@ -34,7 +45,8 @@ exports.getPricing = async (sellerId) => {
 // featuredStore.service.js#getEligibleCategories uses (see
 // product.repository.js#findActiveCategoriesBySeller).
 exports.getEligibleCategories = async (sellerId) => {
-    return productRepository.findActiveCategoriesBySeller(sellerId);
+    const categories = await productRepository.findActiveCategoriesBySeller(sellerId);
+    return categories.filter((c) => c.slug !== SERVICES_DEPARTMENT_SLUG);
 };
 
 // Charges the seller's wallet, snapshots the rate that applied, and opens
@@ -56,6 +68,10 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
     const category = await categoryRepository.findById(categoryId);
     if (!category || !category.is_active) {
         throw new Error("Department not found");
+    }
+
+    if (category.slug === SERVICES_DEPARTMENT_SLUG) {
+        throw new Error("The Services department can't be sponsored");
     }
 
     const eligibleCategories = await productRepository.findActiveCategoriesBySeller(sellerId);

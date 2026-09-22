@@ -57,6 +57,39 @@ exports.touchLastActive = async (id) => {
 // omit it to just use the shared pool like any other one-off query.
 const runner = (conn) => conn || db;
 
+// ---- Per-account login lockout (migration 117) -------------------------
+// Persistence for loginLockout.service.js - the policy itself (thresholds,
+// backoff tiers) lives there, these are just the reads/writes.
+
+// Locks the row for the duration of the caller's transaction so two
+// concurrent failed attempts can't both read "4" and both write "5".
+exports.findLoginLockStateForUpdate = async (userId, conn) => {
+    const [rows] = await runner(conn).query(
+        `SELECT failed_login_attempts, last_failed_login_at, login_locked_until
+        FROM users WHERE id = ? FOR UPDATE`,
+        [userId]
+    );
+    return rows[0];
+};
+
+exports.saveLoginLockState = async (userId, { failedAttempts, lastFailedAt, lockedUntil }, conn) => {
+    await runner(conn).query(
+        `UPDATE users
+        SET failed_login_attempts = ?, last_failed_login_at = ?, login_locked_until = ?
+        WHERE id = ?`,
+        [failedAttempts, lastFailedAt, lockedUntil, userId]
+    );
+};
+
+exports.clearLoginLockState = async (userId) => {
+    await db.query(
+        `UPDATE users
+        SET failed_login_attempts = 0, last_failed_login_at = NULL, login_locked_until = NULL
+        WHERE id = ?`,
+        [userId]
+    );
+};
+
 exports.createUser = async (user, conn) => {
     const {
         first_name,

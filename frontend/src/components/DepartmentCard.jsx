@@ -15,19 +15,10 @@ const FALLBACK_GRADIENTS = [
     "linear-gradient(135deg, #1E3A8A 0%, #9FC1F2 100%)"
 ];
 
-//  (item 23) follow-up: the team decided to replace the
-// gradient-and-initial placeholder with a real photo for the
-// "services" department specifically. This is a real, verified,
-// freely-licensed photo (Unsplash License - free for commercial use,
-// no attribution required: https://unsplash.com/license), not a
-// fabricated URL - "Businessmen are shaking hands in a professional
-// gesture" by Ambre Estève (https://unsplash.com/photos/bGczI5fXbmo).
-//
-// Phase 4 (Real Imagery & Avatars) follow-up: the remaining four
-// departments now have a curated cover too, sourced the exact same
-// verified/freely-licensed way (all Unsplash License, all hotlinked
-// from images.unsplash.com - Unsplash's own CDN, not a re-hosted
-// copy):
+// Phase 4 (Real Imagery & Avatars) follow-up: four departments have a
+// curated cover, sourced from verified/freely-licensed photos (all
+// Unsplash License, all hotlinked from images.unsplash.com - Unsplash's
+// own CDN, not a re-hosted copy):
 //  - phones-electronics: "black smartphone" by Balázs Kétyi
 //    (https://unsplash.com/photos/xIcr9ygfhIk)
 //  - fashion-beauty: "assorted-colored clothes on rack near brown
@@ -37,10 +28,13 @@ const FALLBACK_GRADIENTS = [
 //    window" by Minh Pham (https://unsplash.com/photos/OtXADkUh3-I)
 //  - groceries-food: "assorted vegetable lot" by Julian Hanslmaier
 //    (https://unsplash.com/photos/bWg-BeVJPG4)
-// Every department now has a sourced photo, so this is a full curated
-// set rather than the partial rollout it started as.
+// "services" deliberately has no entry here - it's excluded from this
+// department grid entirely (see Home.jsx's DepartmentDiscovery) and
+// rendered as its own tile instead. A previous "services" entry here
+// pointed at a Pinterest pin page rather than a real image file (round-3
+// audit) and never rendered reliably; removed rather than fixed, since
+// this map isn't read for that tile in the first place.
 const CURATED_COVER_IMAGES = {
-    "services": "https://www.pinterest.com/pin/492229434296870277/fm=jpg&q=80&w=1200&auto=format&fit=crop",
     "phones-electronics": "https://images.unsplash.com/photo-1545063328-c8e3faffa16f?q=80&w=1200&auto=format&fit=crop",
     "fashion-beauty": "https://images.unsplash.com/photo-1573612664822-d7d347da7b80?q=80&w=1200&auto=format&fit=crop",
     "home-living": "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=1200&auto=format&fit=crop",

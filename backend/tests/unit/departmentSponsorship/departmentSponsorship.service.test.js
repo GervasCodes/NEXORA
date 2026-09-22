@@ -150,3 +150,28 @@ describe("departmentSponsorship.service.createCampaign - included credits then p
         expect(connection.commit).not.toHaveBeenCalled();
     });
 });
+
+describe("departmentSponsorship.service - the Services row is not sponsorable", () => {
+    it("leaves the 'services' row out of the seller's eligible departments", async () => {
+        productRepository.findActiveCategoriesBySeller.mockResolvedValue([
+            { id: 2, name: "Fashion", slug: "fashion" },
+            { id: 9, name: "Services", slug: "services" }
+        ]);
+
+        const categories = await campaignService.getEligibleCategories(10);
+
+        expect(categories).toEqual([{ id: 2, name: "Fashion", slug: "fashion" }]);
+    });
+
+    it("refuses to open a campaign against it, before any wallet or credit work", async () => {
+        categoryRepository.findById.mockResolvedValue({ id: 9, name: "Services", slug: "services", is_active: true });
+        productRepository.findActiveCategoriesBySeller.mockResolvedValue([{ id: 9, slug: "services" }]);
+
+        await expect(campaignService.createCampaign(10, 9, 5)).rejects.toThrow(
+            "The Services department can't be sponsored"
+        );
+
+        expect(walletRepository.getWalletForUpdate).not.toHaveBeenCalled();
+        expect(campaignRepository.create).not.toHaveBeenCalled();
+    });
+});

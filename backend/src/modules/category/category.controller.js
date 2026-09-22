@@ -34,6 +34,23 @@ exports.listForAdmin = async (req, res) => {
     }
 };
 
+exports.getServicesTile = async (req, res) => {
+    try {
+        const tile = await categoryService.getServicesTile();
+
+        return res.json({
+            success: true,
+            data: tile
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.listDepartments = async (req, res) => {
     try {
         const departments = await categoryService.listDepartments();

@@ -74,6 +74,12 @@ exports.requestOtp = async (user, purpose) => {
     return { expiresInSeconds: EXPIRY_MINUTES * 60 };
 };
 
+// `failureReason` is a machine-readable tag for callers that need to tell a
+// genuinely wrong guess apart from an expired/used-up code (login lockout
+// only counts the former - see login.service.js) and for monitoring logs.
+// It is never sent to the client; the message is unchanged.
+const otpError = (message, failureReason) => Object.assign(new Error(message), { failureReason });
+
 // Verifies a submitted code against the active one for that user/purpose.
 // Consumes the code on success so it can't be reused; tracks attempts so a
 // leaked/guessed-at code can't be brute-forced indefinitely.
@@ -81,22 +87,22 @@ exports.verifyOtp = async (userId, purpose, submittedCode) => {
     const record = await otpRepository.findActive(userId, purpose);
 
     if (!record) {
-        throw new Error("No active code found. Please request a new one.");
+        throw otpError("No active code found. Please request a new one.", "otp_missing");
     }
 
     if (new Date(record.expires_at) < new Date()) {
-        throw new Error("This code has expired. Please request a new one.");
+        throw otpError("This code has expired. Please request a new one.", "otp_expired");
     }
 
     if (record.attempts >= record.max_attempts) {
-        throw new Error("Too many incorrect attempts. Please request a new code.");
+        throw otpError("Too many incorrect attempts. Please request a new code.", "otp_attempts_exceeded");
     }
 
     const match = await bcrypt.compare(String(submittedCode || ""), record.code_hash);
 
     if (!match) {
         await otpRepository.incrementAttempts(record.id);
-        throw new Error("Incorrect code. Please try again.");
+        throw otpError("Incorrect code. Please try again.", "otp_incorrect");
     }
 
     await otpRepository.consume(record.id);

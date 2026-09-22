@@ -25,6 +25,7 @@ function DepartmentDiscovery() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [serviceCount, setServiceCount] = useState(null);
+    const [servicesCover, setServicesCover] = useState(null);
 
     useEffect(() => {
         api.get("/categories/departments")
@@ -39,6 +40,16 @@ function DepartmentDiscovery() {
     useEffect(() => {
         api.get("/service-categories/browse")
             .then(({ data }) => setServiceCount(data.data.reduce((sum, c) => sum + (c.serviceCount || 0), 0)))
+            .catch(() => {});
+    }, []);
+
+    // Admin-set cover for the Services tile below (AdminServiceCategories.jsx
+    // > "Services tile (homepage)") - falls back to the gradient+icon design
+    // when unset, same fallback pattern DepartmentCard.jsx uses. Round-3
+    // phase 2.
+    useEffect(() => {
+        api.get("/categories/services-tile")
+            .then(({ data }) => setServicesCover(data.data?.coverUrl || null))
             .catch(() => {});
     }, []);
 
@@ -74,13 +85,23 @@ function DepartmentDiscovery() {
                 to="/services"
                 className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
-                <div className="aspect-[4/3] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #111827 0%, #1D4ED8 100%)" }}>
-                    <div className="w-full h-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-9 h-9 text-frost/90">
-                            <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
-                            <path d="M3.5 9.5h17M8 3v3M16 3v3" />
-                        </svg>
-                    </div>
+                <div className="aspect-[4/3] relative overflow-hidden" style={!servicesCover ? { background: "linear-gradient(135deg, #111827 0%, #1D4ED8 100%)" } : undefined}>
+                    {servicesCover ? (
+                        <img
+                            src={servicesCover}
+                            alt="Services"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-9 h-9 text-frost/90">
+                                <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+                                <path d="M3.5 9.5h17M8 3v3M16 3v3" />
+                            </svg>
+                        </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
                     <div className="absolute bottom-3 left-3 right-3">
                         <h3 className="font-display text-lg text-frost leading-tight mb-0.5">Services</h3>

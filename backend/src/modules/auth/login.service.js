@@ -4,6 +4,7 @@ const generateToken = require("../../utils/generateToken");
 const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/shortLivedToken");
 const otpService = require("../otp/otp.service");
 const appError = require("../../utils/appError");
+const loginLockoutService = require("./loginLockout.service");
 
 const PRE_AUTH_TYP = "login_otp";
 const PRE_AUTH_EXPIRY = "10m";
@@ -15,13 +16,26 @@ exports.login = async (email, password) => {
     const user = await userRepository.findByEmail(email);
 
     if (!user) {
-        throw appError("INVALID_CREDENTIALS", 401);
+        throw Object.assign(appError("INVALID_CREDENTIALS", 401), { failureReason: "unknown_email" });
     }
+
+    // Per-account lockout (see loginLockout.service.js): checked before the
+    // password so a locked account costs no bcrypt work and doesn't rack up
+    // further counted failures.
+    loginLockoutService.assertNotLocked(user);
 
     const match = await comparePassword(password, user.password);
 
     if (!match) {
-        throw appError("INVALID_CREDENTIALS", 401);
+        const outcome = await loginLockoutService.recordFailure(user.id);
+
+        // The failure that trips the lock says so immediately, rather than
+        // making the person find out on their next try.
+        if (outcome && outcome.locked) {
+            throw loginLockoutService.lockedErrorFor(outcome);
+        }
+
+        throw Object.assign(appError("INVALID_CREDENTIALS", 401), { failureReason: "bad_password" });
     }
 
     if (user.is_active === 0) {
@@ -72,7 +86,15 @@ exports.resendLoginOtp = async (preAuthToken) => {
         throw new Error("Session expired. Please sign in again.");
     }
 
-    return otpService.requestOtp(user, "login");
+    // A locked account can't be sent fresh codes - otherwise a pre-auth
+    // token issued before the lock would keep an attacker in the OTP loop
+    // (and keep emailing the account holder).
+    loginLockoutService.assertNotLocked(user);
+
+    const result = await otpService.requestOtp(user, "login");
+
+    // userId is only for the caller's monitoring log (see authEvents.js).
+    return { ...result, userId: user.id };
 };
 
 // verify the OTP against the pre-auth token issued in step 1. Only
@@ -91,7 +113,26 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
         throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
-    await otpService.verifyOtp(user.id, "login", code);
+    loginLockoutService.assertNotLocked(user);
+
+    try {
+        await otpService.verifyOtp(user.id, "login", code);
+    } catch (error) {
+        // Only an actual wrong guess counts toward the lockout - an expired
+        // or already-used code is the person's mistake or a slow inbox, not
+        // an attack, and shouldn't lock them out.
+        if (error.failureReason === "otp_incorrect") {
+            const outcome = await loginLockoutService.recordFailure(user.id);
+
+            if (outcome && outcome.locked) {
+                throw loginLockoutService.lockedErrorFor(outcome);
+            }
+        }
+        throw error;
+    }
+
+    // Password AND OTP both passed - the only point that clears the counter.
+    await loginLockoutService.clearFailures(user);
 
     const token = generateToken({
         id: user.id,
@@ -104,6 +145,9 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
     });
 
     delete user.password;
+    delete user.failed_login_attempts;
+    delete user.last_failed_login_at;
+    delete user.login_locked_until;
 
     return { user, token };
 };

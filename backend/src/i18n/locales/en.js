@@ -25,7 +25,8 @@ module.exports = {
         NOTIFICATION_NOT_FOUND: "Notification not found",
         TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account",
         CATEGORY_UNAVAILABLE: "Selected category is not available",
-        ACCOUNT_SUSPENDED: "This account has been suspended."
+        ACCOUNT_SUSPENDED: "This account has been suspended.",
+        ACCOUNT_LOCKED: "Too many failed sign-in attempts. Please try again in {minutes} minute(s), or reset your password to sign in now."
     },
 
     labels: {

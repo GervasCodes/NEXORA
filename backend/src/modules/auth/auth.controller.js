@@ -9,6 +9,7 @@ const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const { sessionCookieOptions, csrfCookieOptions } = require("../../utils/sessionCookie");
 const { generateCsrfToken } = require("../../middleware/csrf.middleware");
+const { logAuthAttempt, reasonFor } = require("./authEvents");
 
 exports.register = async (req, res) => {
     try {
@@ -62,6 +63,8 @@ exports.login = async (req, res) => {
 
         const result = await loginService.login(email, password);
 
+        logAuthAttempt(req, { endpoint: "login", outcome: "success", reason: "otp_sent", email });
+
         res.json({
             success: true,
             message: "Enter the code we emailed you to finish signing in.",
@@ -69,17 +72,26 @@ exports.login = async (req, res) => {
         });
 
     } catch (error) {
+        const reason = reasonFor(error);
+
+        logAuthAttempt(req, { endpoint: "login", outcome: "failure", reason, email: req.body.email });
+
         auditService.logFromRequest(req, {
             eventType: "login_failed",
             description: `Failed login attempt for ${req.body.email || "unknown email"}`,
-            metadata: { email: req.body.email, stage: "password" }
+            metadata: { email: req.body.email, stage: "password", reason }
         });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
 
         res.status(error.status || 401).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message,
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
             ...(error.code ? { code: error.code } : {}),
-            ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {})
+            ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {}),
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };
@@ -90,6 +102,8 @@ exports.verifyLoginOtp = async (req, res) => {
         const { pre_auth_token, code } = req.body;
 
         const result = await loginService.verifyLoginOtp(pre_auth_token, code);
+
+        logAuthAttempt(req, { endpoint: "login_otp_verify", outcome: "success", userId: result.user?.id });
 
         auditService.logFromRequest(req, {
             userId: result.user?.id,
@@ -130,15 +144,24 @@ exports.verifyLoginOtp = async (req, res) => {
         });
 
     } catch (error) {
+        const reason = reasonFor(error);
+
+        logAuthAttempt(req, { endpoint: "login_otp_verify", outcome: "failure", reason });
+
         auditService.logFromRequest(req, {
             eventType: "login_failed",
             description: "Failed login attempt (invalid or expired OTP)",
-            metadata: { stage: "otp" }
+            metadata: { stage: "otp", reason }
         });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
 
         res.status(error.status || 401).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };
@@ -147,7 +170,9 @@ exports.resendLoginOtp = async (req, res) => {
     try {
         // (OTP resend/expiry UX) - previously discarded, so the
         // frontend had no way to restart its countdown after a resend.
-        const { expiresInSeconds } = await loginService.resendLoginOtp(req.body.pre_auth_token);
+        const { expiresInSeconds, userId } = await loginService.resendLoginOtp(req.body.pre_auth_token);
+
+        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: "success", userId });
 
         res.json({
             success: true,
@@ -156,9 +181,16 @@ exports.resendLoginOtp = async (req, res) => {
         });
 
     } catch (error) {
+        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: "failure", reason: reasonFor(error) });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
+
         res.status(error.status || 400).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };

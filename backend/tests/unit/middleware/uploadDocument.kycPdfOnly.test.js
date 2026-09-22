@@ -40,7 +40,7 @@ const mockRes = () => {
 describe("uploadDocument fileFilter - KYC document fields", () => {
     it("covers exactly the four document types plus the ID alternative", () => {
         expect([...PDF_ONLY_FIELDS].sort()).toEqual(
-            ["brela_certificate", "business_license", "national_id", "tin_certificate", "voter_id"]
+            ["brela_certificate", "business_license", "drivers_license", "national_id", "tin_certificate", "voter_id"]
         );
     });
 

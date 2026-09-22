@@ -20,6 +20,11 @@ router.get("/", categoryController.listPublic);
 // Public - homepage department cards (cover, live product count, trending preview)
 router.get("/departments", categoryController.listDepartments);
 
+// Public - cover image (and id, for the admin upload control) for the
+// homepage's separately-rendered "Services" tile. See
+// category.service.js#getServicesTile.
+router.get("/services-tile", categoryController.getServicesTile);
+
 // Public - homepage hero carousel (promo videos, sponsored/on-sale
 // products, featured stores) - see category.service.js#getHomeHighlights
 router.get("/home-highlights", categoryController.getHomeHighlights);

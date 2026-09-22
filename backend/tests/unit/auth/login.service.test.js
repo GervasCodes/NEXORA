@@ -1,6 +1,10 @@
 jest.mock("../../../src/modules/auth/auth.repository");
 jest.mock("../../../src/utils/comparePassword");
 jest.mock("../../../src/modules/otp/otp.service");
+// Lockout behavior has its own suites (loginLockout.service.test.js,
+// login.service.lockout.test.js) - mocked here so these step-1/step-2 tests
+// never reach for a real database connection.
+jest.mock("../../../src/modules/auth/loginLockout.service");
 
 const jwt = require("jsonwebtoken");
 

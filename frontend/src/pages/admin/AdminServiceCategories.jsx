@@ -17,11 +17,42 @@ export default function AdminServiceCategories() {
     const [editingId, setEditingId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
+    // The homepage's "Services" tile (Home.jsx) - separate from the
+    // category list below, which is the sub-categories *inside* Services
+    // (Home Repair, Events, etc). This is the top-level entry-point tile
+    // itself; it only has a cover image to manage, via the same generic
+    // /categories/:id/cover endpoint every product department uses.
+    // Round-3 phase 2.
+    const [servicesTile, setServicesTile] = useState(null);
+    const [uploadingTileCover, setUploadingTileCover] = useState(false);
+
     const load = () => {
         api.get("/service-categories/admin/all").then(({ data }) => setCategories(data.data)).finally(() => setLoading(false));
     };
 
     useEffect(load, []);
+
+    useEffect(() => {
+        api.get("/categories/services-tile").then(({ data }) => setServicesTile(data.data)).catch(() => {});
+    }, []);
+
+    const handleTileCoverUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !servicesTile) return;
+        setUploadingTileCover(true);
+        setError("");
+        try {
+            const body = new FormData();
+            body.append("cover", file);
+            const { data } = await api.post(`/categories/${servicesTile.id}/cover`, body);
+            setServicesTile({ ...servicesTile, coverUrl: data.data.coverUrl });
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setUploadingTileCover(false);
+            e.target.value = "";
+        }
+    };
 
     const startEdit = (category) => {
         setEditingId(category.id);
@@ -97,6 +128,30 @@ export default function AdminServiceCategories() {
         <div>
             <PageMeta title="Service Categories" noIndex />
             <h1 className="font-display text-2xl mb-6">Service categories</h1>
+
+            <div className="mb-8 border border-line rounded-lg p-4">
+                <h2 className="font-display text-lg mb-1">Services tile (homepage)</h2>
+                <p className="text-ash text-xs mb-3">
+                    Cover image for the "Services" card shown among the department tiles on the homepage. Falls back to the default gradient when unset.
+                </p>
+                <div className="flex items-center gap-3">
+                    <div className="w-16 h-12 rounded-md bg-line/40 overflow-hidden shrink-0">
+                        {servicesTile?.coverUrl ? (
+                            <img src={servicesTile.coverUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                        ) : null}
+                    </div>
+                    <label className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors cursor-pointer">
+                        {uploadingTileCover ? "Uploading…" : servicesTile?.coverUrl ? "Change cover" : "Add cover"}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={uploadingTileCover || !servicesTile}
+                            onChange={handleTileCoverUpload}
+                        />
+                    </label>
+                </div>
+            </div>
 
             <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 items-start mb-8 border border-line rounded-lg p-4">
                 <input

@@ -21,12 +21,11 @@ const FALLBACK_GRADIENTS = [
 // (mirrors DepartmentCard.jsx linking to /departments/:slug). `active` just
 // highlights whichever card matches the page currently being viewed.
 //
-// Phase 6 (item 23) follow-up: same curated-photo decision as
-// DepartmentCard.jsx, applied to the "All services" tile specifically
-// since it represents services in general (the individual categories -
-// accommodation, transportation, tourism, etc. - don't have a sourced
-// photo yet and keep the dark gradient + grid icon below).
-const ALL_SERVICES_COVER_IMAGE = "https://www.pinterest.com/pin/492229434296870277/fm=jpg&q=80&w=1200&auto=format&fit=crop";
+// No curated cover image for this tile - it falls back to the same
+// gradient/letter treatment as any category without an admin-uploaded
+// cover (see ALL_SERVICES_COVER_IMAGE removal, round-3 phase 1: it
+// pointed at a Pinterest pin page rather than a real image file, so it
+// never rendered reliably in the first place).
 
 export default function ServiceCategoryCard({ category, index, active, totalCount }) {
     const isAll = !category;
@@ -45,17 +44,9 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
         >
             <div
                 className="aspect-[4/3] relative overflow-hidden"
-                style={!isAll && !category.cover_image_url ? { background: gradient } : undefined}
+                style={!category?.cover_image_url ? { background: gradient } : undefined}
             >
-                {isAll ? (
-                    <img
-                        src={ALL_SERVICES_COVER_IMAGE}
-                        alt="All services"
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                ) : category.cover_image_url ? (
+                {category?.cover_image_url ? (
                     <img
                         src={category.cover_image_url}
                         alt={category.name}
@@ -65,7 +56,7 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <span className="font-display text-3xl text-frost/90">{category.name.charAt(0)}</span>
+                        <span className="font-display text-3xl text-frost/90">{name.charAt(0)}</span>
                     </div>
                 )}
                 <ImageOverlayCaption title={name} subtitle={`${count} ${count === 1 ? "service" : "services"}`} />

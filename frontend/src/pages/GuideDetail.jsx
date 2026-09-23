@@ -68,7 +68,7 @@ export default function GuideDetail() {
             <PageMeta title={article.title} description={article.seo_meta_description || article.excerpt} />
             <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Guides", href: "/guides" }, { label: article.title }]} />
             {article.cover_image_url && (
-                <img src={article.cover_image_url} alt="" className="w-full aspect-video object-cover rounded-lg mb-6" />
+                <img src={article.cover_image_url} alt={article.title} className="w-full aspect-video object-cover rounded-lg mb-6" />
             )}
             <h1 className="font-display text-3xl mb-6">{article.title}</h1>
             <div className="text-ink/90 text-[15px]">{renderBody(article.body_markdown)}</div>

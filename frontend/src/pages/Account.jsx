@@ -310,7 +310,7 @@ export default function Account() {
                 </form>
             </section>
 
-            <AddressBook />
+            {user?.role === "buyer" && <AddressBook />}
 
             {/* Settings - applied instantly via context, persisted in the background */}
             <section>

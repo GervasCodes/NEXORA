@@ -48,7 +48,7 @@ exports.getMySubscription = async (sellerId) => {
             commissionRateOverride: current.commission_rate_override !== null ? Number(current.commission_rate_override) : null,
             maxActiveListings: current.max_active_listings,
             sponsorshipCreditsPerMonth: Number(current.sponsorship_credits_per_month) || 0,
-            features: current.features ? JSON.parse(current.features) : []
+            features: current.features ? (typeof current.features === "string" ? JSON.parse(current.features) : current.features) : []
         },
         status: current.status,
         currentPeriodStart: current.current_period_start,

@@ -42,13 +42,13 @@ export default function NexoraAdminInsights() {
                 </p>
                 {forecast && (
                     <div className="flex items-start gap-2">
-                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Forecast</span>
+                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 min-w-[6rem] pt-0.5">Forecast</span>
                         <p className="text-sm text-abyss">{forecast.explanation}</p>
                     </div>
                 )}
                 {personalization && (
                     <div className="flex items-start gap-2">
-                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 w-24 pt-0.5">Personalization</span>
+                        <span className="text-xs uppercase tracking-widest text-ash shrink-0 min-w-[6rem] pt-0.5">Personalization</span>
                         <p className="text-sm text-abyss">{personalization.explanation}</p>
                     </div>
                 )}

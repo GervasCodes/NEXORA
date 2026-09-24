@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
-import { useCompare } from "../context/CompareContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
 import { useDataSaver } from "../context/DataSaverContext";
@@ -15,14 +14,12 @@ function ProductCard({ product, layout = "grid" }) {
     const { format } = useCurrency();
     const { user } = useAuth();
     const wishlist = useWishlist();
-    const compare = useCompare();
     const cart = useCart();
     const toast = useToast();
     const dataSaver = useDataSaver();
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const stock = Number(product.stock);
     const saved = wishlist?.isSaved(product.id);
-    const comparing = compare?.isComparing(product.id);
     const isList = layout === "list";
     const [adding, setAdding] = useState(false);
 
@@ -30,12 +27,6 @@ function ProductCard({ product, layout = "grid" }) {
         e.preventDefault();
         e.stopPropagation();
         wishlist?.toggle(product.id);
-    };
-
-    const handleToggleCompare = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        compare?.toggle(product);
     };
 
    
@@ -95,6 +86,22 @@ function ProductCard({ product, layout = "grid" }) {
             )}
 
             <VerificationBadge entity={product} corner="top-left" compact={isList} />
+
+            {/* Video cue. The /products list response doesn't include
+                videos today, so this stays dormant until it carries
+                `videos` (as the detail endpoint does) or a `has_video`
+                flag - see the phase-7 CHANGES.md. */}
+            {(product.has_video || product.videos?.length > 0) && (
+                <span
+                    role="img"
+                    aria-label="Has video"
+                    className="absolute bottom-2 left-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3" aria-hidden="true">
+                        <path d="M8 5v14l11-7L8 5Z" />
+                    </svg>
+                </span>
+            )}
         </div>
     );
 
@@ -143,22 +150,6 @@ function ProductCard({ product, layout = "grid" }) {
         </div>
     );
 
-    const compareToggle = (
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, so ticking Compare doesn't also open the product link; the checkbox itself stays keyboard-operable
-        <label
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 text-xs text-ash mt-1.5 cursor-pointer w-fit"
-        >
-            <input
-                type="checkbox"
-                checked={comparing || false}
-                onChange={handleToggleCompare}
-                disabled={!comparing && compare?.count >= compare?.maxCompare}
-                className="accent-teal"
-            />
-            Compare
-        </label>
-    );
 
    
     
@@ -187,7 +178,6 @@ function ProductCard({ product, layout = "grid" }) {
                     <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
                     {priceRow}
                     {ratingAndStock}
-                    {compareToggle}
                 </div>
 
                 {addToCartButton}
@@ -207,7 +197,6 @@ function ProductCard({ product, layout = "grid" }) {
 
             {priceRow}
             {ratingAndStock}
-            {compareToggle}
             {addToCartButton}
         </Link>
     );

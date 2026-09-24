@@ -51,19 +51,24 @@ export default function RecommendedProducts({ endpoint, title }) {
 
     if (!loading && products.length === 0) return null;
 
+    // Phase 3: vertical grid instead of a horizontal snap-scroll shelf -
+    // same grid-cols breakpoints ProductGrid.jsx already uses, so this
+    // reads as a continuation of the page's normal product grid rather
+    // than a visually distinct shelf. Skeleton count/shape follows suit
+    // (8 tiles across the grid instead of 4 tiles sized for a single row).
     return (
         <section className="my-10">
             <h2 className="font-display text-xl mb-4">{title}</h2>
             {loading ? (
-                <div className="flex gap-4 overflow-x-hidden">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="w-44 shrink-0 h-56 bg-line/40 rounded-lg animate-pulse" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-56 bg-line/40 rounded-lg animate-pulse" />
                     ))}
                 </div>
             ) : (
-                <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                     {products.map((product) => (
-                        <div key={product.id} className="w-44 shrink-0 snap-start">
+                        <div key={product.id}>
                             <ProductCard product={product} />
                             {whyById[product.id] && (
                                 <p className="text-[11px] text-ash mt-1 px-0.5 line-clamp-1">{whyById[product.id]}</p>

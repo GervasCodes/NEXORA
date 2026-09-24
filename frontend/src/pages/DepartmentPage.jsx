@@ -9,6 +9,7 @@ import ProductFilters from "../components/ProductFilters";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import ServicesBrowse from "./ServicesBrowse";
 import { useSocket } from "../context/SocketContext";
+import { ServicesIcon } from "../components/NavIcons";
 
 // The "Services" department card lives in the same homepage grid as every
 // product department, but services aren't products - they have their own
@@ -145,6 +146,24 @@ export default function DepartmentPage() {
             </div>
 
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+                {/* Phase 3: per-department cross-link to Services, styled
+                    consistently with the homepage's own "Looking for a
+                    service, not a product?" card (see Home.jsx) but sized
+                    down to sit alongside this page's other rows instead of
+                    as a standalone hero-sized block. */}
+                <Link
+                    to="/services"
+                    className="mb-8 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-azure/5 hover:bg-azure/10 transition-colors px-5 py-4"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-azure/15 flex items-center justify-center shrink-0">
+                            <ServicesIcon className="w-4 h-4 text-azure" />
+                        </div>
+                        <p className="text-sm text-ink/80">Looking for a service instead of a product?</p>
+                    </div>
+                    <span className="text-sm text-teal shrink-0 hidden sm:inline">Browse services →</span>
+                </Link>
+
                 <ProductRow title="On sale" products={department.promotions} />
                 <ProductRow title="Sponsored" products={department.sponsored} />
                 <ProductRow title={`Trending in ${department.name}`} products={department.trending} />

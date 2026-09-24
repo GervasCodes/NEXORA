@@ -390,7 +390,7 @@ export default function ConversationThread() {
     if (loading) return <PageLoader />;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
+        <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
             <PageMeta title="Conversation" noIndex />
             {/* Phase 4 (SEO Supporting, H1 audit): this page has no heading
                 anywhere - just a "← All messages" back link and the action

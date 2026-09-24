@@ -68,6 +68,12 @@ export const DICTIONARY = {
 
         "products.viewGrid": "Grid view",
         "products.viewList": "List view",
+        "products.viewFeed": "Swipe view",
+        "products.feedClose": "Close feed",
+        "products.feedFilters": "Filters",
+        "products.feedViewProduct": "View product",
+        "products.feedMute": "Mute video",
+        "products.feedUnmute": "Unmute video",
 
         "account.title": "Account",
         "account.signedInAs": "Signed in as",
@@ -849,6 +855,12 @@ export const DICTIONARY = {
 
         "products.viewGrid": "Mwonekano wa gridi",
         "products.viewList": "Mwonekano wa orodha",
+        "products.viewFeed": "Mwonekano wa kutelezesha",
+        "products.feedClose": "Funga",
+        "products.feedFilters": "Vichujio",
+        "products.feedViewProduct": "Tazama bidhaa",
+        "products.feedMute": "Zima sauti",
+        "products.feedUnmute": "Washa sauti",
 
         "account.title": "Akaunti",
         "account.signedInAs": "Umeingia kama",

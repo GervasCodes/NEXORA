@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import DepartmentCard from "../components/DepartmentCard";
@@ -121,6 +121,22 @@ export default function Home() {
     const { t } = useLanguage();
     const { user } = useAuth();
     const search = searchParams.get("search") || "";
+    const queryKey = searchParams.toString();
+
+    // Price/sort intent extracted from a natural-language header search
+    // (see SearchBox.jsx). Layered *under* the ProductFilters values in
+    // the ProductGrid params below, so a manual filter change always wins.
+    const urlFilters = useMemo(() => {
+        const out = {};
+        const min = searchParams.get("min_price");
+        const max = searchParams.get("max_price");
+        const sort = searchParams.get("sort");
+        if (min !== null && min !== "" && Number.isFinite(Number(min))) out.min_price = Number(min);
+        if (max !== null && max !== "" && Number.isFinite(Number(max))) out.max_price = Number(max);
+        if (["newest", "price_low", "price_high", "rating"].includes(sort)) out.sort = sort;
+        return out;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [queryKey]);
     const [resultCount, setResultCount] = useState(null);
     const [filters, setFilters] = useState({});
 
@@ -130,7 +146,7 @@ export default function Home() {
     useEffect(() => {
         setResultCount(null);
         setFilters({});
-    }, [search]);
+    }, [queryKey]);
 
     return (
         <div>
@@ -206,12 +222,6 @@ export default function Home() {
                         </div>
                         <DepartmentDiscovery />
 
-                        <div className="text-center mt-8">
-                            <Link to="/products" className="text-sm text-teal hover:underline">
-                                Or browse every product →
-                            </Link>
-                        </div>
-
                         {/* Services now lives only here, not in the global header
                             (see Header.jsx) - the header was carrying it as a
                             permanent icon for every page/role even though it's
@@ -261,7 +271,7 @@ export default function Home() {
                         <ProductFilters onChange={setFilters} />
 
                         <ProductGrid
-                            params={{ search, ...filters }}
+                            params={{ search, ...urlFilters, ...filters }}
                             onResults={setResultCount}
                             emptyTitle={t("search.noResultsTitle", { term: search })}
                             emptyHint={t("search.noResultsHint")}

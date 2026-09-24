@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
+import { parseSearchQuery } from "../api/ai";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
@@ -8,6 +9,58 @@ import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../util
 
 const DEBOUNCE_MS = 250;
 const MIN_CHARS = 2;
+// The AI parse only runs when the shopper actually submits (not per
+// keystroke like the suggestions above), and navigation waits on it - so
+// it's capped. Past this, we give up and search the raw text instead of
+// leaving the shopper staring at a search box that does nothing.
+const PARSE_TIMEOUT_MS = 4000;
+const VALID_SORTS = ["newest", "price_low", "price_high", "rating"];
+
+const toPrice = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+// Turns free text into the {search, min_price, max_price, sort} shape the
+// results page understands. Never throws: any failure (network, timeout,
+// malformed response) degrades to a plain raw-text search, which is exactly
+// what this box did before the AI parse was merged in. Single-word queries
+// skip the AI call entirely - there's no price/sort intent to extract from
+// "sneakers", so it would only add latency and cost.
+async function resolveSearchIntent(query) {
+    if (!/\s/.test(query)) return { search: query };
+
+    let timer;
+    try {
+        const result = await Promise.race([
+            parseSearchQuery(query),
+            new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("parse timeout")), PARSE_TIMEOUT_MS); })
+        ]);
+        const filters = { search: (result?.search || "").trim() || query };
+        const { min_price, max_price, sort } = result || {};
+        const min = toPrice(min_price);
+        const max = toPrice(max_price);
+        if (min !== null) filters.min_price = min;
+        if (max !== null) filters.max_price = max;
+        if (VALID_SORTS.includes(sort)) filters.sort = sort;
+        return filters;
+    } catch {
+        return { search: query };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// Same URL shape as before for a plain search ("/?search=..."); price/sort
+// are only appended when the parse actually found them.
+function buildResultsUrl({ search, min_price, max_price, sort }) {
+    let url = `/?search=${encodeURIComponent(search)}`;
+    if (min_price !== undefined) url += `&min_price=${min_price}`;
+    if (max_price !== undefined) url += `&max_price=${max_price}`;
+    if (sort) url += `&sort=${sort}`;
+    return url;
+}
 
 
 function HighlightMatch({ text, query }) {
@@ -40,10 +93,12 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
     const [listening, setListening] = useState(false);
+    const [parsing, setParsing] = useState(false);
     const [recent, setRecent] = useState(() => getRecentSearches());
     const containerRef = useRef(null);
     const debounceRef = useRef(null);
     const recognitionRef = useRef(null);
+    const parsingRef = useRef(false);
 
     useEffect(() => {
         clearTimeout(debounceRef.current);
@@ -102,12 +157,31 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const goToResults = (term) => {
-        setOpen(false);
-        onNavigate?.();
+    const goToResults = async (term) => {
         const trimmed = term.trim();
+        // A second submit while the first is still parsing would race two
+        // navigations - the first one in wins.
+        if (parsingRef.current) return;
+
+        setOpen(false);
         if (trimmed) setRecent(addRecentSearch(trimmed));
-        navigate(trimmed ? `/?search=${encodeURIComponent(trimmed)}` : "/");
+
+        if (!trimmed) {
+            onNavigate?.();
+            navigate("/");
+            return;
+        }
+
+        parsingRef.current = true;
+        setParsing(true);
+        try {
+            const intent = await resolveSearchIntent(trimmed);
+            onNavigate?.();
+            navigate(buildResultsUrl(intent));
+        } finally {
+            parsingRef.current = false;
+            setParsing(false);
+        }
     };
 
     const ROUTE_BY_TYPE = {
@@ -212,7 +286,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                         </svg>
                     </button>
                 )}
-                <button type="submit" className="bg-mango text-abyss px-4 rounded-r-md text-sm font-semibold hover:bg-mango-dark transition-colors focus-ring shrink-0">
+                <button type="submit" disabled={parsing} aria-busy={parsing} className="bg-mango text-abyss px-4 rounded-r-md text-sm font-semibold hover:bg-mango-dark transition-colors focus-ring shrink-0 disabled:opacity-70">
                     {submitLabel}
                 </button>
             </form>

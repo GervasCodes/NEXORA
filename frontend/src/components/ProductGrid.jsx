@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import ProductCard from "./ProductCard";
+import ProductSwipeFeed from "./ProductSwipeFeed";
 import EmptyState from "./ui/EmptyState";
 import ErrorState from "./ui/ErrorState";
 
@@ -57,6 +58,12 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     const [layout, setLayout] = useState(readStoredView);
     const [retryCount, setRetryCount] = useState(0);
     const sentinelRef = useRef(null);
+    const viewToggleRef = useRef(null);
+    // The swipe feed is a mobile-only full-screen overlay, not a persisted
+    // layout: grid/list stays the stored preference (readStoredView /
+    // changeLayout are untouched), so closing the feed - or opening the
+    // site later - lands exactly where the shopper was before.
+    const [feedOpen, setFeedOpen] = useState(false);
 
     const changeLayout = (next) => {
         setLayout(next);
@@ -112,8 +119,32 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         return () => observer.disconnect();
     }, [loadMore]);
 
+    const closeFeed = useCallback(() => setFeedOpen(false), []);
+
+    // The filter controls live in the page that renders this grid (right
+    // above it), so "Filters" from inside the feed closes the feed and
+    // brings them into view rather than duplicating them in a sheet.
+    const openFiltersFromFeed = useCallback(() => {
+        setFeedOpen(false);
+        const toggle = viewToggleRef.current;
+        const target = toggle?.previousElementSibling || toggle;
+        // Wait a frame so the overlay's scroll lock is released first.
+        requestAnimationFrame(() => target?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
+    }, []);
+
+    // Mobile-only: if the viewport grows past the `md` breakpoint (rotate,
+    // resize) while the feed is open, drop back to the normal views.
+    useEffect(() => {
+        if (!feedOpen || typeof window === "undefined" || !window.matchMedia) return;
+        const mql = window.matchMedia("(min-width: 768px)");
+        const handle = (e) => { if (e.matches) setFeedOpen(false); };
+        if (mql.matches) setFeedOpen(false);
+        mql.addEventListener?.("change", handle);
+        return () => mql.removeEventListener?.("change", handle);
+    }, [feedOpen]);
+
     const viewToggle = (
-        <div className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Product view">
+        <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Product view">
             <button
                 type="button"
                 onClick={() => changeLayout("grid")}
@@ -139,6 +170,19 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                     <rect x="3" y="4" width="18" height="3.5" rx="1" />
                     <rect x="3" y="10.25" width="18" height="3.5" rx="1" />
                     <rect x="3" y="16.5" width="18" height="3.5" rx="1" />
+                </svg>
+            </button>
+            {/* Third view: launches the full-screen swipe feed. Mobile only. */}
+            <button
+                type="button"
+                onClick={() => setFeedOpen(true)}
+                disabled={loading}
+                aria-label={t("products.viewFeed")}
+                className="md:hidden w-11 h-11 rounded-md flex items-center justify-center border border-line text-ash hover:border-ink transition-colors disabled:opacity-50"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4" aria-hidden="true">
+                    <rect x="7" y="2" width="10" height="20" rx="2" />
+                    <path d="M10.5 9.5v5l4-2.5-4-2.5Z" fill="currentColor" stroke="none" />
                 </svg>
             </button>
         </div>
@@ -205,6 +249,17 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
             )}
             {page >= totalPages && products.length >= PAGE_SIZE && (
                 <p className="text-center text-ash text-xs mt-8">You've reached the end.</p>
+            )}
+
+            {feedOpen && (
+                <ProductSwipeFeed
+                    products={products}
+                    hasMore={page < totalPages}
+                    loadingMore={loadingMore}
+                    onLoadMore={loadMore}
+                    onClose={closeFeed}
+                    onOpenFilters={openFiltersFromFeed}
+                />
             )}
         </>
     );

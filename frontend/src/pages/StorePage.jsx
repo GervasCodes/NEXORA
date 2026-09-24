@@ -221,7 +221,7 @@ export default function StorePage() {
             </div>
             <div className="relative h-40 sm:h-56 bg-line/40 overflow-hidden">
                 {store.store_banner ? (
-                    <img src={store.store_banner} alt={`${store.name} banner`} className="w-full h-full object-cover" />
+                    <img src={store.store_banner} alt="" className="w-full h-full object-cover" />
                 ) : null}
                 {store.promo_video_url && (
                     <button
@@ -246,7 +246,7 @@ export default function StorePage() {
                 <div className="flex items-end gap-4 -mt-10 mb-6">
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-paper border-4 border-paper shadow-sm overflow-hidden shrink-0">
                         {store.store_logo ? (
-                            <img src={store.store_logo} alt={`${store.name} logo`} className="w-full h-full object-cover" />
+                            <img src={store.store_logo} alt="" className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-line/40 text-ash text-xs">
                                 {t("store.noLogo")}

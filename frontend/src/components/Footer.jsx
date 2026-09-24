@@ -41,13 +41,15 @@ function InstallCallout() {
     return (
         <button
             onClick={promptInstall}
-            className="flex items-center gap-2 text-frost/60 hover:text-frost transition-colors"
+            aria-label="Install the NEXORA app"
+            title="Install the NEXORA app"
+            className="flex items-center gap-1.5 text-frost/60 hover:text-frost transition-colors"
         >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 shrink-0">
                 <path d="M12 3v12m0 0-4-4m4 4 4-4" />
                 <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
             </svg>
-            Install the NEXORA app
+            <span className="hidden md:inline text-xs">Install app</span>
         </button>
     );
 }
@@ -55,36 +57,39 @@ function InstallCallout() {
 export default function Footer() {
     const { t } = useLanguage();
 
+    // Compact layout: brand/tagline + payment icons + install + social
+    // share one row (wrapping on narrow screens), and the legal nav row
+    // carries the copyright at its end. The legal links themselves
+    // (status + every LEGAL_DOC_LIST entry) render exactly as before -
+    // compliance-required, so only their container's neighbors changed.
     return (
         <footer className="glass-dark text-frost/70 mt-24">
-            <div className="max-w-6xl mx-auto px-6 pt-10 pb-28 sm:pb-10 flex flex-col gap-6 text-sm">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
+            <div className="max-w-6xl mx-auto px-6 pt-8 pb-28 sm:pb-8 flex flex-col gap-4 text-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
                         <span className="font-display italic text-frost text-lg">NEXORA</span>
-                    </div>
-                    <p>{t("footer.tagline")}</p>
-                    <p className="text-frost/40">&copy; {new Date().getFullYear()} NEXORA</p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-frost/10 pt-5">
-                    <div className="flex items-center gap-3">
-                        {PAYMENT_BADGES.map((badge) => (
-                            <span
-                                key={badge.key}
-                                title={badge.label}
-                                aria-label={badge.label}
-                                className="flex items-center gap-1.5 border border-frost/15 rounded-md px-2.5 py-1.5 text-frost/60"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
-                                    <path d={badge.icon} />
-                                </svg>
-                                <span className="hidden md:inline text-xs">{badge.label}</span>
-                            </span>
-                        ))}
+                        <p className="text-frost/60">{t("footer.tagline")}</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-x-4 gap-y-3 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                            {PAYMENT_BADGES.map((badge) => (
+                                <span
+                                    key={badge.key}
+                                    role="img"
+                                    title={badge.label}
+                                    aria-label={badge.label}
+                                    className="flex items-center justify-center w-7 h-7 border border-frost/15 rounded-md text-frost/60"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0" aria-hidden="true">
+                                        <path d={badge.icon} />
+                                    </svg>
+                                </span>
+                            ))}
+                        </div>
+
                         <InstallCallout />
+
                         <div className="flex items-center gap-2">
                             {COMPANY_SOCIAL_LINKS.map((link) => (
                                 <a
@@ -103,7 +108,7 @@ export default function Footer() {
                     </div>
                 </div>
 
-                <nav className="flex flex-wrap gap-x-5 gap-y-2 border-t border-frost/10 pt-5 text-frost/60">
+                <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-frost/10 pt-4 text-frost/60">
                     <Link to="/status" className="hover:text-frost hover:underline">
                         {t("footer.status")}
                     </Link>
@@ -112,6 +117,7 @@ export default function Footer() {
                             {d.shortTitle}
                         </Link>
                     ))}
+                    <span className="text-frost/40 lg:ml-auto">&copy; {new Date().getFullYear()} NEXORA</span>
                 </nav>
             </div>
         </footer>

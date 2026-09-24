@@ -12,13 +12,12 @@
 # crawl budget. This list mirrors the same route groups already marked
 # `noIndex` in the pages' own <PageMeta noIndex /> usage.
 #
-# Two routes are marked `noIndex` but are NOT behind an auth gate —
-# /compare and /group-buys/:id (see ComparePage.jsx and
-# GroupBuyDetail.jsx). Those are deliberately left OUT of Disallow
-# below: unlike the auth-gated routes, a crawler CAN reach them, so
+# One route is marked `noIndex` but is NOT behind an auth gate —
+# /group-buys/:id (see GroupBuyDetail.jsx). It is deliberately left OUT
+# of Disallow below: unlike the auth-gated routes, a crawler CAN reach it, so
 # blocking the crawl would stop Google from ever seeing the noindex
 # meta tag on the page itself — the well-known robots.txt-vs-meta-
-# noindex conflict. Leaving them crawlable lets the per-page noindex
+# noindex conflict. Leaving it crawlable lets the per-page noindex
 # tag do its job as intended.
 User-agent: *
 Allow: /
@@ -38,4 +37,8 @@ Disallow: /seller
 Disallow: /delivery
 Disallow: /admin
 
+# TODO: replace with the real production frontend domain before deploying
+# (same domain this file itself is served from). See PHASE_1_NOTES.md —
+# this is proxied through to the backend-generated sitemap via
+# frontend/public/_redirects, so the same domain applies here.
 Sitemap: https://nexoramarketplace.online/sitemap.xml

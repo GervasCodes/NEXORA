@@ -11,6 +11,7 @@ import Button from "./ui/Button";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
+import SideDrawer from "./ui/SideDrawer";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -126,17 +127,9 @@ export default function Header() {
         setMenuOpen(false);
     }, [user]);
 
-    // Keyboard users get the same "back out of the drawer" affordance a
-    // mouse user gets by tapping elsewhere - only listens while the
-    // drawer is actually open, so it costs nothing the rest of the time.
-    useEffect(() => {
-        if (!menuOpen) return;
-        const handleKeyDown = (e) => {
-            if (e.key === "Escape") setMenuOpen(false);
-        };
-        document.addEventListener("keydown", handleKeyDown);
-        return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [menuOpen]);
+    // Escape-to-close and outside-click-to-close for the mobile drawer
+    // are now handled inside the shared SideDrawer itself (see below),
+    // so there's no separate keydown listener to maintain here.
 
     //  sign-out now requires an explicit confirmation instead of
     // firing on a single click - a stray tap (easy on the mobile drawer's
@@ -353,24 +346,27 @@ export default function Header() {
                 of screen width or orientation. Icon + label rows - a
                 drawer has room for both, unlike the compact desktop bar.
 
-                Mobile UI/UX audit: this list has grown past what a short
-                phone viewport can show in one screen (Home/Browse plus
-                every nav link plus sign-out/sign-in) - at ~44px a row that
-                easily tops 700-800px. The drawer lives inside `header`,
-                which is `sticky top-0`, so once stuck it behaves like a
-                fixed element: without its own scroll, anything past the
-                viewport's bottom edge (Bookings/Disputes/Returns/Wallet/
-                Loyalty/Affiliate were landing right in that cut-off zone)
-                was rendered but permanently unreachable - no amount of
-                page-scrolling brings it into view. max-h + overflow-y-auto
-                makes the drawer itself the thing that scrolls. The extra
-                bottom padding for buyers reserves room for the fixed
-                MobileBottomNav below so the last item can scroll clear of
-                it instead of ending up hidden underneath. */}
-            {menuOpen && (
+                UI Modernization Phase 2: now the shared, edge-anchored
+                SideDrawer (right side, the component's default) instead
+                of a top-anchored slide-down panel living inline inside
+                `header`. Its own internal scroll region (see
+                SideDrawer.jsx) is what fixed the original "unreachable
+                nav items on short viewports" bug (Bookings/Disputes/
+                Returns/Wallet/Loyalty/Affiliate landing past the
+                viewport's cut-off with no way to scroll to them) - this
+                keeps that fix, just inside the shared component now. The
+                extra bottom padding for buyers reserves room for the
+                fixed MobileBottomNav below so the last item can scroll
+                clear of it instead of ending up hidden underneath. */}
+            <SideDrawer
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                id="mobile-nav-drawer"
+                ariaLabel="Menu"
+                widthClassName="w-80 max-w-[85vw]"
+            >
                 <div
-                    id="mobile-nav-drawer"
-                    className="md:hidden glass-strong text-ink border-t border-line/60 px-4 pt-3 animate-slide-up overflow-y-auto overscroll-contain max-h-[calc(100dvh-140px)]"
+                    className="md:hidden glass-strong text-ink px-4 pt-3"
                     style={{ paddingBottom: user?.role === "buyer" ? "calc(env(safe-area-inset-bottom) + 76px)" : "0.75rem" }}
                 >
                     <nav className="flex flex-col divide-y divide-line/60">
@@ -450,7 +446,7 @@ export default function Header() {
                         ) : null}
                     </nav>
                 </div>
-            )}
+            </SideDrawer>
 
             {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
 

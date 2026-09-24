@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import PageTransition from "./PageTransition";
 import ConfirmDialog from "./ConfirmDialog";
+import NotificationBell from "./NotificationBell";
+import SideDrawer from "./ui/SideDrawer";
 import { useAuth } from "../context/AuthContext";
 import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 
@@ -108,25 +110,18 @@ export default function AdminLayout() {
         setDrawerOpen(false);
     }, [pathname]);
 
-    useEffect(() => {
-        if (!drawerOpen) return;
-        const handleKeyDown = (e) => {
-            if (e.key === "Escape") setDrawerOpen(false);
-        };
-        document.addEventListener("keydown", handleKeyDown);
-        return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [drawerOpen]);
-
     const currentTab = allTabs.find((tab) => tabIsActive(tab, pathname));
 
     return (
-        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-6 md:gap-8 md:h-[calc(100vh-5rem)] md:overflow-hidden">
-            {/* Mobile: a single toggle bar showing the current page, opening
-                a grouped drawer - replaces what used to be a cramped
-                horizontal-scrolling strip of all 17 tabs at equal weight
-                crammed under a "Control room" heading. Desktop keeps the
-                original always-visible sidebar below, untouched. */}
-            <div className="md:hidden glass-strong border-b border-line/60 px-4 py-3">
+        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8">
+            {/* UI Modernization Phase 2: one persistent toggle bar at every
+                breakpoint (previously mobile-only, with desktop instead
+                getting a permanently-visible ~200px sidebar) feeding a
+                single shared SideDrawer. Reclaims that column's width for
+                content on desktop while keeping the toggle discoverable -
+                it's a persistent, always-visible bar, not buried behind
+                another control - per Phase 2's requirement. */}
+            <div className="glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
                 <div className="flex items-center gap-2">
                     <Link
                         to="/"
@@ -136,11 +131,22 @@ export default function AdminLayout() {
                     >
                         <HomeIcon className="w-5 h-5" />
                     </Link>
+                    {/* NotificationBell's icon/badge colors (text-frost,
+                        etc.) are built for the dark storefront Header it
+                        used to live in exclusively - it never expected to
+                        render on this panel's light glass-strong surface.
+                        The dark chip gives it the same background it
+                        always had, so it stays visible here without
+                        needing a second, admin-specific color variant of
+                        the component itself. */}
+                    <div className="shrink-0 w-9 h-9 rounded-md bg-abyss flex items-center justify-center">
+                        <NotificationBell />
+                    </div>
                     <button
                         type="button"
                         onClick={() => setDrawerOpen((v) => !v)}
                         aria-expanded={drawerOpen}
-                        aria-controls="admin-mobile-drawer"
+                        aria-controls="admin-nav-drawer"
                         className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
                     >
                         <span className="min-w-0 text-left">
@@ -161,82 +167,29 @@ export default function AdminLayout() {
                         </svg>
                     </button>
                 </div>
-
-                {drawerOpen && (
-                    <nav
-                        id="admin-mobile-drawer"
-                        className="mt-3 pt-3 border-t border-line/60 max-h-[70vh] overflow-y-auto"
-                    >
-                        {groups.map((group) => (
-                            <div key={group.label} className="mb-4 last:mb-0">
-                                <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                    {group.tabs.map((tab) => (
-                                        <NavLink
-                                            key={tab.to}
-                                            to={tab.to}
-                                            end={tab.end}
-                                            className={({ isActive }) =>
-                                                `text-sm px-3 py-2 rounded-md transition-colors ${
-                                                    isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
-                                                }`
-                                            }
-                                        >
-                                            {tab.label}
-                                        </NavLink>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-
-                        <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
-                            <Link
-                                to="/account"
-                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
-                            >
-                                <AccountIcon className="w-4 h-4 shrink-0" />
-                                Account
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={() => setSignOutConfirmOpen(true)}
-                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
-                            >
-                                <SignOutIcon className="w-4 h-4 shrink-0" />
-                                Sign out
-                            </button>
-                        </div>
-                    </nav>
-                )}
             </div>
 
-            {/* Desktop sidebar - unchanged layout, just now fed from the
-                same grouped `groups` data as the mobile drawer so the two
-                can never drift out of sync with each other. */}
-            <aside className="hidden md:block glass-strong rounded-lg p-4 md:h-full md:overflow-y-auto">
-                <p className="text-xs uppercase tracking-widest text-ash mb-1">Admin</p>
-                <p className="font-display text-lg mb-3">Control room</p>
-                <Link
-                    to="/"
-                    className="flex items-center gap-2 text-sm text-ink/70 hover:text-ink mb-6 px-3 py-2 rounded-md hover:bg-line/50 transition-colors"
-                >
-                    <HomeIcon className="w-4 h-4 shrink-0" />
-                    Back to Home
-                </Link>
-
-                <nav className="flex flex-col gap-4">
+            <SideDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                side="left"
+                id="admin-nav-drawer"
+                ariaLabel="Control room navigation"
+                widthClassName="w-80 max-w-[85vw]"
+            >
+                <nav className="p-4">
                     {groups.map((group) => (
-                        <div key={group.label}>
-                            <p className="text-[11px] uppercase tracking-widest text-ash/80 mb-1 px-3">{group.label}</p>
-                            <div className="flex flex-col gap-1">
+                        <div key={group.label} className="mb-4 last:mb-0">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
+                            <div className="grid grid-cols-2 gap-1.5">
                                 {group.tabs.map((tab) => (
                                     <NavLink
                                         key={tab.to}
                                         to={tab.to}
                                         end={tab.end}
                                         className={({ isActive }) =>
-                                            `text-sm px-3 py-2 rounded-md whitespace-nowrap transition-colors ${
-                                                isActive ? "bg-ink text-paper" : "text-ink/80 hover:bg-line/50"
+                                            `text-sm px-3 py-2 rounded-md transition-colors ${
+                                                isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
                                             }`
                                         }
                                     >
@@ -246,28 +199,28 @@ export default function AdminLayout() {
                             </div>
                         </div>
                     ))}
+
+                    <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                        <Link
+                            to="/account"
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                        >
+                            <AccountIcon className="w-4 h-4 shrink-0" />
+                            Account
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setSignOutConfirmOpen(true)}
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                        >
+                            <SignOutIcon className="w-4 h-4 shrink-0" />
+                            Sign out
+                        </button>
+                    </div>
                 </nav>
+            </SideDrawer>
 
-                <div className="mt-6 pt-4 border-t border-line/60 flex flex-col gap-1">
-                    <Link
-                        to="/account"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-ink/80 hover:bg-line/50 transition-colors"
-                    >
-                        <AccountIcon className="w-4 h-4 shrink-0" />
-                        Account
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => setSignOutConfirmOpen(true)}
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-coral hover:bg-coral/10 transition-colors text-left"
-                    >
-                        <SignOutIcon className="w-4 h-4 shrink-0" />
-                        Sign out
-                    </button>
-                </div>
-            </aside>
-
-            <div className="min-w-0 px-4 pb-6 pt-2 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
+            <div className="min-w-0 px-4 pb-6 pt-4 sm:px-0">
                 <PageTransition granular>
                     <Outlet />
                 </PageTransition>

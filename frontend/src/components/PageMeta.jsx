@@ -95,7 +95,7 @@ export default function PageMeta({
                     <meta property="og:image:height" content="630" />
                 </>
             )}
-            <meta property="og:url" content={canonicalUrl} />
+            <meta property="og:url" content={url} />
 
             {/* Twitter Card */}
             <meta name="twitter:card" content="summary_large_image" />

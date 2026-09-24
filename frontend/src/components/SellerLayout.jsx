@@ -7,6 +7,7 @@ import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
 import MobileBottomNav from "./MobileBottomNav";
 import ConfirmDialog from "./ConfirmDialog";
+import SideDrawer from "./ui/SideDrawer";
 import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
 import { getVerificationTier } from "../utils/verificationTier";
@@ -143,15 +144,6 @@ export default function SellerLayout() {
         setDrawerOpen(false);
     }, [location.pathname]);
 
-    useEffect(() => {
-        if (!drawerOpen) return;
-        const handleKeyDown = (e) => {
-            if (e.key === "Escape") setDrawerOpen(false);
-        };
-        document.addEventListener("keydown", handleKeyDown);
-        return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [drawerOpen]);
-
     const currentTab = allTabs.find((tab) => tabIsActive(tab, location.pathname));
 
     const loadProfile = () => {
@@ -257,13 +249,15 @@ export default function SellerLayout() {
     );
 
     return (
-        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8 grid md:grid-cols-[200px_1fr] gap-8 md:h-[calc(100vh-5rem)] md:overflow-hidden">
-            {/* Mobile: a single toggle bar showing the current page, opening
-                a grouped drawer - replaces what used to be a cramped
-                horizontally-scrolling strip of all 18 tabs at equal weight
-                with no hint there was more off-screen. Desktop keeps the
-                original always-visible sidebar below, untouched. */}
-            <div className="md:hidden glass-strong border-b border-line/60 px-4 py-3">
+        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8">
+            {/* UI Modernization Phase 2: one persistent toggle bar at every
+                breakpoint (previously mobile-only, with desktop instead
+                getting a permanently-visible ~200px sidebar) feeding a
+                single shared SideDrawer - same treatment as AdminLayout,
+                see that file for the fuller rationale. MobileBottomNav
+                below is untouched: that's a separate, mobile-only surface
+                (Phase 6) this phase doesn't revisit. */}
+            <div className="glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
                 <div className="flex items-center gap-2">
                     <Link
                         to="/"
@@ -277,7 +271,7 @@ export default function SellerLayout() {
                         type="button"
                         onClick={() => setDrawerOpen((v) => !v)}
                         aria-expanded={drawerOpen}
-                        aria-controls="seller-mobile-drawer"
+                        aria-controls="seller-nav-drawer"
                         className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
                     >
                         <span className="min-w-0 text-left">
@@ -300,87 +294,30 @@ export default function SellerLayout() {
                         </svg>
                     </button>
                 </div>
-
-                {drawerOpen && (
-                    <nav
-                        id="seller-mobile-drawer"
-                        className="mt-3 pt-3 border-t border-line/60 max-h-[70vh] overflow-y-auto"
-                    >
-                        <p className="text-xs mb-3">{verifiedBadge}</p>
-                        {visibleGroups(merchantType).map((group) => (
-                            <div key={group.label} className="mb-4 last:mb-0">
-                                <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                    {group.tabs.map((tab) => (
-                                        <NavLink
-                                            key={tab.to}
-                                            to={tab.to}
-                                            end={tab.end}
-                                            className={({ isActive }) =>
-                                                `text-sm px-3 py-2 rounded-md transition-colors ${
-                                                    isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
-                                                }`
-                                            }
-                                        >
-                                            {tab.label}
-                                        </NavLink>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-
-                        <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
-                            <Link
-                                to="/account"
-                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
-                            >
-                                <AccountIcon className="w-4 h-4 shrink-0" />
-                                Account
-                            </Link>
-                            <button
-                                type="button"
-                                onClick={() => setSignOutConfirmOpen(true)}
-                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
-                            >
-                                <SignOutIcon className="w-4 h-4 shrink-0" />
-                                Sign out
-                            </button>
-                        </div>
-                    </nav>
-                )}
             </div>
 
-            {/* Desktop sidebar - unchanged look, now fed from the same
-                grouped `groups` data as the mobile drawer so the two can
-                never drift out of sync with each other. */}
-            <aside className="hidden md:block glass-strong rounded-lg p-4 md:h-full md:overflow-y-auto">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-xs uppercase tracking-widest text-ash">Seller</p>
-                    <Link
-                        to="/"
-                        aria-label="Back to Home"
-                        title="Back to Home"
-                        className="shrink-0 -mt-1 -mr-1 w-7 h-7 flex items-center justify-center rounded-md text-ink/60 hover:text-ink hover:bg-line/50 focus-ring transition-colors"
-                    >
-                        <HomeIcon className="w-4 h-4" />
-                    </Link>
-                </div>
-                <p className="font-display text-lg mb-1 truncate">{profile.store_name}</p>
-                <p className="text-xs mb-6">{verifiedBadge}</p>
-
-                <nav className="flex flex-col gap-4">
+            <SideDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                side="left"
+                id="seller-nav-drawer"
+                ariaLabel="Seller dashboard navigation"
+                widthClassName="w-80 max-w-[85vw]"
+            >
+                <nav className="p-4">
+                    <p className="text-xs mb-3">{verifiedBadge}</p>
                     {visibleGroups(merchantType).map((group) => (
-                        <div key={group.label}>
-                            <p className="text-[11px] uppercase tracking-widest text-ash/80 mb-1 px-3">{group.label}</p>
-                            <div className="flex flex-col gap-1">
+                        <div key={group.label} className="mb-4 last:mb-0">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
+                            <div className="grid grid-cols-2 gap-1.5">
                                 {group.tabs.map((tab) => (
                                     <NavLink
                                         key={tab.to}
                                         to={tab.to}
                                         end={tab.end}
                                         className={({ isActive }) =>
-                                            `text-sm px-3 py-2 rounded-md whitespace-nowrap transition-colors ${
-                                                isActive ? "bg-ink text-paper" : "text-ink/80 hover:bg-line/50"
+                                            `text-sm px-3 py-2 rounded-md transition-colors ${
+                                                isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
                                             }`
                                         }
                                     >
@@ -390,28 +327,28 @@ export default function SellerLayout() {
                             </div>
                         </div>
                     ))}
+
+                    <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                        <Link
+                            to="/account"
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                        >
+                            <AccountIcon className="w-4 h-4 shrink-0" />
+                            Account
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setSignOutConfirmOpen(true)}
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                        >
+                            <SignOutIcon className="w-4 h-4 shrink-0" />
+                            Sign out
+                        </button>
+                    </div>
                 </nav>
+            </SideDrawer>
 
-                <div className="mt-6 pt-4 border-t border-line/60 flex flex-col gap-1">
-                    <Link
-                        to="/account"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-ink/80 hover:bg-line/50 transition-colors"
-                    >
-                        <AccountIcon className="w-4 h-4 shrink-0" />
-                        Account
-                    </Link>
-                    <button
-                        type="button"
-                        onClick={() => setSignOutConfirmOpen(true)}
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-md text-coral hover:bg-coral/10 transition-colors text-left"
-                    >
-                        <SignOutIcon className="w-4 h-4 shrink-0" />
-                        Sign out
-                    </button>
-                </div>
-            </aside>
-
-            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0 md:h-full md:overflow-y-auto">
+            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
                 <PageTransition granular>
                     <Outlet context={{ profile, refreshProfile: loadProfile }} />
                 </PageTransition>

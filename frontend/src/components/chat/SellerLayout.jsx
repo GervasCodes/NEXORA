@@ -1,0 +1,371 @@
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
+import api from "../api/client";
+import { useAuth } from "../context/AuthContext";
+import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
+import AccountReviewNotice from "./AccountReviewNotice";
+import PageTransition from "./PageTransition";
+import MobileBottomNav from "./MobileBottomNav";
+import ConfirmDialog from "./ConfirmDialog";
+import SideDrawer from "./ui/SideDrawer";
+import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
+import { CheckIcon } from "./Icons";
+import { getVerificationTier } from "../utils/verificationTier";
+
+// Grouped rather than one flat list, so the mobile drawer reads as
+// sections (like /admin's) instead of an 18-item horizontal-scroll
+// strip with no indication there's more to the right, and so the
+// mobile toggle bar can show the exact current page name instead of
+// a generic "Seller" label.
+//
+// Merchant-Type-Aware Dashboard (Phase 1): each tab may carry a
+// `category` of "product" or "service". A tab with no `category` is
+// shared and always shown. Visibility is resolved against
+// seller_profiles.merchant_type - see isTabVisible below. `hybrid`
+// sellers see every tab, per CHANGES.md's Permission Matrix.
+// Reviews/Service reviews, Collections/Promote (sponsorship, featured
+// stores, and department sponsorship are tabs within it - see
+// SellerPromote.jsx) and Delivery team/Disputes (order-only dispute
+// types) follow the same product/service split as the Catalog and
+// Orders groups they sit alongside.
+//
+// `selfGated: true` marks tabs whose page already renders its own
+// merchant-type fallback UI (an upgrade prompt or explanatory empty
+// state - see SellerServices/SellerBookings/SellerAvailability/
+// SellerPricing) instead of a hard redirect. Those pages stay
+// reachable by direct URL even when their tab is hidden, so we don't
+// duplicate or override that existing behavior; see the
+// direct-access guard effect below for the tabs that don't have one
+// and still need a redirect.
+const groups = [
+    {
+        label: "Overview",
+        tabs: [
+            { to: "/seller", label: "Overview", end: true },
+            { to: "/seller/analytics", label: "Analytics" },
+            { to: "/seller/wallet", label: "Wallet" },
+            { to: "/seller/tax-info", label: "Tax & receipts" }
+        ]
+    },
+    {
+        label: "Catalog",
+        tabs: [
+            { to: "/seller/products", label: "Products", category: "product" },
+            { to: "/seller/services", label: "Services", category: "service", selfGated: true },
+            { to: "/seller/availability", label: "Availability", category: "service", selfGated: true },
+            { to: "/seller/pricing", label: "Pricing", category: "service", selfGated: true },
+            { to: "/seller/collections", label: "Collections", category: "product" }
+        ]
+    },
+    {
+        label: "Orders",
+        tabs: [
+            { to: "/seller/bookings", label: "Bookings", category: "service", selfGated: true },
+            { to: "/seller/orders", label: "Orders", category: "product" },
+            { to: "/seller/delivery-team", label: "Delivery team", category: "product" },
+            { to: "/seller/disputes", label: "Disputes", category: "product" },
+            { to: "/seller/returns", label: "Returns", category: "product" },
+            { to: "/seller/group-buys", label: "Group buys", category: "product" },
+            { to: "/seller/live-selling", label: "Live selling", category: "product" }
+        ]
+    },
+    {
+        label: "Reviews",
+        tabs: [
+            { to: "/seller/reviews", label: "Reviews", category: "product" },
+            { to: "/seller/service-reviews", label: "Service reviews", category: "service" }
+        ]
+    },
+    {
+        label: "Growth",
+        tabs: [
+            { to: "/seller/promote", label: "Promote", category: "product" },
+            { to: "/seller/subscription", label: "Subscription" }
+        ]
+    },
+    {
+        label: "Settings",
+        tabs: [
+            { to: "/seller/store", label: "Store settings" },
+            { to: "/seller/verification", label: "Verification" }
+        ]
+    }
+];
+
+const allTabs = groups.flatMap((g) => g.tabs);
+
+function tabIsActive(tab, pathname) {
+    return tab.end ? pathname === tab.to : pathname.startsWith(tab.to);
+}
+
+// A tab with no category is shared; hybrid sellers get everything;
+// otherwise the tab's category must match the seller's merchant_type.
+function isTabVisible(tab, merchantType) {
+    if (!tab.category) return true;
+    if (merchantType === "hybrid") return true;
+    return tab.category === merchantType;
+}
+
+function visibleGroups(merchantType) {
+    return groups
+        .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => isTabVisible(tab, merchantType)) }))
+        .filter((group) => group.tabs.length > 0);
+}
+
+export default function SellerLayout() {
+    const { user, sessionReady, logout } = useAuth();
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const isApproved = user?.account_verification_status === "approved";
+
+    // Account/Sign-out used to live in the global Header alongside the
+    // shopper-facing icons - out of place for a seller living inside
+    // their own dashboard shell. Both now live down here instead (see
+    // Header.jsx for the corresponding removal for the seller role).
+    // Mobile still also has "Profile" on the bottom tab bar below
+    // (sellerBottomNavItems) - that's a different, mobile-only surface
+    // and stays as-is; this addition is specifically for the sidebar/
+    // drawer that replaces the header's old Account icon.
+    const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+    const confirmSignOut = () => {
+        setSignOutConfirmOpen(false);
+        setDrawerOpen(false);
+        logout();
+        navigate("/");
+    };
+
+    // Close the drawer on every navigation, so it never sits open behind
+    // a page the seller didn't mean to open it on.
+    useEffect(() => {
+        setDrawerOpen(false);
+    }, [location.pathname]);
+
+    const currentTab = allTabs.find((tab) => tabIsActive(tab, location.pathname));
+
+    const loadProfile = () => {
+        if (!isApproved) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        api.get("/seller/profile")
+            .then(({ data }) => setProfile(data.data))
+            .catch(() => setProfile(null))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(loadProfile, [isApproved]);
+
+    useEffect(() => {
+        if (isApproved && !loading && !profile && location.pathname !== "/seller/setup") {
+            navigate("/seller/setup", { replace: true });
+        }
+    }, [isApproved, loading, profile, location.pathname, navigate]);
+
+    const merchantType = profile?.merchant_type || "product";
+    const unreadMessages = useUnreadMessagesCount(sessionReady);
+
+    // Seller's mobile bottom nav (Phase 6: Mobile Navigation
+    // Unification) - the Orders/Bookings slot follows the seller's own
+    // merchant_type, same category logic the sidebar/drawer tabs above
+    // already use: a service-only seller's most-reached-for list is
+    // their bookings, not an orders page they'd immediately get
+    // redirected out of (see the direct-access guard effect below).
+    // Hybrid sellers default to Orders, matching this layout's own
+    // "Orders" group ordering.
+    const sellerBottomNavItems = [
+        { to: "/seller", label: "Home", icon: DashboardIcon, end: true },
+        merchantType === "service"
+            ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
+            : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
+        { to: "/messages", label: "Messages", icon: MessagesIcon, badge: unreadMessages > 0 && (
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+        ) },
+        { to: "/seller/wallet", label: "Wallet", icon: WalletIcon },
+        { to: "/account", label: "Profile", icon: AccountIcon }
+    ];
+
+    // direct-access guard: only for tabs whose page has no
+    // merchant-type fallback UI of its own (selfGated tabs - Services,
+    // Bookings, Availability, Pricing - are intentionally left alone so
+    // their existing upgrade-prompt/empty-state behavior isn't
+    // overridden). Anyone hitting a product-only or service-only route
+    // that doesn't match their merchant_type gets sent back to the
+    // overview instead of a page built for the other merchant type.
+    useEffect(() => {
+        if (!profile) return;
+        const blockedTab = allTabs.find(
+            (tab) => tab.category && !tab.selfGated && !isTabVisible(tab, merchantType) && tabIsActive(tab, location.pathname)
+        );
+        if (blockedTab) {
+            navigate("/seller", { replace: true });
+        }
+    }, [profile, merchantType, location.pathname, navigate]);
+
+    if (!isApproved) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+                <AccountReviewNotice
+                    status={user?.account_verification_status}
+                    rejectionReason={user?.account_verification_rejection_reason}
+                    roleLabel="seller"
+                />
+            </div>
+        );
+    }
+
+    if (loading) {
+        return <div className="max-w-5xl mx-auto px-6 py-16 text-ash">Loading your store…</div>;
+    }
+
+    if (!profile && location.pathname === "/seller/setup") {
+        return <Outlet context={{ profile, refreshProfile: loadProfile }} />;
+    }
+
+    if (!profile) {
+        return null;
+    }
+
+    const verificationTier = getVerificationTier(profile);
+    const verifiedBadge = verificationTier === "business" ? (
+        <span className="text-azure inline-flex items-center gap-1">
+            <CheckIcon className="w-3.5 h-3.5" /> Verified Business
+        </span>
+    ) : verificationTier === "seller" ? (
+        <span className="text-teal inline-flex items-center gap-1">
+            <CheckIcon className="w-3.5 h-3.5" /> Verified Seller ·{" "}
+            <NavLink to="/seller/verification" className="text-azure hover:underline">
+                get Verified Business
+            </NavLink>
+        </span>
+    ) : (
+        <span className="text-ash">Awaiting ID verification</span>
+    );
+
+    return (
+        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8">
+            {/* UI Modernization Phase 2: one persistent toggle bar at every
+                breakpoint (previously mobile-only, with desktop instead
+                getting a permanently-visible ~200px sidebar) feeding a
+                single shared SideDrawer - same treatment as AdminLayout,
+                see that file for the fuller rationale. MobileBottomNav
+                below is untouched: that's a separate, mobile-only surface
+                (Phase 6) this phase doesn't revisit. */}
+            <div className="glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
+                <div className="flex items-center gap-2">
+                    <Link
+                        to="/"
+                        aria-label="Home"
+                        title="Home"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring transition-colors"
+                    >
+                        <HomeIcon className="w-5 h-5" />
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setDrawerOpen((v) => !v)}
+                        aria-expanded={drawerOpen}
+                        aria-controls="seller-nav-drawer"
+                        className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
+                    >
+                        <span className="min-w-0 text-left">
+                            <span className="block text-xs uppercase tracking-widest text-ash">
+                                {profile.store_name}
+                            </span>
+                            <span className="block font-display text-lg truncate">
+                                {currentTab?.label ?? "Seller"}
+                            </span>
+                        </span>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className={`w-5 h-5 shrink-0 text-ink/70 transition-transform ${drawerOpen ? "rotate-180" : ""}`}
+                        >
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <SideDrawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                side="left"
+                id="seller-nav-drawer"
+                ariaLabel="Seller dashboard navigation"
+                widthClassName="w-80 max-w-[85vw]"
+            >
+                <nav className="p-4">
+                    <p className="text-xs mb-3">{verifiedBadge}</p>
+                    {visibleGroups(merchantType).map((group) => (
+                        <div key={group.label} className="mb-4 last:mb-0">
+                            <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                {group.tabs.map((tab) => (
+                                    <NavLink
+                                        key={tab.to}
+                                        to={tab.to}
+                                        end={tab.end}
+                                        className={({ isActive }) =>
+                                            `text-sm px-3 py-2 rounded-md transition-colors ${
+                                                isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
+                                            }`
+                                        }
+                                    >
+                                        {tab.label}
+                                    </NavLink>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+
+                    <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                        <Link
+                            to="/account"
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                        >
+                            <AccountIcon className="w-4 h-4 shrink-0" />
+                            Account
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setSignOutConfirmOpen(true)}
+                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                        >
+                            <SignOutIcon className="w-4 h-4 shrink-0" />
+                            Sign out
+                        </button>
+                    </div>
+                </nav>
+            </SideDrawer>
+
+            <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
+                <PageTransition granular>
+                    <Outlet context={{ profile, refreshProfile: loadProfile }} />
+                </PageTransition>
+            </div>
+
+            <MobileBottomNav items={sellerBottomNavItems} />
+
+            <ConfirmDialog
+                open={signOutConfirmOpen}
+                title="Sign out"
+                description="You'll need to sign in again to access your seller dashboard."
+                confirmLabel="Sign out"
+                cancelLabel="Cancel"
+                danger
+                onConfirm={confirmSignOut}
+                onCancel={() => setSignOutConfirmOpen(false)}
+            />
+        </div>
+    );
+}

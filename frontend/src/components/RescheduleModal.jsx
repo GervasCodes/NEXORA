@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import AvailabilityCalendar from "./AvailabilityCalendar";
 import Button from "./ui/Button";
+import { useCurrency } from "../context/CurrencyContext";
 
 // Same inclusive-date-range helper ServiceDetail.jsx's booking widget
 // uses, duplicated here rather than imported since it's a few lines and
@@ -28,6 +29,7 @@ const inclusiveDateRange = (start, end) => {
  * POST /bookings.
  */
 export default function RescheduleModal({ booking, onClose, onRescheduled }) {
+    const { format } = useCurrency();
     const isPerNight = booking.pricing_model === "per_night";
 
     const [startDate, setStartDate] = useState(null);
@@ -59,6 +61,15 @@ export default function RescheduleModal({ booking, onClose, onRescheduled }) {
         if (!endDate || startDate === endDate) return [startDate];
         return inclusiveDateRange(startDate, endDate);
     }, [startDate, endDate]);
+
+    // Same estimated-total calc as ServiceDetail.jsx's own booking widget
+    // (per_night excludes the checkout day); priceByDate was being tracked
+    // here but never surfaced, so a buyer rescheduling to pricier/cheaper
+    // dates had no way to see the new total before confirming.
+    const estimatedTotal = useMemo(() => {
+        const chargeableDates = isPerNight ? selectedDates.slice(0, -1) : selectedDates;
+        return chargeableDates.reduce((sum, date) => sum + (priceByDate[date] || 0) * (booking.quantity || 1), 0);
+    }, [selectedDates, priceByDate, isPerNight, booking.quantity]);
 
     const handleDateClick = (dateKey, info) => {
         setError("");
@@ -137,6 +148,10 @@ export default function RescheduleModal({ booking, onClose, onRescheduled }) {
 
                 {isPerNight && startDate && !endDate && (
                     <p className="text-xs text-ash mt-2">Check-in: {startDate} - now pick a check-out date.</p>
+                )}
+
+                {canSubmit && estimatedTotal > 0 && (
+                    <p className="text-sm mt-3">New total: <span className="font-medium">{format(estimatedTotal)}</span></p>
                 )}
 
                 {error && <p role="alert" className="text-coral text-sm mt-3">{error}</p>}

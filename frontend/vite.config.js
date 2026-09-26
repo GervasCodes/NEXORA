@@ -41,6 +41,18 @@ export default defineConfig({
                     if (id.includes("@sentry")) return "vendor-sentry";
                     if (id.includes("socket.io-client") || id.includes("engine.io-client")) return "vendor-socket";
                     if (id.includes("leaflet")) return "vendor-map";
+                    // three.js + @react-three/fiber + @react-three/drei are
+                    // by far the heaviest single dependency here, and only
+                    // Hero3DScene (already lazy-loaded behind
+                    // use3DHeroSupport - see App.jsx/Hero3D.jsx) uses them.
+                    // Without this, the fallback "vendor" bucket below
+                    // pulled them into the one chunk shared by every page,
+                    // so visitors who never even qualify for the 3D hero
+                    // (low-end device, reduced-motion, save-data) paid for
+                    // downloading and parsing it anyway. Splitting it out
+                    // lets it load only alongside Hero3DScene's own dynamic
+                    // import, not on every route.
+                    if (id.includes("/three/") || id.includes("@react-three")) return "vendor-three";
                     return "vendor";
                 }
             }

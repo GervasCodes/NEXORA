@@ -4,8 +4,11 @@ const SESSION_KEY = "nexora_splash_shown";
 
 // Minimum time the branded splash stays visible even once the app is
 // ready, so it always reads as a deliberate brand moment rather than a
-// flash that may disappear before it's even been seen.
-const MIN_DISPLAY_MS = 700;
+// flash that may disappear before it's even been seen. (Phase 3: bumped
+// from 700ms into the 1200-1600ms range - long enough for the fill
+// indicator below to read as intentional, short enough not to feel like
+// a delay. FAILSAFE_MS is untouched.)
+const MIN_DISPLAY_MS = 1400;
 // Safety net: never block the app for more than this even if `appReady`
 // never resolves for some reason.
 const FAILSAFE_MS = 4000;
@@ -100,24 +103,42 @@ export default function SplashScreen({ appReady, onDone }) {
 
             {/* branded wordmark - reuses the exact same "NEXORA" mark
                 treatment as Header.jsx/Footer.jsx (font-display italic)
-                so it's recognizably the same brand. This is now the
-                entire splash content, with a small loading indicator
-                underneath (same ring style as PageLoader.jsx) while the
-                app finishes its readiness check. */}
-            <div className="relative z-10 flex flex-col items-center justify-center gap-5">
+                so it's recognizably the same brand. Phase 3: added the
+                core-actions line under the wordmark, and swapped the
+                spinning two-ring loader for a bar that fills from empty
+                to full over MIN_DISPLAY_MS - a "deliberate brand moment"
+                reads better as progress toward something than as an
+                indefinite spin. Pure CSS (see the <style> block below),
+                no new dependency. */}
+            <div className="relative z-10 flex flex-col items-center justify-center gap-6">
                 <div className="flex flex-col items-center gap-3">
                     <span className="font-display italic text-4xl sm:text-5xl text-frost tracking-tight animate-scale-in drop-shadow-[0_2px_16px_rgba(124,58,237,0.5)]">
                         NEXORA
                     </span>
                     <span className="h-px w-10 bg-frost/30 animate-scale-in [animation-delay:120ms]" />
+                    <span className="text-frost/50 text-[11px] sm:text-xs font-medium tracking-[0.25em] uppercase animate-scale-in [animation-delay:220ms]">
+                        Buy · Sell · Book · Deliver
+                    </span>
                 </div>
 
-                <div className="relative w-8 h-8" role="status" aria-hidden="true">
-                    <div className="absolute inset-0 border-2 border-frost/20 rounded-full" />
-                    <div className="absolute inset-0 border-2 border-transparent border-t-frost rounded-full animate-spin" />
+                <div className="w-28 sm:w-32 h-[3px] rounded-full bg-frost/15 overflow-hidden" role="status" aria-hidden="true">
+                    <div
+                        className="h-full rounded-full origin-left"
+                        style={{
+                            background: "linear-gradient(90deg, #7C3AED 0%, #1D4ED8 100%)",
+                            animation: `nexora-splash-fill ${MIN_DISPLAY_MS}ms linear forwards`,
+                        }}
+                    />
                 </div>
                 <span className="sr-only">Loading</span>
             </div>
+
+            <style>{`
+                @keyframes nexora-splash-fill {
+                    from { width: 0%; }
+                    to { width: 100%; }
+                }
+            `}</style>
 
             <p
                 className={`absolute z-20 left-1/2 -translate-x-1/2 bottom-8 text-frost/70 text-xs mt-8 tracking-wide drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)] transition-opacity duration-500 ${

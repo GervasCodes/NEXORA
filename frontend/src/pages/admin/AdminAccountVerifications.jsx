@@ -47,7 +47,7 @@ function AccountReviews() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [status, role]);
+    useEffect(load, [status, role, toast]);
 
     const toggleExpand = async (userId) => {
         if (expanded === userId) {
@@ -257,7 +257,7 @@ function BusinessUpgradeReviews() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [status]);
+    useEffect(load, [status, toast]);
 
     const toggleExpand = async (requestId) => {
         if (expanded === requestId) {

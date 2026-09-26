@@ -47,12 +47,12 @@ exports.countRecipientsBySegment = async (segment) => {
     return rows[0].count;
 };
 
-exports.create = async ({ adminId, segment, channels, subject, message, recipientCount, emailSentCount, smsSentCount, whatsappSentCount }) => {
+exports.create = async ({ adminId, segment, channels, subject, message, recipientCount, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount }) => {
     const [result] = await db.query(
         `INSERT INTO broadcasts
-        (admin_id, segment, channels, subject, message, recipient_count, email_sent_count, sms_sent_count, whatsapp_sent_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [adminId, segment, channels.join(","), subject || null, message, recipientCount, emailSentCount, smsSentCount, whatsappSentCount]
+        (admin_id, segment, channels, subject, message, recipient_count, email_sent_count, sms_sent_count, whatsapp_sent_count, in_app_sent_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [adminId, segment, channels.join(","), subject || null, message, recipientCount, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount || 0]
     );
     return result.insertId;
 };

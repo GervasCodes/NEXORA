@@ -12,6 +12,27 @@ const receiptStatus = (message) => {
     return "sent";
 };
 
+// Phase 8 sub-phase 1 (bubble & typography pass, see PHASE_8_NOTES
+// discussion) - direction confirmed: premium dark/glassy, matching the
+// same violet-to-azure brand glow SplashScreen.jsx and
+// CookieConsentBanner.jsx already use, with iMessage/WhatsApp/Telegram as
+// style references. The "mine" bubble becomes a genuine branded gradient
+// with a soft violet glow instead of flat bg-abyss; the other side becomes
+// a real frosted-glass card (backdrop-blur + translucent surface, in both
+// themes) rather than a flat bg-line fill. Kept theme-aware (light/dark
+// variants) rather than forcing the whole thread dark, since
+// ChatWallpaperPicker.jsx already lets the person choose the thread's
+// background - permanently darkening bubbles regardless of that choice
+// would fight it instead of complementing it.
+const formatTime = (iso) => {
+    if (!iso) return "";
+    try {
+        return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    } catch {
+        return "";
+    }
+};
+
 export default function MessageBubble({
     message: m,
     mine,
@@ -44,6 +65,7 @@ export default function MessageBubble({
     };
 
     const hasAttachment = !!m.attachment_url;
+    const time = formatTime(m.created_at);
 
     return (
         <div
@@ -97,13 +119,22 @@ export default function MessageBubble({
                     onMouseLeave={cancelLongPress}
                     onTouchStart={!m.is_deleted ? startLongPress : undefined}
                     onTouchEnd={cancelLongPress}
-                    className={`rounded-2xl px-4 py-2 text-sm select-none transition-transform ${
+                    className={`rounded-[20px] px-4 py-2.5 text-[15px] leading-relaxed select-none transition-transform ${
                         m.is_deleted
-                            ? "italic text-ash bg-line/30 rounded-bl-sm"
+                            ? "italic text-ash bg-line/30 rounded-bl-[6px]"
                             : mine
-                                ? "bg-abyss text-frost rounded-br-sm"
-                                : "bg-line/50 text-ink rounded-bl-sm"
+                                ? "text-frost rounded-br-[6px] shadow-[0_6px_20px_-4px_rgba(124,58,237,0.35)]"
+                                : "text-ink rounded-bl-[6px] backdrop-blur-md bg-paper/70 dark:bg-abyss/45 border border-ink/5 shadow-[0_2px_10px_rgba(0,0,0,0.06)]"
                     } ${hasAttachment && !m.message ? "p-1.5" : ""}`}
+                    style={
+                        !m.is_deleted && mine
+                            ? {
+                                  background: "linear-gradient(135deg, #7C3AED 0%, #1D4ED8 100%)",
+                                  boxShadow:
+                                      "0 6px 20px -4px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.12)"
+                              }
+                            : undefined
+                    }
                 >
                     {m.is_deleted ? (
                         "This message was deleted"
@@ -113,11 +144,18 @@ export default function MessageBubble({
                                 <AttachmentBubble attachment={m} mine={mine} onOpenLightbox={onOpenLightbox} />
                             )}
                             {m.message && <p className="whitespace-pre-wrap break-words">{m.message}</p>}
-                            {mine && (
-                                <div className="flex justify-end">
-                                    <ReadReceipt status={receiptStatus(m)} />
-                                </div>
-                            )}
+                            <div className={`flex items-center gap-1 ${mine ? "justify-end" : "justify-start"}`}>
+                                {time && (
+                                    <span
+                                        className={`text-[10px] tabular-nums ${
+                                            mine ? "text-frost/60" : "text-ash"
+                                        }`}
+                                    >
+                                        {time}
+                                    </span>
+                                )}
+                                {mine && <ReadReceipt status={receiptStatus(m)} />}
+                            </div>
                         </div>
                     )}
                 </div>

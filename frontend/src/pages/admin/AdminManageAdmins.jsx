@@ -22,6 +22,7 @@ export default function AdminManageAdmins() {
         api.get("/admin/admins").then(({ data }) => setAdmins(data.data)).catch((err) => toast?.error(extractErrorMessage(err))).finally(() => setLoading(false));
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-runs when isSuperAdmin changes
     useEffect(() => { if (isSuperAdmin) load(); else setLoading(false); }, [isSuperAdmin]);
 
     if (!isSuperAdmin) {

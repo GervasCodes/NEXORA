@@ -21,7 +21,8 @@ const SEGMENTS = [
 const CHANNELS = [
     { value: "email", label: "Email" },
     { value: "sms", label: "SMS" },
-    { value: "whatsapp", label: "WhatsApp" }
+    { value: "whatsapp", label: "WhatsApp" },
+    { value: "in_app", label: "In-app" }
 ];
 
 export default function AdminBroadcast() {
@@ -93,8 +94,9 @@ export default function AdminBroadcast() {
 
             <div className="border border-line rounded-lg p-4 space-y-4 mb-8 max-w-2xl">
                 <div>
-                    <label className="block text-sm mb-1">Audience</label>
+                    <label htmlFor="broadcast-audience" className="block text-sm mb-1">Audience</label>
                     <select
+                        id="broadcast-audience"
                         value={segment}
                         onChange={(e) => { setSegment(e.target.value); setConfirming(false); }}
                         className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
@@ -109,8 +111,11 @@ export default function AdminBroadcast() {
                 </div>
 
                 <div>
-                    <label className="block text-sm mb-1">Channels</label>
-                    <div className="flex gap-4">
+                    {/* Not a <label> - this heads a group of checkboxes rather
+                        than a single control, so it's exposed via
+                        aria-labelledby on the group below instead. */}
+                    <span id="broadcast-channels-label" className="block text-sm mb-1">Channels</span>
+                    <div role="group" aria-labelledby="broadcast-channels-label" className="flex gap-4">
                         {CHANNELS.map((c) => (
                             <label key={c.value} className="flex items-center gap-2 text-sm">
                                 <input
@@ -139,8 +144,9 @@ export default function AdminBroadcast() {
                 )}
 
                 <div>
-                    <label className="block text-sm mb-1">Message</label>
+                    <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
                     <textarea
+                        id="broadcast-message"
                         value={message}
                         onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
                         maxLength={2000}
@@ -166,7 +172,7 @@ export default function AdminBroadcast() {
                 {lastResult && (
                     <p className="text-xs text-teal">
                         Sent to {lastResult.recipientCount} recipients
-                        (email {lastResult.emailSentCount}, sms {lastResult.smsSentCount}, whatsapp {lastResult.whatsappSentCount}).
+                        (email {lastResult.emailSentCount}, sms {lastResult.smsSentCount}, whatsapp {lastResult.whatsappSentCount}, in-app {lastResult.inAppSentCount}).
                     </p>
                 )}
             </div>

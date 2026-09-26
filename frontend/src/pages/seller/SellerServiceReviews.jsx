@@ -36,6 +36,7 @@ export default function SellerServiceReviews() {
             .finally(() => setLoading(false));
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadPage` is redefined every render; this effect intentionally only re-fetches when the profile changes
     useEffect(() => loadPage(1), [profile.user_id]);
 
     const handleReply = async (reviewId) => {
@@ -93,7 +94,7 @@ export default function SellerServiceReviews() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Photo ${pi + 1} from this review`}
+                                            alt={`Review attachment ${pi + 1}`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />

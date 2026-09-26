@@ -66,7 +66,7 @@ export default function SellerProducts() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [search, categoryId, status, page]);
+    useEffect(load, [search, categoryId, status, page, toast]);
 
     const toggleActive = async (product) => {
         setBusyId(product.id);

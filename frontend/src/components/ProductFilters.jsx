@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
-import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
-import Input from "./ui/Input";
 
 
 const RATING_OPTIONS = [4, 3, 2, 1];
@@ -22,11 +20,8 @@ const SORT_OPTIONS = [
 
 
 export default function ProductFilters({ categoryId, onChange, singleStore }) {
-    const { currency, toTzs } = useCurrency();
     const { t } = useLanguage();
 
-    const [minInput, setMinInput] = useState("");
-    const [maxInput, setMaxInput] = useState("");
     const [sellerId, setSellerId] = useState("");
     const [sellers, setSellers] = useState([]);
     const [sellersError, setSellersError] = useState(false);
@@ -78,13 +73,9 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [regions]);
 
-    const emit = (nextMinInput, nextMaxInput, nextSellerId, nextRegion, nextMinRating, nextSort) => {
+    const emit = (nextSellerId, nextRegion, nextMinRating, nextSort) => {
         const filters = {};
 
-        const minTzs = toTzs(nextMinInput);
-        const maxTzs = toTzs(nextMaxInput);
-        if (minTzs !== null) filters.min_price = minTzs;
-        if (maxTzs !== null) filters.max_price = maxTzs;
         if (nextSellerId) filters.seller_id = nextSellerId;
         if (nextRegion) filters.region = nextRegion;
         if (nextMinRating) filters.min_rating = nextMinRating;
@@ -93,75 +84,43 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
         onChange(filters);
     };
 
-    const handleApply = () => emit(minInput, maxInput, sellerId, region, minRating, sort);
-
     const handleSellerChange = (e) => {
         const next = e.target.value;
         setSellerId(next);
-        emit(minInput, maxInput, next, region, minRating, sort);
+        emit(next, region, minRating, sort);
     };
 
     const handleRegionChange = (e) => {
         const next = e.target.value;
         setRegion(next);
-        emit(minInput, maxInput, sellerId, next, minRating, sort);
+        emit(sellerId, next, minRating, sort);
     };
 
     const handleRatingChange = (e) => {
         const next = e.target.value;
         setMinRating(next);
-        emit(minInput, maxInput, sellerId, region, next, sort);
+        emit(sellerId, region, next, sort);
     };
 
     const handleSortChange = (e) => {
         const next = e.target.value;
         setSort(next);
-        emit(minInput, maxInput, sellerId, region, minRating, next);
+        emit(sellerId, region, minRating, next);
     };
 
     // Sort is intentionally left out of handleClear/hasActiveFilters -
     // see the component-level comment above for why.
     const handleClear = () => {
-        setMinInput("");
-        setMaxInput("");
         setSellerId("");
         setRegion("");
         setMinRating("");
-        emit("", "", "", "", "", sort);
+        emit("", "", "", sort);
     };
 
-    const hasActiveFilters = minInput !== "" || maxInput !== "" || (!singleStore && (sellerId !== "" || region !== "")) || minRating !== "";
+    const hasActiveFilters = (!singleStore && (sellerId !== "" || region !== "")) || minRating !== "";
 
     return (
         <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-line">
-            <Input
-                id="filter-min-price"
-                label={`${t("filters.minPrice")} (${currency})`}
-                type="number"
-                min="0"
-                inputMode="decimal"
-                placeholder="0"
-                value={minInput}
-                onChange={(e) => setMinInput(e.target.value)}
-                onBlur={handleApply}
-                onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                className="w-28 !py-1.5"
-            />
-
-            <Input
-                id="filter-max-price"
-                label={`${t("filters.maxPrice")} (${currency})`}
-                type="number"
-                min="0"
-                inputMode="decimal"
-                placeholder={t("filters.noLimit")}
-                value={maxInput}
-                onChange={(e) => setMaxInput(e.target.value)}
-                onBlur={handleApply}
-                onKeyDown={(e) => e.key === "Enter" && handleApply()}
-                className="w-28 !py-1.5"
-            />
-
             {!singleStore && (
                 <div className="flex flex-col gap-1">
                     <label htmlFor="filter-seller" className="text-xs text-ash">

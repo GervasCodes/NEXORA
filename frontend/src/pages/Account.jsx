@@ -56,6 +56,7 @@ export default function Account() {
         }).catch(() => {});
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; syncTheme/syncLanguage/syncCurrency/syncDataSaver are redefined every render and would turn this into a re-fetch-on-every-render loop
     useEffect(load, []);
 
     const saveProfile = async (e) => {

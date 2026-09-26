@@ -243,6 +243,7 @@ export default function Checkout() {
                 .finally(() => { if (!cancelled) setEstimateLoading(false); });
         }, 400);
         return () => { cancelled = true; clearTimeout(timer); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately depends on pin's lat/lng primitives, not the pin object reference, so a re-created-but-unchanged pin doesn't re-trigger the debounced estimate
     }, [deliveryType, pin?.lat, pin?.lng]);
 
     const selectPickupPoint = (id) => {

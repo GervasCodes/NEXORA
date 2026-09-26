@@ -8,6 +8,20 @@ import ErrorState from "./ui/ErrorState";
 
 const PAGE_SIZE = 24;
 const VIEW_STORAGE_KEY = "nexora_product_view";
+// Phase 6.1 follow-up: the /products request here had no per-request
+// timeout, unlike useUnreadMessagesCount.js and NotificationBell.jsx's
+// polls, both of which were fixed under Phase 5 (production error fixes)
+// for the exact same symptom - a stalled request on a flaky mobile
+// connection (ERR_QUIC_PROTOCOL_ERROR / QUIC_NETWORK_IDLE_TIMEOUT per
+// production logs) hanging until the browser's own, much longer,
+// network-level timeout. A hung request here means `loading` never
+// clears, so the grid sits on its skeleton state indefinitely - which
+// would present as "products not visible" exactly as reported. This
+// wasn't reproduced live (still no phone/dev-tools access), but it's
+// the same confirmed bug class already fixed twice elsewhere in this
+// codebase for the same "flaky mobile connection" cause, applied here
+// where it was missing rather than a new guess.
+const REQUEST_TIMEOUT_MS = 10000;
 
 function readStoredView() {
     if (typeof window === "undefined") return "grid";
@@ -77,18 +91,30 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     const paramsKey = JSON.stringify(params || {});
 
     useEffect(() => {
+        let ignore = false;
         setLoading(true);
         setError("");
         setPage(1);
 
-        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: 1 } })
+        // Guard against an out-of-order response: if the filters/sort
+        // change again before this request resolves (e.g. quickly
+        // switching a dropdown, more likely on a slower/flakier mobile
+        // connection), an earlier request finishing after a newer one
+        // would otherwise overwrite the grid with stale results. Found
+        // while re-checking Phase 6.1 - not the confirmed root cause of
+        // the reported bug, but a real correctness gap in the same
+        // fetch path.
+        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: 1 }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
+                if (ignore) return;
                 setProducts(data.data);
                 setTotalPages(data.pagination?.totalPages || 1);
                 onResults?.(data.pagination?.total ?? data.data.length);
             })
-            .catch(() => setError("Couldn't load products right now."))
-            .finally(() => setLoading(false));
+            .catch(() => { if (!ignore) setError("Couldn't load products right now."); })
+            .finally(() => { if (!ignore) setLoading(false); });
+
+        return () => { ignore = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paramsKey, retryCount]);
 
@@ -98,7 +124,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         const nextPage = page + 1;
         setLoadingMore(true);
 
-        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: nextPage } })
+        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: nextPage }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
                 setProducts((prev) => [...prev, ...data.data]);
                 setPage(nextPage);
@@ -132,17 +158,6 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         requestAnimationFrame(() => target?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
     }, []);
 
-    // Mobile-only: if the viewport grows past the `md` breakpoint (rotate,
-    // resize) while the feed is open, drop back to the normal views.
-    useEffect(() => {
-        if (!feedOpen || typeof window === "undefined" || !window.matchMedia) return;
-        const mql = window.matchMedia("(min-width: 768px)");
-        const handle = (e) => { if (e.matches) setFeedOpen(false); };
-        if (mql.matches) setFeedOpen(false);
-        mql.addEventListener?.("change", handle);
-        return () => mql.removeEventListener?.("change", handle);
-    }, [feedOpen]);
-
     const viewToggle = (
         <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Product view">
             <button
@@ -172,13 +187,16 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                     <rect x="3" y="16.5" width="18" height="3.5" rx="1" />
                 </svg>
             </button>
-            {/* Third view: launches the full-screen swipe feed. Mobile only. */}
+            {/* Third view: launches the full-screen swipe feed. Now
+                available at every viewport width, not just mobile - see
+                ProductSwipeFeed.jsx for the desktop-width sizing that
+                makes that not look broken on a wide monitor. */}
             <button
                 type="button"
                 onClick={() => setFeedOpen(true)}
                 disabled={loading}
                 aria-label={t("products.viewFeed")}
-                className="md:hidden w-11 h-11 rounded-md flex items-center justify-center border border-line text-ash hover:border-ink transition-colors disabled:opacity-50"
+                className="w-11 h-11 rounded-md flex items-center justify-center border border-line text-ash hover:border-ink transition-colors disabled:opacity-50"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4" aria-hidden="true">
                     <rect x="7" y="2" width="10" height="20" rx="2" />

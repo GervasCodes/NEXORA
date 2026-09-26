@@ -1,6 +1,6 @@
 # Security maintenance
 
-Process documentation, not code. Added in Phase 3 (Security Hardening).
+
 
 Most of NEXORA's security posture is already implemented and reviewed —
 `docs/SECURITY_REVIEW_CHECKLIST.md` covers CSRF, rate limiting, Helmet/CSP, session

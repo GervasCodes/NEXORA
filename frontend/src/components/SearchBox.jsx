@@ -145,7 +145,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
         }, DEBOUNCE_MS);
 
         return () => clearTimeout(debounceRef.current);
-    }, [value]);
+    }, [value, t]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {

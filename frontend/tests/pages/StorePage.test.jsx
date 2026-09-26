@@ -208,7 +208,17 @@ describe("StorePage catalog (Phase 5C)", () => {
         renderPage();
 
         await waitFor(() =>
-            expect(api.get).toHaveBeenCalledWith("/products", { params: { seller_id: 42, limit: 24, page: 1 } })
+            // ProductGrid attaches a request timeout to every /products call
+            // (Phase 6.1 - guards against a stalled request on a flaky
+            // mobile connection), so the assertion checks the params it
+            // actually cares about here - that this is scoped to the
+            // store's seller_id, not the whole catalog - rather than an
+            // exact-object match that would also pin down that unrelated
+            // timeout value.
+            expect(api.get).toHaveBeenCalledWith(
+                "/products",
+                expect.objectContaining({ params: { seller_id: 42, limit: 24, page: 1 } })
+            )
         );
     });
 

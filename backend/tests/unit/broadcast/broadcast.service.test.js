@@ -2,12 +2,14 @@ jest.mock("../../../src/modules/broadcast/broadcast.repository");
 jest.mock("../../../src/utils/sendEmail");
 jest.mock("../../../src/modules/sms/providers/sms.provider");
 jest.mock("../../../src/modules/whatsapp/providers/whatsapp.provider");
+jest.mock("../../../src/modules/notification/notification.service");
 jest.mock("../../../src/modules/audit/audit.service");
 
 const broadcastRepository = require("../../../src/modules/broadcast/broadcast.repository");
 const sendEmail = require("../../../src/utils/sendEmail");
 const smsProvider = require("../../../src/modules/sms/providers/sms.provider");
 const whatsappProvider = require("../../../src/modules/whatsapp/providers/whatsapp.provider");
+const notificationService = require("../../../src/modules/notification/notification.service");
 const auditService = require("../../../src/modules/audit/audit.service");
 
 const broadcastService = require("../../../src/modules/broadcast/broadcast.service");
@@ -22,6 +24,7 @@ beforeEach(() => {
     sendEmail.mockResolvedValue(undefined);
     smsProvider.sendText.mockResolvedValue(undefined);
     whatsappProvider.sendText.mockResolvedValue(undefined);
+    notificationService.notify.mockResolvedValue(undefined);
     broadcastRepository.create.mockResolvedValue(1);
 });
 
@@ -79,6 +82,21 @@ describe("broadcast.service.resolveChannelsForRecipient", () => {
         expect(broadcastService.resolveChannelsForRecipient(
             recipient({ phone: null, whatsapp_order_updates: 1 }), ["whatsapp"]
         )).toEqual([]);
+    });
+
+    it("includes in_app for every recipient when requested, with no email/phone precondition", () => {
+        expect(broadcastService.resolveChannelsForRecipient(
+            recipient({ email: null, phone: null, whatsapp_order_updates: 0 }), ["in_app"]
+        )).toEqual(["in_app"]);
+
+        expect(broadcastService.resolveChannelsForRecipient(
+            recipient(), ["in_app"]
+        )).toEqual(["in_app"]);
+
+        // not requested -> not included, even though the recipient is "eligible"
+        expect(broadcastService.resolveChannelsForRecipient(
+            recipient(), ["email"]
+        )).toEqual(["email"]);
     });
 
     it("never includes a channel that wasn't requested, even if the recipient is eligible for it", () => {
@@ -158,7 +176,8 @@ describe("broadcast.service.sendBroadcast", () => {
             recipientCount: 3,
             emailSentCount: 2,
             smsSentCount: 2,
-            whatsappSentCount: 1
+            whatsappSentCount: 1,
+            inAppSentCount: 0
         });
 
         expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -186,6 +205,27 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(sendEmail).toHaveBeenCalledTimes(2);
         expect(result.emailSentCount).toBe(1); // only the successful one counted
         expect(result.recipientCount).toBe(2); // audience size is unaffected by individual failures
+    });
+
+    it("creates an in-app notification for a recipient with no email or phone on file", async () => {
+        broadcastRepository.findRecipientsBySegment.mockResolvedValue([
+            recipient({ id: 7, email: null, phone: null, whatsapp_order_updates: 0 })
+        ]);
+
+        const result = await broadcastService.sendBroadcast({
+            adminId: 1, segment: "all_buyers", channels: ["in_app"], message: "Big sale this weekend"
+        });
+
+        expect(notificationService.notify).toHaveBeenCalledTimes(1);
+        expect(notificationService.notify).toHaveBeenCalledWith(expect.objectContaining({
+            userId: 7, message: "Big sale this weekend"
+        }));
+        expect(sendEmail).not.toHaveBeenCalled();
+        expect(smsProvider.sendText).not.toHaveBeenCalled();
+        expect(whatsappProvider.sendText).not.toHaveBeenCalled();
+
+        expect(result).toEqual(expect.objectContaining({ recipientCount: 1, inAppSentCount: 1 }));
+        expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({ inAppSentCount: 1 }));
     });
 
     it("resolves an empty segment (0 recipients) without error", async () => {

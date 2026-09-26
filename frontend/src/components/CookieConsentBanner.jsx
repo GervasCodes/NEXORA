@@ -53,32 +53,52 @@ export default function CookieConsentBanner() {
 
     if (acknowledged) return null;
 
-    // Positioned bottom-left so it can't collide with InstallPrompt.jsx
-    // (bottom-right on sm+), and using the same
-    // calc(...+env(safe-area-inset-bottom)) pattern the other floating
-    // elements use, with the md: breakpoint matching where
-    // MobileBottomNav actually stops rendering (`md:hidden`).
+    // Phase 3.2: restyled from a small bottom-left utility card into a
+    // deliberate, full-width bottom sheet that matches the splash
+    // screen's brand treatment (SplashScreen.jsx) - same abyss/frost
+    // surface and violet-to-azure glow accents, rather than the generic
+    // glass-strong card used elsewhere in the app. Now only mounted on
+    // the guest landing route (see App.jsx), it sits flush at the very
+    // bottom of the screen, well below InstallPrompt.jsx's own
+    // calc(10rem+...) offset, so the two no longer need to be
+    // horizontally separated (bottom-left vs. bottom-right) to avoid
+    // colliding - copy/logic (localStorage dismissal, cookie policy
+    // link) is unchanged.
     return (
         <div
             role="region"
             aria-label="Cookie notice"
-            className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] md:bottom-36 inset-x-4 sm:inset-x-auto sm:left-4 z-[1040] sm:w-96
-                glass-strong border border-frost/20 rounded-lg px-4 py-3 shadow-lg
-                flex flex-col sm:flex-row sm:items-center gap-3 animate-slide-up"
+            className="fixed inset-x-0 bottom-0 z-[1040] animate-slide-up"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-            <p className="text-sm text-ink flex-1 min-w-0">
-                NEXORA uses only the cookies needed to sign you in and keep your account
-                secure. No advertising or third-party tracking.{" "}
-                <Link to="/legal/cookie-policy" className="text-teal hover:underline">
-                    Cookie Policy
-                </Link>
-            </p>
-            <button
-                onClick={accept}
-                className="text-sm font-medium text-teal hover:underline shrink-0 self-end sm:self-auto focus-ring rounded"
-            >
-                Got it
-            </button>
+            <div className="relative overflow-hidden border-t border-frost/20 bg-abyss/95 backdrop-blur-xl">
+                <div
+                    className="pointer-events-none absolute -top-16 -left-16 w-64 h-64 rounded-full opacity-30 blur-[90px]"
+                    style={{ background: "radial-gradient(circle, #7C3AED 0%, transparent 70%)" }}
+                />
+                <div
+                    className="pointer-events-none absolute -top-16 -right-16 w-64 h-64 rounded-full opacity-30 blur-[90px]"
+                    style={{ background: "radial-gradient(circle, #1D4ED8 0%, transparent 70%)" }}
+                />
+                <div className="relative max-w-3xl mx-auto px-6 py-6 sm:py-7 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                        <p className="font-display italic text-frost text-base mb-1">A quick note on cookies</p>
+                        <p className="text-sm text-frost/70 leading-relaxed">
+                            NEXORA uses only the cookies needed to sign you in and keep your account
+                            secure. No advertising or third-party tracking.{" "}
+                            <Link to="/legal/cookie-policy" className="text-teal hover:underline">
+                                Cookie Policy
+                            </Link>
+                        </p>
+                    </div>
+                    <button
+                        onClick={accept}
+                        className="shrink-0 self-start sm:self-auto bg-frost text-abyss rounded-lg px-5 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity focus-ring"
+                    >
+                        Got it
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

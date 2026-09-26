@@ -177,6 +177,7 @@ export default function Header() {
     const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
     return (
+        <>
         <header className="glass-dark text-frost sticky top-0 z-40">
             {/* (UI/UX remediation): the cart/messages/notification
                 badge counts above only ever updated visually - a
@@ -358,7 +359,10 @@ export default function Header() {
                 extra bottom padding for buyers reserves room for the
                 fixed MobileBottomNav below so the last item can scroll
                 clear of it instead of ending up hidden underneath. */}
-            <SideDrawer
+            {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
+        </header>
+
+        <SideDrawer
                 open={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 id="mobile-nav-drawer"
@@ -446,20 +450,18 @@ export default function Header() {
                         ) : null}
                     </nav>
                 </div>
-            </SideDrawer>
+        </SideDrawer>
 
-            {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
-
-            <ConfirmDialog
-                open={signOutConfirmOpen}
-                title={t("nav.signOut")}
-                description="You'll need to sign in again to access your account."
-                confirmLabel={t("nav.signOut")}
-                cancelLabel={t("common.cancel") || "Cancel"}
-                danger
-                onConfirm={confirmSignOut}
-                onCancel={() => setSignOutConfirmOpen(false)}
-            />
-        </header>
+        <ConfirmDialog
+            open={signOutConfirmOpen}
+            title={t("nav.signOut")}
+            description="You'll need to sign in again to access your account."
+            confirmLabel={t("nav.signOut")}
+            cancelLabel={t("common.cancel") || "Cancel"}
+            danger
+            onConfirm={confirmSignOut}
+            onCancel={() => setSignOutConfirmOpen(false)}
+        />
+        </>
     );
 }

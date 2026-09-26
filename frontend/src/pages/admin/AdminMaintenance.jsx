@@ -418,7 +418,7 @@ export default function AdminMaintenance() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const activate = async (sectionKey, item) => {
         const id = item.key || item.id;

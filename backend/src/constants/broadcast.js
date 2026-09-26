@@ -15,4 +15,10 @@ exports.SEGMENT_ROLES = {
     everyone: ["buyer", "seller", "delivery_agent"]
 };
 
-exports.BROADCAST_CHANNELS = ["email", "sms", "whatsapp"];
+// "in_app" (Fix Plan Phase 1.2): lands the broadcast in the
+// recipient's own NotificationBell.jsx feed via the existing
+// notification.service.js#notify() path - see broadcast.service.js.
+// Unlike email/sms/whatsapp it needs no contact-info precondition,
+// so it's eligible for every recipient (see
+// resolveChannelsForRecipient in broadcast.service.js).
+exports.BROADCAST_CHANNELS = ["email", "sms", "whatsapp", "in_app"];

@@ -5,7 +5,7 @@ import DepartmentCard from "../components/DepartmentCard";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
-import HomeCarousel from "../components/HomeCarousel";
+import Hero3D from "../components/Hero3D";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
@@ -163,7 +163,12 @@ export default function Home() {
                         <div>
                             <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
                             {user?.first_name && (
-                                <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
+                                <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full border border-frost/20 bg-frost/5 text-frost/80 text-xs font-medium">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                                    </svg>
+                                    Welcome back, {user.first_name}
+                                </div>
                             )}
                             <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
                                 Everything You Need, From The Sellers You Trust.
@@ -207,8 +212,15 @@ export default function Home() {
                           renders its own skeleton/fallback if the API has
                           no live campaigns yet, so there's no empty-state
                           gap to handle here.
+
+                          Phase 7 sub-phase 1: Hero3D replaces a direct
+                          HomeCarousel render here - it renders HomeCarousel
+                          itself (unchanged) for anyone whose device/
+                          preferences don't pass use3DHeroSupport, or a
+                          placeholder 3D scene for anyone who does. See
+                          Hero3D.jsx / PHASE_7_NOTES.md.
                         */}
-                        <HomeCarousel />
+                        <Hero3D />
                     </div>
                 </div>
             )}

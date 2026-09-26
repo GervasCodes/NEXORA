@@ -30,6 +30,7 @@ function FeedVideo({ src, poster, muted, autoplay }) {
     }, [autoplay, src]);
 
     return (
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded product videos have no caption/subtitle track available; this is silent b-roll of the product, not narrated content
         <video
             ref={ref}
             src={src}
@@ -45,10 +46,14 @@ function FeedVideo({ src, poster, muted, autoplay }) {
     );
 }
 
-// Mobile full-screen, one-product-per-screen vertical snap feed. Purely a
+// Full-screen, one-product-per-screen vertical snap feed - available at
+// every viewport width now (Fix Plan 2.2), not just mobile. Purely a
 // presentation layer: the product list, pagination state and loadMore all
 // belong to ProductGrid, so the feed can't drift from the grid/list views
-// for the same query (same array, same page cursor).
+// for the same query (same array, same page cursor). Each slide is capped
+// to a centered, phone-proportioned column at `md`+ (see `md:max-w-[480px]
+// md:mx-auto` below) so the image/video doesn't stretch into an absurdly
+// wide column on a desktop monitor - the backdrop stays full-bleed black.
 export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoadMore, onClose, onOpenFilters }) {
     const { format } = useCurrency();
     const { t } = useLanguage();
@@ -133,8 +138,8 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
     }, [activeIndex, products]);
 
     return (
-        <div role="dialog" aria-modal="true" aria-label="Product feed" className="fixed inset-0 z-[1050] bg-black text-frost md:hidden">
-            <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between gap-3 px-3 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+        <div role="dialog" aria-modal="true" aria-label="Product feed" className="fixed inset-0 z-[1050] bg-black text-frost">
+            <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between gap-3 px-3 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-gradient-to-b from-black/60 to-transparent pointer-events-none md:max-w-[480px] md:mx-auto">
                 <button
                     ref={closeRef}
                     type="button"
@@ -176,7 +181,7 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                             key={product.id}
                             data-feed-index={index}
                             aria-label={product.name}
-                            className="snap-start snap-always h-full relative overflow-hidden bg-black"
+                            className="snap-start snap-always h-full relative overflow-hidden bg-black md:max-w-[480px] md:mx-auto"
                         >
                             {media.type === "video" && isActive ? (
                                 <FeedVideo src={media.src} poster={media.poster} muted={muted} autoplay={autoplay} />

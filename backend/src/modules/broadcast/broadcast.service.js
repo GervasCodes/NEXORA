@@ -2,6 +2,12 @@ const broadcastRepository = require("./broadcast.repository");
 const sendEmail = require("../../utils/sendEmail");
 const smsProvider = require("../sms/providers/sms.provider");
 const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
+// Reuses the same notification-creation + socket-emit path every other
+// in-app notification in the app already goes through (see
+// notification.service.js#notify) instead of a parallel mechanism, so
+// a broadcast lands in NotificationBell.jsx instantly for anyone
+// currently online, not just on next page load.
+const notificationService = require("../notification/notification.service");
 const auditService = require("../audit/audit.service");
 const { BROADCAST_SEGMENTS, BROADCAST_CHANNELS } = require("../../constants/broadcast");
 const logger = require("../../utils/logger").child({ module: "broadcast" });
@@ -47,6 +53,9 @@ exports.previewAudience = async (segment) => {
 //     no broadcast-specific opt-in exists yet (a real product surface
 //     for "WhatsApp marketing opt-in" distinct from "WhatsApp order
 //     updates" is a reasonable follow-up, not built in this phase).
+//   - in_app: every recipient is eligible, no precondition - it's
+//     their own account's notification feed, not an external contact
+//     channel that can bounce or go unanswered.
 // Exported so the audience-resolution tests can exercise this in
 // isolation from the actual send loop below.
 exports.resolveChannelsForRecipient = (recipient, requestedChannels) => {
@@ -60,6 +69,9 @@ exports.resolveChannelsForRecipient = (recipient, requestedChannels) => {
     }
     if (requestedChannels.includes("whatsapp") && recipient.phone && recipient.whatsapp_order_updates) {
         eligible.push("whatsapp");
+    }
+    if (requestedChannels.includes("in_app")) {
+        eligible.push("in_app");
     }
 
     return eligible;
@@ -85,6 +97,7 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
     let emailSentCount = 0;
     let smsSentCount = 0;
     let whatsappSentCount = 0;
+    let inAppSentCount = 0;
 
     for (const recipient of recipients) {
         const eligibleChannels = exports.resolveChannelsForRecipient(recipient, channels);
@@ -100,6 +113,14 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
                 } else if (channel === "whatsapp") {
                     await whatsappProvider.sendText(recipient.phone, message);
                     whatsappSentCount += 1;
+                } else if (channel === "in_app") {
+                    await notificationService.notify({
+                        userId: recipient.id,
+                        type: "broadcast",
+                        title: subject || "Announcement",
+                        message
+                    });
+                    inAppSentCount += 1;
                 }
             } catch (error) {
                 logger.warn({ err: error, recipientId: recipient.id, channel }, "broadcast send error for one recipient");
@@ -116,14 +137,15 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
         recipientCount: recipients.length,
         emailSentCount,
         smsSentCount,
-        whatsappSentCount
+        whatsappSentCount,
+        inAppSentCount
     });
 
     auditService.log({
         userId: adminId,
         eventType: "broadcast_sent",
         description: `Broadcast sent to ${segment} (${recipients.length} recipients)`,
-        metadata: { broadcastId, segment, channels, recipientCount: recipients.length, emailSentCount, smsSentCount, whatsappSentCount }
+        metadata: { broadcastId, segment, channels, recipientCount: recipients.length, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount }
     });
 
     return {
@@ -132,7 +154,8 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
         recipientCount: recipients.length,
         emailSentCount,
         smsSentCount,
-        whatsappSentCount
+        whatsappSentCount,
+        inAppSentCount
     };
 };
 

@@ -24,6 +24,7 @@ export default function AdminDeletedAccounts() {
             .finally(() => setLoading(false));
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; `load` is redefined every render
     useEffect(() => { load(); }, []);
 
     const handlePermanentDelete = async (u) => {

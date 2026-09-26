@@ -49,7 +49,7 @@ export default function AdminBillingControl() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const toggleFlag = async (key, nextEnabled) => {
         setSavingKey(key);

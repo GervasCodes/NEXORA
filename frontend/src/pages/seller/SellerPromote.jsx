@@ -75,6 +75,7 @@ function StorePromoVideoSection() {
             {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
 
             {promoVideoUrl && (
+                // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded store promo video has no caption/subtitle track available
                 <video
                     src={promoVideoUrl}
                     controls

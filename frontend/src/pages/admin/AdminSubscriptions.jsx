@@ -66,7 +66,7 @@ export default function AdminSubscriptions() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const startEdit = (plan) => {
         setEditingId(plan.id);

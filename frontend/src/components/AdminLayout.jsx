@@ -202,7 +202,7 @@ export default function AdminLayout() {
 
                     <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
                         <Link
-                            to="/account"
+                            to="/admin/settings"
                             className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
                         >
                             <AccountIcon className="w-4 h-4 shrink-0" />

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { LEGAL_DOC_LIST } from "../data/legalDocs";
 import { useLanguage } from "../context/LanguageContext";
-import { SocialIcon } from "../pages/StorePage";
+import { SocialIcon } from "./SocialIcon";
 import useInstallPrompt from "../hooks/useInstallPrompt";
 
 // (Visual Polish & Metadata): the four payment rails checkout

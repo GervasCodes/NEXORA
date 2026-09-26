@@ -38,6 +38,7 @@ export default function ProductQA({ productId }) {
             .catch(() => {});
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-fetches when productId changes, not on every render
     useEffect(() => { load(1); }, [productId]);
 
     const loadMore = () => {

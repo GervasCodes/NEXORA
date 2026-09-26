@@ -527,7 +527,7 @@ export default function BookingDetail() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Photo ${pi + 1} from this review`}
+                                            alt={`Review attachment ${pi + 1}`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />

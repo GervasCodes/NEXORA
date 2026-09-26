@@ -162,6 +162,17 @@ export default function App() {
     // drops the storefront chrome.
     const isAdminRoute = location.pathname.startsWith("/admin");
 
+    // Phase 3 (splash/cookie-banner/install-banner placement): these two
+    // used to render globally on every route. The brief asked for them to
+    // only show on "the login/landing screen" - which route that actually
+    // meant was ambiguous (the dedicated /login form, vs. the public "/"
+    // homepage a guest lands on first). Per the phase brief's own
+    // fallback, this defaults to the unauthenticated landing/home view
+    // (`/` while signed out) rather than guessing /login specifically -
+    // see PHASE_3_NOTES.md for that assumption and how to repoint it if
+    // /login was actually meant.
+    const isGuestLandingRoute = !user && location.pathname === "/";
+
     // Session expiry. Fires for either an idle-timeout (see
     // AuthContext.jsx's isIdleExpired check on load) or a session that
     // died server-side mid-use (401 caught in api/client.js). Either way
@@ -248,8 +259,8 @@ export default function App() {
         <div className="min-h-screen flex flex-col">
             <UpdateAvailableBanner />
             <NetworkStatusNotice />
-            <InstallPrompt />
-            <CookieConsentBanner />
+            {isGuestLandingRoute && <InstallPrompt />}
+            {isGuestLandingRoute && <CookieConsentBanner />}
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
 

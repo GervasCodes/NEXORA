@@ -4,11 +4,13 @@ import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import { useToast } from "../context/ToastContext";
 import Avatar from "../components/ui/Avatar";
-import { BellIcon, BellOffIcon, ArchiveIcon } from "../components/Icons";
+import { BellIcon, BellOffIcon, ArchiveIcon, ChatIcon } from "../components/Icons";
+import { SkeletonAvatarList } from "../components/Skeleton";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
 
 // (UI/UX remediation) - search here is now two things layered
 // together, and it's worth being explicit about the difference:
@@ -41,19 +43,30 @@ export default function Messages() {
     const [messageResults, setMessageResults] = useState(null);
     const [searchingMessages, setSearchingMessages] = useState(false);
 
+    // Phase 8 sub-phase 3 (empty & loading states): a failed fetch used to
+    // fall through silently, leaving `conversations` at its initial `[]` -
+    // indistinguishable from a person who genuinely has no conversations.
+    // This tracks a real load failure separately so it gets its own
+    // ErrorState with a retry, instead of masquerading as "no messages yet".
+    const [loadError, setLoadError] = useState(false);
+
     const loadConversations = (targetView = view) => {
         setLoading(true);
         setMaintenance(null);
+        setLoadError(false);
         api.get("/chat/conversations", { params: { archived: targetView === "archived" } })
             .then(({ data }) => setConversations(data.data))
             .catch((err) => {
                 if (err.response?.data?.code === "MODULE_MAINTENANCE") {
                     setMaintenance(err.response.data.message);
+                } else {
+                    setLoadError(true);
                 }
             })
             .finally(() => setLoading(false));
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadConversations` is redefined every render; this effect intentionally only re-fetches when `view` changes
     useEffect(() => loadConversations(view), [view]);
 
     useEffect(() => {
@@ -149,8 +162,22 @@ export default function Messages() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+                <div className="h-9 w-40 rounded-md skeleton animate-shimmer mb-8" />
+                <SkeletonAvatarList rows={5} />
+            </div>
+        );
+    }
     if (maintenance) return <MaintenanceScreen title="Messages is under maintenance" message={maintenance} onRetry={() => loadConversations()} />;
+    if (loadError) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+                <ErrorState title="Couldn't load your messages" hint="Check your connection and try again." onRetry={() => loadConversations()} />
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
@@ -230,16 +257,12 @@ export default function Messages() {
             )}
 
             {conversations.length === 0 && !query.trim() && (
-                <div className="text-center py-16">
-                    <p className="font-display text-xl mb-2">
-                        {view === "archived" ? t("messages.emptyArchived") : t("messages.emptyTitle")}
-                    </p>
-                    {view === "active" && (
-                        <p className="text-ash text-sm">
-                            {user.role === "buyer" ? t("messages.emptyHintBuyer") : t("messages.emptyHintSeller")}
-                        </p>
-                    )}
-                </div>
+                <EmptyState
+                    title={view === "archived" ? t("messages.emptyArchived") : t("messages.emptyTitle")}
+                    hint={view === "active" ? (user.role === "buyer" ? t("messages.emptyHintBuyer") : t("messages.emptyHintSeller")) : undefined}
+                    tone="azure"
+                    icon={<ChatIcon className="w-7 h-7" />}
+                />
             )}
 
             {query.trim() && filtered.length === 0 && conversations.length > 0 && (

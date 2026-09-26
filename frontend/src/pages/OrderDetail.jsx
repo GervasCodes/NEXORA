@@ -86,6 +86,7 @@ export default function OrderDetail() {
         }).finally(() => setLoading(false));
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-fetches when the order id changes
     useEffect(load, [id]);
 
     
@@ -186,6 +187,7 @@ export default function OrderDetail() {
 
         socket.on("payment:updated", handlePaymentUpdated);
         return () => socket.off("payment:updated", handlePaymentUpdated);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; omitted so this effect doesn't tear down/resubscribe the socket listener on every render
     }, [socket, connected, id]);
 
     useEffect(() => {

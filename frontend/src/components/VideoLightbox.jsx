@@ -35,6 +35,7 @@ export default function VideoLightbox({ src, onClose }) {
                 ×
             </button>
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, so clicking the player itself doesn't dismiss the overlay */}
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded product videos have no caption/subtitle track available */}
             <video
                 src={src}
                 controls

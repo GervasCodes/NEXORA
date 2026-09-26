@@ -37,7 +37,7 @@ export default function AdminStatusIncidents() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const submitIncident = async (e) => {
         e.preventDefault();

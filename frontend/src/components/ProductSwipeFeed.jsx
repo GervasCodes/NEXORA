@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
@@ -10,6 +11,43 @@ import { pickFeedMedia } from "../utils/feedMedia";
 // the end of what's loaded, so the next screen is usually ready before
 // they swipe to it.
 export const LOAD_AHEAD = 3;
+
+// Same "flaky mobile connection" bug class already fixed in ProductGrid.jsx
+// (REQUEST_TIMEOUT_MS) - this lookup had no timeout of its own, so a stalled
+// request here (ERR_QUIC_PROTOCOL_ERROR / QUIC_NETWORK_IDLE_TIMEOUT per
+// production logs) could hang indefinitely instead of falling back cleanly.
+const VIDEO_LOOKUP_TIMEOUT_MS = 8000;
+
+// Bug fix: previously, a slide whose product hit an unexpected render error
+// (a malformed record, a rejected image decode some browsers surface as a
+// thrown error, etc.) had nothing catching it - React unmounts the nearest
+// tree on an uncaught render error, which for this component meant losing
+// the whole feed (including the close/counter/filter bar) silently, with
+// nothing in production to show what happened. This boundary is scoped to
+// one slide at a time so a single bad product can't take the rest down.
+class SlideErrorBoundary extends Component {
+    state = { hasError: false };
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error) {
+        // eslint-disable-next-line no-console -- surfaced to Sentry via the app's global handler; this local log is for local/dev visibility only.
+        console.error("ProductSwipeFeed slide failed to render:", error);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="absolute inset-0 flex items-center justify-center text-frost/60 text-sm px-6 text-center">
+                    Couldn't load this item.
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 function prefersReducedMotion() {
     return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -65,6 +103,12 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
     const [activeIndex, setActiveIndex] = useState(0);
     const [videoUrls, setVideoUrls] = useState({});
     const [muted, setMuted] = useState(true);
+    // Bug fix: a broken/expired image URL used to just fail silently (the
+    // <img> renders nothing, no fallback), which combined with a slow CDN
+    // is the most likely way a slide ends up looking fully blank. Track
+    // failures per product id so those slides fall back to the same "No
+    // image" state as a product with no image at all.
+    const [brokenImageIds, setBrokenImageIds] = useState(() => new Set());
 
     const autoplay = !dataSaver?.enabled && !prefersReducedMotion();
 
@@ -128,7 +172,7 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
             if (requestedVideoIds.current.has(product.id)) return;
 
             requestedVideoIds.current.add(product.id);
-            api.get(`/products/${product.slug}`)
+            api.get(`/products/${product.slug}`, { timeout: VIDEO_LOOKUP_TIMEOUT_MS })
                 .then(({ data }) => {
                     const url = data?.data?.videos?.[0]?.video_url || null;
                     setVideoUrls((prev) => ({ ...prev, [product.id]: url }));
@@ -137,7 +181,21 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
         });
     }, [activeIndex, products]);
 
-    return (
+    // Bug fix: every route in App.jsx is wrapped in PageTransition, which
+    // renders a <div className="animate-page-in"> whose enter animation
+    // ends on `transform: translateY(0)` with fill-mode "both" - so the
+    // computed transform never goes back to `none` for as long as that
+    // page is mounted. Per spec, any non-`none` transform on an ancestor
+    // becomes the containing block for `position: fixed` descendants, so
+    // this dialog's `fixed inset-0` was sizing/positioning itself against
+    // that (short, content-height) page wrapper instead of the real
+    // viewport - not against the actual screen. The close/counter/filter
+    // bar sits at the top of that box and so still roughly lined up, but
+    // everything below - every slide - was being squeezed into or clipped
+    // by a box far shorter than the screen, which is what read as "all of
+    // them are blank". Portaling straight to document.body takes this
+    // dialog out from under that ancestor entirely.
+    return createPortal(
         <div role="dialog" aria-modal="true" aria-label="Product feed" className="fixed inset-0 z-[1050] bg-black text-frost">
             <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between gap-3 px-3 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-gradient-to-b from-black/60 to-transparent pointer-events-none md:max-w-[480px] md:mx-auto">
                 <button
@@ -175,22 +233,29 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                     const isLast = index === products.length - 1;
                     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
                     const imageSrc = media.type === "video" ? media.poster : media.src;
+                    const imageFailed = brokenImageIds.has(product.id);
 
                     return (
+                        <SlideErrorBoundary key={product.id}>
                         <section
-                            key={product.id}
                             data-feed-index={index}
                             aria-label={product.name}
                             className="snap-start snap-always h-full relative overflow-hidden bg-black md:max-w-[480px] md:mx-auto"
                         >
                             {media.type === "video" && isActive ? (
                                 <FeedVideo src={media.src} poster={media.poster} muted={muted} autoplay={autoplay} />
-                            ) : imageSrc ? (
+                            ) : imageSrc && !imageFailed ? (
                                 <img
                                     src={dataSaver?.optimize(imageSrc) || imageSrc}
                                     alt={product.name}
                                     loading={Math.abs(index - activeIndex) <= 1 ? "eager" : "lazy"}
                                     decoding="async"
+                                    onError={() => setBrokenImageIds((prev) => {
+                                        if (prev.has(product.id)) return prev;
+                                        const next = new Set(prev);
+                                        next.add(product.id);
+                                        return next;
+                                    })}
                                     className="absolute inset-0 w-full h-full object-contain"
                                 />
                             ) : (
@@ -235,9 +300,11 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                                 {isLast && !hasMore && <p className="mt-3 text-xs text-frost/60">You've reached the end.</p>}
                             </div>
                         </section>
+                        </SlideErrorBoundary>
                     );
                 })}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

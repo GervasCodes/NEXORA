@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Image as HeroImage, Html } from "@react-three/drei";
@@ -98,7 +99,23 @@ function CarouselRig({ slides, pointerRef, activeIndex, setActiveIndex, onSelect
 
         const normalized = ((rotationRef.current % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         const nearest = Math.round(normalized / anglePerSlide) % count;
-        if (nearest !== activeIndex) setActiveIndex(nearest);
+        // Bug fix: the ring's rotation (group.rotation.y, just above) is
+        // applied directly to the Three.js object every frame, completely
+        // outside React. `activeIndex` - which decides which single card
+        // shows its description/price <Html> overlay via `isFront` - is
+        // plain React state, so a bare setActiveIndex here only *schedules*
+        // a re-render; React can take one or more further animation frames
+        // to actually commit it (batching, effects, etc). While the ring is
+        // spinning (autoplay, or a drag), that gap meant the description
+        // could still be attached to the card that has already visually
+        // rotated past the front position, right as the next card rotates
+        // into it - since the cards sit close together and <Html> doesn't
+        // participate in the WebGL depth pass, the outgoing and incoming
+        // labels/prices could render on top of each other for a frame or
+        // few. flushSync forces the commit (and the mount/unmount of the
+        // two cards' <Html> blocks) to happen synchronously, in the same
+        // frame the crossing is detected, closing that gap.
+        if (nearest !== activeIndex) flushSync(() => setActiveIndex(nearest));
     });
 
     return (

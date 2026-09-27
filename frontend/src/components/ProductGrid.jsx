@@ -61,7 +61,7 @@ function containerClass(layout) {
 }
 
 
-export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, emptyAction }) {
+export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, emptyAction, forceFeedOnly = false, onFeedClose }) {
     const { t } = useLanguage();
     const [products, setProducts] = useState([]);
     const [page, setPage] = useState(1);
@@ -77,7 +77,17 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     // layout: grid/list stays the stored preference (readStoredView /
     // changeLayout are untouched), so closing the feed - or opening the
     // site later - lands exactly where the shopper was before.
-    const [feedOpen, setFeedOpen] = useState(false);
+    // forceFeedOnly (Browse All only - see BrowseProducts.jsx) changes
+    // that: there's no grid/list to remember, swipe is the only view, so
+    // this starts already open instead of waiting for a toggle click.
+    const [feedOpen, setFeedOpen] = useState(forceFeedOnly);
+    // forceFeedOnly's one way back to the grid/list toggle-free page is
+    // the feed's own "Filters" button, which needs the plain product list
+    // visible underneath while filters are open. Once a filter change
+    // brings back a fresh result set, hop straight back into swipe rather
+    // than leaving the shopper stranded on a bare list - that's tracked
+    // here rather than by re-showing the (removed, in this mode) toggle.
+    const returnToFeedRef = useRef(false);
 
     const changeLayout = (next) => {
         setLayout(next);
@@ -112,7 +122,14 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 onResults?.(data.pagination?.total ?? data.data.length);
             })
             .catch(() => { if (!ignore) setError("Couldn't load products right now."); })
-            .finally(() => { if (!ignore) setLoading(false); });
+            .finally(() => {
+                if (ignore) return;
+                setLoading(false);
+                if (forceFeedOnly && returnToFeedRef.current) {
+                    returnToFeedRef.current = false;
+                    setFeedOpen(true);
+                }
+            });
 
         return () => { ignore = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,20 +162,27 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         return () => observer.disconnect();
     }, [loadMore]);
 
-    const closeFeed = useCallback(() => setFeedOpen(false), []);
+    const closeFeed = useCallback(() => {
+        if (onFeedClose) { onFeedClose(); return; }
+        setFeedOpen(false);
+    }, [onFeedClose]);
 
     // The filter controls live in the page that renders this grid (right
     // above it), so "Filters" from inside the feed closes the feed and
     // brings them into view rather than duplicating them in a sheet.
     const openFiltersFromFeed = useCallback(() => {
+        if (forceFeedOnly) returnToFeedRef.current = true;
         setFeedOpen(false);
-        const toggle = viewToggleRef.current;
-        const target = toggle?.previousElementSibling || toggle;
         // Wait a frame so the overlay's scroll lock is released first.
-        requestAnimationFrame(() => target?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
-    }, []);
+        requestAnimationFrame(() => {
+            const target = forceFeedOnly
+                ? document.querySelector("[data-product-filters]") || viewToggleRef.current
+                : (viewToggleRef.current?.previousElementSibling || viewToggleRef.current);
+            target?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+        });
+    }, [forceFeedOnly]);
 
-    const viewToggle = (
+    const viewToggle = forceFeedOnly ? null : (
         <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Product view">
             <button
                 type="button"
@@ -206,6 +230,11 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         </div>
     );
 
+    // forceFeedOnly has no list toggle, so it always falls back to plain
+    // grid - ignoring whatever grid/list preference another page (which
+    // shares the same stored key) last left behind.
+    const effectiveLayout = forceFeedOnly ? "grid" : layout;
+
     if (error) {
         return (
             <ErrorState
@@ -220,8 +249,8 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         return (
             <>
                 {viewToggle}
-                <div className={containerClass(layout)}>
-                    {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} layout={layout} />)}
+                <div className={containerClass(effectiveLayout)}>
+                    {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} layout={effectiveLayout} />)}
                 </div>
             </>
         );
@@ -241,9 +270,9 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         <>
             {viewToggle}
 
-            <div className={containerClass(layout)}>
+            <div className={containerClass(effectiveLayout)}>
                 {products.map((product) => (
-                    <ProductCard key={product.id} product={product} layout={layout} />
+                    <ProductCard key={product.id} product={product} layout={effectiveLayout} />
                 ))}
             </div>
 
@@ -251,8 +280,8 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 anyone whose browser/extensions block IntersectionObserver. */}
             <div ref={sentinelRef} />
             {loadingMore && (
-                <div className={`${containerClass(layout)} mt-4 sm:mt-5`}>
-                    {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} layout={layout} />)}
+                <div className={`${containerClass(effectiveLayout)} mt-4 sm:mt-5`}>
+                    {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} layout={effectiveLayout} />)}
                 </div>
             )}
             {!loadingMore && page < totalPages && (

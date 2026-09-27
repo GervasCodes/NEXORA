@@ -120,7 +120,7 @@ export default function ProductFilters({ categoryId, onChange, singleStore }) {
     const hasActiveFilters = (!singleStore && (sellerId !== "" || region !== "")) || minRating !== "";
 
     return (
-        <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-line">
+        <div data-product-filters className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-line">
             {!singleStore && (
                 <div className="flex flex-col gap-1">
                     <label htmlFor="filter-seller" className="text-xs text-ash">

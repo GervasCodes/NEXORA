@@ -210,10 +210,6 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                     </svg>
                 </button>
 
-                <span className="text-xs text-frost/80" aria-live="polite">
-                    {activeIndex + 1} / {products.length}{hasMore ? "+" : ""}
-                </span>
-
                 <button
                     type="button"
                     onClick={onOpenFilters}

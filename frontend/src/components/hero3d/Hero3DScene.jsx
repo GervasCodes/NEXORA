@@ -2,10 +2,9 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Image as HeroImage, Html } from "@react-three/drei";
+import { Image as HeroImage } from "@react-three/drei";
 import api from "../../api/client";
-import { useCurrency } from "../../context/CurrencyContext";
-import { FALLBACK_SLIDES, BADGE_STYLES } from "./heroSlides";
+import { FALLBACK_SLIDES } from "./heroSlides";
 
 // Phase 7 sub-phase 2 (see PHASE_7_NOTES.md): the real scene, replacing
 // sub-phase 1's spinning-icosahedron placeholder. Same live data source and
@@ -19,18 +18,17 @@ const AUTOPLAY_RADIANS_PER_SEC = 0.12; // slow ambient spin while idle
 const ROTATION_EASE_PER_SEC = 4; // higher = snappier easing toward target
 const PARALLAX_MAX_TILT = 0.12; // radians of pointer-driven group tilt
 
-function SlideBadge({ badge }) {
-    if (!badge) return null;
-    return (
-        <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${BADGE_STYLES[badge] || "bg-frost/90 text-abyss"}`}>
-            {badge}
-        </span>
-    );
-}
-
+// Bug fix: the badge/title/price panel used to live in-scene, as a child
+// of this card's own group - which is itself a child of the ring group
+// that auto-spins continuously (see CarouselRig below). A card doesn't
+// stop moving just because it's briefly "front"; the ring keeps sliding
+// the whole time it holds that title, so a panel attached to the card
+// was always in motion right along with the image, reading as the
+// details themselves "spinning". Per direction, the 3D hero is now pure
+// image/video visuals - no text riding the rotation - so that panel (and
+// the badge/currency logic it needed) has been removed rather than
+// patched; clicking a card still navigates same as before.
 function Card({ slide, angle, radius, isFront, onSelect }) {
-    const { format } = useCurrency();
-    const hasDiscount = slide.discountPrice && Number(slide.discountPrice) < Number(slide.price);
     const x = Math.sin(angle) * radius;
     const z = Math.cos(angle) * radius;
 
@@ -48,25 +46,6 @@ function Card({ slide, angle, radius, isFront, onSelect }) {
                 onPointerOver={() => { document.body.style.cursor = "pointer"; }}
                 onPointerOut={() => { document.body.style.cursor = "auto"; }}
             />
-            {isFront && (
-                <Html center position={[0, -0.82, 0.05]} distanceFactor={6} style={{ pointerEvents: "none" }}>
-                    <div className="bg-abyss/70 backdrop-blur-sm rounded-xl px-3 py-2 text-center w-[200px]">
-                        <SlideBadge badge={slide.badge} />
-                        <p className="font-display text-frost text-sm leading-tight mt-1 truncate">{slide.title}</p>
-                        {slide.subtitle && (
-                            <p className="text-frost/60 text-[11px] truncate">{slide.subtitle}</p>
-                        )}
-                        {slide.price && (
-                            <p className="text-frost text-xs mt-0.5">
-                                <span className="font-medium">{format(hasDiscount ? slide.discountPrice : slide.price)}</span>
-                                {hasDiscount && (
-                                    <span className="text-frost/50 line-through ml-1.5">{format(slide.price)}</span>
-                                )}
-                            </p>
-                        )}
-                    </div>
-                </Html>
-            )}
         </group>
     );
 }
@@ -99,22 +78,11 @@ function CarouselRig({ slides, pointerRef, activeIndex, setActiveIndex, onSelect
 
         const normalized = ((rotationRef.current % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         const nearest = Math.round(normalized / anglePerSlide) % count;
-        // Bug fix: the ring's rotation (group.rotation.y, just above) is
-        // applied directly to the Three.js object every frame, completely
-        // outside React. `activeIndex` - which decides which single card
-        // shows its description/price <Html> overlay via `isFront` - is
-        // plain React state, so a bare setActiveIndex here only *schedules*
-        // a re-render; React can take one or more further animation frames
-        // to actually commit it (batching, effects, etc). While the ring is
-        // spinning (autoplay, or a drag), that gap meant the description
-        // could still be attached to the card that has already visually
-        // rotated past the front position, right as the next card rotates
-        // into it - since the cards sit close together and <Html> doesn't
-        // participate in the WebGL depth pass, the outgoing and incoming
-        // labels/prices could render on top of each other for a frame or
-        // few. flushSync forces the commit (and the mount/unmount of the
-        // two cards' <Html> blocks) to happen synchronously, in the same
-        // frame the crossing is detected, closing that gap.
+        // `activeIndex` only drives the front card's slightly larger scale
+        // now (see Card above - the description/price panel it used to
+        // also gate has been removed). flushSync keeps that scale swap
+        // committing in the same frame the ring crosses to a new card,
+        // instead of lagging a frame or two behind the visual rotation.
         if (nearest !== activeIndex) flushSync(() => setActiveIndex(nearest));
     });
 

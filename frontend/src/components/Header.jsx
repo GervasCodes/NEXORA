@@ -400,9 +400,23 @@ export default function Header() {
                 extra bottom padding for buyers reserves room for the
                 fixed MobileBottomNav below so the last item can scroll
                 clear of it instead of ending up hidden underneath. */}
-            {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
-            {!user && <MobileBottomNav items={guestBottomNavItems} />}
         </header>
+
+        {/* Rendered as a sibling of <header>, not a child of it (bug fix:
+            moved out of the header - see below). <header> has
+            `glass-dark`, which sets `backdrop-filter` - a backdrop-filter
+            on an ancestor creates a new containing block for any
+            `position: fixed` descendant (same rule as `transform`/
+            `filter`/`perspective`), so a MobileBottomNav rendered inside
+            that header was pinning itself to the bottom of the (short)
+            header box instead of the viewport's bottom edge, landing
+            right under the logo row instead of as an actual bottom tab
+            bar. Moving it here, outside the glass-dark element, restores
+            the intended fixed-to-the-screen behavior - matching how
+            SellerLayout.jsx/DeliveryLayout.jsx already render their own
+            copies of this component outside any backdrop-filter wrapper. */}
+        {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
+        {!user && <MobileBottomNav items={guestBottomNavItems} />}
 
         <SideDrawer
                 open={menuOpen}

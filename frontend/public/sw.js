@@ -5,7 +5,7 @@
 // Bumped on every SW logic change so stale, possibly-buggy service
 // workers still installed on returning visitors' devices are replaced
 // rather than continuing to run their old (broken) fetch handler.
-const CACHE_VERSION = "nexora-v4";
+const CACHE_VERSION = "nexora-v5";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -210,6 +210,27 @@ self.addEventListener("fetch", (event) => {
     // cache/manage them here.
     if (url.origin !== self.location.origin && !isCacheableApiRequest(url)) return;
 
+    // A same-shaped error body (`{success:false, message, code}`, matching
+    // backend/src/middleware/errorHandler.js) for the one case below where
+    // this worker has to manufacture its own response rather than relay a
+    // real one. Real Response, not Response.error(): the frontend's axios
+    // interceptor (api/client.js) branches on `error.response?.status`/
+    // `error.response?.data?.code` - a network-error-typed Response leaves
+    // axios with no `.response` at all (same as a raw dropped connection),
+    // so there's nothing for that existing handling to work with and it
+    // surfaces to the browser as a bare, undiagnosable net::ERR_FAILED.
+    // 503 + a real JSON body lets the exact same error-handling code path
+    // used for a real backend 503 run here too.
+    const offlineApiResponse = () =>
+        new Response(
+            JSON.stringify({
+                success: false,
+                code: "OFFLINE_NO_CACHE",
+                message: "You're offline and this hasn't been loaded before, so there's nothing saved to show."
+            }),
+            { status: 503, headers: { "Content-Type": "application/json" } }
+        );
+
     if (isCacheableApiRequest(url)) {
         // Network-first, cached fallback when offline - so a product
         // listing you've already loaded stays browsable without a
@@ -227,8 +248,8 @@ self.addEventListener("fetch", (event) => {
                 .catch(() =>
                     caches
                         .match(request)
-                        .then((cached) => cached || Response.error())
-                        .catch(() => Response.error())
+                        .then((cached) => cached || offlineApiResponse())
+                        .catch(() => offlineApiResponse())
                 )
         );
         return;

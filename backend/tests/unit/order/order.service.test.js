@@ -10,6 +10,17 @@ jest.mock("../../../src/modules/business/business.service");
 jest.mock("../../../src/modules/kyc/kyc.service");
 jest.mock("../../../src/modules/audit/audit.service");
 jest.mock("../../../src/socket/socket");
+// Phase 3 - cancelOrder's paid-order refund/reversal flow pulls these in.
+jest.mock("../../../src/modules/refund/refund.service");
+jest.mock("../../../src/modules/wallet/wallet.service");
+jest.mock("../../../src/modules/coupon/coupon.service");
+jest.mock("../../../src/modules/referral/referral.service");
+// checkout snapshots each seller's commission rate onto order_items via
+// subscription.service#getEffectiveCommissionRate (required lazily inside
+// checkout), and cancelOrder / pre-order refunds reserve against the
+// per-order refund cap (refundCap.service) inside their own transaction.
+jest.mock("../../../src/modules/subscription/subscription.service");
+jest.mock("../../../src/modules/refund/refundCap.service");
 
 const orderRepository = require("../../../src/modules/order/order.repository");
 const cartRepository = require("../../../src/modules/cart/cart.repository");
@@ -22,6 +33,12 @@ const fraudService = require("../../../src/modules/fraud/fraud.service");
 const businessService = require("../../../src/modules/business/business.service");
 const kycService = require("../../../src/modules/kyc/kyc.service");
 const socket = require("../../../src/socket/socket");
+const refundService = require("../../../src/modules/refund/refund.service");
+const walletService = require("../../../src/modules/wallet/wallet.service");
+const couponService = require("../../../src/modules/coupon/coupon.service");
+const referralService = require("../../../src/modules/referral/referral.service");
+const subscriptionService = require("../../../src/modules/subscription/subscription.service");
+const refundCapService = require("../../../src/modules/refund/refundCap.service");
 
 const orderService = require("../../../src/modules/order/order.service");
 
@@ -59,6 +76,50 @@ beforeEach(() => {
     // product's normal price", exactly like before this Q7 integration
     // existed). Individual tests can override this per-item.
     businessService.getBulkUnitPrice.mockResolvedValue(null);
+    // Phase 3: order.service.js#checkout now calls the batched
+    // getBulkUnitPrices (one query for every distinct product) instead of
+    // getBulkUnitPrice per line item - see that function's own comment.
+    // Default mock mirrors "no tier qualifies for anything" the same way
+    // the singular mock above does; individual tests needing bulk-tier
+    // pricing override this per-case with their own .get() stub.
+    businessService.getBulkUnitPrices.mockResolvedValue({ get: () => null });
+    // Cart row lock (Phase 3) - findActiveSellerIds backs the new
+    // seller-eligibility check in checkout's per-item loop. Default mock
+    // treats every seller as active so existing tests (none of which are
+    // exercising a suspended-seller scenario) keep passing; individual
+    // tests override this to exercise the blocked path.
+    cartRepository.findActiveSellerIds.mockImplementation(async (sellerIds) => sellerIds);
+    // Default passthroughs for the Phase-2/3 dependencies: 0% commission
+    // (so seller_net == subtotal, matching the price math every test here
+    // was written against), and a refund-cap reservation that runs the
+    // callback with a stub connection and reserves exactly what was asked.
+    subscriptionService.getEffectiveCommissionRate.mockResolvedValue(0);
+    refundCapService.withTransaction.mockImplementation(async (fn) => fn({}));
+    refundCapService.reserveRefund.mockImplementation(async (_connection, { amount }) => amount);
+    // Cancel a paid order (Phase 3, P0) - conditional status flips
+    // default to "this call is the one that changed it" (the common
+    // case); individual race tests override to exercise the "lost the
+    // race" no-op path.
+    orderRepository.cancelOrderIfCancellable.mockResolvedValue(true);
+    orderRepository.cancelChildOrdersIfCancellable.mockResolvedValue(1);
+    referralService.reverseRedemption.mockResolvedValue(undefined);
+    couponService.reverseRedemption.mockResolvedValue(undefined);
+    // Phase 3: coupon.service/referral.service are now fully mocked in
+    // this file (cancelOrder's reversal calls need them - see above), so
+    // their quote-side functions - which checkout() always calls, coupon
+    // code/points or not - need a default too, matching what the REAL
+    // functions return when nothing was submitted (an empty
+    // coupon_code / a zero loyalty_points_redeemed short-circuits before
+    // ever touching their own repositories). Individual tests override
+    // these to exercise an actual coupon/points redemption.
+    couponService.quote.mockResolvedValue({ coupon: null, discountAmount: 0 });
+    referralService.quoteRedemption.mockResolvedValue({ pointsRedeemed: 0, discountAmount: 0 });
+    walletService.reverseSellerEarningsForOrder.mockResolvedValue({ reversed: [] });
+    refundService.autoRefundForCancellation.mockResolvedValue({ status: "completed" });
+    deliveryRepository.findActiveOffer.mockResolvedValue(undefined);
+    deliveryRepository.findByOrderId.mockResolvedValue(undefined);
+    deliveryRepository.expireOffer.mockResolvedValue(true);
+    deliveryRepository.updateStatus.mockResolvedValue(undefined);
     // Buyer's tier isn't over their order limit by default - matches
     // kyc.service.js#enforceOrderLimit's real "unlimited (tier2)" /
     // "under the cap" no-op return. Individual tests can override to
@@ -149,6 +210,35 @@ describe("order.service.checkout", () => {
             vendorCount: 1,
             couponDiscount: 0
         });
+    });
+
+    it("snapshots each seller's commission rate onto the order items at checkout, one lookup per distinct seller", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([
+            cartRow({ product_id: 1, seller_id: 10, quantity: 1, price: 1000 }),
+            cartRow({ product_id: 2, seller_id: 20, quantity: 2, price: 300 }),
+            cartRow({ product_id: 3, seller_id: 10, quantity: 1, price: 200 })
+        ]);
+        cartRepository.findProductsByIds.mockResolvedValue([
+            productRow({ id: 1, price: 1000, stock: 5 }),
+            productRow({ id: 2, price: 300, stock: 5 }),
+            productRow({ id: 3, price: 200, stock: 5 })
+        ]);
+        subscriptionService.getEffectiveCommissionRate.mockImplementation(async (sellerId) => (sellerId === 10 ? 5 : 0));
+        orderRepository.createSplitOrder.mockResolvedValue({ parentOrderId: 100, childOrders: [] });
+
+        await orderService.checkout(1, {});
+
+        expect(subscriptionService.getEffectiveCommissionRate).toHaveBeenCalledTimes(2);
+        expect(subscriptionService.getEffectiveCommissionRate).toHaveBeenCalledWith(10);
+        expect(subscriptionService.getEffectiveCommissionRate).toHaveBeenCalledWith(20);
+
+        const sellerGroups = orderRepository.createSplitOrder.mock.calls[0][3];
+        const items = sellerGroups.flatMap((group) => group.items);
+        const byProduct = (id) => items.find((item) => item.product_id === id);
+
+        expect(byProduct(1)).toMatchObject({ commission_rate: 5, commission_amount: 50, seller_net_amount: 950 });
+        expect(byProduct(3)).toMatchObject({ commission_rate: 5, commission_amount: 10, seller_net_amount: 190 });
+        expect(byProduct(2)).toMatchObject({ commission_rate: 0, commission_amount: 0, seller_net_amount: 600 });
     });
 
     it("splits a multi-vendor cart into a parent order grouped by seller", async () => {
@@ -292,6 +382,72 @@ describe("order.service.checkout", () => {
 
         expect(socket.emitToAdmins).toHaveBeenCalledWith("admin:stats_changed", { reason: "order_placed" });
     });
+
+    it("blocks checkout from a suspended or deleted seller's cart", async () => {
+        cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10, name: "Widget" })]);
+        cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1 })]);
+        cartRepository.findActiveSellerIds.mockResolvedValue([]); // seller 10 is not active
+
+        await expect(orderService.checkout(1, {})).rejects.toThrow(
+            '"Widget" is no longer available - the seller\'s store isn\'t currently active'
+        );
+        expect(orderRepository.createOrder).not.toHaveBeenCalled();
+    });
+
+    // Loyalty cap (Phase 3, P0) - previously nothing stopped
+    // couponDiscount + loyaltyDiscount from exceeding the subtotal,
+    // which could drive the charged total to zero or below.
+    describe("loyalty cap", () => {
+        it("caps the loyalty discount so the charged total never goes to zero or below", async () => {
+            cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10, price: 1000, quantity: 1 })]);
+            cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1, price: 1000 })]);
+            orderRepository.createOrder.mockResolvedValue(1);
+            // Quoted as "the buyer has enough points to cover the whole
+            // 1000 subtotal" - quoteRedemption's own balance check passed,
+            // but the checkout-level cap must still kick in since nothing
+            // should be free.
+            referralService.quoteRedemption.mockResolvedValue({ pointsRedeemed: 100, discountAmount: 1000 });
+
+            await orderService.checkout(1, { loyalty_points_redeemed: 100 });
+
+            const [, , , , totalAmount, , , loyalty] = orderRepository.createOrder.mock.calls[0];
+            // Capped discount, rounded DOWN to a whole number of points at
+            // 10 TZS/point: at most 500 TZS of points usable here
+            // (subtotal 1000 - MIN_PAYABLE_ORDER_AMOUNT 500) = 50 points,
+            // not the 100 quoted/requested - leaving exactly the minimum
+            // payable amount charged, never less.
+            expect(loyalty.pointsRedeemed).toBe(50);
+            expect(loyalty.discountAmount).toBe(500);
+            expect(totalAmount).toBe(500);
+        });
+
+        it("rejects a checkout whose discounts would reduce the total to zero or below even after capping", async () => {
+            cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10, price: 400, quantity: 1 })]);
+            cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1, price: 400 })]);
+            // A coupon alone already covers the whole subtotal - nothing
+            // left for MIN_PAYABLE_ORDER_AMOUNT to work with.
+            couponService.quote.mockResolvedValue({ coupon: { id: 3 }, discountAmount: 400 });
+
+            await expect(orderService.checkout(1, { coupon_code: "FREE400" })).rejects.toThrow(
+                "This order's total can't be reduced to zero or below - please use fewer points or remove the coupon and try again"
+            );
+            expect(orderRepository.createOrder).not.toHaveBeenCalled();
+        });
+
+        it("does not cap a loyalty discount that already fits comfortably under the subtotal", async () => {
+            cartRepository.getCartByUser.mockResolvedValue([cartRow({ product_id: 1, seller_id: 10, price: 2000, quantity: 1 })]);
+            cartRepository.findProductsByIds.mockResolvedValue([productRow({ id: 1, price: 2000 })]);
+            orderRepository.createOrder.mockResolvedValue(1);
+            referralService.quoteRedemption.mockResolvedValue({ pointsRedeemed: 10, discountAmount: 100 });
+
+            await orderService.checkout(1, { loyalty_points_redeemed: 10 });
+
+            const [, , , , totalAmount, , , loyalty] = orderRepository.createOrder.mock.calls[0];
+            expect(totalAmount).toBe(1900);
+            expect(loyalty.pointsRedeemed).toBe(10);
+            expect(loyalty.discountAmount).toBe(100);
+        });
+    });
 });
 
 describe("order.service.getMyOrders", () => {
@@ -373,27 +529,27 @@ describe("order.service.cancelOrder", () => {
         await expect(orderService.cancelOrder(2, 5)).rejects.toThrow(
             "Cancel the full order instead of a single vendor's part of it"
         );
-        expect(orderRepository.updateOrderStatus).not.toHaveBeenCalled();
+        expect(orderRepository.cancelOrderIfCancellable).not.toHaveBeenCalled();
     });
 
     it("cancels every child and then the parent when all children are cancellable", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, buyer_id: 5, parent_order_id: null, is_parent: true, order_number: "ORD-1"
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: true, order_number: "ORD-1",
+            payment_status: "unpaid", loyalty_points_redeemed: 0, coupon_id: null
         });
         orderRepository.findChildOrders.mockResolvedValue([
             { id: 2, status: "pending", order_number: "ORD-1-V1" },
             { id: 3, status: "processing", order_number: "ORD-1-V2" }
         ]);
+        orderRepository.cancelChildOrdersIfCancellable.mockResolvedValue(2);
 
         await orderService.cancelOrder(1, 5);
 
-        // (Backend N+1 Fixes & Read Replica Adoption): children
-        // are cancelled in a single batched query now, not one
-        // updateOrderStatus call per child - see
-        // updateOrderStatusForChildren in order.repository.js.
-        expect(orderRepository.updateOrderStatusForChildren).toHaveBeenCalledWith(1, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledTimes(1);
+        // Phase 3, P0: conditional (race-safe), not a plain UPDATE - see
+        // order.repository.js#cancelChildOrdersIfCancellable.
+        expect(orderRepository.cancelChildOrdersIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
+        expect(orderRepository.restoreStockForChildOrders).toHaveBeenCalledWith(1);
+        expect(orderRepository.cancelOrderIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
     });
 
     it("refuses to cancel a parent order when any child is past the cancellable window", async () => {
@@ -408,7 +564,7 @@ describe("order.service.cancelOrder", () => {
         await expect(orderService.cancelOrder(1, 5)).rejects.toThrow(
             'Order can no longer be cancelled (vendor order ORD-1-V2 is "shipped")'
         );
-        expect(orderRepository.updateOrderStatus).not.toHaveBeenCalled();
+        expect(orderRepository.cancelChildOrdersIfCancellable).not.toHaveBeenCalled();
     });
 
     it("refuses to cancel a standalone order once it's past the cancellable window", async () => {
@@ -419,17 +575,21 @@ describe("order.service.cancelOrder", () => {
         await expect(orderService.cancelOrder(1, 5)).rejects.toThrow(
             "Order can no longer be cancelled (status: delivered)"
         );
-        expect(orderRepository.updateOrderStatus).not.toHaveBeenCalled();
+        expect(orderRepository.cancelOrderIfCancellable).not.toHaveBeenCalled();
     });
 
-    it("cancels a standalone order while still cancellable and notifies the buyer", async () => {
+    it("cancels a standalone unpaid order, restores stock, and notifies the buyer - no refund triggered", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1"
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1",
+            payment_status: "unpaid", loyalty_points_redeemed: 0, coupon_id: null
         });
 
         await orderService.cancelOrder(1, 5);
 
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
+        expect(orderRepository.cancelOrderIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
+        expect(orderRepository.restoreStockForOrder).toHaveBeenCalledWith(1);
+        expect(walletService.reverseSellerEarningsForOrder).not.toHaveBeenCalled();
+        expect(refundService.autoRefundForCancellation).not.toHaveBeenCalled();
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({
                 userId: 5,
@@ -441,9 +601,117 @@ describe("order.service.cancelOrder", () => {
         );
     });
 
+    // Cancel a paid order (Phase 3, P0) - the core new behavior: a paid
+    // order being cancelled must reverse the seller's wallet credit and
+    // automatically refund the buyer, not just flip the status and
+    // restore stock.
+    it("reverses seller earnings and triggers an automatic refund for a PAID order", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "processing", order_number: "ORD-1",
+            payment_status: "paid", total_amount: 15000, deposit_amount: null,
+            loyalty_points_redeemed: 0, coupon_id: null
+        });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(walletService.reverseSellerEarningsForOrder).toHaveBeenCalledWith(1);
+        expect(refundService.autoRefundForCancellation).toHaveBeenCalledWith(
+            expect.objectContaining({ amount: 15000, requestedBy: null })
+        );
+    });
+
+    it("reserves the cancellation refund against the order's refund cap before refunding", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "processing", order_number: "ORD-1",
+            payment_status: "paid", total_amount: 15000, deposit_amount: null,
+            loyalty_points_redeemed: 0, coupon_id: null
+        });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(refundCapService.reserveRefund).toHaveBeenCalledWith(
+            expect.anything(), { orderId: 1, orderItemId: null, amount: 15000 }
+        );
+        expect(refundCapService.reserveRefund.mock.invocationCallOrder[0])
+            .toBeLessThan(refundService.autoRefundForCancellation.mock.invocationCallOrder[0]);
+    });
+
+    it("skips the automatic refund (without failing the cancel) when the refund cap is already exhausted", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "processing", order_number: "ORD-1",
+            payment_status: "paid", total_amount: 15000, deposit_amount: null,
+            loyalty_points_redeemed: 0, coupon_id: null
+        });
+        refundCapService.reserveRefund.mockRejectedValue(new Error("Refund of 15000 would exceed what's left to refund on this order (0 remaining)"));
+
+        await expect(orderService.cancelOrder(1, 5)).resolves.not.toThrow();
+
+        expect(refundService.autoRefundForCancellation).not.toHaveBeenCalled();
+    });
+
+    it("refunds only the deposit for a pre-order cancelled before the balance is paid", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1",
+            payment_status: "deposit_paid", total_amount: 20000, deposit_amount: 6000,
+            loyalty_points_redeemed: 0, coupon_id: null
+        });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(refundService.autoRefundForCancellation).toHaveBeenCalledWith(
+            expect.objectContaining({ amount: 6000 })
+        );
+    });
+
+    it("gives back redeemed loyalty points and frees up a redeemed coupon on cancel", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1",
+            payment_status: "unpaid", loyalty_points_redeemed: 40, coupon_id: 9
+        });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(referralService.reverseRedemption).toHaveBeenCalledWith(5, 40, 1);
+        expect(couponService.reverseRedemption).toHaveBeenCalledWith(1);
+    });
+
+    it("cancels any in-flight delivery offer/assignment when a paid order is cancelled", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "processing", order_number: "ORD-1",
+            payment_status: "paid", total_amount: 5000, loyalty_points_redeemed: 0, coupon_id: null
+        });
+        deliveryRepository.findActiveOffer.mockResolvedValue({ id: 77 });
+        deliveryRepository.findByOrderId.mockResolvedValue({ id: 88, status: "assigned" });
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(deliveryRepository.expireOffer).toHaveBeenCalledWith(77);
+        expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(88, "failed", "Order cancelled");
+    });
+
+    // Cancel a paid order (Phase 3, P0) - the race guard itself: when the
+    // conditional status flip changes nothing (another request, e.g. the
+    // stale-order sweep job, already cancelled this exact order), nothing
+    // further should run - no double stock restore, no double refund.
+    it("is a no-op past the status flip when the conditional update loses the race", async () => {
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1",
+            payment_status: "paid", total_amount: 5000, loyalty_points_redeemed: 0, coupon_id: null
+        });
+        orderRepository.cancelOrderIfCancellable.mockResolvedValue(false);
+
+        await orderService.cancelOrder(1, 5);
+
+        expect(orderRepository.restoreStockForOrder).not.toHaveBeenCalled();
+        expect(walletService.reverseSellerEarningsForOrder).not.toHaveBeenCalled();
+        expect(refundService.autoRefundForCancellation).not.toHaveBeenCalled();
+        expect(notificationService.notify).not.toHaveBeenCalled();
+    });
+
     it("uses the item-aware message key and names the item when the order has one on this row", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1"
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: false, status: "pending", order_number: "ORD-1",
+            payment_status: "unpaid", loyalty_points_redeemed: 0, coupon_id: null
         });
         orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: "Widget", itemCount: 1 });
 
@@ -459,7 +727,8 @@ describe("order.service.cancelOrder", () => {
 
     it("falls back to the order-number-only message key for a multi-vendor parent order (no item on this row)", async () => {
         orderRepository.findOrderById.mockResolvedValue({
-            id: 1, buyer_id: 5, parent_order_id: null, is_parent: true, order_number: "ORD-1"
+            id: 1, buyer_id: 5, parent_order_id: null, is_parent: true, order_number: "ORD-1",
+            payment_status: "unpaid", loyalty_points_redeemed: 0, coupon_id: null
         });
         orderRepository.findChildOrders.mockResolvedValue([
             { id: 2, status: "pending", order_number: "ORD-1-V1" }
@@ -477,30 +746,35 @@ describe("order.service.cancelOrder", () => {
 });
 
 describe("order.service.autoCancelStaleOrder", () => {
+    const staleOrder = (overrides = {}) => ({
+        id: 1, is_parent: false, buyer_id: 5, order_number: "ORD-1",
+        payment_status: "unpaid", loyalty_points_redeemed: 0, coupon_id: null,
+        ...overrides
+    });
+
     it("cancels only the order itself when it has no children", async () => {
-        await orderService.autoCancelStaleOrder({ id: 1, is_parent: false, buyer_id: 5, order_number: "ORD-1" });
+        await orderService.autoCancelStaleOrder(staleOrder());
 
         expect(orderRepository.findChildOrders).not.toHaveBeenCalled();
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledTimes(1);
+        expect(orderRepository.cancelOrderIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
+        expect(orderRepository.restoreStockForOrder).toHaveBeenCalledWith(1);
     });
 
     it("cancels all children then the parent, without checking cancellable status (system-initiated)", async () => {
-        await orderService.autoCancelStaleOrder({ id: 1, is_parent: true, buyer_id: 5, order_number: "ORD-1" });
+        orderRepository.cancelChildOrdersIfCancellable.mockResolvedValue(2);
 
-        // (Backend N+1 Fixes & Read Replica Adoption): no
-        // per-child cancellability check needed here (unlike cancelOrder
-        // above), so findChildOrders isn't called at all anymore - the
-        // batched update replaces both the SELECT and the per-child
-        // UPDATE loop. See updateOrderStatusForChildren in
-        // order.repository.js.
+        await orderService.autoCancelStaleOrder(staleOrder({ is_parent: true }));
+
+        // No per-child cancellability check needed here (unlike
+        // cancelOrder above) - findChildOrders isn't called at all.
         expect(orderRepository.findChildOrders).not.toHaveBeenCalled();
-        expect(orderRepository.updateOrderStatusForChildren).toHaveBeenCalledWith(1, "cancelled");
-        expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "cancelled");
+        expect(orderRepository.cancelChildOrdersIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
+        expect(orderRepository.restoreStockForChildOrders).toHaveBeenCalledWith(1);
+        expect(orderRepository.cancelOrderIfCancellable).toHaveBeenCalledWith(1, ["pending", "processing"]);
     });
 
     it("notifies the buyer using the unpaid-cancellation message key", async () => {
-        await orderService.autoCancelStaleOrder({ id: 1, is_parent: false, buyer_id: 5, order_number: "ORD-1" });
+        await orderService.autoCancelStaleOrder(staleOrder());
 
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -515,7 +789,7 @@ describe("order.service.autoCancelStaleOrder", () => {
     it("uses the item-aware unpaid-cancellation message key and names the item when one is on this row", async () => {
         orderRepository.getPrimaryItemSummary.mockResolvedValue({ itemName: "Widget", itemCount: 2 });
 
-        await orderService.autoCancelStaleOrder({ id: 1, is_parent: false, buyer_id: 5, order_number: "ORD-1" });
+        await orderService.autoCancelStaleOrder(staleOrder());
 
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -526,7 +800,9 @@ describe("order.service.autoCancelStaleOrder", () => {
     });
 
     it("falls back to the order-number-only unpaid-cancellation key for a multi-vendor parent order", async () => {
-        await orderService.autoCancelStaleOrder({ id: 1, is_parent: true, buyer_id: 5, order_number: "ORD-1" });
+        orderRepository.cancelChildOrdersIfCancellable.mockResolvedValue(1);
+
+        await orderService.autoCancelStaleOrder(staleOrder({ is_parent: true }));
 
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -534,6 +810,25 @@ describe("order.service.autoCancelStaleOrder", () => {
                 messageParams: { orderNumber: "ORD-1", itemSummary: null }
             })
         );
+    });
+
+    // Reverse points and coupon on stale expiry (Phase 3) - same
+    // reversal as a buyer-initiated cancel, since a stale/unpaid order
+    // expiring never completed either.
+    it("gives back redeemed loyalty points and frees up a redeemed coupon on stale expiry", async () => {
+        await orderService.autoCancelStaleOrder(staleOrder({ loyalty_points_redeemed: 15, coupon_id: 3 }));
+
+        expect(referralService.reverseRedemption).toHaveBeenCalledWith(5, 15, 1);
+        expect(couponService.reverseRedemption).toHaveBeenCalledWith(1);
+    });
+
+    it("is a no-op past the status flip when a buyer cancel already won the race", async () => {
+        orderRepository.cancelOrderIfCancellable.mockResolvedValue(false);
+
+        await orderService.autoCancelStaleOrder(staleOrder());
+
+        expect(orderRepository.restoreStockForOrder).not.toHaveBeenCalled();
+        expect(notificationService.notify).not.toHaveBeenCalled();
     });
 });
 

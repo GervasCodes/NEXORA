@@ -71,15 +71,22 @@ export default function ForgotPassword() {
     // login's /auth/login/resend-otp). The anti-enumeration behavior is
     // unaffected: this always responds success regardless of whether the
     // account exists, same as the first call.
-    const handleResend = async () => {
+    const handleResend = async (channel = "email") => {
         if (resendCooldown > 0 || resending) return;
         setResending(true);
         setError("");
         setNotice("");
         try {
-            const { data } = await api.post("/auth/forgot-password", { email });
+            const { data } = await api.post("/auth/forgot-password", { email, channel });
 
-            setNotice("A new code is on its way.");
+            // Global setup check only (never per-account), so this can't reveal
+            // whether the email is registered.
+            if (data.data?.channelUnavailable) {
+                setError(`That method isn't available right now. Please choose another.`);
+                return;
+            }
+
+            setNotice(`A new code is on its way by ${channel}. Didn't get it? Try another method.`);
             setExpiresIn(data.data?.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
             setResendCooldown(RESEND_COOLDOWN_SECONDS);
         } catch (err) {
@@ -105,7 +112,7 @@ export default function ForgotPassword() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
-            <PageMeta title="Reset Password" />
+            <PageMeta title="Reset Password" noIndexFollow />
             <h1 className="font-display text-2xl mb-1">Reset your password</h1>
             <p className="text-ash text-sm mb-8">
                 {step === "email"
@@ -186,14 +193,23 @@ export default function ForgotPassword() {
                         >
                             ← Use a different email
                         </button>
-                        <button
-                            type="button"
-                            onClick={handleResend}
-                            disabled={resendCooldown > 0 || resending}
-                            className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
-                        >
-                            {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
-                        </button>
+                        <div className="text-right">
+                            <p className="text-xs text-ash mb-1">Send the code by</p>
+                            <div className="flex gap-3 justify-end">
+                                {[["email", "Email"], ["sms", "SMS"], ["whatsapp", "WhatsApp"]].map(([channel, name]) => (
+                                    <button
+                                        key={channel}
+                                        type="button"
+                                        onClick={() => handleResend(channel)}
+                                        disabled={resendCooldown > 0 || resending}
+                                        className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                                    >
+                                        {name}
+                                    </button>
+                                ))}
+                            </div>
+                            {resendCooldown > 0 && <p className="text-xs text-ash mt-1">Resend in {resendCooldown}s</p>}
+                        </div>
                     </div>
                 </form>
             )}

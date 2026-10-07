@@ -23,6 +23,8 @@ router.put(
     validationMiddleware,
     efdController.verifyRegistration
 );
+router.get("/admin/needs-attention", authorize("admin"), efdController.listNeedsAttention);
+router.post("/admin/receipts/:id/retry", authorize("admin"), efdController.retryReceipt);
 
 // --- Seller ---
 router.get("/seller/tax-info", authorize("seller"), efdController.getMyTaxInfo);

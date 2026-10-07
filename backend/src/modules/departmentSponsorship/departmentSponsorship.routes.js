@@ -24,6 +24,13 @@ router.post(
     departmentSponsorshipController.createCampaign
 );
 
+router.get(
+    "/campaigns/:id/cancel-preview",
+    campaignIdValidation,
+    validationMiddleware,
+    departmentSponsorshipController.previewCancelCampaign
+);
+
 router.put(
     "/campaigns/:id/cancel",
     campaignIdValidation,

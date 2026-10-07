@@ -6,6 +6,17 @@ import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
 
+
+// Tip dismissal is remembered per tip on this device. Storage can be
+// unavailable (private mode), in which case the tip hides for the session only.
+const TIP_STORAGE_PREFIX = "nexora_agent_tip_dismissed_";
+function readTipDismissed(key) {
+    try { return localStorage.getItem(TIP_STORAGE_PREFIX + key) === "1"; } catch { return false; }
+}
+function writeTipDismissed(key) {
+    try { localStorage.setItem(TIP_STORAGE_PREFIX + key, "1"); } catch { /* session-only dismissal */ }
+}
+
 export default function DeliveryEarnings() {
     const { t } = useLanguage();
     const [dashboard, setDashboard] = useState(null);
@@ -19,11 +30,28 @@ export default function DeliveryEarnings() {
             .finally(() => setLoading(false));
     }, [t]);
 
+    // Contextual tip: one at a time, most useful first. Dismissal is
+    // remembered per tip on this device so it doesn't nag on every visit.
+    const tipKey = !dashboard
+        ? null
+        : dashboard.totalDeliveries === 0 && dashboard.recent.length === 0
+            ? "start"
+            : dashboard.heldEarnings > 0
+                ? "held"
+                : null;
+    const [dismissedTips, setDismissedTips] = useState({});
+    const tipDismissed = !tipKey || dismissedTips[tipKey] || readTipDismissed(tipKey);
+    const dismissTip = () => {
+        writeTipDismissed(tipKey);
+        setDismissedTips((prev) => ({ ...prev, [tipKey]: true }));
+    };
+
     if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!dashboard) return null;
 
-    const { totalEarnings, totalDeliveries, todayEarnings, weekEarnings, monthEarnings, dailyBreakdown, recent } = dashboard;
+    const { totalEarnings, totalDeliveries, todayEarnings, weekEarnings, monthEarnings, heldEarnings, holdDays, dailyBreakdown, recent } = dashboard;
+
 
     return (
         <div className="animate-fade-in">
@@ -57,6 +85,22 @@ export default function DeliveryEarnings() {
                 )}
             </div>
 
+            {tipKey && !tipDismissed && dashboard && (
+                <div role="note" className="border border-teal/30 bg-teal/5 rounded-lg p-4 mb-8 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium mb-1">
+                            {tipKey === "start" ? t("delivery.agent.tip.startTitle") : t("delivery.agent.tip.heldTitle")}
+                        </p>
+                        <p className="text-xs text-ink/80">
+                            {tipKey === "start" ? t("delivery.agent.tip.startBody") : t("delivery.agent.tip.heldBody", { days: dashboard.holdDays })}
+                        </p>
+                    </div>
+                    <button type="button" onClick={dismissTip} className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink shrink-0">
+                        {t("delivery.agent.tip.dismiss")}
+                    </button>
+                </div>
+            )}
+
             <div>
                 <p className="text-sm font-medium mb-3">{t("delivery.agent.earnings.recent")}</p>
                 {recent.length === 0 ? (
@@ -73,7 +117,14 @@ export default function DeliveryEarnings() {
                                     <p className="font-medium">{r.order_number}</p>
                                     <p className="text-xs text-ash">{r.shipping_city} · {formatDate(r.created_at)}</p>
                                 </div>
-                                <span className="price text-teal">+{formatMoney(r.amount)}</span>
+                                <div className="text-right">
+                                    <span className="price text-teal block">+{formatMoney(r.amount)}</span>
+                                    <span className="text-xs text-ash">
+                                        {r.status === "released"
+                                            ? t("delivery.agent.earnings.statusReleased", { date: formatShortDate(r.released_at) })
+                                            : t("delivery.agent.earnings.statusHeld", { date: formatShortDate(r.held_until) })}
+                                    </span>
+                                </div>
                             </li>
                         ))}
                     </ul>

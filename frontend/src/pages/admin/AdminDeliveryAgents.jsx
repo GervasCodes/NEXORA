@@ -5,8 +5,12 @@ import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import ActionDialog from "../../components/ActionDialog";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
 
 // Modeled directly on AdminSellers.jsx - the Trust & safety group had a
 // roster page for Sellers but nothing equivalent for Delivery agents;
@@ -32,30 +36,19 @@ const verificationStyles = {
 };
 
 export default function AdminDeliveryAgents() {
-    const [agents, setAgents] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
+    const [suspendTarget, setSuspendTarget] = useState(null);
     const toast = useToast();
 
-    const load = () => {
-        api.get("/admin/delivery-agents").then(({ data }) => setAgents(data.data)).finally(() => setLoading(false));
-    };
+    const list = useAdminPagedList("/admin/delivery-agents", { onError: (m) => toast?.error(m) });
+    const { items: agents, loading, meta } = list;
+    const load = list.reload;
 
-    useEffect(load, []);
-
-    const handleSuspend = async (agent) => {
-        const reason = window.prompt(
-            `Why are you suspending ${agent.first_name} ${agent.last_name}? This is shown to the agent and kept on record.`
-        );
-        if (reason === null) return;
-        if (!reason.trim()) {
-            toast?.error("A reason is required to suspend an account.");
-            return;
-        }
-
+    const handleSuspend = async (agent, reason) => {
+        setSuspendTarget(null);
         setBusyId(agent.id);
         try {
-            await api.put(`/admin/users/${agent.id}/suspend`, { reason: reason.trim() });
+            await api.put(`/admin/users/${agent.id}/suspend`, { reason });
             toast?.success(`${agent.first_name} ${agent.last_name} has been suspended.`);
             load();
         } catch (err) {
@@ -78,7 +71,7 @@ export default function AdminDeliveryAgents() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading && !meta) return <PageLoader />;
 
     return (
         <div>
@@ -89,6 +82,15 @@ export default function AdminDeliveryAgents() {
                 <Link to="/admin/account-verifications" className="text-teal hover:underline">Verifications</Link>.
                 This is the full roster.
             </p>
+
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search agent name, email, phone or ID"
+                ariaLabel="Search delivery agents"
+                filters={[{ key: "status", label: "Filter by status", value: list.filters.status || "", options: [{ value: "", label: "All statuses" },{ value: "pending", label: "Verification pending" },{ value: "approved", label: "Verified" },{ value: "rejected", label: "Rejected" },{ value: "suspended", label: "Suspended" }], onChange: (v) => list.applyFilters({ ...list.filters, status: v }) }]}
+            />
 
             {agents.length === 0 && <EmptyState title="No delivery agents yet." />}
 
@@ -125,7 +127,7 @@ export default function AdminDeliveryAgents() {
                             </span>
 
                             <Button
-                                onClick={() => (a.is_active ? handleSuspend(a) : handleUnsuspend(a))}
+                                onClick={() => (a.is_active ? setSuspendTarget(a) : handleUnsuspend(a))}
                                 disabled={busyId === a.id}
                                 variant="secondary"
                                 size="sm"
@@ -137,6 +139,19 @@ export default function AdminDeliveryAgents() {
                     </li>
                 ))}
             </ul>
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Delivery agent pages" />
+
+            <ActionDialog
+                open={!!suspendTarget}
+                title={`Suspend ${suspendTarget?.first_name || ""} ${suspendTarget?.last_name || ""}?`}
+                description="The reason is shown to the agent and kept on record."
+                reasonLabel="Reason for suspension"
+                confirmLabel="Suspend account"
+                danger
+                onConfirm={({ reason }) => handleSuspend(suspendTarget, reason)}
+                onCancel={() => setSuspendTarget(null)}
+            />
         </div>
     );
 }

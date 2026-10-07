@@ -241,22 +241,54 @@ exports.findBookingsCompletingToday = async () => {
 // booking had already been paid for - see booking.service.js#cancelBooking)
 // and give back every date's units, all in one transaction - the inverse
 // of createBooking's decrement loop above.
+// Unpaid booking expiry (Phase 5, P1) - a booking reserves availability
+// units the moment it's created (createBooking above), before payment
+// is even attempted, so one the buyer never pays for would otherwise
+// hold that availability forever with nothing to release it.
+exports.findStaleUnpaid = async (minutes) => {
+    const [rows] = await db.query(
+        `SELECT id, service_id, provider_id, customer_id, booking_reference
+        FROM bookings
+        WHERE status = 'pending' AND payment_status = 'unpaid'
+            AND created_at <= (NOW() - INTERVAL ? MINUTE)`,
+        [Number(minutes)]
+    );
+    return rows;
+};
+
+// Conditional status update (Phase 5, P0) - WHERE status IN (...)
+// against the same CANCELLABLE_STATUSES set booking.service.js already
+// checks before calling this, but checked again here *inside* the
+// transaction, against the live row. Closes the race the earlier
+// application-level-only check left open: two near-simultaneous cancel
+// attempts (a double-click, or a buyer's cancel racing the unpaid-
+// booking-expiry job for the same booking) previously could both pass
+// the service-layer check, then both run this UPDATE and both restore
+// availability units - the second restore has nothing real to undo.
+// Returns whether this call actually changed the row; the caller only
+// restores units / triggers a refund when it did.
 exports.cancelBooking = async (bookingId, serviceId, dateItems, finalStatus = "cancelled") => {
     const connection = await db.getConnection();
 
     try {
         await connection.beginTransaction();
 
-        await connection.query(
-            "UPDATE bookings SET status = ? WHERE id = ?",
+        const [result] = await connection.query(
+            "UPDATE bookings SET status = ? WHERE id = ? AND status IN ('pending', 'confirmed')",
             [finalStatus, bookingId]
         );
+
+        if (result.affectedRows === 0) {
+            await connection.commit();
+            return false;
+        }
 
         // Phase RF3: was one restoreUnits UPDATE per date; now one
         // batched UPDATE covers every date in the booking's range.
         await availabilityRepository.restoreUnitsForDates(connection, serviceId, dateItems);
 
         await connection.commit();
+        return true;
 
     } catch (error) {
         await connection.rollback();

@@ -6,8 +6,34 @@ import NexoraAvailabilitySuggestion from "../../components/ai/NexoraAvailability
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import Input from "../../components/ui/Input";
+import Skeleton from "../../components/Skeleton";
+import ErrorState from "../../components/ui/ErrorState";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local-date ISO (YYYY-MM-DD). toISOString() is UTC, which in East Africa
+// (UTC+3) shows yesterday's date for the first hours of every day.
+const toLocalIso = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+};
+const todayIso = () => toLocalIso(new Date());
+const addDaysIso = (iso, days) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return toLocalIso(new Date(y, m - 1, d + days));
+};
+
+const PRESETS = [
+    { label: "Next 7 days", range: () => [todayIso(), addDaysIso(todayIso(), 6)] },
+    { label: "Next 30 days", range: () => [todayIso(), addDaysIso(todayIso(), 29)] },
+    {
+        label: "Rest of month",
+        range: () => {
+            const now = new Date();
+            return [todayIso(), toLocalIso(new Date(now.getFullYear(), now.getMonth() + 1, 0))];
+        }
+    }
+];
 
 export default function SellerAvailability() {
     const { profile } = useOutletContext();
@@ -15,6 +41,7 @@ export default function SellerAvailability() {
 
     const [services, setServices] = useState([]);
     const [loadingServices, setLoadingServices] = useState(true);
+    const [servicesError, setServicesError] = useState("");
     const [serviceId, setServiceId] = useState("");
 
     const [startDate, setStartDate] = useState(todayIso());
@@ -28,26 +55,57 @@ export default function SellerAvailability() {
     const [error, setError] = useState("");
     const [refreshToken, setRefreshToken] = useState(0);
 
+    const loadServices = () => {
+        setLoadingServices(true);
+        setServicesError("");
+        api.get("/services/mine/list")
+            .then(({ data }) => {
+                setServices(data.data);
+                if (data.data.length > 0) setServiceId((current) => current || String(data.data[0].id));
+            })
+            .catch((err) => setServicesError(extractErrorMessage(err)))
+            .finally(() => setLoadingServices(false));
+    };
+
     useEffect(() => {
         if (!isProvider) {
             setLoadingServices(false);
             return;
         }
-        api.get("/services/mine/list")
-            .then(({ data }) => {
-                setServices(data.data);
-                if (data.data.length > 0) setServiceId(String(data.data[0].id));
-            })
-            .finally(() => setLoadingServices(false));
+        loadServices();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- loadServices only closes over setters
     }, [isProvider]);
+
+    const onStartChange = (value) => {
+        setStartDate(value);
+        // Keep the range valid: pushing the start past the end drags the end along.
+        if (value && endDate && value > endDate) setEndDate(value);
+    };
+
+    const applyPreset = (preset) => {
+        const [from, to] = preset.range();
+        setStartDate(from);
+        setEndDate(to);
+        setMessage("");
+        setError("");
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!serviceId) return;
 
-        setSaving(true);
         setMessage("");
         setError("");
+
+        if (endDate < startDate) {
+            setError("The end date can't be before the start date.");
+            return;
+        }
+        if (Number(availableUnits) < 0 || !Number.isFinite(Number(availableUnits))) {
+            setError("Available units must be 0 or more.");
+            return;
+        }
+        setSaving(true);
 
         try {
             const { data } = await api.put(`/services/${serviceId}/availability`, {
@@ -78,7 +136,22 @@ export default function SellerAvailability() {
         );
     }
 
-    if (loadingServices) return <p className="text-ash">Loading your services…</p>;
+    if (loadingServices) {
+        return (
+            <div className="animate-fade-in" aria-busy="true" aria-label="Loading availability">
+                <Skeleton className="h-7 w-36 mb-6" />
+                <div className="grid md:grid-cols-[1fr_320px] gap-8">
+                    <div>
+                        <Skeleton className="h-10 w-full mb-6" />
+                        <Skeleton className="h-72 w-full" />
+                    </div>
+                    <Skeleton className="h-80 w-full" />
+                </div>
+            </div>
+        );
+    }
+
+    if (servicesError) return <ErrorState title="Couldn't load your services" hint={servicesError} onRetry={loadServices} />;
 
     if (services.length === 0) {
         return (
@@ -118,9 +191,22 @@ export default function SellerAvailability() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="border border-line rounded-lg p-4 h-fit">
-                    <p className="text-sm font-medium mb-4">Set availability for a date range</p>
+                    <p className="text-sm font-medium mb-3">Set availability for a date range</p>
 
-                    {message && <p className="text-teal text-xs mb-3">{message}</p>}
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                        {PRESETS.map((preset) => (
+                            <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => applyPreset(preset)}
+                                className="text-xs border border-line px-2.5 py-1 rounded-full hover:border-ink transition-colors"
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {message && <p role="status" className="text-teal text-xs mb-3">{message}</p>}
                     {error && <p role="alert" className="text-coral text-xs mb-3">{error}</p>}
 
                     <div className="grid grid-cols-2 gap-3 mb-3">
@@ -131,7 +217,7 @@ export default function SellerAvailability() {
                                 type="date"
                                 required
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(e) => onStartChange(e.target.value)}
                             />
                         </div>
                         <div>
@@ -140,6 +226,7 @@ export default function SellerAvailability() {
                                 id="availability-end"
                                 type="date"
                                 required
+                                min={startDate}
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
                             />

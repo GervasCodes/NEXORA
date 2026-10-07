@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Button from "../components/ui/Button";
@@ -22,10 +22,32 @@ const formatCountdown = (totalSeconds) => {
     return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
+// Only an in-app relative path is accepted (Phase 4 remediation) -
+// `returnTo` is attacker-controllable (anyone can link to
+// /login?returnTo=...), so a bare "send the user there after login"
+// would be an open-redirect vector. Must start with a single "/" and
+// not "//" (protocol-relative, i.e. a disguised external host).
+const sanitizeReturnTo = (value) => {
+    if (!value) return null;
+    if (!value.startsWith("/") || value.startsWith("//")) return null;
+    return value;
+};
+
 export default function Login() {
     const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Guests redirected here from an action that needs an account (e.g.
+    // joining a group buy - see GroupBuyDetail.jsx) arrive with
+    // ?returnTo=<path> so they land back where they were instead of at
+    // the homepage after logging in.
+    const returnTo = sanitizeReturnTo(new URLSearchParams(location.search).get("returnTo"));
+
+    // What the guest was trying to do (set by product cards). Display only.
+    const intentParam = new URLSearchParams(location.search).get("intent");
+    const intent = ["add-to-cart", "save"].includes(intentParam) ? intentParam : null;
 
     const [form, setForm] = useState({ email: "", password: "" });
     const [step, setStep] = useState("credentials"); // 'credentials' | 'otp'
@@ -83,6 +105,7 @@ export default function Login() {
         // away). It only kicks in after an actual resend, per the spec's
         // "after each resend" wording, in handleResend below.
         setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
+        if (result.codeDelivered === false) setError(t("auth.otp.initialSendFailed"));
         setStep("otp");
     };
 
@@ -96,17 +119,22 @@ export default function Login() {
         setSubmitting(false);
 
         if (result.success) {
-            navigate("/");
+            navigate(returnTo || "/");
         } else {
             setError(result.message);
         }
     };
 
-    const handleResend = async () => {
+    const handleResend = async (channel = "email") => {
         if (resendCooldown > 0) return;
         setError("");
         setNotice("");
-        const result = await resendLoginOtp(preAuthToken);
+        const result = await resendLoginOtp(preAuthToken, channel);
+        if (result.success && !result.delivered) {
+            // Not a block: the user picks another method right away (no cooldown).
+            setError(result.message);
+            return;
+        }
         setNotice(result.success ? t("auth.otp.resendSuccess") : "");
         if (result.success) {
             setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
@@ -175,16 +203,25 @@ export default function Login() {
                     >
                         ← {t("auth.otp.useDifferentAccount")}
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleResend}
-                        disabled={resendCooldown > 0}
-                        className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
-                    >
-                        {resendCooldown > 0
-                            ? t("auth.otp.resendIn", { seconds: resendCooldown })
-                            : t("auth.otp.resendCode")}
-                    </button>
+                    <div className="text-right">
+                        <p className="text-xs text-ash mb-1">{t("auth.otp.channelLabel")}</p>
+                        <div className="flex gap-3 justify-end">
+                            {["email", "sms", "whatsapp"].map((channel) => (
+                                <button
+                                    key={channel}
+                                    type="button"
+                                    onClick={() => handleResend(channel)}
+                                    disabled={resendCooldown > 0}
+                                    className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                                >
+                                    {t(`auth.otp.channel.${channel}`)}
+                                </button>
+                            ))}
+                        </div>
+                        {resendCooldown > 0 && (
+                            <p className="text-xs text-ash mt-1">{t("auth.otp.resendIn", { seconds: resendCooldown })}</p>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -192,8 +229,9 @@ export default function Login() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
-            <PageMeta title="Sign In" />
+            <PageMeta title="Sign In" noIndexFollow />
             <h1 className="font-display text-2xl mb-1">{t("auth.welcomeBack")}</h1>
+            {intent && <p className="text-sm text-ash mb-4">{t(intent === "save" ? "auth.intentSave" : "auth.intentCart")}</p>}
             <p className="text-ash text-sm mb-8">{t("auth.signInSubtitle")}</p>
 
             <form onSubmit={handleCredentials} className="space-y-4">

@@ -8,12 +8,19 @@
 // around that function, matching the shape of every other job in this
 // directory.
 //
-// (Nexora Services - Financial Integration) added the booking
+// Financial Integration) added the booking
 // equivalent, wallet.service.js#releaseEligibleBookingEarnings - run
 // from the same tick rather than a second cron entry, since it's the
 // exact same "release whatever's past its hold window" sweep just
 // against booking_items instead of order_items (see migration 064).
+//
+// Rider earnings hold (Phase 2) added a third leg, earnings.service.js#
+// releaseEligibleEarnings, for the exact same reason: a delivery agent's
+// per-order earning is now held the same way, so it releases on the same
+// tick as the seller/provider sweeps above rather than needing its own
+// schedule.
 const walletService = require("../modules/wallet/wallet.service");
+const earningsService = require("../modules/earnings/earnings.service");
 const logger = require("../utils/logger").child({ module: "job:escrowRelease" });
 
 exports.run = async () => {
@@ -35,5 +42,14 @@ exports.run = async () => {
             released: bookingSummary.released,
             amountReleased: bookingSummary.amountReleased
         }, "escrow release sweep (bookings)");
+    }
+
+    const agentEarningsSummary = await earningsService.releaseEligibleEarnings();
+
+    if (agentEarningsSummary.released) {
+        logger.info({
+            released: agentEarningsSummary.released,
+            errored: agentEarningsSummary.errored
+        }, "escrow release sweep (agent earnings)");
     }
 };

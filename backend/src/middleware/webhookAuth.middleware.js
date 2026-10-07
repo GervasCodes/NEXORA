@@ -30,6 +30,22 @@ const crypto = require("crypto");
 const logger = require("../utils/logger");
 const replayGuard = require("../utils/webhookReplayGuard");
 
+// Fail closed everywhere: a webhook whose secret is not configured is
+// rejected in EVERY environment. The one exception is local development,
+// which must opt in explicitly with ALLOW_UNSIGNED_WEBHOOKS=true - and even
+// that is ignored in production.
+const allowUnsignedForLocalDev = () =>
+    process.env.ALLOW_UNSIGNED_WEBHOOKS === "true" && process.env.NODE_ENV !== "production";
+
+// Selcom's bearer token is static, so also restrict by source IP when an
+// allow-list is configured (SELCOM_WEBHOOK_ALLOWED_IPS, comma separated).
+const sourceIpAllowed = (req, envVarName) => {
+    const allowList = String(process.env[envVarName] || "").split(",").map((ip) => ip.trim()).filter(Boolean);
+    if (allowList.length === 0) return true;
+    const ip = String(req.ip || "").replace(/^::ffff:/, "");
+    return allowList.includes(ip);
+};
+
 // --- MalipoPay --------------------------------------------------------
 // Per developers.malipopay.co.tz/integration/webhooks: every callback
 // body includes a `payloadSignature` field, computed as
@@ -43,13 +59,11 @@ exports.verifyMalipopayWebhook = async (req, res, next) => {
     const { reference, timestamp, amount, customer, payloadSignature } = payload;
 
     if (!secret) {
-        if (process.env.NODE_ENV === "production") {
-            logger.error({ provider: "malipopay", reqId: req.id }, "[webhook auth] MOBILE_MONEY_API_KEY not configured - rejecting webhook in production (fail closed)");
-            return res.status(200).json({ success: false });
+        if (allowUnsignedForLocalDev()) {
+            return next();
         }
-        // Not configured outside production - allow through so local/dev
-        // testing with a hand-crafted payload doesn't require a secret.
-        return next();
+        logger.error({ provider: "malipopay", reqId: req.id }, "[webhook auth] MOBILE_MONEY_API_KEY not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).json({ success: false });
     }
 
     if (!payloadSignature || !customer?.phoneNumber) {
@@ -95,6 +109,9 @@ exports.verifyMalipopayWebhook = async (req, res, next) => {
         if (!isFreshDelivery) {
             return res.status(200).json({ success: false });
         }
+        // The controller releases this if processing fails transiently, so
+        // the provider's retry is not rejected as a replay.
+        req.replayGuardKey = { provider: "malipopay", raw: JSON.stringify(payload) };
     } catch (error) {
         logger.error({ err: error, provider: "malipopay", reqId: req.id }, "[webhook auth] replay-guard check failed");
         return res.status(200).json({ success: false });
@@ -116,11 +133,16 @@ exports.verifySelcomWebhook = async (req, res, next) => {
     const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
     if (!configuredToken) {
-        if (process.env.NODE_ENV === "production") {
-            logger.error({ provider: "selcom", reqId: req.id }, "[webhook auth] SELCOM_WEBHOOK_SECRET not configured - rejecting webhook in production (fail closed)");
-            return res.status(200).json({ success: false });
+        if (allowUnsignedForLocalDev()) {
+            return next();
         }
-        return next();
+        logger.error({ provider: "selcom", reqId: req.id }, "[webhook auth] SELCOM_WEBHOOK_SECRET not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).json({ success: false });
+    }
+
+    if (!sourceIpAllowed(req, "SELCOM_WEBHOOK_ALLOWED_IPS")) {
+        logger.warn({ provider: "selcom", reqId: req.id, ip: req.ip }, "[webhook auth] rejected selcom webhook from an IP outside SELCOM_WEBHOOK_ALLOWED_IPS");
+        return res.status(200).json({ success: false });
     }
 
     const expected = Buffer.from(configuredToken, "utf8");
@@ -142,6 +164,7 @@ exports.verifySelcomWebhook = async (req, res, next) => {
         if (!isFreshDelivery) {
             return res.status(200).json({ success: false });
         }
+        req.replayGuardKey = { provider: "selcom", raw: JSON.stringify(req.body || {}) };
     } catch (error) {
         logger.error({ err: error, provider: "selcom", reqId: req.id }, "[webhook auth] replay-guard check failed");
         return res.status(200).json({ success: false });
@@ -162,11 +185,11 @@ const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
     const providedSecret = req.headers["x-webhook-secret"];
 
     if (!configuredSecret) {
-        if (process.env.NODE_ENV === "production") {
-            logger.error({ provider, envVarName, reqId: req.id }, "[webhook auth] secret not configured - rejecting webhook in production (fail closed)");
-            return res.status(200).json({ success: false });
+        if (allowUnsignedForLocalDev()) {
+            return next();
         }
-        return next();
+        logger.error({ provider, envVarName, reqId: req.id }, "[webhook auth] secret not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).json({ success: false });
     }
 
     // Timing-safe, length-checked comparison - same pattern as
@@ -203,11 +226,11 @@ exports.verifySmsWebhook = async (req, res, next) => {
     const providedSecret = req.headers["x-webhook-secret"];
 
     if (!configuredSecret) {
-        if (process.env.NODE_ENV === "production") {
-            logger.error({ provider: "sms", reqId: req.id }, "[webhook auth] SMS_GATEWAY_WEBHOOK_SECRET not configured - rejecting webhook in production (fail closed)");
-            return res.status(200).json({ success: false });
+        if (allowUnsignedForLocalDev()) {
+            return next();
         }
-        return next();
+        logger.error({ provider: "sms", reqId: req.id }, "[webhook auth] SMS_GATEWAY_WEBHOOK_SECRET not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).json({ success: false });
     }
 
     const expected = Buffer.from(configuredSecret, "utf8");
@@ -242,11 +265,11 @@ exports.verifyWhatsAppWebhook = async (req, res, next) => {
     const signatureHeader = req.headers["x-hub-signature-256"];
 
     if (!appSecret) {
-        if (process.env.NODE_ENV === "production") {
-            logger.error({ provider: "whatsapp", reqId: req.id }, "[webhook auth] WHATSAPP_APP_SECRET not configured - rejecting webhook in production (fail closed)");
-            return res.status(200).send("EVENT_RECEIVED");
+        if (allowUnsignedForLocalDev()) {
+            return next();
         }
-        return next();
+        logger.error({ provider: "whatsapp", reqId: req.id }, "[webhook auth] WHATSAPP_APP_SECRET not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).send("EVENT_RECEIVED");
     }
 
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));

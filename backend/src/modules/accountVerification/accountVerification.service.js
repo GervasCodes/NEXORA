@@ -1,6 +1,6 @@
 const db = require("../../config/db");
 const accountVerificationRepository = require("./accountVerification.repository");
-const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { uploadPrivateDocument, toClientDocument } = require("../../utils/privateDocuments");
 const { classify } = require("../../utils/fileContentValidator");
 const notificationService = require("../notification/notification.service");
 const logger = require("../../utils/logger").child({ module: "accountVerification" });
@@ -19,7 +19,30 @@ exports.getDetail = async (userId) => {
         accountVerificationRepository.findHistoryByUser(userId)
     ]);
 
-    return { ...user, documents, history };
+    return { ...user, documents: documents.map(toClientDocument), history };
+};
+
+// Tags one submitted document as failing (or updates its reason). The
+// account itself stays pending; the reviewer still approves or rejects it.
+exports.flagDocument = async (documentId, reason, adminId) => {
+    const doc = await accountVerificationRepository.findDocumentById(documentId);
+    if (!doc || doc.business_request_id) {
+        throw new Error("Document not found.");
+    }
+    if (!reason || !reason.trim()) {
+        throw new Error("A reason is required to flag a document.");
+    }
+    await accountVerificationRepository.upsertDocumentFlag(documentId, reason.trim(), adminId);
+    return exports.getDetail(doc.user_id);
+};
+
+exports.unflagDocument = async (documentId) => {
+    const doc = await accountVerificationRepository.findDocumentById(documentId);
+    if (!doc || doc.business_request_id) {
+        throw new Error("Document not found.");
+    }
+    await accountVerificationRepository.deleteDocumentFlag(documentId);
+    return exports.getDetail(doc.user_id);
 };
 
 exports.approve = async (userId, adminId) => {
@@ -168,8 +191,8 @@ exports.submitBusinessRequest = async (userId, files = {}) => {
     const uploaded = [];
     for (const doc of documents) {
         try {
-            const result = await uploadToCloudinary(doc.file.buffer, `verification/${doc.type}`, "auto");
-            uploaded.push({ type: doc.type, url: result.secure_url });
+            const stored = await uploadPrivateDocument(doc.file.buffer, `verification/${doc.type}`);
+            uploaded.push({ type: doc.type, stored });
         } catch (uploadError) {
             throw new Error(`We couldn't upload your ${BUSINESS_DOC_LABELS[doc.type]}. Please try again.`);
         }
@@ -188,7 +211,7 @@ exports.submitBusinessRequest = async (userId, files = {}) => {
 
         const requestId = await accountVerificationRepository.insertBusinessRequest(userId, connection);
         for (const doc of uploaded) {
-            await accountVerificationRepository.insertBusinessDocument(userId, requestId, doc.type, doc.url, connection);
+            await accountVerificationRepository.insertBusinessDocument(userId, requestId, doc.type, doc.stored, connection);
         }
         await accountVerificationRepository.insertHistory(userId, "business_submitted", null, null, connection);
 
@@ -211,7 +234,7 @@ exports.getBusinessRequestDetail = async (requestId) => {
         throw new Error("Request not found");
     }
     const documents = await accountVerificationRepository.findDocumentsByBusinessRequest(requestId);
-    return { ...request, documents };
+    return { ...request, documents: documents.map(toClientDocument) };
 };
 
 exports.approveBusinessRequest = async (requestId, adminId) => {

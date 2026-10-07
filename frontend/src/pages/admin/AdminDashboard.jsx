@@ -9,6 +9,26 @@ import PeriodComparisonCard from "../../components/PeriodComparisonCard";
 import PageLoader from "../../components/PageLoader";
 import NexoraAdminInsights from "../../components/ai/NexoraAdminInsights";
 import PageMeta from "../../components/PageMeta";
+import CollapsibleSection from "../../components/CollapsibleSection";
+
+// Queue counts drive the health strip. Keys match /admin/queue-counts, which
+// is also what the side navigation badges read.
+const HEALTH_ITEMS = [
+    { key: "verifications", label: "Verifications waiting", to: "/admin/account-verifications" },
+    { key: "withdrawals", label: "Withdrawals waiting", to: "/admin/withdrawals" },
+    { key: "disputes", label: "Open disputes", to: "/admin/disputes" },
+    { key: "fraud_flags", label: "Fraud flags", to: "/admin/fraud" },
+    { key: "efd_failed", label: "EFD failures", to: "/admin/efd" },
+    { key: "support_chats", label: "Support chats", to: "/admin/support" }
+];
+
+const RANGE_PRESETS = [
+    { value: 7, label: "7 days" },
+    { value: 30, label: "30 days" },
+    { value: 90, label: "90 days" }
+];
+
+const isoDay = (d) => d.toISOString().slice(0, 10);
 
 export default function AdminDashboard() {
     const { socket } = useSocket();
@@ -47,8 +67,15 @@ export default function AdminDashboard() {
     const [customEnd, setCustomEnd] = useState("");
     const [customRangeError, setCustomRangeError] = useState("");
     const [loadingCustomRange, setLoadingCustomRange] = useState(false);
+    // Which sticky range preset is active: a number of days, "custom", or null (default window).
+    const [rangePreset, setRangePreset] = useState(null);
+    const [queueCounts, setQueueCounts] = useState({});
 
     const load = useCallback((range) => {
+        api.get("/admin/queue-counts")
+            .then(({ data }) => setQueueCounts(data.data || {}))
+            .catch(() => {});
+
         const advancedParams = range && range.start && range.end
             ? { params: { start: range.start, end: range.end } }
             : undefined;
@@ -82,11 +109,39 @@ export default function AdminDashboard() {
             return;
         }
         setLoadingCustomRange(true);
+        setRangePreset("custom");
         api.get("/admin/analytics/advanced", { params: { start: customStart, end: customEnd } })
             .then(({ data }) => setAdvancedAnalytics(data.data))
             .catch((err) => setCustomRangeError(err.response?.data?.message || "Couldn't load that range."))
             .finally(() => setLoadingCustomRange(false));
     }, [customStart, customEnd]);
+
+    // Sticky range presets (7 / 30 / 90 days). They fill the same start/end
+    // pair the custom range uses, so the advanced section and its deltas
+    // follow the chosen window without a separate code path.
+    const applyPreset = useCallback((days) => {
+        setCustomRangeError("");
+        if (days == null) {
+            setRangePreset(null);
+            setCustomStart("");
+            setCustomEnd("");
+            load();
+            return;
+        }
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - days);
+        const startStr = isoDay(start);
+        const endStr = isoDay(end);
+        setCustomStart(startStr);
+        setCustomEnd(endStr);
+        setRangePreset(days);
+        setLoadingCustomRange(true);
+        api.get("/admin/analytics/advanced", { params: { start: startStr, end: endStr } })
+            .then(({ data }) => setAdvancedAnalytics(data.data))
+            .catch((err) => setCustomRangeError(err.response?.data?.message || "Couldn't load that range."))
+            .finally(() => setLoadingCustomRange(false));
+    }, [load]);
 
     // Auth is a Bearer token (see api/client.js), so a plain <a href> to
     // the export endpoint wouldn't carry it - fetch as a blob instead and
@@ -171,6 +226,68 @@ export default function AdminDashboard() {
                 </span>}
             </div>
 
+            {/* Health strip: the things that need an admin's attention, plus
+                today's money and activity. Each queue tile links to its page. */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mb-4" aria-label="Platform health">
+                {HEALTH_ITEMS.map((item) => {
+                    const count = queueCounts[item.key] ?? 0;
+                    return (
+                        <Link
+                            key={item.key}
+                            to={item.to}
+                            className="border border-line rounded-lg px-3 py-2.5 hover:border-ink transition-colors"
+                        >
+                            <p className="text-[11px] uppercase tracking-wide text-ash truncate">{item.label}</p>
+                            <p className={`text-lg font-medium price flex items-center gap-1.5 ${count > 0 ? "text-coral" : ""}`}>
+                                {count}
+                                {count > 0 && <span className="w-1.5 h-1.5 rounded-full bg-coral" aria-hidden="true" />}
+                            </p>
+                        </Link>
+                    );
+                })}
+                {businessMetrics && (
+                    <>
+                        <div className="border border-line rounded-lg px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-wide text-ash truncate">GMV today</p>
+                            <p className="text-lg font-medium price">{formatMoney(businessMetrics.gmv.today)}</p>
+                        </div>
+                        <div className="border border-line rounded-lg px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-wide text-ash truncate">Active today</p>
+                            <p className="text-lg font-medium price">{businessMetrics.activeUsers.total.dau}</p>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Sticky range selector: stays visible while scrolling the
+                sections below, and drives the advanced analytics window
+                and every delta figure. */}
+            <div className="sticky top-0 z-20 -mx-4 sm:mx-0 px-4 sm:px-0 py-2 bg-paper/95 backdrop-blur border-b border-line mb-6 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-ash mr-1">Range</span>
+                <button
+                    type="button"
+                    onClick={() => applyPreset(null)}
+                    aria-pressed={rangePreset === null}
+                    className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${rangePreset === null ? "bg-ink text-paper border-ink" : "border-line hover:border-ink"}`}
+                >
+                    Default
+                </button>
+                {RANGE_PRESETS.map((p) => (
+                    <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => applyPreset(p.value)}
+                        disabled={loadingCustomRange}
+                        aria-pressed={rangePreset === p.value}
+                        className={`text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${rangePreset === p.value ? "bg-ink text-paper border-ink" : "border-line hover:border-ink"}`}
+                    >
+                        {p.label}
+                    </button>
+                ))}
+                {rangePreset === "custom" && <span className="text-xs text-ash">Custom: {customStart} → {customEnd}</span>}
+                {loadingCustomRange && <span className="text-xs text-ash">Updating…</span>}
+            </div>
+
             {/* Section tabs - everything below still loads together on
                 mount (see the Promise.all in `load` above); this only
                 changes which already-loaded section is visible, so
@@ -201,11 +318,12 @@ export default function AdminDashboard() {
                 <>
                     <NexoraAdminInsights />
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4 mb-10">
                         <Stat label="Buyers" value={stats.users.buyers} />
                         <Stat label="Sellers" value={stats.users.sellers} />
                         <Stat label="Delivery agents" value={stats.users.delivery_agents} />
                         <Stat label="Revenue (paid)" value={formatMoney(stats.revenue)} mono />
+                        <Stat label="Failed emails" value={stats.email?.failed ?? 0} />
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
@@ -232,9 +350,10 @@ export default function AdminDashboard() {
             {activeTab === "sales" && (
                 <>
             {businessMetrics && (
-                <div className="mb-10">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-display text-xl">Business metrics</h2>
+                <CollapsibleSection
+                    id="business-metrics"
+                    title="Business metrics"
+                    actions={(
                         <button
                             type="button"
                             onClick={handleExportCsv}
@@ -243,15 +362,26 @@ export default function AdminDashboard() {
                         >
                             {exporting ? "Preparing CSV…" : "Export GMV CSV (90d) ↓"}
                         </button>
-                    </div>
+                    )}
+                >
 
                     <p className="text-xs uppercase tracking-widest text-ash mb-3">
                         GMV (Gross Merchandise Value) · products + services
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                         <Stat label="GMV today" value={formatMoney(businessMetrics.gmv.today)} mono />
-                        <Stat label="GMV (7d)" value={formatMoney(businessMetrics.gmv.last7Days)} mono />
-                        <Stat label="GMV (30d)" value={formatMoney(businessMetrics.gmv.last30Days)} mono />
+                        <Stat
+                            label="GMV (7d)"
+                            value={formatMoney(businessMetrics.gmv.last7Days)}
+                            mono
+                            delta={advancedAnalytics?.periodComparison?.week?.growthPercent ?? null}
+                        />
+                        <Stat
+                            label="GMV (30d)"
+                            value={formatMoney(businessMetrics.gmv.last30Days)}
+                            mono
+                            delta={advancedAnalytics?.periodComparison?.month?.growthPercent ?? null}
+                        />
                         <Stat label="GMV (all-time)" value={formatMoney(businessMetrics.gmv.allTime)} mono />
                     </div>
 
@@ -317,11 +447,11 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </CollapsibleSection>
             )}
 
             {analytics && (
-                <>
+                <CollapsibleSection id="daily-sales" title="Daily sales" subtitle="Last 14 days with a 7-day forecast">
                     <div className="border border-line rounded-lg p-5 mb-6">
                         <div className="flex items-center justify-between mb-4">
                             <p className="text-xs uppercase tracking-widest text-ash">
@@ -420,7 +550,7 @@ export default function AdminDashboard() {
                     <Link to="/admin/fraud" className="text-sm text-teal hover:underline block mb-10">
                         Review flagged orders & sellers →
                     </Link>
-                </>
+                </CollapsibleSection>
             )}
                 </>
             )}
@@ -428,8 +558,7 @@ export default function AdminDashboard() {
             {activeTab === "growth" && (
             <>
             {advancedAnalytics && (
-                <div className="mb-10">
-                    <h2 className="font-display text-xl mb-4">Advanced analytics</h2>
+                <CollapsibleSection id="advanced-analytics" title="Advanced analytics" subtitle="Period comparison, top customers and seller leaderboard">
 
                     <div className="border border-line rounded-lg p-4 mb-6">
                         <p className="text-xs uppercase tracking-widest text-ash mb-3">Custom date range</p>
@@ -611,7 +740,7 @@ export default function AdminDashboard() {
                             </p>
                         </div>
                     </div>
-                </div>
+                </CollapsibleSection>
             )}
             </>
             )}
@@ -619,8 +748,7 @@ export default function AdminDashboard() {
             {activeTab === "services" && (
             <>
             {servicesAnalytics && (
-                <>
-                    <h2 className="font-display text-xl mb-4">Services marketplace</h2>
+                <CollapsibleSection id="services-marketplace" title="Services marketplace" subtitle="Booking revenue and provider performance">
 
                     <div className="border border-line rounded-lg p-5 mb-6">
                         <div className="flex items-center justify-between mb-4">
@@ -733,7 +861,7 @@ export default function AdminDashboard() {
                             </ul>
                         )}
                     </div>
-                </>
+                </CollapsibleSection>
             )}
             </>
             )}
@@ -741,11 +869,27 @@ export default function AdminDashboard() {
     );
 }
 
-function Stat({ label, value, mono }) {
+function Stat({ label, value, mono, delta }) {
     return (
         <div className="border border-line rounded-lg p-4">
             <p className="text-xs text-ash mb-1">{label}</p>
             <p className={`text-xl font-medium ${mono ? "price" : "font-display"}`}>{value}</p>
+            {delta !== undefined && <Delta percent={delta} />}
         </div>
+    );
+}
+
+// Change versus the previous equivalent window. Null means there was no
+// previous data to compare against, which is shown as such rather than as 0%.
+function Delta({ percent }) {
+    if (percent === null || percent === undefined || Number.isNaN(Number(percent))) {
+        return <p className="text-[11px] text-ash mt-1">No prior period data</p>;
+    }
+    const value = Number(percent);
+    const up = value >= 0;
+    return (
+        <p className={`text-[11px] mt-1 price ${up ? "text-teal" : "text-coral"}`}>
+            {up ? "▲" : "▼"} {Math.abs(value).toFixed(1)}% vs prior period
+        </p>
     );
 }

@@ -107,10 +107,8 @@ describe("GET /api/v1/ai/seller/analytics/summary", () => {
     it("requires a paid subscription tier in addition to seller approval", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        // No active plan at all: findCurrentForSeller's active-in-period
-        // query comes back empty, then its fallback "most recent plan
-        // overall" query also comes back empty (implicit free plan).
-        db.query.mockResolvedValueOnce([[]]);
+        // No active plan at all: requireSubscriptionTier's single
+        // findEntitledForSeller query comes back empty (implicit free plan).
         db.query.mockResolvedValueOnce([[]]);
 
         const res = await request(app)

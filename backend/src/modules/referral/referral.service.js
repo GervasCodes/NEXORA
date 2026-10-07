@@ -2,18 +2,15 @@
  * Referral & loyalty points program .
  *
  * Referral: every user gets a referral_code at signup. Sharing it and
- * having someone register with it links referred_by_user_id + a
- * `referrals` row; the referrer gets a one-time bonus once (and only
- * once) the referred user completes their first paid order - see
- * maybeAwardReferralBonus, called from payment.service.js's order-paid
- * webhook handler the same fire-and-forget way EFD receipts and wallet
- * crediting already are.
+ * having someone register with it links a `referrals` row. The referrer's
+ * one-time bonus is paid by rewardSettlement.service.js once the referred
+ * user's first qualifying order is delivered and past its return window
+ * (Phase 6), never at payment.
  *
- * Loyalty: every completed order earns the buyer points (flat rate on
- * the amount actually charged), redeemable at checkout as a discount on
- * a later order - see redeemAtCheckout, called from
- * order.service.js#checkout the same way KYC limit enforcement and the
- * buyer-protection fee are.
+ * Loyalty: points are earned on delivered orders once the return window
+ * has passed (see rewardSettlement.service.js). They are redeemable at
+ * checkout as a discount on a later order - see quoteRedemption and
+ * commitRedemption, called from order.service.js#checkout.
  */
 
 const crypto = require("crypto");
@@ -22,6 +19,9 @@ const notificationService = require("../notification/notification.service");
 const logger = require("../../utils/logger").child({ module: "referral" });
 
 const REFERRAL_BONUS_POINTS = 200;
+// The referred user's first top-level order must reach this amount (TZS)
+// before the referrer is paid. Below it, no bonus is paid for that referral.
+const REFERRAL_MIN_FIRST_ORDER_TZS = 20000;
 const POINTS_PER_1000_SPENT = 1; // 1 point per 1,000 TZS charged
 const POINT_VALUE_TZS = 10; // each point is worth 10 TZS when redeemed
 
@@ -51,38 +51,9 @@ exports.setupNewUserReferral = async (userId, submittedCode, connection) => {
     await referralRepository.createReferral(referrer.id, userId, connection);
 };
 
-exports.maybeAwardReferralBonus = async (buyerId) => {
-    const referral = await referralRepository.findReferralByReferredUser(buyerId);
-    if (!referral || referral.bonus_awarded) return;
-
-    await referralRepository.markReferralBonusAwarded(referral.id);
-    await referralRepository.addPoints(referral.referrer_id, REFERRAL_BONUS_POINTS, "referral_bonus", {
-        description: "Referral bonus - your referred friend completed their first order"
-    });
-
-    notificationService.notify({
-        userId: referral.referrer_id,
-        type: "referral_bonus",
-        titleKey: "notifications.referral.bonus.title",
-        messageKey: "notifications.referral.bonus.message",
-        messageParams: { points: REFERRAL_BONUS_POINTS },
-        withEmail: true
-    }).catch((err) => logger.warn({ err, referralId: referral.id }, "referral bonus notify error"));
-};
-
-// Called from order.service.js#checkout's order-paid webhook path (via
-// payment.service.js), same fire-and-forget shape as the referral bonus
-// above - earning points should never be able to block or slow down
-// checkout itself.
-exports.awardPointsForOrder = async (buyerId, orderId, chargedAmount) => {
-    const points = Math.floor(Number(chargedAmount) / 1000) * POINTS_PER_1000_SPENT;
-    if (points <= 0) return;
-
-    await referralRepository.addPoints(buyerId, points, "earned", {
-        orderId,
-        description: `Earned from order #${orderId}`
-    });
-};
+// Points for a settled order amount: 1 point per 1,000 TZS. Used by
+// rewardSettlement.service.js, never at payment time.
+exports.pointsForAmount = (amount) => Math.floor(Number(amount) / 1000) * POINTS_PER_1000_SPENT;
 
 exports.getMyLoyaltyStatus = async (userId) => {
     const [balance, ledger, referrals] = await Promise.all([
@@ -90,7 +61,7 @@ exports.getMyLoyaltyStatus = async (userId) => {
         referralRepository.findLedger(userId),
         referralRepository.findMyReferrals(userId)
     ]);
-    return { balance, ledger, referrals, pointValueTzs: POINT_VALUE_TZS };
+    return { balance, ledger, referrals, pointValueTzs: POINT_VALUE_TZS, referralBonusPoints: REFERRAL_BONUS_POINTS, pointsPer1000Spent: POINTS_PER_1000_SPENT };
 };
 
 // Called from order.service.js#checkout BEFORE the order is created, to
@@ -108,14 +79,33 @@ exports.quoteRedemption = async (userId, pointsToRedeem) => {
     return { pointsRedeemed: pointsToRedeem, discountAmount: pointsToRedeem * POINT_VALUE_TZS };
 };
 
-// Called from order.service.js#checkout AFTER the order row is created,
-// with the exact points quoteRedemption already validated - actually
-// deducts the balance and writes the ledger entry.
-exports.commitRedemption = async (userId, pointsToRedeem) => {
+// Called from order.repository.js#createOrder/createSplitOrder (Phase 3) -
+// now runs INSIDE the order's own creation transaction (executor is the
+// transaction connection, not the default pool) so a checkout that fails
+// after this point rolls the points deduction back along with everything
+// else, and the race-safe guard in addPoints applies before the order
+// that spent these points is ever visible to anyone.
+exports.commitRedemption = async (userId, pointsToRedeem, orderId, executor) => {
     if (!pointsToRedeem || pointsToRedeem <= 0) return;
     await referralRepository.addPoints(userId, -pointsToRedeem, "redeemed", {
+        orderId,
         description: "Redeemed at checkout"
-    });
+    }, executor);
+};
+
+// Cancel a paid order, or a stale/unpaid order expiring (Phase 3) - gives
+// back points a buyer redeemed at checkout, since the order they were
+// spent on never completed. executor lets order.service.js run this
+// inside cancelOrder's own guarded flow when useful; defaults to the bare
+// pool otherwise (no multi-step transaction needed for a plain credit).
+exports.reverseRedemption = async (userId, pointsToGiveBack, orderId, executor) => {
+    if (!pointsToGiveBack || pointsToGiveBack <= 0) return;
+    await referralRepository.addPoints(userId, pointsToGiveBack, "reversed", {
+        orderId,
+        description: `Order #${orderId} cancelled - points returned`
+    }, executor);
 };
 
 exports.POINT_VALUE_TZS = POINT_VALUE_TZS;
+exports.REFERRAL_BONUS_POINTS = REFERRAL_BONUS_POINTS;
+exports.REFERRAL_MIN_FIRST_ORDER_TZS = REFERRAL_MIN_FIRST_ORDER_TZS;

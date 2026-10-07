@@ -59,6 +59,18 @@ exports.createService = async (providerId, data) => {
     return { serviceId, slug };
 };
 
+// Buyer's shared location for "near me". Returns null unless both coordinates
+// are valid numbers in range. Radius defaults to 25 km and is capped at 100.
+function parseNear(query) {
+    if (!query.near_lat || !query.near_lng) return null;
+    const lat = Number(query.near_lat);
+    const lng = Number(query.near_lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    const radiusKm = Math.min(100, Math.max(1, Number(query.near_radius) || 25));
+    return { lat, lng, radiusKm };
+}
+
 exports.listServices = async (query) => {
     const page = Math.max(1, parseInt(query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 12));
@@ -77,6 +89,7 @@ exports.listServices = async (query) => {
         region: parseLocation(query.region),
         minRating: parseMinRating(query.min_rating),
         sort: parseSort(query.sort),
+        near: parseNear(query),
         page,
         limit
     });
@@ -186,15 +199,53 @@ exports.publishService = async (providerId, serviceId) => {
     const service = await serviceRepository.findById(serviceId);
 
     if (!service || service.provider_id !== providerId) {
-        throw new Error("Service not found");
+        throw Object.assign(new Error("Service not found"), { status: 404 });
+    }
+
+    // An admin suspension must not be lifted by the provider re-publishing.
+    if (service.status === "suspended") {
+        throw Object.assign(new Error("This listing is suspended - contact support"), { status: 403 });
+    }
+
+    const title = typeof service.title === "string" ? service.title.trim() : "";
+    if (title.length < 3) {
+        throw Object.assign(new Error("Enter a service title (at least 3 characters) before publishing"), {
+            code: "SERVICE_INCOMPLETE",
+            status: 400
+        });
+    }
+    if (!service.category_id) {
+        throw Object.assign(new Error("Choose a category before publishing"), { code: "SERVICE_INCOMPLETE", status: 400 });
+    }
+    if (!(Number(service.base_price) > 0)) {
+        throw Object.assign(new Error("Enter a base price above zero before publishing"), {
+            code: "SERVICE_INCOMPLETE",
+            status: 400
+        });
     }
 
     const media = await serviceRepository.countExistingMedia(serviceId);
     if (media === 0) {
-        throw new Error("Add at least one photo before publishing a service");
+        throw Object.assign(new Error("Add at least one photo before publishing a service"), {
+            code: "SERVICE_INCOMPLETE",
+            status: 400
+        });
+    }
+
+    // Drafts created by createDraft are inactive and not yet counted. Older
+    // drafts are already active and counted, so they skip this check.
+    if (!service.is_active) {
+        const subscriptionService = require("../subscription/subscription.service");
+        const listingCheck = await subscriptionService.canCreateListing(providerId);
+        if (!listingCheck.allowed) {
+            throw Object.assign(new Error(listingCheck.message), { code: "LISTING_LIMIT_REACHED", status: 403 });
+        }
     }
 
     await serviceRepository.setStatus(serviceId, "published");
+    if (!service.is_active) {
+        await serviceRepository.setActive(serviceId, true);
+    }
 };
 
 exports.unpublishService = async (providerId, serviceId) => {
@@ -307,4 +358,26 @@ exports.deletePricingRule = async (providerId, ruleId) => {
     }
 
     await serviceRepository.deletePricingRule(ruleId);
+};
+
+exports.createDraft = async (providerId, data) => {
+    const title = typeof data.title === "string" ? data.title.trim() : "";
+    if (title.length < 3) {
+        throw Object.assign(new Error("Enter a service title (at least 3 characters) to start saving"), {
+            code: "DRAFT_TITLE_REQUIRED",
+            status: 400
+        });
+    }
+    if (data.category_id) {
+        await assertCategoryIsActive(data.category_id);
+    }
+
+    const serviceId = await serviceRepository.createDraft({
+        provider_id: providerId,
+        category_id: data.category_id || null,
+        title,
+        slug: `draft-${require("crypto").randomBytes(8).toString("hex")}`
+    });
+
+    return { serviceId };
 };

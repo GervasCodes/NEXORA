@@ -39,6 +39,12 @@ exports.BUYER_PROTECTION_FEE_RATE = 0.015;
 exports.BUYER_PROTECTION_FEE_MIN = 1000; // TZS
 exports.BUYER_PROTECTION_FEE_MAX = 20000; // TZS
 
+// Loyalty cap (Phase 3, P0) - the smallest amount a checkout may still be
+// charged after every discount (coupon + loyalty points) is applied. Stops
+// a buyer from stacking a coupon with enough redeemed points to drive the
+// charged total to zero or negative - see order.service.js#checkout.
+exports.MIN_PAYABLE_ORDER_AMOUNT = 500; // TZS
+
 // Vehicle types a delivery agent can register with (migration 032).
 exports.VEHICLE_TYPES = ["bicycle", "motorcycle", "tuktuk", "car", "van", "truck"];
 

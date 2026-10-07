@@ -41,14 +41,14 @@ exports.incrementBalance = async (buyerId, delta, executor = db) => {
 };
 
 exports.insertTransaction = async (
-    { buyerId, type, amount, balanceAfter, referenceType, referenceId, description },
+    { buyerId, type, amount, balanceAfter, referenceType, referenceId, paymentId, description },
     executor = db
 ) => {
     await executor.query(
         `INSERT INTO buyer_wallet_transactions
-        (buyer_id, type, amount, balance_after, reference_type, reference_id, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [buyerId, type, amount, balanceAfter, referenceType, referenceId ?? null, description ?? null]
+        (buyer_id, type, amount, balance_after, reference_type, reference_id, payment_id, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [buyerId, type, amount, balanceAfter, referenceType, referenceId ?? null, paymentId ?? null, description ?? null]
     );
 };
 
@@ -75,10 +75,44 @@ exports.findTopUpById = async (id) => {
     return rows[0];
 };
 
-exports.markTopUpCompleted = async (id) => {
-    await db.query("UPDATE wallet_top_ups SET status = 'completed', completed_at = NOW() WHERE id = ?", [id]);
+exports.markTopUpCompleted = async (id, executor = db) => {
+    await executor.query("UPDATE wallet_top_ups SET status = 'completed', completed_at = NOW() WHERE id = ?", [id]);
 };
 
 exports.markTopUpFailed = async (id) => {
     await db.query("UPDATE wallet_top_ups SET status = 'failed' WHERE id = ?", [id]);
+};
+
+// Top-up limits (Phase 2) --------------------------------------------------
+
+exports.updateLastTopupPhone = async (buyerId, phone) => {
+    await db.query("UPDATE buyer_wallets SET last_topup_phone = ? WHERE buyer_id = ?", [phone, buyerId]);
+};
+
+// Sum of this buyer's completed top-ups today (server "today", UTC date
+// boundary) - used to enforce the per-tier daily top-up cap. Reads the
+// wallet_top_ups table (not the ledger) since a top-up's `completed_at` is
+// unambiguous and the amount is guaranteed to match what was credited.
+exports.sumCompletedTopUpsToday = async (buyerId) => {
+    const [[row]] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_top_ups
+        WHERE buyer_id = ? AND status = 'completed' AND DATE(completed_at) = CURDATE()`,
+        [buyerId]
+    );
+    return Number(row.total);
+};
+
+// ---- Nightly wallet reconciliation (Phase 2) ------------------------------
+// Mirrors wallet.repository.js#findBalanceDrift, keyed by buyer instead of
+// seller.
+exports.findBalanceDrift = async () => {
+    const [rows] = await db.query(
+        `SELECT bw.buyer_id AS owner_id, bw.balance AS recorded_balance,
+                COALESCE(SUM(CASE WHEN bwt.type = 'credit' THEN bwt.amount ELSE -bwt.amount END), 0) AS computed_balance
+        FROM buyer_wallets bw
+        JOIN buyer_wallet_transactions bwt ON bwt.buyer_id = bw.buyer_id
+        GROUP BY bw.buyer_id, bw.balance
+        HAVING ABS(bw.balance - computed_balance) > 0.01`
+    );
+    return rows;
 };

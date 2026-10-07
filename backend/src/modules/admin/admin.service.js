@@ -12,6 +12,7 @@ const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const accountRepository = require("../account/account.repository");
 const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
+const { deleteStoredDocument } = require("../../utils/privateDocuments");
 // (Admin Manual Override & Ops Visibility) - manualAssignDelivery
 // below delegates the actual delivery-row creation to delivery.service.js
 // so manual admin assignment goes through the same hardened path
@@ -119,6 +120,7 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     // deleted from the database - once the account_verification_documents
     // /product rows are gone, there's no way to look their URLs back up.
     const verificationDocUrls = await adminRepository.findAccountVerificationDocumentUrls(userId);
+    const privateVerificationDocs = await adminRepository.findPrivateVerificationDocuments(userId);
 
     const sellerAssets = await adminRepository.findSellerLogoAndBanner(userId);
     const sellerAssetUrls = sellerAssets
@@ -205,6 +207,10 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         ...sellerAssetUrls,
         ...productMediaUrls
     ]);
+    for (const doc of privateVerificationDocs) {
+        const ok = await deleteStoredDocument(doc);
+        if (!ok) failedDeletes.push(doc.file_public_id);
+    }
 
     auditService.log({
         userId: actorAdminId,
@@ -216,7 +222,7 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
             hard_deleted: hardDeleted,
             products_deleted: neverOrderedProductIds.length,
             cloudinary_assets_deleted:
-                verificationDocUrls.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
+                verificationDocUrls.length + privateVerificationDocs.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
             cloudinary_assets_failed: failedDeletes.length
         }
     });
@@ -587,7 +593,10 @@ exports.manualAssignDelivery = async (orderId, agentId, adminId) => {
     return result;
 };
 
+const emailOutboxService = require("../emailOutbox/emailOutbox.service");
+
 exports.getDashboard = async () => {
+    const failedEmails = await emailOutboxService.countFailed();
     const { userCounts, orderCounts, revenue, productCounts, bookingCounts, bookingRevenue, serviceCounts } =
         await adminRepository.getDashboardStats();
 
@@ -617,6 +626,7 @@ exports.getDashboard = async () => {
             cancelled: Number(bookingCounts.cancelled_bookings) || 0
         },
         bookingRevenue: Number(bookingRevenue.total_booking_revenue) || 0,
+        email: { failed: failedEmails },
         services: {
             total: Number(serviceCounts.total_services) || 0,
             active: Number(serviceCounts.active_services) || 0
@@ -1033,12 +1043,15 @@ exports.exportAdvancedAnalyticsCsv = async (type) => {
 };
 
 exports.getSettings = async () => {
-    return settingsService.getAll();
+    const [settings, meta] = await Promise.all([settingsService.getAll(), settingsService.getSettingsMeta()]);
+    return { ...settings, setting_meta: meta, settings_loaded_at: new Date().toISOString() };
 };
 
-exports.updateSettings = async (data) => {
-    return settingsService.updateSettings(data);
+exports.updateSettings = async (data, actorId) => {
+    return settingsService.updateSettings(data, { actorId });
 };
+
+exports.getSettingHistory = async (key) => settingsService.getSettingHistory(key);
 
 // Read-only Nexora Assistant token usage (today/this month, global) for
 // the Admin Settings page's usage panel . Lazily required
@@ -1110,6 +1123,10 @@ exports.listWithdrawals = async () => {
     return walletService.listAllWithdrawals();
 };
 
+exports.revealWithdrawalPayoutDetails = async (withdrawalId, adminId, req) => {
+    return walletService.getWithdrawalPayoutDetails(withdrawalId, { adminId, req });
+};
+
 exports.approveWithdrawal = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "approve", adminNote);
 };
@@ -1118,8 +1135,14 @@ exports.rejectWithdrawal = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "reject", adminNote);
 };
 
-exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
-    return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
+exports.markWithdrawalPaid = async (withdrawalId, adminNote, payoutReference) => {
+    return walletService.processWithdrawal(withdrawalId, "paid", adminNote, payoutReference);
+};
+
+// Negative seller balances (Phase 2) - purely informational, see
+// wallet.repository.js#findNegativeBalanceSellers.
+exports.listNegativeBalanceSellers = async () => {
+    return walletService.listNegativeBalanceSellers();
 };
 
 // --- Escrow manual release (docs/ESCROW_ANALYSIS.md section
@@ -1355,3 +1378,74 @@ exports.getCoverageHeatmap = async (windowDays = DEFAULT_HEATMAP_WINDOW_DAYS) =>
 
     return { windowDays: days, grid };
 };
+
+// --- Phase 8: paged + searchable lists (opt-in, see utils/adminListQuery) ---
+
+exports.listUsersPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await adminRepository.findUsersPage({
+        q: params.q,
+        role: params.role,
+        status: params.status,
+        limit: params.pageSize,
+        offset: params.offset
+    });
+    const socket = require("../../socket/socket");
+    return {
+        items: rows.map((u) => ({ ...u, is_online: socket.isUserOnline(u.id) })),
+        meta: buildMeta(total, params)
+    };
+};
+
+exports.listAllOrdersPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await adminRepository.findOrdersPage({
+        q: params.q,
+        status: params.status,
+        paymentStatus: params.paymentStatus,
+        sort: query.sort || null,
+        limit: params.pageSize,
+        offset: params.offset
+    });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+exports.listWithdrawalsPaged = async (query = {}) => {
+    return walletService.listAllWithdrawalsPaged(query);
+};
+
+// --- Phase 8: paged lists for sellers, agents, deleted accounts, admins, fraud ---
+
+const pagedList = (fetch) => async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await fetch({ q: params.q, status: params.status, limit: params.pageSize, offset: params.offset });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+exports.listSellersPaged = pagedList((args) => adminRepository.findSellersPage(args));
+exports.listDeliveryAgentsPaged = pagedList((args) => adminRepository.findDeliveryAgentsPage(args));
+exports.listDeletedUsersPaged = pagedList((args) => adminRepository.findDeletedUsersPage(args));
+exports.listAdminsPaged = pagedList((args) => adminRepository.findAdminsPage(args));
+exports.listFraudFlagsPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const fraudRepository = require("../fraud/fraud.repository");
+    const { rows, total } = await fraudRepository.findOpenPage({ q: params.q, limit: params.pageSize, offset: params.offset });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+// --- Phase 8: withdrawal context and queue badges ---
+exports.getWithdrawalContext = async (withdrawalId) => {
+    const context = await adminRepository.findWithdrawalContext(withdrawalId);
+    if (!context) {
+        const error = new Error("Withdrawal not found.");
+        error.status = 404;
+        throw error;
+    }
+    return context;
+};
+
+exports.getQueueCounts = async () => adminRepository.findQueueCounts();

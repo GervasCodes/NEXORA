@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
@@ -12,7 +12,10 @@ import { formatDate } from "../utils/format";
 import Button from "../components/ui/Button";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
 import PageMeta from "../components/PageMeta";
+import { SITE_URL, normalizePath } from "../utils/seo";
 import { ChatIcon } from "../components/Icons";
+import ServiceCard from "../components/ServiceCard";
+import { toWhatsappUrl } from "../utils/socialLinks";
 
 const PRICING_LABELS = {
     fixed: "",
@@ -229,6 +232,40 @@ export default function ServiceDetail() {
     // but submitted from BookingDetail.jsx once a booking is completed
     // (a review is booking-keyed, not service-keyed - see migration
     // 065's design notes), so this page only ever displays them.
+    // Gallery swipe: a horizontal drag of more than 40px moves to the
+    // next/previous media item. Vertical scrolls are ignored so the page
+    // still scrolls normally over the gallery on touch devices.
+    const swipeStartRef = useRef(null);
+    const handleGalleryTouchStart = (e) => {
+        const touch = e.touches[0];
+        swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+    };
+    const handleGalleryTouchEnd = (e) => {
+        const start = swipeStartRef.current;
+        swipeStartRef.current = null;
+        if (!start || !service) return;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        const count = service.media?.length || 0;
+        if (count < 2) return;
+        setActiveMedia((i) => (dx < 0 ? (i + 1) % count : (i - 1 + count) % count));
+    };
+
+    // Similar services: other published services in the same category,
+    // excluding this one. Failure just hides the section.
+    const [similarServices, setSimilarServices] = useState([]);
+    useEffect(() => {
+        if (!service?.category_id) return;
+        api.get("/services", { params: { category_id: service.category_id, limit: 8 } })
+            .then(({ data }) => {
+                const list = Array.isArray(data.data) ? data.data : (data.data?.services || []);
+                setSimilarServices(list.filter((item) => item.id !== service.id).slice(0, 4));
+            })
+            .catch(() => setSimilarServices([]));
+    }, [service?.id, service?.category_id]);
+
     useEffect(() => {
         if (!service) return;
         api.get(`/reviews/service/${service.id}`, { params: { sort: reviewSort } })
@@ -271,6 +308,7 @@ export default function ServiceDetail() {
     if (!service) {
         return (
             <div className="max-w-6xl mx-auto px-6 py-16 text-center">
+                <PageMeta title="Service not found" noIndex />
                 <p className="font-display text-2xl mb-2">Service not found</p>
                 <Link to="/services" className="text-teal hover:underline text-sm">Back to services</Link>
             </div>
@@ -297,7 +335,7 @@ export default function ServiceDetail() {
         { label: service.title }
     ];
 
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = SITE_URL;
     const breadcrumbJsonLd = {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
@@ -334,7 +372,7 @@ export default function ServiceDetail() {
             : {}),
         offers: {
             "@type": "Offer",
-            url: typeof window !== "undefined" ? window.location.href : undefined,
+            url: typeof window !== "undefined" ? `${SITE_URL}${normalizePath(window.location.pathname)}` : undefined,
             priceCurrency: "TZS",
             price: String(hasDiscount ? service.discount_price : service.base_price)
         }
@@ -352,13 +390,17 @@ export default function ServiceDetail() {
             <Breadcrumbs items={breadcrumbItems} />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
-                    <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
+                    <div
+                        className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3 touch-pan-y"
+                        onTouchStart={handleGalleryTouchStart}
+                        onTouchEnd={handleGalleryTouchEnd}
+                    >
                         {current.media_url ? (
                             current.media_type === "video" ? (
                                 // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded service clip, no caption track available
                                 <video src={current.media_url} controls className="w-full h-full object-cover" />
                             ) : (
-                                <img src={current.media_url} alt={service.title} className="w-full h-full object-cover" />
+                                <img src={current.media_url} alt={service.title} fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
                             )
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-ash text-sm">No photo</div>
@@ -477,8 +519,52 @@ export default function ServiceDetail() {
                         Message {service.store_name || "provider"}
                     </button>
 
-                    <BookingWidget service={service} />
+                    {service.social_whatsapp && (
+                        <a
+                            href={toWhatsappUrl(service.social_whatsapp)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 ml-2 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center gap-1.5"
+                        >
+                            WhatsApp {service.store_name || "provider"}
+                        </a>
+                    )}
+
+                    {service.public_phone && (
+                        <a
+                            href={`tel:${service.public_phone.replace(/[^+0-9]/g, "")}`}
+                            className="mt-3 ml-2 border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring inline-flex items-center gap-1.5"
+                        >
+                            {t("store.callProvider")}
+                        </a>
+                    )}
+
+                    <div id="booking-widget" className="scroll-mt-20">
+                        <BookingWidget service={service} />
+                    </div>
                 </div>
+            </div>
+
+            {similarServices.length > 0 && (
+                <section className="mt-12" aria-labelledby="similar-services-heading">
+                    <h2 id="similar-services-heading" className="font-display text-lg mb-4">Similar services</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {similarServices.map((item) => (
+                            <ServiceCard key={item.id} service={item} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Phones: keep the main action in reach while reading the page. */}
+            <div className="md:hidden fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 bg-paper/95 backdrop-blur border-t border-line">
+                <button
+                    type="button"
+                    onClick={() => document.getElementById("booking-widget")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="w-full bg-ink text-paper rounded-md py-3 text-sm font-semibold"
+                >
+                    {t("service.stickyBook")}
+                </button>
             </div>
 
             <section className="mt-16 max-w-2xl">

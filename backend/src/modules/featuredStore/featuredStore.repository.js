@@ -103,3 +103,13 @@ exports.findAll = async () => {
     );
     return rows;
 };
+
+// Conditional on the row still being 'active' and past its end date.
+exports.expireIfDue = async (id, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE store_featured_campaigns SET status = 'expired'
+        WHERE id = ? AND status = 'active' AND ends_at <= NOW()`,
+        [id]
+    );
+    return result.affectedRows > 0;
+};

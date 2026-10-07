@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useLanguage } from "./context/LanguageContext";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -12,6 +13,8 @@ import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
 import CookieConsentBanner from "./components/CookieConsentBanner";
 import SupportWidget from "./components/SupportWidget";
+import FloatingActions from "./components/FloatingActions";
+import { COOKIE_NOTICE_KEY } from "./components/CookieConsentBanner";
 import OnboardingTour from "./components/OnboardingTour";
 import AffiliateClickTracker from "./components/AffiliateClickTracker";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
@@ -31,8 +34,14 @@ import AdminLayout from "./components/AdminLayout";
 
 
 const Home = lazy(() => import("./pages/Home"));
+const SearchResults = lazy(() => import("./pages/SearchResults"));
+const SellOnNexora = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.SellOnNexora })));
+const HowItWorks = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.HowItWorks })));
+const About = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.About })));
+const Contact = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.Contact })));
 const DepartmentPage = lazy(() => import("./pages/DepartmentPage"));
 const BrowseProducts = lazy(() => import("./pages/BrowseProducts"));
+const ProductFeed = lazy(() => import("./pages/ProductFeed"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const ServicesBrowse = lazy(() => import("./pages/ServicesBrowse"));
 const ServiceCategoryPage = lazy(() => import("./pages/ServiceCategoryPage"));
@@ -139,8 +148,11 @@ const AdminDataReset = lazy(() => import("./pages/admin/AdminDataReset"));
 const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
 
 export default function App() {
+    const { t } = useLanguage();
+    // Splash is a homepage-only moment: other entry points (deep links,
+    // shared product URLs) go straight to content.
     const [showSplash, setShowSplash] = useState(
-        () => !sessionStorage.getItem("nexora_splash_shown")
+        () => !sessionStorage.getItem("nexora_splash_shown") && window.location.pathname === "/"
     );
     const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired, sessionReady } = useAuth();
     const navigate = useNavigate();
@@ -161,6 +173,16 @@ export default function App() {
     // (e.g. "Back to Home" from AdminLayout) - only /admin/* itself
     // drops the storefront chrome.
     const isAdminRoute = location.pathname.startsWith("/admin");
+    const isFeedRoute = location.pathname === "/feed";
+    // An open conversation is a full-screen view with its own top bar:
+    // no storefront header, bottom nav, footer or floating buttons.
+    const isThreadRoute = /^\/messages\/[^/]+\/?$/.test(location.pathname);
+
+    // Banner queue: cookie notice first, then install and update banners.
+    const [updateVisible, setUpdateVisible] = useState(false);
+    const [cookieAcknowledged, setCookieAcknowledged] = useState(() => {
+        try { return localStorage.getItem(COOKIE_NOTICE_KEY) === "1"; } catch { return false; }
+    });
 
     // Phase 3 (splash/cookie-banner/install-banner placement): these two
     // used to render globally on every route. The brief asked for them to
@@ -191,13 +213,26 @@ export default function App() {
     // need their page content to clear it, or the bar covers whatever's
     // at the bottom of the page - matched to MobileBottomNav's own
     // min-h-[52px] tab height plus a little breathing room.
-    const hasMobileBottomNav = ["buyer", "seller", "delivery_agent"].includes(user?.role);
+    //
+    // iPhone fix: MobileBottomNav adds env(safe-area-inset-bottom) as its
+    // OWN bottom padding (clearing the home-indicator bar), so its real
+    // rendered height on an iPhone with a home indicator is ~52px + ~34px,
+    // not just 52px. A flat "pb-16" (4rem/64px) content offset was short
+    // by that inset on iPhone specifically (most Android devices report a
+    // 0px inset, so 64px happened to be enough there) - the last bit of
+    // page content ended up sitting under the bar instead of above it,
+    // and since the bar is translucent (glass-strong), that trapped
+    // content stayed partly visible through it instead of being fully
+    // hidden. See PRODUCTS_BOTTOM_NAV_IOS_FIX.md.
+    const hasMobileBottomNav = !isThreadRoute && (!user || ["buyer", "seller", "delivery_agent"].includes(user?.role));
 
     // Nexora AI is buyer-facing/advisory only - a guest
     // (user is null, not yet logged in) or a signed-in buyer gets it;
     // seller/delivery_agent/admin roles get their own AI entry points
     // in later phases (B2/B3), not this one.
-    const showNexoraAI = !user || user.role === "buyer";
+    // Visible to every role. The AI routes gate their own features by role
+    // (for example seller analytics), so the general chat is open to all.
+    const showNexoraAI = true;
 
     // when a push notification is clicked and it focuses an
     // already-open tab (see sw.js#notificationclick), that only brings the
@@ -257,21 +292,23 @@ export default function App() {
 
     return (
         <div className="min-h-screen flex flex-col">
-            <UpdateAvailableBanner />
+            {cookieAcknowledged && <UpdateAvailableBanner onVisibilityChange={setUpdateVisible} />}
             <NetworkStatusNotice />
-            {isGuestLandingRoute && <InstallPrompt />}
-            {isGuestLandingRoute && <CookieConsentBanner />}
+            {cookieAcknowledged && !updateVisible && isGuestLandingRoute && <InstallPrompt />}
+            {!isAdminRoute && <CookieConsentBanner onAcknowledged={() => setCookieAcknowledged(true)} />}
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
 
-            {!isAdminRoute && <Header />}
-            <SupportWidget />
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[var(--z-modal)] focus:bg-paper focus:text-ink focus:px-4 focus:py-2 focus:rounded-md focus:shadow-md focus-ring">
+                {t("a11y.skipToContent")}
+            </a>
+            {!isAdminRoute && !isThreadRoute && <Header />}
             <OnboardingTour />
             <AffiliateClickTracker />
 
             <RouteProgressBar />
 
-            <main className={`flex-1 ${hasMobileBottomNav ? "pb-16 md:pb-0" : ""}`}>
+            <main id="main-content" tabIndex={-1} className={`flex-1 ${hasMobileBottomNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
                 <Suspense fallback={<PageLoader />}>
                     <PageTransition>
                         <Routes>
@@ -279,6 +316,7 @@ export default function App() {
                         <Route path="/departments/:slug" element={<DepartmentPage />} />
                         <Route path="/products" element={<BrowseProducts />} />
                         <Route path="/products/:slug" element={<ProductDetail />} />
+                        <Route path="/feed" element={<ProductFeed />} />
                         <Route path="/services" element={<ServicesBrowse />} />
                         <Route path="/services/category/:slug" element={<ServiceCategoryPage />} />
                         <Route path="/services/:slug" element={<ServiceDetail />} />
@@ -310,6 +348,11 @@ export default function App() {
 
                         <Route path="/account/kyc" element={<RequireBuyer><KycStatus /></RequireBuyer>} />
                         <Route path="/account/wallet" element={<RequireBuyer><WalletPage /></RequireBuyer>} />
+                        <Route path="/search" element={<SearchResults />} />
+                        <Route path="/sell" element={<SellOnNexora />} />
+                        <Route path="/how-it-works" element={<HowItWorks />} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/contact" element={<Contact />} />
                         <Route path="/guides" element={<Guides />} />
                         <Route path="/guides/:slug" element={<GuideDetail />} />
                         <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
@@ -410,13 +453,14 @@ export default function App() {
                 </Suspense>
             </main>
 
-            {!isAdminRoute && <Footer />}
+            {!isAdminRoute && !isThreadRoute && <Footer />}
 
-            {showNexoraAI && (
-                <>
-                    <NexoraAIButton />
-                    <NexoraAIDrawer />
-                </>
+            {showNexoraAI && <NexoraAIDrawer />}
+            {!isAdminRoute && !isFeedRoute && !isThreadRoute && (
+                <FloatingActions>
+                    {showNexoraAI && <NexoraAIButton />}
+                    <SupportWidget />
+                </FloatingActions>
             )}
         </div>
     );

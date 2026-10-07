@@ -89,7 +89,7 @@ export default function SupportWidget() {
         // top of each other. Same mobile safe-area offset NexoraAIButton
         // already uses, so this also clears MobileBottomNav on mobile
         // instead of sitting under it.
-        <div className="fixed left-5 z-40 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-5">
+        <div className="relative">
             {open && (
                 <div className="mb-3 w-80 max-w-[90vw] max-h-[28rem] flex flex-col bg-paper border border-line rounded-lg shadow-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-line">

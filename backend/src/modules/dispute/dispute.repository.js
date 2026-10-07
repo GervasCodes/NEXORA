@@ -12,6 +12,17 @@ exports.create = async ({ disputeNumber, orderId, orderItemId, buyerId, sellerId
     return result.insertId;
 };
 
+// Open/under_review disputes against this seller right now - used by
+// wallet.service.js#requestWithdrawal to block a new withdrawal once a
+// seller has too many unresolved disputes outstanding (Phase 2).
+exports.countOpenBySeller = async (sellerId) => {
+    const [[row]] = await db.query(
+        "SELECT COUNT(*) AS count FROM disputes WHERE seller_id = ? AND status IN ('open', 'under_review')",
+        [sellerId]
+    );
+    return Number(row.count);
+};
+
 exports.findById = async (id) => {
     const [rows] = await db.query("SELECT * FROM disputes WHERE id = ?", [id]);
     return rows[0];
@@ -141,6 +152,64 @@ exports.findAll = async ({ status, type } = {}) => {
 
 exports.updateStatus = async (id, status) => {
     await db.query("UPDATE disputes SET status = ? WHERE id = ?", [status, id]);
+};
+
+// SLA (Phase 5) ------------------------------------------------------------
+
+// Set once, the first time the seller actually responds (a message, not
+// just viewing the dispute) - WHERE first_response_at IS NULL makes this
+// a no-op on every later seller message, so the timestamp always
+// reflects the *first* response.
+exports.markFirstResponse = async (id) => {
+    await db.query(
+        "UPDATE disputes SET first_response_at = NOW() WHERE id = ? AND first_response_at IS NULL",
+        [id]
+    );
+};
+
+// Open/under_review disputes older than `hours` with no seller response
+// yet, and not already flagged - used by the SLA job to flag them and
+// notify admins exactly once per dispute (the job flips
+// seller_response_overdue so it won't re-match next tick).
+exports.findOverdueForSellerResponse = async (hours) => {
+    const [rows] = await db.query(
+        `SELECT d.id, d.dispute_number, d.seller_id, d.order_id, o.order_number
+        FROM disputes d
+        JOIN orders o ON o.id = d.order_id
+        WHERE d.status IN ('open', 'under_review')
+            AND d.first_response_at IS NULL
+            AND d.seller_response_overdue = FALSE
+            AND d.created_at <= (NOW() - INTERVAL ? HOUR)`,
+        [Number(hours)]
+    );
+    return rows;
+};
+
+exports.markSellerResponseOverdue = async (id) => {
+    await db.query("UPDATE disputes SET seller_response_overdue = TRUE WHERE id = ?", [id]);
+};
+
+// Open/under_review disputes that have crossed the 12h or 20h mark and
+// haven't had that specific checkpoint notification sent yet - the SLA
+// reminder job notifies admins once per checkpoint, not once per tick.
+// `column` is interpolated directly (not parameterized - MySQL doesn't
+// allow a column name as a bound param) but is only ever called with
+// the two hardcoded literals below from disputeSla.job.js, never with
+// anything derived from a request.
+exports.findUnnotifiedAtCheckpoint = async (hours, column) => {
+    const [rows] = await db.query(
+        `SELECT id, dispute_number, order_id, created_at
+        FROM disputes
+        WHERE status IN ('open', 'under_review')
+            AND ${column} IS NULL
+            AND created_at <= (NOW() - INTERVAL ? HOUR)`,
+        [Number(hours)]
+    );
+    return rows;
+};
+
+exports.markCheckpointNotified = async (id, column) => {
+    await db.query(`UPDATE disputes SET ${column} = NOW() WHERE id = ?`, [id]);
 };
 
 exports.resolve = async (id, { status, resolution, resolutionNote, refundAmount, resolvedBy }) => {

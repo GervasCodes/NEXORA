@@ -164,6 +164,13 @@ export default function Cart() {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium truncate">{item.name}</p>
                                     <p className="price text-sm text-ash">{format(item.unit_price)} {t("common.each")}</p>
+                                    {Number.isFinite(Number(item.stock)) && Number(item.stock) <= 5 && (
+                                        <p className={`text-xs mt-0.5 ${Number(item.stock) < displayQuantity(item) ? "text-coral" : "text-mango-dark"}`}>
+                                            {Number(item.stock) < displayQuantity(item)
+                                                ? t("cart.stockExceeded", { count: Number(item.stock) })
+                                                : t("cart.stockLow", { count: Number(item.stock) })}
+                                        </p>
+                                    )}
 
                                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                                         <QuantityStepper
@@ -195,20 +202,22 @@ export default function Cart() {
                 </div>
             ))}
 
-            <div className="flex justify-between items-baseline mb-6 animate-slide-up" style={{ animationDelay: "160ms" }}>
-                <span className="text-ash text-sm">{t("common.total")}</span>
-                <span className="price text-2xl font-medium">{format(total)}</span>
+            {/* Total + checkout stay in view on phones, sitting just above the
+                bottom nav; on desktop they sit at the end of the list. */}
+            <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 bg-paper/95 backdrop-blur border-t border-line z-10 flex items-center justify-between gap-4">
+                <div>
+                    <p className="text-ash text-xs">{t("common.total")}</p>
+                    <p className="price text-xl font-medium">{format(total)}</p>
+                </div>
+                <Button
+                    onClick={handleCheckout}
+                    disabled={placing}
+                    className="gap-2 active:scale-[0.98] !px-8 !py-3"
+                >
+                    {placing && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                    {t("cart.checkoutButton")}
+                </Button>
             </div>
-
-            <Button
-                onClick={handleCheckout}
-                disabled={placing}
-                className="w-full sm:w-auto gap-2 active:scale-[0.98] animate-slide-up !px-8 !py-3"
-                style={{ animationDelay: "200ms" }}
-            >
-                {placing && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
-                {t("cart.checkoutButton")}
-            </Button>
         </div>
     );
 }

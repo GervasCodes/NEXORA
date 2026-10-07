@@ -41,13 +41,37 @@ exports.findUserById = async (userId) => {
 
 exports.findDocumentsByUser = async (userId) => {
     const [rows] = await db.query(
-        `SELECT id, document_type, file_url, uploaded_at
-        FROM account_verification_documents
-        WHERE user_id = ? AND business_request_id IS NULL
-        ORDER BY uploaded_at ASC`,
+        `SELECT d.id, d.document_type, d.file_url, d.file_public_id, d.file_storage, d.file_purged_at, d.uploaded_at,
+                f.reason AS flag_reason, f.flagged_at AS flag_flagged_at
+        FROM account_verification_documents d
+        LEFT JOIN account_verification_document_flags f ON f.document_id = d.id
+        WHERE d.user_id = ? AND d.business_request_id IS NULL
+        ORDER BY d.uploaded_at ASC`,
         [userId]
     );
     return rows;
+};
+
+// Admin "failing document" tags. Keyed by the document id, one row each.
+exports.findDocumentById = async (documentId) => {
+    const [rows] = await db.query(
+        "SELECT id, user_id, business_request_id FROM account_verification_documents WHERE id = ?",
+        [documentId]
+    );
+    return rows[0];
+};
+
+exports.upsertDocumentFlag = async (documentId, reason, adminId) => {
+    await db.query(
+        `INSERT INTO account_verification_document_flags (document_id, reason, flagged_by)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE reason = VALUES(reason), flagged_by = VALUES(flagged_by), flagged_at = CURRENT_TIMESTAMP`,
+        [documentId, reason, adminId || null]
+    );
+};
+
+exports.deleteDocumentFlag = async (documentId) => {
+    await db.query("DELETE FROM account_verification_document_flags WHERE document_id = ?", [documentId]);
 };
 
 exports.findHistoryByUser = async (userId) => {
@@ -164,17 +188,18 @@ exports.insertBusinessRequest = async (userId, conn) => {
     return result.insertId;
 };
 
-exports.insertBusinessDocument = async (userId, requestId, documentType, fileUrl, conn) => {
+exports.insertBusinessDocument = async (userId, requestId, documentType, stored, conn) => {
     await conn.query(
-        `INSERT INTO account_verification_documents (user_id, business_request_id, document_type, file_url)
-        VALUES (?, ?, ?, ?)`,
-        [userId, requestId, documentType, fileUrl]
+        `INSERT INTO account_verification_documents
+            (user_id, business_request_id, document_type, file_public_id, file_resource_type, file_format, file_storage)
+        VALUES (?, ?, ?, ?, ?, ?, 'authenticated')`,
+        [userId, requestId, documentType, stored.publicId, stored.resourceType, stored.format]
     );
 };
 
 exports.findDocumentsByBusinessRequest = async (requestId) => {
     const [rows] = await db.query(
-        `SELECT id, document_type, file_url, uploaded_at
+        `SELECT id, document_type, file_url, file_public_id, file_storage, file_purged_at, uploaded_at
         FROM account_verification_documents
         WHERE business_request_id = ?
         ORDER BY uploaded_at ASC`,

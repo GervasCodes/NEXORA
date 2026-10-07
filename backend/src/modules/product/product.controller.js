@@ -384,3 +384,36 @@ exports.activateMyProduct = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+const draftError = (res, error) => res.status(error.status || 400).json({
+    success: false,
+    code: error.code,
+    message: error.message
+});
+
+exports.createDraft = async (req, res) => {
+    try {
+        const result = await productService.createDraft(req.user.id, req.body);
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return draftError(res, error);
+    }
+};
+
+exports.saveDraft = async (req, res) => {
+    try {
+        const result = await productService.saveDraft(req.user.id, Number(req.params.id), req.body);
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return draftError(res, error);
+    }
+};
+
+exports.publishDraft = async (req, res) => {
+    try {
+        const result = await productService.publishDraft(req.user.id, Number(req.params.id), req.body);
+        return res.json({ success: true, message: "Product published", data: result });
+    } catch (error) {
+        return draftError(res, error);
+    }
+};

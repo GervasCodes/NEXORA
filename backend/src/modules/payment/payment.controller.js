@@ -1,4 +1,5 @@
 const paymentService = require("./payment.service");
+const providerStatus = require("./providerStatus");
 const logger = require("../../utils/logger").child({ module: "payment-webhook" });
 const Sentry = require("../../config/sentry");
 // (Security) - this used to be a private copy of the same check
@@ -6,6 +7,30 @@ const Sentry = require("../../config/sentry");
 // all - see that file). Now shared from one place - see
 // utils/redirectValidator.js's header comment for why.
 const { assertAllowedRedirect } = require("../../utils/redirectValidator");
+
+// One policy for a webhook whose processing threw, so every provider
+// behaves the same:
+//   - permanent (unknown reference, no payment row): a retry can never
+//     help, so answer 2xx and stop the provider retrying;
+//   - anything else is transient (database down, provider lookup failed):
+//     the delivery is released from the replay guard - otherwise its retry
+//     would be rejected as a "replay" - and a 500 asks the provider to
+//     redeliver.
+const answerProcessingFailure = async (req, res, error, provider) => {
+    if (error && error.permanent) {
+        logger.warn({ err: error, provider, reqId: req.id }, "webhook could not be matched to a payment - not retryable");
+        return res.status(200).json({ success: false });
+    }
+
+    logger.error({ err: error, provider, reqId: req.id }, "webhook processing failed - asking the provider to retry");
+    Sentry.captureException(error, { tags: { area: "payment-webhook", provider } });
+
+    if (req.replayGuardKey) {
+        await require("../../utils/webhookReplayGuard").forgetDelivery(req.replayGuardKey.provider, req.replayGuardKey.raw);
+    }
+
+    return res.status(500).json({ success: false });
+};
 
 exports.initiateWalletTopUp = async (req, res) => {
     try {
@@ -99,33 +124,36 @@ exports.getPayment = async (req, res) => {
 // docs/WEBHOOK_VALIDATION.md §1/§6 for the full verification writeup
 // and what's still unconfirmed against a live sandbox.
 exports.malipopayWebhook = async (req, res) => {
+    const payload = req.body || {};
+
+    // (Security) - the signature check upstream proves this request came
+    // from MalipoPay at some point; it doesn't prove `reference` is a
+    // well-formed reference we issued. A malformed or missing one is a
+    // clean "ignored", not an application error.
+    if (typeof payload.reference !== "string" || !payload.reference) {
+        logger.warn({ provider: "malipopay", reqId: req.id }, "[webhook] malipopay payload missing/invalid reference field");
+        return res.status(200).json({ success: false });
+    }
+
+    // PENDING / PROCESSING (and any status we do not recognise) mean "not
+    // finished" - acknowledge and ignore, never mark the payment failed.
+    const outcome = providerStatus.classifyMalipopay(payload);
+    if (outcome === "pending") {
+        return res.status(200).json({ success: true, ignored: true });
+    }
+
     try {
-        const payload = req.body || {};
-
-        // (Security) - the signature check upstream proves this
-        // request came from MalipoPay at some point; it doesn't prove
-        // `reference` is the well-formed string handleProviderWebhook's
-        // ORDER-/VERIFY-/BOOKING-/SUB- regex match expects. A malformed
-        // or missing reference here should be a clean "ignored", not an
-        // unhandled exception logged as an application error.
-        if (typeof payload.reference !== "string" || !payload.reference) {
-            logger.warn({ provider: "malipopay", reqId: req.id }, "[webhook] malipopay payload missing/invalid reference field");
-            return res.status(200).json({ success: false });
-        }
-
         await paymentService.handleProviderWebhook({
             providerReference: payload.reference,
-            success: payload.status === "SUCCESS" || payload.status === "success",
-            transactionReference: payload.transactionReference || payload.reference
+            success: outcome === "success",
+            transactionReference: payload.transactionReference || payload.reference,
+            reportedAmount: payload.amount,
+            reportedCurrency: payload.currency
         });
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        logger.error({ err: error, provider: "malipopay", reqId: req.id }, "MalipoPay webhook error");
-        Sentry.captureException(error, { tags: { area: "payment-webhook", provider: "malipopay" } });
-        // Still 200 so MalipoPay doesn't retry-storm on our own bug; the
-        // error is logged above for us to investigate.
-        return res.status(200).json({ success: false });
+        return answerProcessingFailure(req, res, error, "malipopay");
     }
 };
 
@@ -135,27 +163,33 @@ exports.malipopayWebhook = async (req, res) => {
 // developers.selcommobile.com's C2B Payment Notification API) happens
 // upstream in verifySelcomWebhook - see docs/WEBHOOK_VALIDATION.md §1/§6.
 exports.selcomWebhook = async (req, res) => {
+    const payload = req.body || {};
+
+    // Same reasoning as malipopayWebhook above - upstream auth proves
+    // provenance, not shape.
+    if (typeof payload.transid !== "string" || !payload.transid) {
+        logger.warn({ provider: "selcom", reqId: req.id }, "[webhook] selcom payload missing/invalid transid field");
+        return res.status(200).json({ success: false });
+    }
+
+    const outcome = providerStatus.classifySelcom(payload);
+    if (outcome === "pending") {
+        return res.status(200).json({ success: true, ignored: true });
+    }
+
     try {
-        const payload = req.body || {};
-
-        // Same reasoning as malipopayWebhook above - upstream auth
-        // proves provenance, not shape.
-        if (typeof payload.transid !== "string" || !payload.transid) {
-            logger.warn({ provider: "selcom", reqId: req.id }, "[webhook] selcom payload missing/invalid transid field");
-            return res.status(200).json({ success: false });
-        }
-
         await paymentService.handleProviderWebhook({
             providerReference: payload.transid,
-            success: payload.resultcode === "000" || payload.result === "SUCCESS",
-            transactionReference: payload.reference || payload.transid
+            success: outcome === "success",
+            transactionReference: payload.reference || payload.transid,
+            // Selcom's notification may carry the amount; when it does it
+            // is checked against what we expected.
+            reportedAmount: payload.amount
         });
 
         return res.status(200).json({ success: true });
     } catch (error) {
-        logger.error({ err: error, provider: "selcom", reqId: req.id }, "Selcom webhook error");
-        Sentry.captureException(error, { tags: { area: "payment-webhook", provider: "selcom" } });
-        return res.status(200).json({ success: false });
+        return answerProcessingFailure(req, res, error, "selcom");
     }
 };
 
@@ -186,63 +220,69 @@ exports.initiateSnippeOrderPayment = async (req, res) => {
 // parsed) for signature verification to work - see the express.raw()
 // wiring in payment.routes.js.
 exports.snippeWebhook = async (req, res) => {
+    return handleHostedCheckoutWebhook(req, res, {
+        provider: "snippe",
+        constructEvent: () => require("./providers/snippe.provider").constructWebhookEvent(req.body, req.headers["snippe-signature"]),
+        handle: (event) => paymentService.handleSnippeWebhookEvent(event)
+    });
+};
+
+// Shared by the two hosted-checkout card rails. HMAC verification proves a
+// delivery came from the provider; the replay guard proves it is the first
+// time these exact bytes were seen. The delivery is recorded BEFORE
+// processing (so two concurrent deliveries cannot both run) and released
+// again if processing fails transiently (so the provider's retry is not
+// mistaken for a replay).
+async function handleHostedCheckoutWebhook(req, res, { provider, constructEvent, handle }) {
+    const replayGuard = require("../../utils/webhookReplayGuard");
+    let event;
+
     try {
-        const snippeProvider = require("./providers/snippe.provider");
-        const replayGuard = require("../../utils/webhookReplayGuard");
-        const event = snippeProvider.constructWebhookEvent(req.body, req.headers["snippe-signature"]);
+        event = constructEvent();
+    } catch (error) {
+        // An invalid signature means this request didn't come from the
+        // provider - a 4xx is what we want (it won't retry a request that
+        // can never become valid). Warning level, not an exception: this
+        // is usually a forgery or a misconfigured secret, not a bug.
+        logger.error({ err: error, provider, reqId: req.id }, `${provider} webhook rejected`);
+        Sentry.captureMessage(`${provider} webhook rejected`, {
+            level: "warning",
+            tags: { area: "payment-webhook", provider },
+            extra: { reason: error.message }
+        });
+        return res.status(400).json({ success: false });
+    }
 
-        // (Security Hardening) - replay protection. HMAC
-        // signature verification above proves this came from Snippe; it
-        // doesn't prove this exact delivery hasn't already been consumed
-        // (a captured, validly-signed request replayed later would still
-        // pass it). If the event carries a `created` timestamp (the
-        // commonly documented shape for a hosted-checkout event, same
-        // caveat as the rest of this provider's integration - see
-        // snippe.provider.js's header comment), reject anything
-        // stale/future first; either way, dedup on the raw request bytes
-        // themselves (req.body is still the raw Buffer here - see the
-        // express.raw() wiring in app.js) so a byte-for-byte replay is
-        // caught even if this event shape turns out not to include a
-        // timestamp at all.
-        if (!replayGuard.isTimestampFresh(event.created)) {
-            logger.warn({ provider: "snippe", reqId: req.id }, "Snippe webhook rejected: stale/future event timestamp (possible replay)");
-            Sentry.captureMessage("Snippe webhook rejected", {
-                level: "warning",
-                tags: { area: "payment-webhook", provider: "snippe" },
-                extra: { reason: "stale timestamp" }
-            });
-            return res.status(400).json({ success: false });
-        }
+    if (!replayGuard.isTimestampFresh(event.created)) {
+        logger.warn({ provider, reqId: req.id }, `${provider} webhook rejected: stale/future event timestamp (possible replay)`);
+        Sentry.captureMessage(`${provider} webhook rejected`, {
+            level: "warning",
+            tags: { area: "payment-webhook", provider },
+            extra: { reason: "stale timestamp" }
+        });
+        return res.status(400).json({ success: false });
+    }
 
-        const isFreshDelivery = await replayGuard.recordDelivery("snippe", req.body);
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery(provider, req.body);
         if (!isFreshDelivery) {
             return res.status(400).json({ success: false });
         }
+    } catch (error) {
+        // The guard table itself is unavailable - transient.
+        logger.error({ err: error, provider, reqId: req.id }, "replay guard unavailable");
+        return res.status(500).json({ success: false });
+    }
 
-        await paymentService.handleSnippeWebhookEvent(event);
+    req.replayGuardKey = { provider, raw: req.body };
 
+    try {
+        await handle(event);
         return res.status(200).json({ success: true });
     } catch (error) {
-        logger.error({ err: error, provider: "snippe", reqId: req.id }, "Snippe webhook error");
-        // Not sent to Sentry as an exception: an invalid-signature
-        // rejection here is usually a forged/replayed request rather
-        // than an application bug (same reasoning as
-        // webhookAuth.middleware.js's warn-level log for the mobile
-        // money providers) - captureMessage at warning level keeps it
-        // visible without treating every rejected forgery as an
-        // incident.
-        Sentry.captureMessage("Snippe webhook rejected", {
-            level: "warning",
-            tags: { area: "payment-webhook", provider: "snippe" },
-            extra: { reason: error.message }
-        });
-        // 400 here (unlike the mobile money webhooks) is correct: an
-        // invalid signature means this request didn't come from Snippe,
-        // and a 4xx on a signature failure is what we want (it won't
-        // retry a request that will never become valid).
-        return res.status(400).json({ success: false });
+        return answerProcessingFailure(req, res, error, provider);
     }
-};
+}
 
 // --- MalipoPay Card ---------------------------------------------------
 // A separate card-checkout product from MalipoPay's mobile-money rail
@@ -275,48 +315,13 @@ exports.initiateMalipopayCardOrderPayment = async (req, res) => {
 // parsed) for signature verification to work - see the express.raw()
 // wiring in app.js, mirroring the Snippe webhook exactly.
 exports.malipopayCardWebhook = async (req, res) => {
-    try {
-        const malipopayCardProvider = require("./providers/malipopayCard.provider");
-        const replayGuard = require("../../utils/webhookReplayGuard");
-        // Real header name confirmed via MalipoPay's official malipopay-php
-        // SDK (reads HTTP_X_MALIPOPAY_SIGNATURE) - see
-        // malipopayCard.provider.js's file header for the full rundown of
-        // what else changed in this rewrite. Express lower-cases incoming
-        // header names, so this is read as all-lowercase.
-        const event = malipopayCardProvider.constructWebhookEvent(req.body, req.headers["x-malipopay-signature"]);
-
-        // Same replay protection as the Snippe webhook - see the comment
-        // there and webhookReplayGuard.js for the full reasoning.
-        if (!replayGuard.isTimestampFresh(event.created)) {
-            logger.warn({ provider: "malipopay-card", reqId: req.id }, "MalipoPay Card webhook rejected: stale/future event timestamp (possible replay)");
-            Sentry.captureMessage("MalipoPay Card webhook rejected", {
-                level: "warning",
-                tags: { area: "payment-webhook", provider: "malipopay-card" },
-                extra: { reason: "stale timestamp" }
-            });
-            return res.status(400).json({ success: false });
-        }
-
-        const isFreshDelivery = await replayGuard.recordDelivery("malipopay-card", req.body);
-        if (!isFreshDelivery) {
-            return res.status(400).json({ success: false });
-        }
-
-        await paymentService.handleMalipopayCardWebhookEvent(event);
-
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        logger.error({ err: error, provider: "malipopay-card", reqId: req.id }, "MalipoPay Card webhook error");
-        Sentry.captureMessage("MalipoPay Card webhook rejected", {
-            level: "warning",
-            tags: { area: "payment-webhook", provider: "malipopay-card" },
-            extra: { reason: error.message }
-        });
-        // 400 here (unlike the mobile money webhooks) is correct: an
-        // invalid signature means this request didn't come from
-        // MalipoPay's card product, same reasoning as the Snippe webhook.
-        return res.status(400).json({ success: false });
-    }
+    // Real header name confirmed via MalipoPay's official malipopay-php
+    // SDK (X-Malipopay-Signature); Express lower-cases header names.
+    return handleHostedCheckoutWebhook(req, res, {
+        provider: "malipopay-card",
+        constructEvent: () => require("./providers/malipopayCard.provider").constructWebhookEvent(req.body, req.headers["x-malipopay-signature"]),
+        handle: (event) => paymentService.handleMalipopayCardWebhookEvent(event)
+    });
 };
 
 // --- PayPal ---------------------------------------------------------
@@ -344,9 +349,81 @@ exports.initiatePaypalOrderPayment = async (req, res) => {
 // payment; PayPal's capture response is the only thing that matters.
 exports.capturePaypalPayment = async (req, res) => {
     try {
-        const result = await paymentService.capturePaypalPayment(req.body.paypalOrderId);
+        const result = await paymentService.capturePaypalPayment(req.body.paypalOrderId, req.user.id);
 
         return res.json({ success: true, data: result });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// PayPal calls this URL directly. The route receives the RAW body (see
+// app.js) and every delivery is verified with PayPal's own
+// verify-webhook-signature endpoint (needs PAYPAL_WEBHOOK_ID) before
+// anything is read from it - fail closed when it cannot be verified.
+//   https://<your-domain>/api/v1/payments/webhooks/paypal
+exports.paypalWebhook = async (req, res) => {
+    const paypalProvider = require("./providers/paypal.provider");
+    const replayGuard = require("../../utils/webhookReplayGuard");
+
+    let event;
+    try {
+        event = JSON.parse(Buffer.isBuffer(req.body) ? req.body.toString("utf8") : JSON.stringify(req.body || {}));
+    } catch (error) {
+        return res.status(400).json({ success: false });
+    }
+
+    const verified = await paypalProvider.verifyWebhookSignature(req.headers, event);
+    if (!verified) {
+        logger.warn({ provider: "paypal", reqId: req.id, ip: req.ip }, "PayPal webhook rejected: signature not verified");
+        Sentry.captureMessage("PayPal webhook rejected", { level: "warning", tags: { area: "payment-webhook", provider: "paypal" } });
+        return res.status(400).json({ success: false });
+    }
+
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery("paypal", event.id || req.body);
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: true, duplicate: true });
+        }
+    } catch (error) {
+        logger.error({ err: error, provider: "paypal", reqId: req.id }, "replay guard unavailable");
+        return res.status(500).json({ success: false });
+    }
+
+    req.replayGuardKey = { provider: "paypal", raw: event.id || req.body };
+
+    try {
+        await paymentService.handlePaypalWebhookEvent(event);
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        return answerProcessingFailure(req, res, error, "paypal");
+    }
+};
+
+// --- Admin: payments needing review ------------------------------------------
+
+exports.listPaymentReviews = async (req, res) => {
+    try {
+        const data = await paymentService.listReviewQueue(req.query);
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.resolvePaymentReview = async (req, res) => {
+    try {
+        const data = await paymentService.resolveReviewItem(Number(req.params.reviewId), req.user.id, req.body?.note);
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.acceptPaymentReview = async (req, res) => {
+    try {
+        const data = await paymentService.acceptReviewedPayment(Number(req.params.reviewId), req.user.id, req.body?.note);
+        return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }

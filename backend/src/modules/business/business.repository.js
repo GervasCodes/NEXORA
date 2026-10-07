@@ -39,6 +39,23 @@ exports.findTiersByProduct = async (productId) => {
     return rows;
 };
 
+// Batched counterpart of findTiersByProduct (Phase 3) - one query for
+// every distinct product a cart/checkout references instead of one round
+// trip per line item (order.service.js#checkout was calling
+// getBulkUnitPrice once per cart item inside its pricing loop - the same
+// N+1 shape findProductsByIds/findVariantsByIds already got fixed for in
+// an earlier phase). Returns every tier row for every requested product;
+// callers group by product_id themselves (see
+// business.service.js#getBulkUnitPrices).
+exports.findTiersByProducts = async (productIds) => {
+    if (!productIds.length) return [];
+    const [rows] = await db.query(
+        "SELECT * FROM product_bulk_price_tiers WHERE product_id IN (?) ORDER BY product_id ASC, min_quantity ASC",
+        [productIds]
+    );
+    return rows;
+};
+
 exports.replaceTiers = async (productId, tiers) => {
     await db.query("DELETE FROM product_bulk_price_tiers WHERE product_id = ?", [productId]);
     if (tiers.length === 0) return;

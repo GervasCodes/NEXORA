@@ -82,6 +82,14 @@ exports.updateSettingsValidation = [
         .isFloat({ min: 0, max: 100 })
         .withMessage("Commission rate must be between 0 and 100"),
 
+    body("confirm_commission_change").optional().isBoolean(),
+    body("confirm_large_exchange_rate_change").optional().isBoolean(),
+    body("expected_updated_at").optional().isISO8601(),
+    body("approved_document_retention_days")
+        .optional()
+        .isInt({ min: 0, max: 3650 })
+        .withMessage("Retention must be 0 (keep) or a number of days up to 3650"),
+
     body("rider_delivery_fee")
         .optional()
         .isFloat({ min: 0 })
@@ -132,8 +140,8 @@ exports.updateSettingsValidation = [
     // as it's editable, same as every other setting above.
     body("escrow_hold_days")
         .optional()
-        .isInt({ min: 0 })
-        .withMessage("Escrow hold period must be zero or a positive whole number of days"),
+        .isInt({ min: 0, max: 60 })
+        .withMessage("Escrow hold period must be a whole number of days from 0 to 60"),
 
     // (Durable Dispatch Foundation) - see settingsService.getDeliveryOfferRadiusStepsKm.
     body("delivery_offer_radius_steps_km")

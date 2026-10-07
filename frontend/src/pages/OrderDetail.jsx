@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
+import { useLanguage } from "../context/LanguageContext";
 import api, { extractErrorMessage } from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
@@ -45,6 +46,7 @@ export default function OrderDetail() {
     const assistant = useAIAssistant();
     const cart = useCart();
     const toast = useToast();
+    const { t: tr } = useLanguage();
     const [order, setOrder] = useState(null);
     const [delivery, setDelivery] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -135,6 +137,13 @@ export default function OrderDetail() {
                     if (data.data?.success) {
                         setActionMessage("Payment successful.");
                         setPaymentFailed(false);
+                    } else if (data.data?.status === "pending") {
+                        // PayPal could not confirm yet - not a failure. The
+                        // webhook will settle it; keep waiting like the
+                        // hosted-checkout return does.
+                        setActionMessage("Confirming your payment…");
+                        setPaymentFailed(false);
+                        pollForPaymentConfirmation();
                     } else {
                         setActionError("Payment was not completed. Please try again.");
                         setPaymentFailed(true);
@@ -426,7 +435,35 @@ export default function OrderDetail() {
 
             <PaymentStatusBanner state={orderState} />
 
-            {actionMessage && <p className="text-sm text-teal mb-4">{actionMessage}</p>}
+            {location.state?.justPlaced ? (
+                <div role="status" className="border border-teal/30 bg-teal/5 rounded-lg p-4 mb-6">
+                    <p className="font-display text-lg text-teal mb-1">{tr("order.placed.title")}</p>
+                    <p className="text-sm text-ink/80 mb-3">{tr("order.placed.body", { number: order.order_number })}</p>
+                    <div className="flex flex-wrap gap-2">
+                        <Link to={`/orders/${id}/tracking`} className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90">
+                            {tr("order.placed.track")}
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                const url = `${window.location.origin}/orders/${id}/tracking`;
+                                try {
+                                    if (navigator.share) await navigator.share({ title: order.order_number, url });
+                                    else {
+                                        await navigator.clipboard.writeText(url);
+                                        toast?.success?.(tr("order.placed.linkCopied"));
+                                    }
+                                } catch { /* share dismissed */ }
+                            }}
+                            className="border border-line px-4 py-2 rounded-md text-sm hover:border-ink transition-colors"
+                        >
+                            {tr("order.placed.share")}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                actionMessage && <p className="text-sm text-teal mb-4">{actionMessage}</p>
+            )}
             {actionError && <p className="text-sm text-coral mb-4">{actionError}</p>}
 
             {!order.is_parent && (

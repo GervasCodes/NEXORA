@@ -51,6 +51,42 @@ exports.hasOtherActiveCampaign = async (productId, excludeId, executor = db) => 
     return rows.length > 0;
 };
 
+// Conditional: only flips a row still 'active'. Returns whether it did, so a
+// cancel that lost a race with the expiry sweep is reported, not swallowed.
+exports.markCancelled = async (id, { refundAmount, creditDaysReturned }, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE sponsorship_campaigns
+        SET status = 'cancelled', refund_amount = ?, credit_days_returned = ?, cancelled_at = NOW()
+        WHERE id = ? AND status = 'active'`,
+        [refundAmount, creditDaysReturned, id]
+    );
+    return result.affectedRows > 0;
+};
+
+// Expiry: flips one campaign to 'expired' only if it is still 'active' and
+// past its end date. Returns whether a row changed.
+exports.expireIfDue = async (id, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE sponsorship_campaigns
+        SET status = 'expired'
+        WHERE id = ? AND status = 'active' AND ends_at <= NOW()`,
+        [id]
+    );
+    return result.affectedRows > 0;
+};
+
+// Plain read (no row locks). The sweep re-checks each row under its own
+// transaction, so this list can be slightly stale without harm.
+exports.findExpiredActiveIds = async () => {
+    const [rows] = await db.query(
+        `SELECT sc.id, sc.seller_id, sc.product_id, p.name AS product_name
+        FROM sponsorship_campaigns sc
+        JOIN products p ON p.id = sc.product_id
+        WHERE sc.status = 'active' AND sc.ends_at <= NOW()`
+    );
+    return rows;
+};
+
 exports.updateStatus = async (id, status, executor = db) => {
     await executor.query(
         "UPDATE sponsorship_campaigns SET status = ? WHERE id = ?",
@@ -62,6 +98,7 @@ exports.findBySeller = async (sellerId) => {
     const [rows] = await db.query(
         `SELECT sc.id, sc.product_id, sc.daily_rate, sc.days, sc.total_cost, sc.credits_used,
                 sc.status, sc.starts_at, sc.ends_at, sc.created_at,
+                sc.refund_amount, sc.credit_days_returned, sc.cancelled_at,
                 p.name AS product_name, p.slug AS product_slug
         FROM sponsorship_campaigns sc
         JOIN products p ON p.id = sc.product_id

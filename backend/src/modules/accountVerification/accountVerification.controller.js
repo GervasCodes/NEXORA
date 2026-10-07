@@ -37,6 +37,24 @@ exports.reject = async (req, res) => {
     }
 };
 
+exports.flagDocument = async (req, res) => {
+    try {
+        const data = await accountVerificationService.flagDocument(req.params.docId, req.body.reason, req.user.id);
+        return res.json({ success: true, message: "Document flagged as failing.", data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.unflagDocument = async (req, res) => {
+    try {
+        const data = await accountVerificationService.unflagDocument(req.params.docId);
+        return res.json({ success: true, message: "Document flag removed.", data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // --- Verified Business tier upgrade ---
 
 exports.getMyBusinessStatus = async (req, res) => {

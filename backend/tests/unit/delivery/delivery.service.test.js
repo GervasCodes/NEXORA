@@ -367,11 +367,19 @@ describe("delivery.service.updateDeliveryStatus", () => {
 
     it("marking delivered also updates the order status and fires the earnings credit (fire-and-forget)", async () => {
         deliveryRepository.findByOrderId.mockResolvedValue({ id: 9, agent_id: 5, status: "in_transit" });
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 20, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 20, order_number: "ORD-1", delivery_handover_code: "1234"
+        });
 
-        await deliveryService.updateDeliveryStatus(1, 5, "delivered", "left at door");
+        // Delivery proof (Phase 5, P0) - marking an order delivered now
+        // requires a matching handover code or a dropoff photo (see
+        // updateDeliveryStatus's own comment); the buyer's code is the
+        // normal case.
+        await deliveryService.updateDeliveryStatus(1, 5, "delivered", "left at door", { handoverCode: "1234" });
 
-        expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(9, "delivered", "left at door");
+        expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(9, "delivered", "left at door", {
+            handoverVerified: true, handoverMethod: "code"
+        });
         expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "delivered");
         expect(earningsService.creditForDelivery).toHaveBeenCalledWith(
             expect.objectContaining({ id: 9, agent_id: 5 })

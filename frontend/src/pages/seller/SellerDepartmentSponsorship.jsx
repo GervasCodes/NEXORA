@@ -5,6 +5,8 @@ import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import { IncludedCreditsBanner, FundingBreakdown } from "../../components/SponsorshipCredits";
@@ -18,6 +20,8 @@ const STATUS_STYLES = {
 
 
 export default function SellerDepartmentSponsorship({ embedded = false, onCampaignsChanged }) {
+    const { t } = useLanguage();
+    const [confirmCancel, setConfirmCancel] = useState(null);
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -75,11 +79,27 @@ export default function SellerDepartmentSponsorship({ embedded = false, onCampai
         }
     };
 
-    const cancelCampaign = async (campaign) => {
+    const openCancel = async (campaign) => {
+        setBusyId(campaign.id);
+        setError("");
+        try {
+            const { data } = await api.get(`/seller/department-sponsorship/campaigns/${campaign.id}/cancel-preview`);
+            setConfirmCancel({ campaign, preview: data.data });
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const cancelCampaign = async () => {
+        if (!confirmCancel) return;
+        const { campaign } = confirmCancel;
         setBusyId(campaign.id);
         setError("");
         try {
             await api.put(`/seller/department-sponsorship/campaigns/${campaign.id}/cancel`);
+            setConfirmCancel(null);
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -88,11 +108,39 @@ export default function SellerDepartmentSponsorship({ embedded = false, onCampai
         }
     };
 
+    const cancelDescription = confirmCancel ? (
+        <div className="space-y-1 text-sm">
+            {confirmCancel.preview.can_cancel === false ? (
+                <p>{confirmCancel.preview.reason}</p>
+            ) : (
+                <>
+                    <p>{t("seller.sponsorship.cancelRefund")}: {formatMoney(confirmCancel.preview.refund_amount)}</p>
+                    <p>
+                        {confirmCancel.preview.credit_days > 0
+                            ? `${t("seller.sponsorship.cancelCredits")}: ${confirmCancel.preview.credit_days}`
+                            : t("seller.sponsorship.cancelNoCredits")}
+                    </p>
+                </>
+            )}
+        </div>
+    ) : null;
+
     if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!pricing) return null;
 
     return (
+        <>
+        <ConfirmDialog
+            open={Boolean(confirmCancel)}
+            title={t("seller.sponsorship.cancelTitle")}
+            description={cancelDescription}
+            confirmLabel={t("seller.sponsorship.cancelConfirm")}
+            cancelLabel={t("seller.sponsorship.cancelKeep")}
+            danger
+            onConfirm={confirmCancel && confirmCancel.preview.can_cancel === false ? () => setConfirmCancel(null) : cancelCampaign}
+            onCancel={() => setConfirmCancel(null)}
+        />
         <div>
             {!embedded && (
                 <>
@@ -201,7 +249,7 @@ export default function SellerDepartmentSponsorship({ embedded = false, onCampai
                             {c.status === "active" && (
                                 <div>
                                     <button
-                                        onClick={() => cancelCampaign(c)}
+                                        onClick={() => openCancel(c)}
                                         disabled={busyId === c.id}
                                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
                                     >
@@ -215,5 +263,6 @@ export default function SellerDepartmentSponsorship({ embedded = false, onCampai
                 </ul>
             )}
         </div>
+        </>
     );
 }

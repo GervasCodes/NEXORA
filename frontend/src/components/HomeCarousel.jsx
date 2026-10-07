@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import { useDataSaver } from "../context/DataSaverContext";
+import { useLanguage } from "../context/LanguageContext";
+
+// Respect the OS "reduce motion" setting: no autoplay, no crossfade.
+const prefersReducedMotion = () =>
+    typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
 
 // How often autoplay advances - long enough to read a slide's title,
 // short enough that a full deck (see HOME_CAROUSEL_MAX_SLIDES on the
@@ -83,6 +89,10 @@ export default function HomeCarousel() {
     const [slides, setSlides] = useState(null);
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
+    const [userPaused, setUserPaused] = useState(false);
+    const [reduceMotion] = useState(prefersReducedMotion);
+    const { t } = useLanguage();
+    const dataSaver = useDataSaver();
     const dragStartX = useRef(null);
 
     useEffect(() => {
@@ -103,14 +113,14 @@ export default function HomeCarousel() {
     // Autoplay - paused on hover/focus (desktop) and mid-drag (touch),
     // so a slide never gets yanked out from under a reader or a swipe.
     useEffect(() => {
-        if (paused || count < 2) return undefined;
+        if (paused || userPaused || reduceMotion || count < 2) return undefined;
         const timer = setInterval(() => goTo(index + 1), AUTOPLAY_INTERVAL_MS);
         return () => clearInterval(timer);
-    }, [paused, count, index, goTo]);
+    }, [paused, userPaused, reduceMotion, count, index, goTo]);
 
     if (slides === null) {
         return (
-            <div className="rounded-2xl overflow-hidden h-56 sm:h-72 lg:h-[420px] bg-frost/5 animate-pulse border border-frost/10" />
+            <div className="rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] bg-frost/5 animate-pulse border border-frost/10" />
         );
     }
 
@@ -133,17 +143,22 @@ export default function HomeCarousel() {
 
     return (
         <div
-            className="relative rounded-2xl overflow-hidden h-56 sm:h-72 lg:h-[420px] border border-frost/10 bg-azure/10 group"
+            role="region"
+            aria-roledescription="carousel"
+            aria-label={t("home.carouselLabel")}
+            aria-live={userPaused || reduceMotion ? "polite" : "off"}
+            className="relative rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] border border-frost/10 bg-azure/10 group"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
             <Link to={slide.href} className="absolute inset-0 block">
-                {slide.videoUrl ? (
+                {slide.videoUrl && !dataSaver?.enabled ? (
                     <video
                         key={slide.videoUrl}
                         src={slide.videoUrl}
+                        poster={slide.imageUrl || undefined}
                         className="w-full h-full object-cover"
                         autoPlay
                         muted
@@ -155,8 +170,10 @@ export default function HomeCarousel() {
                         key={slide.imageUrl}
                         src={slide.imageUrl}
                         alt={slide.title || ""}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover animate-fade-in motion-reduce:animate-none"
                         loading={index === 0 ? "eager" : "lazy"}
+                        fetchPriority={index === 0 ? "high" : undefined}
+                        decoding="async"
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                     />
                 )}
@@ -164,7 +181,7 @@ export default function HomeCarousel() {
 
                 <div className="absolute bottom-4 left-4 right-16">
                     <SlideBadge badge={slide.badge} />
-                    <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 truncate">
+                    <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 line-clamp-2">
                         {slide.title}
                     </h3>
                     {slide.subtitle && (
@@ -180,7 +197,7 @@ export default function HomeCarousel() {
                         type="button"
                         onClick={() => goTo(index - 1)}
                         aria-label="Previous slide"
-                        className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="flex absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                             <path d="M15 19 8 12l7-7" strokeLinecap="round" strokeLinejoin="round" />
@@ -190,14 +207,27 @@ export default function HomeCarousel() {
                         type="button"
                         onClick={() => goTo(index + 1)}
                         aria-label="Next slide"
-                        className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="flex absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
                             <path d="m9 5 7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     </button>
 
-                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setUserPaused((p) => !p)}
+                        aria-label={userPaused ? t("home.playSlides") : t("home.pauseSlides")}
+                        className="absolute top-2 right-2 z-10 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost flex items-center justify-center"
+                    >
+                        {userPaused ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z" /></svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+                        )}
+                    </button>
+
+                    <div className="absolute bottom-1 right-3 flex items-center gap-0.5">
                         {slides.map((s, i) => (
                             <button
                                 key={i}
@@ -205,8 +235,10 @@ export default function HomeCarousel() {
                                 onClick={() => goTo(i)}
                                 aria-label={`Go to slide ${i + 1}`}
                                 aria-current={i === index}
-                                className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40 hover:bg-frost/60"}`}
-                            />
+                                className="w-11 h-11 flex items-center justify-center"
+                            >
+                                <span className={`block h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40 hover:bg-frost/60"}`} />
+                            </button>
                         ))}
                     </div>
                 </>

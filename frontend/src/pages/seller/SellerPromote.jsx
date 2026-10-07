@@ -6,6 +6,9 @@ import SellerSponsorship from "./SellerSponsorship";
 import SellerFeaturedStore from "./SellerFeaturedStore";
 import SellerDepartmentSponsorship from "./SellerDepartmentSponsorship";
 import { IncludedCreditsBanner } from "../../components/SponsorshipCredits";
+import Skeleton from "../../components/Skeleton";
+
+const MAX_PROMO_VIDEO_BYTES = 50 * 1024 * 1024;
 
 // (Promo Video Unification) - one store-level promo video,
 // managed here rather than added to any single campaign type below
@@ -20,31 +23,58 @@ import { IncludedCreditsBanner } from "../../components/SponsorshipCredits";
 function StorePromoVideoSection() {
     const [promoVideoUrl, setPromoVideoUrl] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [progress, setProgress] = useState(0);
     const [removing, setRemoving] = useState(false);
     const [error, setError] = useState("");
 
-    useEffect(() => {
+    const loadProfile = useCallback(() => {
+        setLoading(true);
+        setLoadFailed(false);
         api.get("/seller/profile")
             .then(({ data }) => setPromoVideoUrl(data.data?.promo_video_url || null))
-            .catch(() => {})
+            .catch(() => setLoadFailed(true))
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(loadProfile, [loadProfile]);
 
     const handleUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        setUploading(true);
         setError("");
+
+        // Same limits the server enforces (uploadVideo.middleware.js) -
+        // checked here so a 200 MB clip fails instantly, not after a
+        // long upload on mobile data.
+        if (!file.type.startsWith("video/")) {
+            setError("Please choose a video file.");
+            e.target.value = "";
+            return;
+        }
+        if (file.size > MAX_PROMO_VIDEO_BYTES) {
+            setError(`That video is ${(file.size / (1024 * 1024)).toFixed(0)} MB - the limit is 50 MB. Try a shorter clip or lower quality.`);
+            e.target.value = "";
+            return;
+        }
+
+        setUploading(true);
+        setProgress(0);
         try {
             const body = new FormData();
             body.append("video", file);
-            const { data } = await api.post("/seller/promo-video", body);
+            const { data } = await api.post("/seller/promo-video", body, {
+                onUploadProgress: (evt) => {
+                    if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+                }
+            });
             setPromoVideoUrl(data.data.promoVideoUrl);
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setUploading(false);
+            setProgress(0);
             e.target.value = "";
         }
     };
@@ -62,14 +92,34 @@ function StorePromoVideoSection() {
         }
     };
 
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div className="border border-line rounded-lg p-4 mb-8" aria-busy="true">
+                <Skeleton className="h-4 w-32 mb-2" />
+                <Skeleton className="h-3 w-3/4 mb-4" />
+                <Skeleton className="h-8 w-28" />
+            </div>
+        );
+    }
+
+    if (loadFailed) {
+        return (
+            <div className="border border-line rounded-lg p-4 mb-8">
+                <p className="text-sm font-medium mb-1">Store promo video</p>
+                <p role="alert" className="text-coral text-sm mb-2">Couldn&apos;t load your promo video.</p>
+                <button type="button" onClick={loadProfile} className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors">
+                    Try again
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="border border-line rounded-lg p-4 mb-8">
             <p className="text-sm font-medium mb-1">Store promo video</p>
             <p className="text-xs text-ash mb-3">
                 A short video shown on your store page banner - separate from
-                product videos and Live Selling.
+                product videos and Live Selling. Up to 50 MB.
             </p>
 
             {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
@@ -79,8 +129,21 @@ function StorePromoVideoSection() {
                 <video
                     src={promoVideoUrl}
                     controls
+                    preload="metadata"
+                    playsInline
                     className="w-full max-w-sm rounded-md border border-line mb-3"
                 />
+            )}
+
+            {uploading && (
+                <div className="mb-3 max-w-sm" role="status" aria-live="polite">
+                    <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                        <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                    <p className="text-xs text-ash mt-1">
+                        {progress < 100 ? `Uploading… ${progress}%` : "Processing video…"}
+                    </p>
+                </div>
             )}
 
             <div className="flex items-center gap-2">

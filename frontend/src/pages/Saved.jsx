@@ -9,6 +9,9 @@ import MaintenanceScreen from "../components/MaintenanceScreen";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import PageMeta from "../components/PageMeta";
+import { useCart } from "../context/CartContext";
+import { useToast } from "../context/ToastContext";
+import { useLanguage } from "../context/LanguageContext";
 
 // (UI/UX remediation): this page previously hand-rolled its own
 // "Loading…" text, empty-state markup, and error text instead of reusing
@@ -26,16 +29,27 @@ import PageMeta from "../components/PageMeta";
 // product grid and a service grid aren't visually interchangeable
 // (different card shape, no shared "stock" concept).
 export default function Saved() {
+    const { t } = useLanguage();
+    const { addToCart } = useCart();
+    const toast = useToast();
+    const [movingId, setMovingId] = useState(null);
     const [products, setProducts] = useState(null);
     const [services, setServices] = useState(null);
-    const [error, setError] = useState(false);
+    // Separate error flags per list (UI/UX remediation): the two
+    // calls can fail independently, and collapsing a services failure
+    // into `setServices([])` made a failed load indistinguishable from
+    // "you haven't saved any services" - a buyer with saved services
+    // would see "No services saved yet" and quietly lose track of them.
+    const [productsError, setProductsError] = useState(false);
+    const [servicesError, setServicesError] = useState(false);
     const [maintenance, setMaintenance] = useState(null);
     const [tab, setTab] = useState("products");
 
     const load = () => {
         setProducts(null);
         setServices(null);
-        setError(false);
+        setProductsError(false);
+        setServicesError(false);
         setMaintenance(null);
         Promise.allSettled([api.get("/wishlist"), api.get("/wishlist/services")])
             .then(([productsRes, servicesRes]) => {
@@ -44,13 +58,28 @@ export default function Saved() {
                 } else if (productsRes.reason?.response?.data?.code === "MODULE_MAINTENANCE") {
                     setMaintenance(productsRes.reason.response.data.message);
                 } else {
-                    setError(true);
+                    setProductsError(true);
+                    setProducts([]);
                 }
-                setServices(servicesRes.status === "fulfilled" ? servicesRes.value.data.data : []);
+
+                if (servicesRes.status === "fulfilled") {
+                    setServices(servicesRes.value.data.data);
+                } else {
+                    setServicesError(true);
+                    setServices([]);
+                }
             });
     };
 
     useEffect(load, []);
+
+    const moveToCart = async (product) => {
+        setMovingId(product.id);
+        const result = await addToCart(product.id, 1);
+        if (result?.success) toast?.success?.(t("saved.addedToCart"));
+        else toast?.error?.(result?.message || t("saved.addFailed"));
+        setMovingId(null);
+    };
 
     if (maintenance) {
         return <MaintenanceScreen title="Wishlist is under maintenance" message={maintenance} onRetry={load} />;
@@ -58,6 +87,7 @@ export default function Saved() {
 
     const loading = products === null || services === null;
     const activeItems = tab === "products" ? products : services;
+    const error = tab === "products" ? productsError : servicesError;
     const productCount = products?.length ?? 0;
     const serviceCount = services?.length ?? 0;
 
@@ -98,7 +128,7 @@ export default function Saved() {
 
             {!loading && error && (
                 <ErrorState
-                    title="Couldn't load your saved items"
+                    title={tab === "products" ? "Couldn't load your saved products" : "Couldn't load your saved services"}
                     hint="Check your connection and try again."
                     onRetry={load}
                 />
@@ -115,8 +145,8 @@ export default function Saved() {
                         </svg>
                     }
                     action={
-                        <Link to={tab === "products" ? "/" : "/services"} className="text-teal hover:underline text-sm">
-                            {tab === "products" ? "Browse products →" : "Browse services →"}
+                        <Link to={tab === "products" ? "/products" : "/services"} className="text-teal hover:underline text-sm">
+                            Browse all →
                         </Link>
                     }
                 />
@@ -125,7 +155,39 @@ export default function Saved() {
             {!loading && !error && activeItems.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                     {tab === "products"
-                        ? activeItems.map((product) => <ProductCard key={product.id} product={product} />)
+                        ? activeItems.map((product) => {
+                            const soldOut = Number(product.stock) <= 0;
+                            return (
+                                <div key={product.id} className="flex flex-col gap-2">
+                                    <div className="relative">
+                                        <ProductCard product={product} />
+                                        {!soldOut && product.price_dropped && Number(product.price_drop_pct) > 0 && (
+                                            <span className="absolute top-2 right-2 bg-teal text-paper text-xs font-medium px-2 py-0.5 rounded">
+                                                {t("saved.priceDropped", { pct: Number(product.price_drop_pct) })}
+                                            </span>
+                                        )}
+                                        {soldOut && (
+                                            <span className="absolute top-2 left-2 bg-coral text-white text-xs font-medium px-2 py-0.5 rounded">
+                                                {t("saved.soldOut")}
+                                            </span>
+                                        )}
+                                        {!soldOut && Number(product.stock) <= 5 && (
+                                            <span className="absolute top-2 left-2 bg-mango text-abyss text-xs font-medium px-2 py-0.5 rounded">
+                                                {t("saved.lowStock", { count: Number(product.stock) })}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => moveToCart(product)}
+                                        disabled={soldOut || movingId === product.id}
+                                        className="text-sm border border-line rounded-md py-2 hover:border-ink transition-colors disabled:opacity-50"
+                                    >
+                                        {movingId === product.id ? t("saved.adding") : t("saved.moveToCart")}
+                                    </button>
+                                </div>
+                            );
+                        })
                         : activeItems.map((service) => <ServiceCard key={service.id} service={service} />)}
                 </div>
             )}

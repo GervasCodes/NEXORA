@@ -2,17 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
+import Skeleton from "../../components/Skeleton";
+import ErrorState from "../../components/ui/ErrorState";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PhoneInput from "../../components/PhoneInput";
 import PageMeta from "../../components/PageMeta";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function SellerSubscription() {
+    const { t } = useLanguage();
     const [plans, setPlans] = useState([]);
     const [current, setCurrent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [loadFailed, setLoadFailed] = useState(false);
     const [message, setMessage] = useState("");
 
     const [selectedPlan, setSelectedPlan] = useState(null);
@@ -27,12 +31,13 @@ export default function SellerSubscription() {
 
     const load = () => {
         setLoading(true);
+        setLoadFailed(false);
         Promise.all([api.get("/subscriptions/plans"), api.get("/subscriptions/me")])
             .then(([plansRes, meRes]) => {
                 setPlans(plansRes.data.data);
                 setCurrent(meRes.data.data);
             })
-            .catch(() => setError("Couldn't load subscription plans."))
+            .catch(() => setLoadFailed(true))
             .finally(() => setLoading(false));
     };
 
@@ -52,7 +57,14 @@ export default function SellerSubscription() {
             const paypalOrderId = params.get("token");
             if (!paypalOrderId) { cleanUrl(); return; }
             api.post("/payments/paypal/capture", { paypalOrderId })
-                .then(() => { setMessage("Payment successful - your plan is now active."); load(); })
+                .then(({ data }) => {
+                    if (data.data?.status === "pending") {
+                        setMessage("We could not confirm your PayPal payment yet. If you were charged, your plan will activate as soon as it is confirmed.");
+                    } else {
+                        setMessage("Payment successful - your plan is now active.");
+                    }
+                    load();
+                })
                 .catch((err) => setError(extractErrorMessage(err)))
                 .finally(cleanUrl);
         } else if (payment === "success") {
@@ -66,27 +78,60 @@ export default function SellerSubscription() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // (Phase 4 remediation) - the fast poll used to stop after 30
+    // attempts (~2 minutes) and then tell the seller "this page will
+    // update automatically once it's confirmed", which was no longer
+    // true: nothing was still polling at that point, so the page would
+    // sit there saying that forever even though it had quietly given up.
+    // A slow background poll now keeps checking after the fast poll
+    // gives up, so the claim in the message stays accurate, and the
+    // seller sees the real state (still checking vs. truly timed out)
+    // instead of a stale promise.
+    const checkConfirmation = async () => {
+        try {
+            const { data } = await api.get("/subscriptions/me");
+            if (data.data?.status === "active" && data.data?.plan?.code === selectedPlan?.code) {
+                clearInterval(pollRef.current);
+                setAwaitingConfirmation(false);
+                setMessage("Payment confirmed - your plan is now active.");
+                setCurrent(data.data);
+                return true;
+            }
+        } catch {
+            // keep polling
+        }
+        return false;
+    };
+
+    const startBackgroundPoll = () => {
+        clearInterval(pollRef.current);
+        // Slower cadence (30s) for up to 20 minutes - frequent enough to
+        // still catch a delayed mobile-money confirmation, infrequent
+        // enough not to hammer the API while the seller may have left
+        // the tab open and moved on.
+        let slowAttempts = 0;
+        pollRef.current = setInterval(async () => {
+            slowAttempts += 1;
+            const confirmed = await checkConfirmation();
+            if (confirmed) return;
+            if (slowAttempts >= 40) {
+                clearInterval(pollRef.current);
+                setAwaitingConfirmation(false);
+                setError("We still haven't received confirmation. If you completed the payment, refresh this page - otherwise try again below.");
+            }
+        }, 30000);
+    };
+
     const pollForConfirmation = () => {
         let attempts = 0;
         clearInterval(pollRef.current);
         pollRef.current = setInterval(async () => {
             attempts += 1;
-            try {
-                const { data } = await api.get("/subscriptions/me");
-                if (data.data?.status === "active" && data.data?.plan?.code === selectedPlan?.code) {
-                    clearInterval(pollRef.current);
-                    setAwaitingConfirmation(false);
-                    setMessage("Payment confirmed - your plan is now active.");
-                    setCurrent(data.data);
-                    return;
-                }
-            } catch {
-                // keep polling
-            }
+            const confirmed = await checkConfirmation();
+            if (confirmed) return;
             if (attempts >= 30) {
-                clearInterval(pollRef.current);
-                setAwaitingConfirmation(false);
-                setError("We haven't received confirmation yet. If you completed the payment on your phone, this page will update automatically once it's confirmed.");
+                setError("Still waiting on confirmation - we'll keep checking in the background and update this page automatically.");
+                startBackgroundPoll();
             }
         }, 4000);
     };
@@ -172,7 +217,32 @@ export default function SellerSubscription() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading) {
+        return (
+            <div className="space-y-6 animate-fade-in" aria-busy="true" aria-label="Loading subscription">
+                <div>
+                    <Skeleton className="h-7 w-40 mb-2" />
+                    <Skeleton className="h-4 w-80" />
+                </div>
+                <Skeleton className="h-24 w-full" />
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-56 w-full" />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    if (loadFailed) {
+        return (
+            <ErrorState
+                title="Couldn't load subscription plans"
+                hint="Check your connection and try again."
+                onRetry={load}
+            />
+        );
+    }
 
     const currentPlanCode = current?.plan?.code || "free";
 
@@ -201,12 +271,12 @@ export default function SellerSubscription() {
                     </p>
                     {current.currentPeriodEnd && (
                         <p className="text-sm text-ash mt-1">
-                            {current.autoRenew ? "Renews" : "Ends"} {formatDate(current.currentPeriodEnd)}
+                            {current.autoRenew ? t("seller.renewal.renews") : t("seller.renewal.ends")} {formatDate(current.currentPeriodEnd)}
                         </p>
                     )}
                     {!current.isFreePlan && current.status === "active" && current.autoRenew && (
                         <button onClick={cancelAutoRenew} className="text-sm text-coral hover:underline mt-2">
-                            Turn off auto-renew
+                            {t("seller.renewal.turnOff")}
                         </button>
                     )}
                 </div>

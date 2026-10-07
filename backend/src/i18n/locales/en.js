@@ -53,6 +53,12 @@ module.exports = {
     },
 
     notifications: {
+        booking: {
+            confirmed: {
+                title: "Booking confirmed",
+                message: "Your booking {reference} has been confirmed."
+            }
+        },
         "message.new.title": "New message from {senderName}",
         "message.new.message": "{preview}",
 
@@ -129,11 +135,17 @@ module.exports = {
         "order.placed.title": "Order placed",
         "order.placed.messageMultiVendor": "Your order {orderNumber} ({vendorCount} vendors) has been placed successfully.",
         "order.placed.messageSingle": "Your order {orderNumber} ({itemSummary}) has been placed successfully.",
+        "order.handoverCode.title": "Your delivery code",
+        "order.handoverCode.message": "Your NEXORA order {orderNumber} delivery code is {code}. Give this code to the rider when your order arrives - don't share it before then.",
         "order.cancelled.title": "Order cancelled",
         "order.cancelled.message": "Your order {orderNumber} has been cancelled.",
         "order.cancelled.messageWithItem": "Your order {orderNumber} ({itemSummary}) has been cancelled.",
         "order.cancelledUnpaid.message": "Your order {orderNumber} was cancelled because payment was never completed. Feel free to place it again.",
         "order.cancelledUnpaid.messageWithItem": "Your order {orderNumber} ({itemSummary}) was cancelled because payment was never completed. Feel free to place it again.",
+        "payment.paidAfterCancel.title": "Payment received for a cancelled order",
+        "payment.paidAfterCancel.message": "We received your payment for order {orderNumber}, but the order had already been cancelled. Our team will review it and refund you.",
+        "payment.notReceived.title": "We did not receive your payment",
+        "payment.notReceived.message": "We did not receive your payment, so it was not completed. Please try again.",
         "order.statusUpdated.title": "Order status updated",
         "order.statusUpdated.message": "Your order {orderNumber} is now \"{status}\".",
         "order.statusUpdated.messageWithItem": "Your order {orderNumber} ({itemSummary}) is now \"{status}\".",
@@ -144,6 +156,8 @@ module.exports = {
 
         "wallet.credited.title": "Wallet credited",
         "wallet.credited.message": "Your wallet has been credited for order #{orderId}.",
+        "wallet.codCommissionDebited.title": "Cash on Delivery commission debited",
+        "wallet.codCommissionDebited.message": "Your platform commission for Cash on Delivery order #{orderId} has been debited from your wallet.",
         "wallet.released.title": "Held earnings released",
         "wallet.released.message": "Some of your held earnings have cleared the escrow hold period and are now available to withdraw.",
         "withdrawal.status.title": "Withdrawal {status}",
@@ -164,10 +178,36 @@ module.exports = {
         "departmentSponsorship.started.title": "Department sponsorship started",
         "departmentSponsorship.started.message": "Your {days}-day sponsorship of \"{categoryName}\" on the homepage is now live ({amount} charged to your wallet).",
         "departmentSponsorship.expired.title": "Department sponsorship ended",
-        "departmentSponsorship.expired.message": "Your sponsorship of \"{categoryName}\" has ended. Start a new one any time from your seller dashboard."
+        "departmentSponsorship.expired.message": "Your sponsorship of \"{categoryName}\" has ended. Start a new one any time from your seller dashboard.",
+
+        "subscription.expiring.title": "Your seller plan is ending soon",
+        "subscription.expiring.message": "Your {planName} plan runs until {date}. Renew from your seller dashboard to keep its benefits.",
+        "subscription.renewal.title": "Renew your seller plan",
+        "subscription.renewal.message": "Your {planName} plan renews on {date}. Pay from your seller dashboard to keep its benefits without a gap."
     },
 
+    otp: {
+        channelName: { email: "email", sms: "SMS", whatsapp: "WhatsApp" },
+        channelFailed: "We couldn't send the code by {channel}. Please choose another method.",
+        subject: {
+            login: "Your NEXORA sign-in code",
+            password_change: "Your NEXORA password change code",
+            password_reset: "Your NEXORA password reset code",
+            default: "Your NEXORA verification code"
+        },
+        intro: {
+            login: "Use this code to finish signing in to NEXORA:",
+            password_change: "Use this code to verify it's you before changing your NEXORA password:",
+            password_reset: "Use this code to reset your NEXORA password:"
+        },
+        expiry: "This code expires in {minutes} minutes. If you didn't request this, you can safely ignore this message.",
+        sms: "NEXORA code: {code}. It expires in {minutes} minutes. Never share this code with anyone."
+    },
     email: {
-        footer: "This is an automated message from NEXORA. Please do not reply directly to this email."
+        cta: { view: "View in NEXORA" },
+        supportLabel: "Need help? Contact support",
+        manageLabel: "Manage notification emails",
+        footer: "This is an automated message from NEXORA. Please do not reply directly to this email.",
+        tagline: "Tanzania's marketplace"
     }
 };

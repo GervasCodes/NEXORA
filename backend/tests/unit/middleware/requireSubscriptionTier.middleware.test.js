@@ -12,7 +12,7 @@ const mockRes = () => {
 
 describe("requireSubscriptionTier.middleware", () => {
     it("calls next() when the seller has an active, non-free plan", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             plan_code: "growth",
             status: "active"
         });
@@ -27,7 +27,7 @@ describe("requireSubscriptionTier.middleware", () => {
     });
 
     it("rejects with SUBSCRIPTION_REQUIRED when the seller has no subscription row at all (implicit free plan)", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         const req = { user: { id: 1 } };
         const res = mockRes();
         const next = jest.fn();
@@ -42,7 +42,7 @@ describe("requireSubscriptionTier.middleware", () => {
     });
 
     it("rejects when the seller's current plan is explicitly the free plan", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             plan_code: "free",
             status: "active"
         });
@@ -60,7 +60,7 @@ describe("requireSubscriptionTier.middleware", () => {
     });
 
     it("rejects when the seller has a paid-tier plan row that isn't active (e.g. cancelled/expired)", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             plan_code: "pro",
             status: "cancelled"
         });
@@ -78,7 +78,7 @@ describe("requireSubscriptionTier.middleware", () => {
     });
 
     it("responds 400 if the repository lookup throws", async () => {
-        subscriptionRepository.findCurrentForSeller.mockRejectedValue(new Error("db down"));
+        subscriptionRepository.findEntitledForSeller.mockRejectedValue(new Error("db down"));
         const req = { user: { id: 1 } };
         const res = mockRes();
         const next = jest.fn();

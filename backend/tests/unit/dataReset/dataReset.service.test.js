@@ -1,10 +1,12 @@
 jest.mock("../../../src/config/db");
+jest.mock("../../../src/utils/comparePassword");
 jest.mock("../../../src/modules/dataReset/dataReset.repository");
 jest.mock("../../../src/modules/audit/audit.repository");
 jest.mock("../../../src/modules/audit/audit.service");
 jest.mock("../../../src/modules/adminNotification/adminNotification.service");
 
 const db = require("../../../src/config/db");
+const comparePassword = require("../../../src/utils/comparePassword");
 const dataResetRepository = require("../../../src/modules/dataReset/dataReset.repository");
 const auditRepository = require("../../../src/modules/audit/audit.repository");
 const auditService = require("../../../src/modules/audit/audit.service");
@@ -55,6 +57,8 @@ beforeEach(() => {
     };
     db.getConnection = jest.fn().mockResolvedValue(connection);
 
+    dataResetRepository.findUserPasswordHash.mockResolvedValue("hash");
+    comparePassword.mockResolvedValue(true);
     dataResetRepository.findSeller.mockResolvedValue(seller);
     dataResetRepository.findSellerOrderIds.mockResolvedValue([11, 12]);
     dataResetRepository.findAllOrderIds.mockResolvedValue([11, 12, 13]);
@@ -228,9 +232,22 @@ describe("bookings", () => {
         }
     });
 
+    it("refuses a platform reset when the password is missing or wrong, before deleting anything", async () => {
+        await expect(
+            dataResetService.resetPlatform({ testOnly: true, confirmation: "RESET ENTIRE PLATFORM" }, actor)
+        ).rejects.toThrow(/password/i);
+
+        comparePassword.mockResolvedValue(false);
+        await expect(
+            dataResetService.resetPlatform({ testOnly: true, confirmation: "RESET ENTIRE PLATFORM", password: "bad" }, actor)
+        ).rejects.toThrow(/password incorrect/i);
+
+        expect(dataResetRepository.deleteOrderTree).not.toHaveBeenCalled();
+    });
+
     it("resolves all bookings platform-wide, not scoped to one provider", async () => {
         const result = await dataResetService.resetPlatform(
-            { testOnly: false, confirmation: "RESET ENTIRE PLATFORM" },
+            { testOnly: false, confirmation: "RESET ENTIRE PLATFORM", password: "pw" },
             actor
         );
 
@@ -398,7 +415,7 @@ describe("non-reversibility", () => {
 describe("platform reset", () => {
     it("deletes across every in-scope table and commits once", async () => {
         const result = await dataResetService.resetPlatform(
-            { testOnly: false, confirmation: "RESET ENTIRE PLATFORM" },
+            { testOnly: false, confirmation: "RESET ENTIRE PLATFORM", password: "pw" },
             actor
         );
 
@@ -421,7 +438,7 @@ describe("platform reset", () => {
 
     it("never touches per-seller scoped deletes", async () => {
         await dataResetService.resetPlatform(
-            { testOnly: true, confirmation: "RESET ENTIRE PLATFORM" },
+            { testOnly: true, confirmation: "RESET ENTIRE PLATFORM", password: "pw" },
             actor
         );
 
@@ -431,7 +448,7 @@ describe("platform reset", () => {
 
     it("writes its audit entry before deleting", async () => {
         await dataResetService.resetPlatform(
-            { testOnly: true, confirmation: "RESET ENTIRE PLATFORM" },
+            { testOnly: true, confirmation: "RESET ENTIRE PLATFORM", password: "pw" },
             actor
         );
 

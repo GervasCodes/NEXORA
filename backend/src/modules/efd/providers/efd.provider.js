@@ -20,3 +20,9 @@ const resolveProvider = () => {
 };
 
 exports.submitInvoice = async (payload) => resolveProvider().submitInvoice(payload);
+
+// Credit note / void (Phase 5, P1) - issued against an already-fiscal-
+// receipted order when it's refunded/returned/cancelled, so the order's
+// tax record reflects the reversal rather than TRA only ever seeing the
+// original sale.
+exports.submitCreditNote = async (payload) => resolveProvider().submitCreditNote(payload);

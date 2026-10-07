@@ -5,13 +5,7 @@ import PageLoader from "../../components/PageLoader";
 import { formatMoney } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
-
-const STATUS_STYLES = {
-    open: "bg-mango/20 text-mango-dark",
-    successful: "bg-teal text-white",
-    failed: "bg-coral/10 text-coral",
-    cancelled: "bg-line text-ash"
-};
+import StatusBadge from "../../components/ui/StatusBadge";
 
 export default function SellerGroupBuys() {
     const [products, setProducts] = useState([]);
@@ -93,9 +87,7 @@ export default function SellerGroupBuys() {
                                 <p className="font-medium text-sm">{g.product_name}</p>
                                 <p className="text-ash text-xs">{g.participant_count}/{g.min_participants} joined · {formatMoney(g.group_price)}</p>
                             </div>
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[g.status] || "bg-line text-ash"}`}>
-                                {g.status}
-                            </span>
+                            <StatusBadge domain="groupBuy" status={g.status} />
                         </li>
                     ))}
                 </ul>

@@ -5,18 +5,17 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
 
 export default function AdminSellers() {
-    const [sellers, setSellers] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
 
-    const load = () => {
-        api.get("/admin/sellers").then(({ data }) => setSellers(data.data)).finally(() => setLoading(false));
-    };
-
-    useEffect(load, []);
+    const list = useAdminPagedList("/admin/sellers", { onError: (m) => toast?.error(m) });
+    const { items: sellers, loading, meta } = list;
+    const load = list.reload;
 
     const toggleVerified = async (seller) => {
         setBusyId(seller.user_id);
@@ -30,12 +29,20 @@ export default function AdminSellers() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading && !meta) return <PageLoader />;
 
     return (
         <div>
             <PageMeta title="Sellers" noIndex />
             <h1 className="font-display text-2xl mb-6">Sellers</h1>
+
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search store, name or email"
+                ariaLabel="Search sellers"
+            />
 
             {sellers.length === 0 && <EmptyState title="No stores yet." />}
 
@@ -74,6 +81,8 @@ export default function AdminSellers() {
                     </li>
                 ))}
             </ul>
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Seller pages" />
         </div>
     );
 }

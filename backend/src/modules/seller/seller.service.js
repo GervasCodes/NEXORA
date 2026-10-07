@@ -41,7 +41,8 @@ exports.createSellerProfile = async (userId, data) => {
         store_name: data.store_name,
         store_slug: storeSlug,
         store_description: data.store_description,
-        store_type_id: data.store_type_id
+        store_type_id: data.store_type_id,
+        merchant_type: data.merchant_type
     });
 
     return {
@@ -439,4 +440,70 @@ exports.setMerchantType = async (userId, merchantType) => {
     await sellerRepository.setMerchantType(userId, merchantType);
 
     return { merchantType };
+};
+
+// Overview summary (Phase 13b). One call replaces downloading every product,
+// order, service and booking to the browser just to count them.
+const OVERVIEW_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseOverviewRange = (from, to) => {
+    if ((from && !OVERVIEW_DATE.test(from)) || (to && !OVERVIEW_DATE.test(to))) {
+        throw Object.assign(new Error("Dates must be in YYYY-MM-DD format"), { status: 400 });
+    }
+    if (from && to && from > to) {
+        throw Object.assign(new Error("The end date must be on or after the start date"), { status: 400 });
+    }
+    let toExclusive = null;
+    if (to) {
+        const next = new Date(`${to}T00:00:00Z`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        toExclusive = next.toISOString().slice(0, 10);
+    }
+    return { from: from || null, toExclusive };
+};
+
+exports.getOverview = async (sellerId, { from, to } = {}) => {
+    const range = parseOverviewRange(from, to);
+    const [products, orders, productRevenue, services, bookings, bookingRevenue] = await Promise.all([
+        sellerRepository.getOverviewProductCounts(sellerId),
+        sellerRepository.getOverviewOrderCounts(sellerId),
+        sellerRepository.getOverviewProductRevenue(sellerId, range),
+        sellerRepository.getOverviewServiceCounts(sellerId),
+        sellerRepository.getOverviewBookingCounts(sellerId),
+        sellerRepository.getOverviewBookingRevenue(sellerId, range)
+    ]);
+
+    // Things the seller should look at. Counts are all-time, not range-filtered.
+    const attention = [];
+    if (Number(products.low_stock) > 0) {
+        attention.push({ key: "lowStock", count: Number(products.low_stock), to: "/seller/products" });
+    }
+    if (Number(orders.pending_over_day) > 0) {
+        attention.push({ key: "pendingOrdersOverDay", count: Number(orders.pending_over_day), to: "/seller/orders" });
+    }
+    if (Number(bookings.pending) > 0) {
+        attention.push({ key: "pendingBookings", count: Number(bookings.pending), to: "/seller/bookings" });
+    }
+
+    return {
+        range: { from: range.from, to: to || null },
+        products: {
+            total: Number(products.total),
+            active: Number(products.active),
+            drafts: Number(products.drafts)
+        },
+        orders: { total: Number(orders.total), pending: Number(orders.pending) },
+        services: {
+            total: Number(services.total),
+            active: Number(services.active),
+            drafts: Number(services.drafts)
+        },
+        bookings: { total: Number(bookings.total), pending: Number(bookings.pending) },
+        revenue: {
+            productGross: Number(productRevenue.gross),
+            productNet: Number(productRevenue.net),
+            bookingGross: Number(bookingRevenue.gross)
+        },
+        attention
+    };
 };

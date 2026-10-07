@@ -921,10 +921,22 @@ exports.findUserForPermanentDeletion = async (userId) => {
 // and untouched, same reasoning as audit_logs surviving deletion.
 exports.findAccountVerificationDocumentUrls = async (userId, executor = db) => {
     const [rows] = await executor.query(
-        "SELECT file_url FROM account_verification_documents WHERE user_id = ?",
+        "SELECT file_url FROM account_verification_documents WHERE user_id = ? AND file_storage = 'public' AND file_url IS NOT NULL",
         [userId]
     );
     return rows.map((r) => r.file_url);
+};
+
+// Private (authenticated) documents have no public URL; they are removed by
+// public_id instead - see utils/privateDocuments.js#deleteStoredDocument.
+exports.findPrivateVerificationDocuments = async (userId, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT file_public_id, file_resource_type, file_storage
+        FROM account_verification_documents
+        WHERE user_id = ? AND file_storage = 'authenticated' AND file_public_id IS NOT NULL AND file_purged_at IS NULL`,
+        [userId]
+    );
+    return rows;
 };
 
 exports.deleteAccountVerificationDocuments = async (userId, executor = db) => {
@@ -1334,4 +1346,294 @@ exports.findHistoricalOfferedAgentsByZoneHour = async (windowDays) => {
         [windowDays]
     );
     return rows;
+};
+
+// --- Phase 8: paged + searchable lists ---
+// Legacy findAllUsers / findAllOrders stay for unpaged callers. These
+// return { rows, total } and take every value as a bound parameter.
+
+exports.findUsersPage = async ({ q, role, status, limit, offset }) => {
+    const { likeTerm, isNumericTerm } = require("../../utils/adminListQuery");
+    const conditions = ["u.deleted_at IS NULL"];
+    const params = [];
+
+    if (role) {
+        conditions.push("u.role = ?");
+        params.push(role);
+    }
+    if (status === "suspended") {
+        conditions.push("u.suspended_at IS NOT NULL");
+    } else if (status === "active") {
+        conditions.push("u.suspended_at IS NULL AND u.is_active = TRUE");
+    }
+    if (q) {
+        const like = likeTerm(q);
+        const clauses = ["CONCAT(u.first_name, ' ', u.last_name) LIKE ?", "u.email LIKE ?", "u.phone LIKE ?"];
+        params.push(like, like, like);
+        if (isNumericTerm(q)) {
+            clauses.push("u.id = ?");
+            params.push(Number(q));
+        }
+        conditions.push(`(${clauses.join(" OR ")})`);
+    }
+
+    const where = conditions.join(" AND ");
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total FROM users u WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role, u.is_active,
+                u.suspended_at, u.suspension_reason, u.suspended_by,
+                CONCAT(a.first_name, ' ', a.last_name) AS suspended_by_name,
+                u.created_at
+        FROM users u
+        LEFT JOIN users a ON a.id = u.suspended_by
+        WHERE ${where}
+        ORDER BY u.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+exports.findOrdersPage = async ({ q, status, paymentStatus, sort, limit, offset }) => {
+    const { likeTerm } = require("../../utils/adminListQuery");
+    const orderByClause = require("../order/order.repository").resolveOrderSort(sort);
+    const conditions = ["o.parent_order_id IS NULL"];
+    const params = [];
+
+    if (status) {
+        conditions.push("o.status = ?");
+        params.push(status);
+    }
+    if (paymentStatus) {
+        conditions.push("o.payment_status = ?");
+        params.push(paymentStatus);
+    }
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push(
+            `(o.order_number LIKE ?
+              OR u.email LIKE ?
+              OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?
+              OR EXISTS (SELECT 1 FROM payments pay WHERE pay.order_id = o.id AND pay.payment_reference = ?))`
+        );
+        params.push(like, like, like, q);
+    }
+
+    const where = conditions.join(" AND ");
+    const [[countRow]] = await db.query(
+        `SELECT COUNT(*) AS total FROM orders o JOIN users u ON u.id = o.buyer_id WHERE ${where}`,
+        params
+    );
+    const [rows] = await db.query(
+        `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
+                o.total_amount, o.created_at, o.is_parent,
+                u.first_name, u.last_name, u.email,
+                (SELECT p.name FROM order_items oi
+                    JOIN products p ON p.id = oi.product_id
+                    WHERE oi.order_id = o.id ORDER BY oi.id ASC LIMIT 1) AS primary_item_name
+        FROM orders o
+        JOIN users u ON u.id = o.buyer_id
+        WHERE ${where}
+        ORDER BY ${orderByClause}
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+// --- Phase 8: paged + searchable lists for sellers, agents, deleted
+// accounts, admins and open fraud flags. Each returns { rows, total }
+// and binds every user value as a parameter.
+
+exports.findSellersPage = async ({ q, status, limit, offset }) => {
+    const { likeTerm } = require("../../utils/adminListQuery");
+    const conditions = ["u.deleted_at IS NULL"];
+    const params = [];
+    if (status === "verified") conditions.push("sp.is_verified = 1");
+    else if (status === "unverified") conditions.push("sp.is_verified = 0");
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push("(sp.store_name LIKE ? OR u.email LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?)");
+        params.push(like, like, like);
+    }
+    const where = conditions.join(" AND ");
+    const from = "FROM seller_profiles sp JOIN users u ON u.id = sp.user_id";
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total ${from} WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT sp.id AS profile_id, sp.user_id, sp.store_name, sp.store_slug,
+                sp.country, sp.region, sp.city, sp.is_verified,
+                u.first_name, u.last_name, u.email, u.is_active
+        ${from}
+        WHERE ${where}
+        ORDER BY sp.is_verified ASC, sp.id DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+exports.findDeliveryAgentsPage = async ({ q, status, limit, offset }) => {
+    const { likeTerm, isNumericTerm } = require("../../utils/adminListQuery");
+    const conditions = ["role = 'delivery_agent'", "deleted_at IS NULL"];
+    const params = [];
+    if (status === "suspended") conditions.push("suspended_at IS NOT NULL");
+    else if (["pending", "approved", "rejected"].includes(status)) {
+        conditions.push("account_verification_status = ?");
+        params.push(status);
+    }
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push("(CONCAT(first_name, ' ', last_name) LIKE ? OR email LIKE ? OR phone LIKE ?)");
+        params.push(like, like, like);
+        if (isNumericTerm(q)) {
+            conditions.push("id = ?");
+            params.push(Number(q));
+        }
+    }
+    const where = conditions.join(" AND ");
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total FROM users WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, email, phone,
+                vehicle_type, vehicle_plate_number,
+                is_active, is_online,
+                account_verification_status,
+                suspended_at, suspension_reason,
+                created_at
+        FROM users
+        WHERE ${where}
+        ORDER BY FIELD(account_verification_status, 'pending', 'rejected', 'approved'), created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+exports.findDeletedUsersPage = async ({ q, status, limit, offset }) => {
+    const { likeTerm } = require("../../utils/adminListQuery");
+    const conditions = ["deleted_at IS NOT NULL"];
+    const params = [];
+    if (status === "pending_review") conditions.push("permanently_deleted_at IS NULL");
+    else if (status === "removed") conditions.push("permanently_deleted_at IS NOT NULL");
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push("(CONCAT(first_name, ' ', last_name) LIKE ? OR email LIKE ? OR phone LIKE ?)");
+        params.push(like, like, like);
+    }
+    const where = conditions.join(" AND ");
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total FROM users WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, email, phone, role, deleted_at,
+                permanently_deleted_at, created_at
+        FROM users
+        WHERE ${where}
+        ORDER BY deleted_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+exports.findAdminsPage = async ({ q, status, limit, offset }) => {
+    const { likeTerm } = require("../../utils/adminListQuery");
+    const conditions = ["role = 'admin'"];
+    const params = [];
+    if (status === "active") conditions.push("is_active = TRUE");
+    else if (status === "inactive") conditions.push("is_active = FALSE");
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push("(CONCAT(first_name, ' ', last_name) LIKE ? OR email LIKE ?)");
+        params.push(like, like);
+    }
+    const where = conditions.join(" AND ");
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total FROM users WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT id, first_name, last_name, email, phone, admin_level, is_active, created_at
+        FROM users
+        WHERE ${where}
+        ORDER BY admin_level = 'super_admin' DESC, created_at ASC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+// --- Phase 8: withdrawal decision context ---
+// Everything an admin needs to judge a payout request beside it. No payout
+// details here - those stay behind the audited reveal endpoint.
+exports.findWithdrawalContext = async (withdrawalId) => {
+    const [[withdrawal]] = await db.query(
+        "SELECT id, seller_id, amount, status FROM withdrawal_requests WHERE id = ?",
+        [withdrawalId]
+    );
+    if (!withdrawal) return null;
+    const sellerId = withdrawal.seller_id;
+
+    const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [sellerId]);
+    // "Total earned" = order credits to the wallet. Adjustments and
+    // withdrawal debits are excluded, so this reflects sales income.
+    const [[earned]] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_transactions
+        WHERE seller_id = ? AND type = 'credit' AND reference_type = 'order'`,
+        [sellerId]
+    );
+    const [previous] = await db.query(
+        `SELECT status, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
+        FROM withdrawal_requests
+        WHERE seller_id = ? AND id <> ?
+        GROUP BY status`,
+        [sellerId, withdrawalId]
+    );
+    const [[tier]] = await db.query("SELECT verification_tier FROM users WHERE id = ?", [sellerId]);
+    const [[disputes]] = await db.query(
+        `SELECT COUNT(*) AS count FROM disputes
+        WHERE seller_id = ? AND status IN ('open', 'under_review')`,
+        [sellerId]
+    );
+
+    return {
+        withdrawal_id: withdrawal.id,
+        seller_id: sellerId,
+        amount: Number(withdrawal.amount),
+        wallet_balance: wallet ? Number(wallet.balance) : 0,
+        total_earned: Number(earned.total),
+        previous_withdrawals: previous.map((r) => ({ status: r.status, count: Number(r.count), amount: Number(r.amount) })),
+        verification_tier: tier ? tier.verification_tier : "none",
+        open_disputes: Number(disputes.count)
+    };
+};
+
+// --- Phase 8: queue badge counts for the admin navigation ---
+// Each count is one indexed query. Failed EFD receipts and failed refunds
+// are the two queues an admin has to clear by hand, so they're separate.
+exports.findQueueCounts = async () => {
+    const count = async (sql) => {
+        const [[row]] = await db.query(sql);
+        return Number(row.count);
+    };
+    const [accountVerifications, businessVerifications, kycUpgrades, disputes, withdrawals,
+        supportChats, failedRefunds, paymentsReview, efdFailed, fraudFlags] = await Promise.all([
+        count("SELECT COUNT(*) AS count FROM users WHERE account_verification_status = 'pending' AND deleted_at IS NULL"),
+        count("SELECT COUNT(*) AS count FROM business_verification_requests WHERE status = 'pending'"),
+        count("SELECT COUNT(*) AS count FROM kyc_upgrade_requests WHERE status = 'pending'"),
+        count("SELECT COUNT(*) AS count FROM disputes WHERE status IN ('open', 'under_review')"),
+        count("SELECT COUNT(*) AS count FROM withdrawal_requests WHERE status = 'pending'"),
+        count("SELECT COUNT(*) AS count FROM support_tickets WHERE status IN ('open', 'pending')"),
+        count("SELECT COUNT(*) AS count FROM refunds WHERE status IN ('failed', 'manual_required')"),
+        count("SELECT COUNT(*) AS count FROM payment_review_queue WHERE status = 'open'"),
+        count("SELECT COUNT(*) AS count FROM efd_receipts WHERE status = 'failed'"),
+        count("SELECT COUNT(*) AS count FROM fraud_flags WHERE status = 'open'")
+    ]);
+    return {
+        verifications: accountVerifications + businessVerifications + kycUpgrades,
+        account_verifications: accountVerifications,
+        business_verifications: businessVerifications,
+        kyc_upgrades: kycUpgrades,
+        disputes,
+        withdrawals,
+        support_chats: supportChats,
+        failed_refunds: failedRefunds,
+        payments_review: paymentsReview,
+        efd_failed: efdFailed,
+        fraud_flags: fraudFlags
+    };
 };

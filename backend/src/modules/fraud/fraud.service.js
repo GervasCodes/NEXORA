@@ -207,3 +207,11 @@ exports.getDashboardStats = async () => {
         topFlaggedEntities
     };
 };
+
+// Phase 8: paged open-flag list (see fraud.repository.findOpenPage).
+exports.listOpenFlagsPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await fraudRepository.findOpenPage({ q: params.q, limit: params.pageSize, offset: params.offset });
+    return { items: rows, meta: buildMeta(total, params) };
+};

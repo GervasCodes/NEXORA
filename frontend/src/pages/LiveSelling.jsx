@@ -5,7 +5,8 @@ import PageLoader from "../components/PageLoader";
 import EmptyState from "../components/ui/EmptyState";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { getEmbedUrl } from "../utils/liveSellingEmbed";
+import { getEmbedUrl, isSafeLiveSellingLink } from "../utils/liveSellingEmbed";
+import { SITE_URL } from "../utils/seo";
 import { buildLiveSellingIcs, downloadIcs } from "../utils/icsCalendar";
 import { BellIcon, CalendarIcon } from "../components/Icons";
 
@@ -16,7 +17,8 @@ function SessionRow({ session, user, toast }) {
     const [watching, setWatching] = useState(false);
     const [reminded, setReminded] = useState(false);
     const [remindBusy, setRemindBusy] = useState(false);
-    const embedUrl = getEmbedUrl(session.external_link);
+    const safeLink = isSafeLiveSellingLink(session.external_link) ? session.external_link : null;
+    const embedUrl = getEmbedUrl(safeLink);
     const isScheduled = session.status === "scheduled";
 
     useEffect(() => {
@@ -49,7 +51,7 @@ function SessionRow({ session, user, toast }) {
             title: session.title,
             description: session.description,
             scheduledAt: session.scheduled_at,
-            externalLink: session.external_link
+            externalLink: safeLink || ""
         });
         downloadIcs(ics, `${session.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.ics`);
     };
@@ -87,14 +89,16 @@ function SessionRow({ session, user, toast }) {
                         {watching ? "Hide player" : "▶ Watch here"}
                     </button>
                 ) : null}
-                <a
-                    href={session.external_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-teal text-sm hover:underline"
-                >
-                    {embedUrl ? "Open on original site →" : "Watch →"}
-                </a>
+                {safeLink ? (
+                    <a
+                        href={safeLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal text-sm hover:underline"
+                    >
+                        {embedUrl ? "Open on original site →" : "Watch →"}
+                    </a>
+                ) : null}
 
                 {isScheduled && (
                     <>
@@ -135,9 +139,27 @@ export default function LiveSelling() {
 
     if (sessions === null) return <PageLoader />;
 
+    // Scheduled sessions as online Events (only ones with a real start time).
+    const eventsJsonLd = sessions
+        .filter((s) => s.status === "scheduled" && s.scheduled_at)
+        .map((s) => ({
+            "@context": "https://schema.org",
+            "@type": "Event",
+            name: s.title,
+            ...(s.description ? { description: s.description } : {}),
+            startDate: new Date(s.scheduled_at).toISOString(),
+            eventStatus: "https://schema.org/EventScheduled",
+            eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
+            location: {
+                "@type": "VirtualLocation",
+                url: isSafeLiveSellingLink(s.external_link) ? s.external_link : `${SITE_URL}/live-selling`
+            },
+            ...(s.store_name ? { organizer: { "@type": "Organization", name: s.store_name } } : {})
+        }));
+
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-            <PageMeta title="Live selling" description="Upcoming live selling sessions from NEXORA sellers." />
+            <PageMeta title="Live selling" description="Upcoming live selling sessions from NEXORA sellers." jsonLd={eventsJsonLd.length ? eventsJsonLd : undefined} />
             <h1 className="font-display text-2xl mb-1">Live selling</h1>
             <p className="text-ash text-sm mb-8">
                 Upcoming live sessions from sellers - watch right here when we can, or head to wherever they're streaming.

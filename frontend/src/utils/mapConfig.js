@@ -32,7 +32,7 @@ export const pickupIcon = new L.DivIcon({
     iconAnchor: [10, 10]
 });
 
-// Phase 5 (map showing users) - buyer/seller markers on the admin user
+// (map showing users) - buyer/seller markers on the admin user
 // map. Distinct shape+color pairing from the delivery-side icons above
 // so the two features (dispatch map vs. this one) never look
 // interchangeable if a dev/admin has both open.
@@ -50,7 +50,7 @@ export const sellerMapIcon = new L.DivIcon({
     iconAnchor: [10, 10]
 });
 
-// Phase 3 (Admin Manual Override & Ops Visibility) - unmatched orders
+// (Admin Manual Override & Ops Visibility) - unmatched orders
 // sitting in the manual pool past the stalled threshold (see
 // admin.service.js's STALLED_ORDER_MINUTES), shown on the dispatch map
 // so staff can see where they are, not just read them in a list.

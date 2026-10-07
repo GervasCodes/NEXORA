@@ -5,6 +5,14 @@ import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
+import Skeleton from "../../components/Skeleton";
+import ErrorState from "../../components/ui/ErrorState";
+
+const FILTERS = [
+    { key: "all", label: "All" },
+    { key: "needs_reply", label: "Needs reply" },
+    { key: "low", label: "3 stars & under" }
+];
 
 
 export default function SellerReviews() {
@@ -17,16 +25,19 @@ export default function SellerReviews() {
     const [drafts, setDrafts] = useState({});
     const [submittingId, setSubmittingId] = useState(null);
     const [error, setError] = useState("");
+    const [loadError, setLoadError] = useState("");
+    const [filter, setFilter] = useState("all");
 
     const loadPage = (targetPage) => {
         setLoading(true);
+        setLoadError("");
         api.get(`/reviews/store/${profile.user_id}`, { params: { page: targetPage } })
             .then(({ data }) => {
                 setReviews((prev) => (targetPage === 1 ? data.data.reviews : [...prev, ...data.data.reviews]));
                 setPage(targetPage);
                 setTotalPages(data.data.totalPages || 1);
             })
-            .catch(() => {})
+            .catch((err) => setLoadError(extractErrorMessage(err) || "Couldn't load your reviews."))
             .finally(() => setLoading(false));
     };
 
@@ -44,6 +55,11 @@ export default function SellerReviews() {
             setReviews((prev) =>
                 prev.map((r) => (r.id === reviewId ? { ...r, seller_reply: reply, seller_reply_at: new Date().toISOString() } : r))
             );
+            setDrafts((prev) => {
+                const next = { ...prev };
+                delete next[reviewId];
+                return next;
+            });
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -52,8 +68,33 @@ export default function SellerReviews() {
     };
 
     if (loading && reviews.length === 0) {
-        return <p className="text-ash">Loading reviews…</p>;
+        return (
+            <div className="animate-fade-in" aria-busy="true" aria-label="Loading reviews">
+                <Skeleton className="h-7 w-32 mb-2" />
+                <Skeleton className="h-4 w-80 mb-8" />
+                <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="border border-line rounded-lg p-4">
+                            <Skeleton className="h-4 w-40 mb-3" />
+                            <Skeleton className="h-3 w-24 mb-3" />
+                            <Skeleton className="h-3 w-full mb-2" />
+                            <Skeleton className="h-3 w-2/3" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
     }
+
+    if (loadError && reviews.length === 0) {
+        return <ErrorState title="Couldn't load reviews" hint={loadError} onRetry={() => loadPage(1)} />;
+    }
+
+    const visibleReviews = reviews.filter((r) => {
+        if (filter === "needs_reply") return !r.seller_reply;
+        if (filter === "low") return Number(r.rating) <= 3;
+        return true;
+    });
 
     return (
         <div>
@@ -61,13 +102,39 @@ export default function SellerReviews() {
             <h1 className="font-display text-2xl mb-1">Reviews</h1>
             <p className="text-ash text-sm mb-8">What buyers are saying about your products - reply to any of them below.</p>
 
-            {error && <p className="text-sm text-coral mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-coral mb-4">{error}</p>}
+            {loadError && (
+                <p role="alert" className="text-sm text-coral mb-4">
+                    {loadError}{" "}
+                    <button type="button" onClick={() => loadPage(page + 1)} className="underline">Try again</button>
+                </p>
+            )}
+
+            {reviews.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-6" role="group" aria-label="Filter reviews">
+                    {FILTERS.map((f) => (
+                        <button
+                            key={f.key}
+                            type="button"
+                            aria-pressed={filter === f.key}
+                            onClick={() => setFilter(f.key)}
+                            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                                filter === f.key ? "bg-ink text-paper" : "text-ash hover:bg-line/50"
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {reviews.length === 0 ? (
                 <EmptyState title="No reviews yet." />
+            ) : visibleReviews.length === 0 ? (
+                <EmptyState title="No reviews match this filter." hint={page < totalPages ? "Load more reviews to see older ones." : undefined} />
             ) : (
                 <ul className="space-y-4">
-                    {reviews.map((r) => (
+                    {visibleReviews.map((r) => (
                         <li key={r.id} className="border border-line rounded-lg p-4">
                             <div className="flex justify-between items-baseline mb-1">
                                 <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
@@ -110,8 +177,9 @@ export default function SellerReviews() {
                                         placeholder="Write a response to this review…"
                                         maxLength={1000}
                                         rows={2}
-                                        className="mb-2"
+                                        className="mb-1"
                                     />
+                                    <p className="text-xs text-ash text-right mb-2" aria-live="off">{(drafts[r.id] || "").length}/1000</p>
                                     <button
                                         onClick={() => handleReply(r.id)}
                                         disabled={submittingId === r.id || !(drafts[r.id] || "").trim()}

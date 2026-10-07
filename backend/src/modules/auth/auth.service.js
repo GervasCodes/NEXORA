@@ -1,7 +1,7 @@
 const db = require("../../config/db");
 const generateToken = require("../../utils/generateToken");
 const hashPassword = require("../../utils/hashPassword");
-const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { uploadPrivateDocument } = require("../../utils/privateDocuments");
 const appError = require("../../utils/appError");
 
 const userRepository = require("./auth.repository");
@@ -97,8 +97,8 @@ exports.register = async (userData, files = {}) => {
     const uploaded = [];
     for (const doc of documentsToUpload) {
         try {
-            const result = await uploadToCloudinary(doc.file.buffer, `verification/${doc.type}`, "auto");
-            uploaded.push({ type: doc.type, url: result.secure_url });
+            const stored = await uploadPrivateDocument(doc.file.buffer, `verification/${doc.type}`);
+            uploaded.push({ type: doc.type, stored });
         } catch (uploadError) {
             throw new Error(
                 `We couldn't upload your ${doc.type.replace("_", " ")}. Please try again.`
@@ -122,7 +122,7 @@ exports.register = async (userData, files = {}) => {
 
         if (needsVerification) {
             for (const doc of uploaded) {
-                await userRepository.insertVerificationDocument(userId, doc.type, doc.url, connection);
+                await userRepository.insertVerificationDocument(userId, doc.type, doc.stored, connection);
             }
             await userRepository.insertVerificationHistory(userId, "submitted", null, null, connection);
         }

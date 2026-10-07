@@ -136,3 +136,29 @@ exports.consumeCredits = async (periodId, credits, connection) => {
         throw new Error("Not enough included sponsorship credits remaining");
     }
 };
+
+// ---- Returning credits (product sponsorship cancel, Phase 6 item 1) -------
+
+// Current period for a seller, read without a lock. Used by the cancel
+// preview.
+exports.findCurrentPeriodId = async (sellerId, executor) => {
+    return sponsorshipCreditRepository.findCurrentPeriodId(sellerId, executor);
+};
+
+// Current period, row-locked. Used inside a cancel transaction, after the
+// wallet is locked, to keep the same lock order as campaign start.
+exports.findCurrentPeriodIdForUpdate = async (sellerId, connection) => {
+    const periodId = await sponsorshipCreditRepository.findCurrentPeriodId(sellerId, connection);
+    if (!periodId) return null;
+    await sponsorshipCreditRepository.findByIdForUpdate(periodId, connection);
+    return periodId;
+};
+
+exports.returnCredits = async (periodId, credits, connection) => {
+    if (!credits || credits <= 0) return;
+
+    const applied = await sponsorshipCreditRepository.decrementUsed(periodId, credits, connection);
+    if (!applied) {
+        throw new Error("Could not return sponsorship credits to the current period");
+    }
+};

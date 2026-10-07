@@ -21,6 +21,8 @@ const deliveryRepository = require("../delivery/delivery.repository");
 const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
 const refundService = require("../refund/refund.service");
+const refundCapService = require("../refund/refundCap.service");
+const settingsService = require("../settings/settings.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 const logger = require("../../utils/logger").child({ module: "return" });
 const Sentry = require("../../config/sentry");
@@ -84,7 +86,16 @@ exports.requestReturn = async (buyerId, { order_id: orderId, order_item_id: orde
         }
     }
 
-    const windowDays = order.buyer_protection_addon ? INSURED_WINDOW_DAYS : DEFAULT_WINDOW_DAYS;
+    // Return window is now an admin setting (Phase 5) rather than a
+    // fixed constant - falls back to the original hardcoded defaults if
+    // the setting row is somehow missing.
+    const [defaultWindow, insuredWindow] = await Promise.all([
+        settingsService.getReturnWindowDays().catch(() => DEFAULT_WINDOW_DAYS),
+        settingsService.getReturnWindowInsuredDays().catch(() => INSURED_WINDOW_DAYS)
+    ]);
+    const windowDays = order.buyer_protection_addon
+        ? (insuredWindow || INSURED_WINDOW_DAYS)
+        : (defaultWindow || DEFAULT_WINDOW_DAYS);
 
     const delivery = await deliveryRepository.findByOrderId(orderId);
     const deliveredAt = delivery?.delivered_at || order.updated_at;
@@ -231,6 +242,18 @@ exports.markReceived = async (returnId, actorId, role) => {
     const refundAmount = ret.order_item_id
         ? Number((await orderRepository.findOrderItems(ret.order_id)).find((i) => i.id === ret.order_item_id)?.subtotal || 0)
         : Number(order.total_amount);
+
+    // Refund cap (Phase 5, P0) - same shared reservation dispute
+    // refunds now go through, so a return can't refund more than what's
+    // actually left to refund on this order/item once a dispute or
+    // cancellation refund for the same order is accounted for.
+    await refundCapService.withTransaction((connection) =>
+        refundCapService.reserveRefund(connection, {
+            orderId: ret.order_id,
+            orderItemId: ret.order_item_id || null,
+            amount: refundAmount
+        })
+    );
 
     await returnRepository.updateStatus(returnId, "received", { markReceived: true, refundAmount });
     await returnRepository.addHistory(returnId, "received", null, actorId);

@@ -14,7 +14,7 @@ const connection = db.__mockConnection;
 
 describe("subscription.service.getMySubscription", () => {
     it("returns the free-plan shape when the seller has no subscription row at all", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(3);
 
         const result = await subscriptionService.getMySubscription(10);
@@ -28,7 +28,7 @@ describe("subscription.service.getMySubscription", () => {
     });
 
     it("formats an active paid subscription, parsing JSON features and numeric fields", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             id: 5,
             plan_code: "pro",
             plan_name: "Pro",
@@ -65,7 +65,7 @@ describe("subscription.service.getMySubscription", () => {
 
 describe("subscription.service.getEffectiveCommissionRate", () => {
     it("falls back to the platform default when the seller has no active override", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
@@ -75,7 +75,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
     });
 
     it("falls back to the platform default when the current subscription isn't active", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "cancelled",
             commission_rate_override: "5.00"
         });
@@ -88,7 +88,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
     });
 
     it("falls back to the platform default when the plan has no override set (NULL)", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             commission_rate_override: null
         });
@@ -101,7 +101,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
     });
 
     it("uses the plan's commission override when the subscription is active and has one", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             commission_rate_override: "5.00"
         });
@@ -117,7 +117,7 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
     // commission monetization is off, ignoring plan overrides and the
     // platform default alike - not even consulted, let alone applied.
     it("returns flat 0% and ignores plan overrides when commission monetization is disabled", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             commission_rate_override: "5.00"
         });
@@ -127,13 +127,13 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
 
         expect(rate).toBe(0);
         expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
-        expect(subscriptionRepository.findCurrentForSeller).not.toHaveBeenCalled();
+        expect(subscriptionRepository.findEntitledForSeller).not.toHaveBeenCalled();
     });
 });
 
 describe("subscription.service.canCreateListing", () => {
     it("allows unlimited listings when the plan's max is NULL", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             max_active_listings: null
         });
@@ -145,7 +145,7 @@ describe("subscription.service.canCreateListing", () => {
     });
 
     it("falls back to the free plan's limit when the seller has no active subscription", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         subscriptionRepository.findPlanByCode.mockResolvedValue({ max_active_listings: 20 });
         subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(20);
 
@@ -157,7 +157,7 @@ describe("subscription.service.canCreateListing", () => {
     });
 
     it("allows a new listing when the seller is under their plan's limit", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             max_active_listings: 200
         });
@@ -169,7 +169,7 @@ describe("subscription.service.canCreateListing", () => {
     });
 
     it("blocks a new listing once the seller is at their plan's limit", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
             status: "active",
             max_active_listings: 50
         });
@@ -186,7 +186,7 @@ describe("subscription.service.activateSubscription", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        subscriptionRepository.activateSubscription.mockResolvedValue(undefined);
+        subscriptionRepository.activateSubscription.mockResolvedValue(true);
         creditRepository.insertPeriodIfAbsent.mockResolvedValue(undefined);
     });
 
@@ -305,7 +305,7 @@ describe("subscription.service.activateSubscription", () => {
 describe("subscription.service.subscribeFree (free-launch activation)", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        subscriptionRepository.activateSubscription.mockResolvedValue(undefined);
+        subscriptionRepository.activateSubscription.mockResolvedValue(true);
         creditRepository.insertPeriodIfAbsent.mockResolvedValue(undefined);
     });
 
@@ -318,7 +318,7 @@ describe("subscription.service.subscribeFree (free-launch activation)", () => {
             id: 9, seller_id: 10, plan_id: 3,
             current_period_start: "2026-09-20 00:00:00", current_period_end: "2026-10-20 00:00:00"
         });
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(0);
 
         await subscriptionService.subscribeFree(10, "growth");
@@ -332,7 +332,7 @@ describe("subscription.service.subscribeFree (free-launch activation)", () => {
 
 describe("subscription.service.cancelMySubscription", () => {
     it("throws when the seller has no active paid subscription", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue(null);
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
 
         await expect(subscriptionService.cancelMySubscription(10)).rejects.toThrow(
             "You have no active paid subscription to cancel"
@@ -340,7 +340,7 @@ describe("subscription.service.cancelMySubscription", () => {
     });
 
     it("throws when the current subscription isn't active", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({ id: 5, status: "cancelled" });
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({ id: 5, status: "cancelled" });
 
         await expect(subscriptionService.cancelMySubscription(10)).rejects.toThrow(
             "You have no active paid subscription to cancel"
@@ -348,7 +348,7 @@ describe("subscription.service.cancelMySubscription", () => {
     });
 
     it("turns off auto-renew but keeps plan benefits until period end", async () => {
-        subscriptionRepository.findCurrentForSeller.mockResolvedValue({ id: 5, status: "active" });
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue({ id: 5, status: "active" });
 
         const result = await subscriptionService.cancelMySubscription(10);
 

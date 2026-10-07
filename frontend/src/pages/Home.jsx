@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import DepartmentCard from "../components/DepartmentCard";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
+import HomeRails from "../components/HomeRails";
+import RecentlyViewedRail from "../components/RecentlyViewedRail";
+import PaymentTrustBar from "../components/PaymentTrustBar";
 import Hero3D from "../components/Hero3D";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
+import { SITE_URL, SITE_NAME } from "../utils/seo";
 import { ServicesIcon } from "../components/NavIcons";
 
 function DepartmentCardSkeleton() {
@@ -118,7 +122,7 @@ function DepartmentDiscovery() {
 export default function Home() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { user } = useAuth();
     const search = searchParams.get("search") || "";
     const queryKey = searchParams.toString();
@@ -148,9 +152,39 @@ export default function Home() {
         setFilters({});
     }, [queryKey]);
 
+    // Search results moved to /search (SearchResults.jsx). Old /?search=
+    // links - bookmarks, shared links, anything already indexed - keep working.
+    if (search) {
+        return <Navigate to={`/search?${searchParams.toString()}`} replace />;
+    }
+
     return (
         <div>
-            <PageMeta titleOverride={search ? `${search} · NEXORA` : "NEXORA — Marketplace"} />
+            <PageMeta
+                titleOverride={search ? `${search} · NEXORA` : "NEXORA — Shop Local Products & Book Services"}
+                description="Shop products from local sellers and book services on NEXORA, a regional multi-vendor marketplace with delivery tracked door to door."
+                // Search results / filtered views are not separate pages worth
+                // indexing - keep them out of the index but let links be followed.
+                // The canonical (see PageMeta) already collapses to "/".
+                noIndexFollow={Boolean(search || urlFilters.min_price !== undefined || urlFilters.max_price !== undefined || urlFilters.sort)}
+                jsonLd={{
+                    "@context": "https://schema.org",
+                    "@type": "WebSite",
+                    "@id": `${SITE_URL}/#website`,
+                    url: `${SITE_URL}/`,
+                    name: SITE_NAME,
+                    inLanguage: language,
+                    publisher: { "@id": `${SITE_URL}/#organization` },
+                    // Describes the real search page (/search?search=...) so
+                    // search engines can offer the sitelinks search box when
+                    // they choose to. It does not make that appear.
+                    potentialAction: {
+                        "@type": "SearchAction",
+                        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/search?search={search_term_string}` },
+                        "query-input": "required name=search_term_string"
+                    }
+                }}
+            />
             {!search && (
                 <div className="bg-abyss text-frost relative overflow-hidden">
                     <div
@@ -159,7 +193,7 @@ export default function Home() {
                             background: "radial-gradient(60% 100% at 15% 0%, rgba(110,168,254,0.35) 0%, rgba(7,9,18,0) 60%), radial-gradient(50% 90% at 100% 100%, rgba(29,78,216,0.35) 0%, rgba(7,9,18,0) 60%)"
                         }}
                     />
-                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-6 lg:gap-10 items-center">
+                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-10 grid lg:grid-cols-[0.85fr_1.15fr] gap-4 lg:gap-8 items-center">
                         <div>
                             <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
                             {user?.first_name && (
@@ -167,22 +201,31 @@ export default function Home() {
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
                                     </svg>
-                                    Welcome back, {user.first_name}
+                                    {t("home.welcomeBack", { name: user.first_name })}
                                 </div>
                             )}
                             <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
-                                Everything You Need, From The Sellers You Trust.
+                                {t("home.heroTitle")}
                             </h1>
-                            <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
-                                Shop thousands of products from local vendors, with delivery tracked door to door.
+                            <p className="text-frost/60 max-w-md text-sm sm:text-base mb-6">
+                                {t("home.heroSub")}
                             </p>
+
+                            <div className="flex flex-wrap gap-3 mb-8">
+                                <Link to="/products" className="inline-flex items-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold">
+                                    {t("home.ctaShop")}
+                                </Link>
+                                <Link to="/sell" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
+                                    {t("home.ctaSell")}
+                                </Link>
+                            </div>
 
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
                                 {[
-                                    { label: "Verified sellers", icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
-                                    { label: "service booking", icon: "M8 2v4M16 2v4M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 10h18" },
-                                    { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
-                                    { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
+                                    { label: t("home.trustVerified"), icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
+                                    { label: t("home.trustServices"), icon: "M8 2v4M16 2v4M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 10h18" },
+                                    { label: t("home.trustDelivery"), icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
+                                    { label: t("home.trustVendors"), icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
                                 ].map((item) => (
                                     <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
@@ -229,10 +272,20 @@ export default function Home() {
                 {!search && (
                     <>
                         <div className="mb-6">
-                            <h2 className="font-display text-2xl mb-1">Shop by department</h2>
-                            <p className="text-ash text-sm">Browse everything on NEXORA, organized the way you shop.</p>
+                            <h2 className="font-display text-2xl mb-1">{t("home.shopByDept")}</h2>
+                            <p className="text-ash text-sm">{t("home.shopByDeptSub")}</p>
                         </div>
+                        <PaymentTrustBar />
+
                         <DepartmentDiscovery />
+
+                        <div className="mt-12">
+                            <HomeRails />
+                        </div>
+
+                        <div className="mt-10">
+                            <RecentlyViewedRail />
+                        </div>
 
                         {/* Services now lives only here, not in the global header
                             (see Header.jsx) - the header was carrying it as a
@@ -247,14 +300,25 @@ export default function Home() {
                                     <ServicesIcon className="w-5 h-5 text-azure" />
                                 </div>
                                 <div>
-                                    <p className="font-display text-lg">Looking for a service, not a product?</p>
-                                    <p className="text-ash text-sm">Book trusted local pros for home, events, and more.</p>
+                                    <p className="font-display text-lg">{t("home.serviceCta")}</p>
+                                    <p className="text-ash text-sm">{t("home.serviceCtaSub")}</p>
                                 </div>
                             </div>
-                            <span className="text-sm text-teal shrink-0 hidden sm:inline">Browse services →</span>
+                            <span className="text-sm text-teal shrink-0 hidden sm:inline">{t("home.browseServices")} →</span>
                         </Link>
 
-                        <RecommendedProducts endpoint="/recommendations/for-me" title="Recommended for you" />
+                        <RecommendedProducts endpoint="/recommendations/for-me" title={t("home.recommended")} />
+
+                        <Link
+                            to="/sell"
+                            className="mt-10 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-mango/10 hover:bg-mango/15 transition-colors px-6 py-5"
+                        >
+                            <div>
+                                <p className="font-display text-lg">{t("home.sellTitle")}</p>
+                                <p className="text-ash text-sm">{t("home.sellSub")}</p>
+                            </div>
+                            <span className="text-sm text-teal shrink-0 hidden sm:inline">{t("home.sellCta")} →</span>
+                        </Link>
                     </>
                 )}
 
@@ -265,7 +329,7 @@ export default function Home() {
                                 <p className="text-xs uppercase tracking-widest text-ash mb-1">
                                     {t("search.resultsFor", { term: search })}
                                 </p>
-                                <h1 className="font-display text-3xl">Search results</h1>
+                                <h1 className="font-display text-3xl">{t("home.searchResults")}</h1>
                                 {resultCount !== null && (
                                     <p className="text-ash text-sm mt-1">
                                         {resultCount === 1 ? t("search.resultCountOne") : t("search.resultCountMany", { count: resultCount })}

@@ -13,11 +13,15 @@ const loadStored = () => localStorage.getItem(STORAGE_KEY) === "1";
 // get downloaded to render the same image. Non-Cloudinary URLs (or
 // already-transformed ones) pass through unchanged.
 export const optimizeImageUrl = (url, enabled) => {
-    if (!enabled || !url || typeof url !== "string") return url;
+    if (!url || typeof url !== "string") return url;
     if (!url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
     if (/\/upload\/[^/]*q_auto/.test(url)) return url; // already transformed
 
-    return url.replace("/upload/", "/upload/q_auto:eco,w_480,f_auto/");
+    // Everyone gets automatic format (WebP/AVIF where supported) and
+    // automatic quality, with no resize - a visually-equivalent but much
+    // smaller file than the original upload. Data-saver mode keeps its
+    // stronger eco-quality, 480px-wide transform on top of that.
+    return url.replace("/upload/", enabled ? "/upload/q_auto:eco,w_480,f_auto/" : "/upload/q_auto,f_auto/");
 };
 
 export function DataSaverProvider({ children }) {

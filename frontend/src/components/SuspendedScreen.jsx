@@ -13,7 +13,7 @@
 export default function SuspendedScreen({ reason, onBack }) {
     return (
         <div
-            className="fixed inset-0 z-[200] bg-abyss overflow-hidden flex flex-col items-center justify-center px-6 text-center"
+            className="fixed inset-0 z-[var(--z-modal)] bg-abyss overflow-hidden flex flex-col items-center justify-center px-6 text-center"
             style={{
                 height: "100dvh",
                 width: "100dvw",

@@ -25,7 +25,7 @@ import { Link } from "react-router-dom";
 // this never becomes a banner that reappears on every visit.
 export const COOKIE_NOTICE_KEY = "nexora_cookie_notice_acknowledged";
 
-export default function CookieConsentBanner() {
+export default function CookieConsentBanner({ onAcknowledged }) {
     // Read once on mount rather than on every render. Wrapped because
     // localStorage throws in a few real situations (Safari private mode
     // in older versions, storage disabled by policy) and a legal notice
@@ -43,6 +43,7 @@ export default function CookieConsentBanner() {
 
     const accept = () => {
         setAcknowledged(true);
+        onAcknowledged?.();
         try {
             localStorage.setItem(COOKIE_NOTICE_KEY, "1");
         } catch {
@@ -68,7 +69,7 @@ export default function CookieConsentBanner() {
         <div
             role="region"
             aria-label="Cookie notice"
-            className="fixed inset-x-0 bottom-0 z-[1040] animate-slide-up"
+            className="fixed inset-x-0 bottom-0 z-[var(--z-banner)] animate-slide-up"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
             <div className="relative overflow-hidden border-t border-frost/20 bg-abyss/95 backdrop-blur-xl">

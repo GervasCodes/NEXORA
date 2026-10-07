@@ -57,6 +57,13 @@ export default function ConversationThread() {
     const [loadFailed, setLoadFailed] = useState(false);
 
     const bottomRef = useRef(null);
+    const cameraInputRef = useRef(null);
+    const recorderRef = useRef(null);
+    const recordChunksRef = useRef([]);
+    const recordTimerRef = useRef(null);
+    const [recording, setRecording] = useState(false);
+    const [recordSeconds, setRecordSeconds] = useState(0);
+    const composerRef = useRef(null);
     const fileInputRef = useRef(null);
     const typingStopTimer = useRef(null);
     const otherTypingTimer = useRef(null);
@@ -254,6 +261,92 @@ export default function ConversationThread() {
         }
     };
 
+    // Grow the composer with its content (up to its max-h), shrink back
+    // when it's cleared after sending.
+    useEffect(() => {
+        const el = composerRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+    }, [draft]);
+
+    // Enter sends, Shift+Enter inserts a new line. On touch keyboards the
+    // Enter key is left alone so it keeps meaning "new line".
+    const handleComposerKeyDown = (e) => {
+        if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+        if (window.matchMedia?.("(pointer: coarse)").matches) return;
+        e.preventDefault();
+        e.currentTarget.form?.requestSubmit();
+    };
+
+    const QUICK_REPLIES = [
+        t("chat.quickReply.thanks"),
+        t("chat.quickReply.available"),
+        t("chat.quickReply.shipToday"),
+        t("chat.quickReply.sendLocation")
+    ];
+
+    const insertQuickReply = (text) => {
+        setDraft((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
+        composerRef.current?.focus();
+    };
+
+    // Voice notes: record with the browser's MediaRecorder, then hand the
+    // result to the normal attachment flow (preview, then Send).
+    const stopRecordTimer = () => {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+    };
+
+    const startRecording = async () => {
+        setError("");
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+            setError(t("chat.voice.unsupported"));
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream);
+            recordChunksRef.current = [];
+            recorder.ondataavailable = (e) => { if (e.data.size > 0) recordChunksRef.current.push(e.data); };
+            recorder.onstop = () => {
+                stream.getTracks().forEach((track) => track.stop());
+                const type = recorder.mimeType || "audio/webm";
+                const blob = new Blob(recordChunksRef.current, { type });
+                if (blob.size > 0 && recorder.cancelled !== true) {
+                    const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+                    setAttachmentFile(new File([blob], `voice-note.${ext}`, { type }));
+                }
+            };
+            recorder.start();
+            recorderRef.current = recorder;
+            setRecordSeconds(0);
+            setRecording(true);
+            recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+        } catch {
+            setError(t("chat.voice.denied"));
+        }
+    };
+
+    const finishRecording = (cancel = false) => {
+        const recorder = recorderRef.current;
+        stopRecordTimer();
+        setRecording(false);
+        if (!recorder || recorder.state === "inactive") return;
+        recorder.cancelled = cancel;
+        recorder.stop();
+        recorderRef.current = null;
+    };
+
+    useEffect(() => () => {
+        stopRecordTimer();
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== "inactive") {
+            recorder.cancelled = true;
+            recorder.stop();
+        }
+    }, []);
+
     const handleDraftChange = (e) => {
         setDraft(e.target.value);
         if (e.target.value.trim()) emitTyping();
@@ -405,7 +498,7 @@ export default function ConversationThread() {
     if (loading) return <ThreadSkeleton />;
 
     return (
-        <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
+        <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 pb-4 flex flex-col h-screen supports-[height:100dvh]:h-[100dvh]">
             <PageMeta title="Conversation" noIndex />
             {/* Phase 4 (SEO Supporting, H1 audit): this page has no heading
                 anywhere - just a "← All messages" back link and the action
@@ -416,8 +509,8 @@ export default function ConversationThread() {
                 title above - visually hidden so the existing header layout
                 is untouched. */}
             <h1 className="sr-only">Conversation</h1>
-            <div className="flex items-center justify-between mb-2 gap-2">
-                <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0">
+            <div className="flex items-center justify-between mb-2 gap-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sticky top-0 z-10 bg-paper border-b border-line/60 -mx-4 px-4 sm:-mx-6 sm:px-6">
+                <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0 py-1">
                     ← {t("chat.allMessages")}
                 </Link>
 
@@ -580,6 +673,21 @@ export default function ConversationThread() {
                 the same frosted-glass surface as sub-phase 1's bubbles
                 (glass-strong, already used elsewhere in the app), rather than
                 a plain bordered box and a bare top border. */}
+            {user?.role === "seller" && (
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" role="group" aria-label={t("chat.quickReply.label")}>
+                    {QUICK_REPLIES.map((text) => (
+                        <button
+                            key={text}
+                            type="button"
+                            onClick={() => insertQuickReply(text)}
+                            className="shrink-0 text-xs border border-line rounded-full px-3 py-1.5 bg-paper hover:border-ink transition-colors"
+                        >
+                            {text}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {attachmentFile && (
                 <div className="flex items-center gap-2 glass-strong rounded-2xl px-3 py-2 mb-2 animate-slide-up">
                     <span className="text-xs truncate flex-1 inline-flex items-center gap-1">
@@ -602,7 +710,7 @@ export default function ConversationThread() {
 
             <form
                 onSubmit={handleSend}
-                className="flex items-center gap-2 glass-strong rounded-full pl-2 pr-2 py-2 mb-[env(safe-area-inset-bottom)]"
+                className="flex items-end gap-2 glass-strong rounded-3xl pl-2 pr-2 py-2 mb-[env(safe-area-inset-bottom)]"
             >
                 <input
                     ref={fileInputRef}
@@ -627,11 +735,55 @@ export default function ConversationThread() {
                     </svg>
                 </button>
                 <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                />
+                <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-paper border border-line/60 text-ash hover:text-ink transition-colors"
+                    aria-label={t("chat.camera")}
+                >
+                    <ImageIcon className="w-[18px] h-[18px]" />
+                </button>
+                {recording ? (
+                    <div className="flex-1 min-w-0 flex items-center gap-2 px-2 py-2" role="status">
+                        <span className="w-2.5 h-2.5 rounded-full bg-coral animate-pulse" />
+                        <span className="text-sm font-mono">{Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}</span>
+                        <button type="button" onClick={() => finishRecording(true)} className="text-xs text-ash hover:text-coral ml-auto">
+                            {t("common.cancel")}
+                        </button>
+                        <button type="button" onClick={() => finishRecording(false)} className="text-xs font-semibold text-teal">
+                            {t("chat.voice.stop")}
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={startRecording}
+                        className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-paper border border-line/60 text-ash hover:text-ink transition-colors"
+                        aria-label={t("chat.voice.record")}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <rect x="9" y="3" width="6" height="11" rx="3" />
+                            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                        </svg>
+                    </button>
+                )}
+                <textarea
+                    ref={composerRef}
                     value={draft}
                     onChange={handleDraftChange}
+                    onKeyDown={handleComposerKeyDown}
                     onBlur={stopTypingNow}
-                    placeholder="Write a message…"
-                    className="flex-1 min-w-0 bg-transparent rounded-full px-2 py-2 text-base focus-ring"
+                    rows={1}
+                    placeholder={t("chat.composerPlaceholder")}
+                    aria-label={t("chat.composerPlaceholder")}
+                    className="flex-1 min-w-0 bg-transparent rounded-2xl px-2 py-2 text-base focus-ring resize-none max-h-32 leading-snug"
                 />
                 {/* Custom send button rather than the shared <Button> - this
                     should read as part of the chat surface (violet-azure

@@ -29,3 +29,19 @@ exports.submitInvoice = ({ orderNumber }) => {
         raw: { simulated: true }
     });
 };
+
+exports.submitCreditNote = ({ fiscalReceiptNumber, orderNumber, reason }) => {
+    const creditNoteNumber = `SIM-CN-${Date.now()}`;
+
+    console.warn(
+        "\n" +
+        "=============================================================\n" +
+        "  SIMULATED EFD CREDIT NOTE — not actually submitted to TRA.\n" +
+        `  order=${orderNumber} originalReceipt=${fiscalReceiptNumber}\n` +
+        `  reason=${reason}\n` +
+        `  creditNoteNumber=${creditNoteNumber}\n` +
+        "=============================================================\n"
+    );
+
+    return Promise.resolve({ success: true, creditNoteNumber, raw: { simulated: true } });
+};

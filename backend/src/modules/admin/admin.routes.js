@@ -1,4 +1,5 @@
 const express = require("express");
+const { param } = require("express-validator");
 const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
@@ -28,6 +29,7 @@ const {
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/dashboard", adminController.getDashboard);
+router.get("/queue-counts", adminController.getQueueCounts);
 router.get("/dispatch", adminController.getDispatchOverview);
 
 // Roadmap (Predictive Coverage Dashboard for Ops) - read-only
@@ -163,6 +165,7 @@ router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddle
 
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);
+router.get("/settings/:key/history", param("key").matches(/^[a-z0-9_]{1,100}$/), validationMiddleware, adminController.getSettingHistory);
 
 // Monetization Master Switch (Admin Billing Control Center) - lets
 // NEXORA launch free and turn each monetization stream on later without
@@ -210,9 +213,12 @@ router.get("/featured-store-campaigns", adminController.listFeaturedStoreCampaig
 router.get("/department-sponsorship-campaigns", adminController.listDepartmentSponsorshipCampaigns);
 
 router.get("/withdrawals", adminController.listWithdrawals);
+router.get("/withdrawals/:id/context", withdrawalIdValidation, validationMiddleware, adminController.getWithdrawalContext);
+router.get("/withdrawals/:id/payout-details", withdrawalIdValidation, validationMiddleware, adminController.revealWithdrawalPayoutDetails);
 router.put("/withdrawals/:id/approve", withdrawalIdValidation, validationMiddleware, adminController.approveWithdrawal);
 router.put("/withdrawals/:id/reject", withdrawalIdValidation, validationMiddleware, adminController.rejectWithdrawal);
 router.put("/withdrawals/:id/paid", withdrawalIdValidation, validationMiddleware, adminController.markWithdrawalPaid);
+router.get("/wallets/negative-balance", adminController.listNegativeBalanceSellers);
 
 // --- Admin management (super admin only) ---
 router.get("/admins", requireSuperAdmin, adminController.listAdmins);

@@ -105,7 +105,7 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
         for (const channel of eligibleChannels) {
             try {
                 if (channel === "email") {
-                    await sendEmail(recipient.email, subject, message);
+                    await sendEmail(recipient.email, subject, message, undefined, { retry: false });
                     emailSentCount += 1;
                 } else if (channel === "sms") {
                     await smsProvider.sendText(recipient.phone, message);

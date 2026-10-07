@@ -73,3 +73,15 @@ exports.incrementUsed = async (id, credits, executor = db) => {
     );
     return result.affectedRows > 0;
 };
+
+// Returns credit days to a period (cancel path). Guarded so the period can
+// never go below zero used. Returns whether a row was updated.
+exports.decrementUsed = async (id, credits, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE seller_sponsorship_credit_periods
+        SET credits_used = credits_used - ?
+        WHERE id = ? AND credits_used >= ?`,
+        [credits, id, credits]
+    );
+    return result.affectedRows > 0;
+};

@@ -32,6 +32,15 @@ router.post(
 );
 
 router.post(
+    "/draft",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireServiceProvider,
+    serviceController.createServiceDraft
+);
+
+router.post(
     "/:id/images",
     authMiddleware,
     authorize("seller"),

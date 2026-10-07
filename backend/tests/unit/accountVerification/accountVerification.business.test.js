@@ -1,6 +1,9 @@
 jest.mock("../../../src/config/db", () => ({ getConnection: jest.fn() }));
 jest.mock("../../../src/config/sentry", () => ({ captureException: jest.fn() }));
-jest.mock("../../../src/utils/cloudinaryUpload", () => ({ uploadToCloudinary: jest.fn() }));
+jest.mock("../../../src/utils/privateDocuments", () => ({
+    uploadPrivateDocument: jest.fn(),
+    toClientDocument: jest.fn((row) => row)
+}));
 jest.mock("../../../src/modules/notification/notification.service", () => ({
     notify: jest.fn().mockResolvedValue(undefined)
 }));
@@ -12,7 +15,7 @@ jest.mock("../../../src/modules/accountVerification/accountVerification.reposito
 const db = require("../../../src/config/db");
 const notificationService = require("../../../src/modules/notification/notification.service");
 const sellerService = require("../../../src/modules/seller/seller.service");
-const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
+const { uploadPrivateDocument } = require("../../../src/utils/privateDocuments");
 const repo = require("../../../src/modules/accountVerification/accountVerification.repository");
 const service = require("../../../src/modules/accountVerification/accountVerification.service");
 
@@ -43,7 +46,7 @@ beforeEach(() => {
     // on both of these, so they must keep returning promises.
     notificationService.notify.mockResolvedValue(undefined);
     sellerService.syncBadgeForSeller.mockResolvedValue(true);
-    uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn.example/doc.pdf" });
+    uploadPrivateDocument.mockResolvedValue({ publicId: "verification/doc_1", resourceType: "image", format: "pdf" });
     repo.findUserById.mockResolvedValue(idVerifiedSeller);
     repo.findLatestBusinessRequestByUser.mockResolvedValue(null);
     repo.findPendingBusinessRequestByUser.mockResolvedValue(undefined);
@@ -56,11 +59,15 @@ describe("submitBusinessRequest", () => {
     it("creates one pending request with all three PDF documents and a history entry, in one transaction", async () => {
         await service.submitBusinessRequest(7, allPdfs());
 
-        expect(uploadToCloudinary).toHaveBeenCalledTimes(3);
+        expect(uploadPrivateDocument).toHaveBeenCalledTimes(3);
         expect(connection.beginTransaction).toHaveBeenCalled();
         expect(repo.insertBusinessRequest).toHaveBeenCalledWith(7, connection);
         expect(repo.insertBusinessDocument).toHaveBeenCalledTimes(3);
-        expect(repo.insertBusinessDocument).toHaveBeenCalledWith(7, 55, "brela_certificate", "https://cdn.example/doc.pdf", connection);
+        expect(repo.insertBusinessDocument).toHaveBeenCalledWith(
+            7, 55, "brela_certificate",
+            { publicId: "verification/doc_1", resourceType: "image", format: "pdf" },
+            connection
+        );
         expect(repo.insertHistory).toHaveBeenCalledWith(7, "business_submitted", null, null, connection);
         expect(connection.commit).toHaveBeenCalled();
         expect(connection.release).toHaveBeenCalled();
@@ -73,7 +80,7 @@ describe("submitBusinessRequest", () => {
 
             await expect(service.submitBusinessRequest(7, files)).rejects.toThrow(/PDF/);
 
-            expect(uploadToCloudinary).not.toHaveBeenCalled();
+            expect(uploadPrivateDocument).not.toHaveBeenCalled();
             expect(db.getConnection).not.toHaveBeenCalled();
         }
     );
@@ -82,7 +89,7 @@ describe("submitBusinessRequest", () => {
         const files = { ...allPdfs(), tin_certificate: [{ mimetype: "application/pdf", buffer: jpeg().buffer }] };
 
         await expect(service.submitBusinessRequest(7, files)).rejects.toThrow(/PDF/);
-        expect(uploadToCloudinary).not.toHaveBeenCalled();
+        expect(uploadPrivateDocument).not.toHaveBeenCalled();
     });
 
     it("requires all three documents", async () => {
@@ -103,7 +110,7 @@ describe("submitBusinessRequest", () => {
         repo.findUserById.mockResolvedValue({ ...idVerifiedSeller, role: "delivery_agent" });
         await expect(service.submitBusinessRequest(7, allPdfs())).rejects.toThrow(/Only sellers/);
 
-        expect(uploadToCloudinary).not.toHaveBeenCalled();
+        expect(uploadPrivateDocument).not.toHaveBeenCalled();
     });
 
     it("enforces a single pending request and rolls back", async () => {
@@ -119,7 +126,7 @@ describe("submitBusinessRequest", () => {
     });
 
     it("writes nothing if a Cloudinary upload fails", async () => {
-        uploadToCloudinary.mockRejectedValueOnce(new Error("cloudinary down"));
+        uploadPrivateDocument.mockRejectedValueOnce(new Error("cloudinary down"));
 
         await expect(service.submitBusinessRequest(7, allPdfs())).rejects.toThrow(/couldn't upload/);
         expect(db.getConnection).not.toHaveBeenCalled();

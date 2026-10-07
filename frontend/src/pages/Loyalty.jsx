@@ -1,23 +1,45 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import api from "../api/client";
 import PageMeta from "../components/PageMeta";
-import PageLoader from "../components/PageLoader";
+import PageState from "../components/ui/PageState";
+import { WhatsAppShareButton, NativeShareButton } from "../components/ShareButtons";
+import useFetch from "../hooks/useFetch";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 
 export default function Loyalty() {
     const { user } = useAuth();
     const { format } = useCurrency();
-    const [status, setStatus] = useState(null);
+    const { t } = useLanguage();
     const [copied, setCopied] = useState(false);
 
-    useEffect(() => {
-        api.get("/loyalty/me").then(({ data }) => setStatus(data.data)).catch(() => {});
-    }, []);
+    // (Phase 4 remediation) - this was previously a bare
+    // `.catch(() => {})` with `status` staying null forever on failure,
+    // and `if (!status) return <PageLoader />` meant a failed load was
+    // visually identical to "still loading" - no error, no retry, just
+    // an infinite spinner. useFetch + PageState give it a real error
+    // state.
+    const { data: status, loading, error, retry } = useFetch(
+        () => api.get("/loyalty/me").then(({ data }) => data.data),
+        []
+    );
 
-    if (!status) return <PageLoader />;
+    if (loading || error) {
+        return (
+            <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
+                <PageMeta title="Loyalty & referrals" noIndex />
+                <PageState
+                    loading={loading}
+                    error={error}
+                    onRetry={retry}
+                    errorProps={{ title: t("loyalty.loadErrorTitle"), hint: t("loyalty.loadErrorHint") }}
+                />
+            </div>
+        );
+    }
 
     const referralLink = `${window.location.origin}/register?ref=${user?.referral_code || ""}`;
     const referralMessage = `Join me on NEXORA and get a head start - sign up with my link: ${referralLink}`;
@@ -27,26 +49,6 @@ export default function Loyalty() {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
-
-    // Native share + WhatsApp-specific share ( UI/UX
-    // remediation) - a referral program's whole value depends on how
-    // easily it spreads, and "copy link" alone puts more friction
-    // between a buyer and actually sharing it than necessary,
-    // especially in a market where WhatsApp is the dominant sharing
-    // channel. navigator.share() covers the native share sheet where
-    // available (mobile); the WhatsApp link works everywhere regardless
-    // (opens the app if installed, wa.me web fallback otherwise).
-    const handleNativeShare = async () => {
-        if (!navigator.share) return;
-        try {
-            await navigator.share({ title: "Join me on NEXORA", text: referralMessage, url: referralLink });
-        } catch {
-            // Cancelling the native share sheet throws - not an error
-            // worth surfacing.
-        }
-    };
-
-    const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(referralMessage)}`;
 
     return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
@@ -61,6 +63,15 @@ export default function Loyalty() {
             </div>
 
             <div className="border border-line rounded-lg p-6 mb-8">
+                <h2 className="font-display text-lg mb-3">{t("loyalty.how.title")}</h2>
+                <ul className="space-y-2 text-sm text-ink/80 list-disc pl-5">
+                    <li>{t("loyalty.how.earn", { points: status.pointsPer1000Spent ?? 1, amount: format(1000) })}</li>
+                    <li>{t("loyalty.how.redeem", { value: format(status.pointValueTzs) })}</li>
+                    <li>{t("loyalty.how.referral", { points: status.referralBonusPoints })}</li>
+                </ul>
+            </div>
+
+            <div className="border border-line rounded-lg p-6 mb-8">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Your referral link</p>
                 <p className="text-sm font-mono break-all mb-3">{referralLink}</p>
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -70,25 +81,8 @@ export default function Loyalty() {
                     >
                         {copied ? "Copied!" : "Copy link"}
                     </button>
-                    <a
-                        href={whatsappShareUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 bg-[#25D366] text-white px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                            <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.4.7-.4h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.2 2.4 1.5 2.7 1.7.3.2.5.1.6-.1l1-1.1c.2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.1 1.3Z" />
-                        </svg>
-                        Share on WhatsApp
-                    </a>
-                    {navigator.share && (
-                        <button
-                            onClick={handleNativeShare}
-                            className="border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors"
-                        >
-                            Share…
-                        </button>
-                    )}
+                    <WhatsAppShareButton url={referralLink} text={referralMessage} size="md" />
+                    <NativeShareButton title="Join me on NEXORA" text={referralMessage} url={referralLink} size="md" />
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -100,7 +94,14 @@ export default function Loyalty() {
                     </p>
                 </div>
 
-                <p className="text-xs text-ash mt-3">You get 200 bonus points when someone you refer completes their first order.</p>
+                {/* (Phase 4 remediation): this figure now comes from
+                    the API (`status.referralBonusPoints`, sourced from
+                    REFERRAL_BONUS_POINTS in referral.service.js)
+                    instead of being hand-typed here - a change to the
+                    bonus amount on the backend previously required
+                    remembering to also edit this unrelated string, and
+                    nothing would have caught it if someone forgot. */}
+                <p className="text-xs text-ash mt-3">{t("loyalty.referralBonusNote", { points: status.referralBonusPoints })}</p>
             </div>
 
             <h2 className="font-display text-lg mb-3">Your referrals</h2>

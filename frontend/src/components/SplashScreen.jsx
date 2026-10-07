@@ -65,7 +65,7 @@ export default function SplashScreen({ appReady, onDone }) {
             role="button"
             tabIndex={0}
             aria-label="Skip intro"
-            className={`fixed inset-0 z-[100] bg-abyss overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-opacity duration-400 ease-out focus:outline-none ${
+            className={`fixed inset-0 z-[var(--z-modal)] bg-abyss overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-opacity duration-400 ease-out focus:outline-none ${
                 leaving ? "opacity-0 pointer-events-none" : "opacity-100"
             }`}
             // `100dvh`/`100dvw` track the *actual* visible viewport on

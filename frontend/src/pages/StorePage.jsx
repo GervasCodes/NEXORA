@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { formatMonthYear, formatDate } from "../utils/format";
 import ProductFilters from "../components/ProductFilters";
 import ProductGrid from "../components/ProductGrid";
+import ServiceCard from "../components/ServiceCard";
 import ProductRow from "../components/ProductRow";
 import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
@@ -12,8 +13,11 @@ import { useLanguage } from "../context/LanguageContext";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
+import { feedLink } from "../utils/feedLink";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
+import { SITE_URL, buildBreadcrumbJsonLd } from "../utils/seo";
 import VideoLightbox from "../components/VideoLightbox";
+import { getTodayHours, formatReplyTime } from "../utils/storeSignals";
 // Moved to its own file so Footer.jsx (which renders on every page) can
 // import it without statically pulling in this whole lazy-loaded route -
 // see components/SocialIcon.jsx for why. Re-exported here too, in case
@@ -46,6 +50,9 @@ export default function StorePage() {
     const { slug } = useParams();
     const { t } = useLanguage();
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const [messageBusy, setMessageBusy] = useState(false);
+    const [shareNote, setShareNote] = useState("");
     const [store, setStore] = useState(null);
     // Phase 7 (Promo Video Unification) - whether the store's promo
     // video (if any) is currently open in the lightbox.
@@ -69,6 +76,36 @@ export default function StorePage() {
             .catch(() => {});
     }, [slug, user]);
 
+    const handleMessageSeller = async () => {
+        if (!user) {
+            navigate("/login", { state: { from: `/stores/${slug}` } });
+            return;
+        }
+        setMessageBusy(true);
+        try {
+            const { data } = await api.post("/chat/conversations", { other_user_id: store.user_id, role: "seller" });
+            navigate(`/messages/${data.data.id}`);
+        } catch {
+            setShareNote(t("store.messageError"));
+        } finally {
+            setMessageBusy(false);
+        }
+    };
+
+    const handleShareStore = async () => {
+        const url = `${window.location.origin}/stores/${store.store_slug || slug}`;
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: store.store_name, url });
+                return;
+            }
+            await navigator.clipboard.writeText(url);
+            setShareNote(t("store.linkCopied"));
+        } catch {
+            /* share sheet dismissed */
+        }
+    };
+
     const handleToggleFollow = async () => {
         setFollowBusy(true);
         try {
@@ -89,6 +126,7 @@ export default function StorePage() {
     };
 
     const [reviews, setReviews] = useState([]);
+    const [storeServices, setStoreServices] = useState([]);
     const [reviewSummary, setReviewSummary] = useState({ average_rating: null, review_count: 0 });
     const [reviewBreakdown, setReviewBreakdown] = useState(null);
     const [reviewSort, setReviewSort] = useState("newest");
@@ -105,6 +143,12 @@ export default function StorePage() {
     }, [slug]);
 
    
+    useEffect(() => {
+        api.get(`/stores/${slug}/services`)
+            .then(({ data }) => setStoreServices(data.data || []))
+            .catch(() => setStoreServices([]));
+    }, [slug]);
+
     useEffect(() => {
         api.get(`/stores/${slug}/collections`)
             .then(({ data }) => setCollections(data.data || []))
@@ -153,6 +197,7 @@ export default function StorePage() {
     if (!store) {
         return (
             <div className="max-w-6xl mx-auto px-6 py-16 text-center">
+                <PageMeta title={t("store.notFoundTitle")} noIndex />
                 <p className="font-display text-2xl mb-2">{t("store.notFoundTitle")}</p>
                 <Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>
             </div>
@@ -165,6 +210,27 @@ export default function StorePage() {
     const theme = getStoreTheme(store.store_theme);
     const socialLinks = getSocialLinks(store);
 
+
+    // Signal row: sold count, typical reply time, today's hours. Each item
+    // only appears when there's real data behind it.
+    const storeSignalItems = [];
+    if (store && Number(store.sold_count) > 0) {
+        storeSignalItems.push({ key: "sold", text: t("store.soldCount", { count: Number(store.sold_count) }) });
+    }
+    if (store && store.response_samples >= 3) {
+        const reply = formatReplyTime(store.response_minutes);
+        if (reply) storeSignalItems.push({ key: "reply", text: t(reply.key, { n: reply.n }) });
+    }
+    const todayHours = store ? getTodayHours(store.opening_hours) : null;
+    if (todayHours) {
+        storeSignalItems.push({
+            key: "hours",
+            text: todayHours.status === "open"
+                ? t("store.hoursToday", { open: todayHours.open, close: todayHours.close })
+                : t("store.closedToday"),
+        });
+    }
+
     return (
         <div>
             <PageMeta
@@ -176,14 +242,62 @@ export default function StorePage() {
                 }
                 image={store.store_banner || store.store_logo}
                 type="website"
+                jsonLd={[
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "Store",
+                        "@id": `${SITE_URL}/stores/${store.store_slug || slug}#store`,
+                        name: store.store_name,
+                        url: `${SITE_URL}/stores/${store.store_slug || slug}`,
+                        ...(store.store_description || store.store_tagline
+                            ? { description: store.store_description?.slice(0, 300) || store.store_tagline }
+                            : {}),
+                        ...(store.store_logo ? { logo: store.store_logo } : {}),
+                        ...(store.store_banner || store.store_logo ? { image: store.store_banner || store.store_logo } : {}),
+                        ...(store.city || store.region || store.country
+                            ? {
+                                address: {
+                                    "@type": "PostalAddress",
+                                    ...(store.city ? { addressLocality: store.city } : {}),
+                                    ...(store.region ? { addressRegion: store.region } : {}),
+                                    ...(store.country ? { addressCountry: store.country } : {})
+                                }
+                            }
+                            : {}),
+                        ...(reviewSummary.review_count > 0 && reviewSummary.average_rating
+                            ? {
+                                aggregateRating: {
+                                    "@type": "AggregateRating",
+                                    ratingValue: Number(reviewSummary.average_rating).toFixed(1),
+                                    reviewCount: reviewSummary.review_count
+                                }
+                            }
+                            : {}),
+                        ...(socialLinks.filter((l) => l.key !== "whatsapp").length
+                            ? { sameAs: socialLinks.filter((l) => l.key !== "whatsapp").map((l) => l.href) }
+                            : {})
+                    },
+                    buildBreadcrumbJsonLd(
+                        [{ label: t("nav.home"), href: "/" }, { label: store.store_name }],
+                        `/stores/${store.store_slug || slug}`
+                    )
+                ]}
             />
             <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4">
                 <Breadcrumbs items={[{ label: t("nav.home"), href: "/" }, { label: store.store_name }]} />
             </div>
             <div className="relative h-40 sm:h-56 bg-line/40 overflow-hidden">
                 {store.store_banner ? (
-                    <img src={store.store_banner} alt="" className="w-full h-full object-cover" />
-                ) : null}
+                    <img src={store.store_banner} alt="" fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
+                ) : (
+                    // Fallback banner: themed block with the store's name so
+                    // stores without a banner don't show an empty grey strip.
+                    <div className={`w-full h-full ${theme.bg} flex items-center justify-center px-6`}>
+                        <p className={`${theme.badgeText} font-display text-xl sm:text-2xl opacity-90 truncate`}>
+                            {t("store.fallbackBannerTagline", { name: store.store_name })}
+                        </p>
+                    </div>
+                )}
                 {store.promo_video_url && (
                     <button
                         type="button"
@@ -237,12 +351,27 @@ export default function StorePage() {
                             {store.average_rating && (
                                 <span className="flex items-center gap-0.5">
                                     <span className="text-mango">★</span> {Number(store.average_rating).toFixed(1)}
-                                    <span className="text-ash/70">({store.review_count})</span>
+                                    <span className="text-ash">({store.review_count})</span>
                                 </span>
                             )}
                             {store.average_rating && <span>·</span>}
                             <span>{t("store.memberSince", { date: formatMonthYear(store.created_at) })}</span>
                         </p>
+                        {storeSignalItems.length > 0 && (
+                            <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/80 mt-2">
+                                {storeSignalItems.map((item) => (
+                                    <li key={item.key} className="flex items-center gap-1">{item.text}</li>
+                                ))}
+                            </ul>
+                        )}
+                        {store.public_phone && (
+                            <a
+                                href={`tel:${store.public_phone.replace(/[^+0-9]/g, "")}`}
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors"
+                            >
+                                {t("store.callProvider")}
+                            </a>
+                        )}
                         {socialLinks.length > 0 && (
                             <div className="flex items-center gap-2 mt-2">
                                 {socialLinks.map((link) => (
@@ -262,12 +391,31 @@ export default function StorePage() {
                         )}
                     </div>
 
+                    <div className="ml-auto shrink-0 flex items-center gap-2">
+                        {user?.id !== store.user_id && (
+                            <button
+                                type="button"
+                                onClick={handleMessageSeller}
+                                disabled={messageBusy}
+                                className="px-3 py-2 rounded-md text-sm border border-line hover:border-ink transition-colors disabled:opacity-60"
+                            >
+                                {t("store.messageSeller")}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleShareStore}
+                            className="px-3 py-2 rounded-md text-sm border border-line hover:border-ink transition-colors"
+                        >
+                            {t("store.share")}
+                        </button>
+                    </div>
                     {user?.role === "buyer" && (
                         <button
                             type="button"
                             onClick={handleToggleFollow}
                             disabled={followBusy}
-                            className={`ml-auto shrink-0 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 ${
+                            className={`shrink-0 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 ${
                                 followStatus?.following
                                     ? "border border-line text-ink hover:border-coral hover:text-coral"
                                     : "bg-ink text-paper hover:bg-abyss"
@@ -277,6 +425,8 @@ export default function StorePage() {
                         </button>
                     )}
                 </div>
+
+                {shareNote && <p role="status" className="text-xs text-ash mb-4">{shareNote}</p>}
 
                 {store.store_description && (
                     <div className="max-w-2xl mb-8">
@@ -355,6 +505,14 @@ export default function StorePage() {
                         </p>
                     )}
 
+                    <div className="flex justify-end mb-3">
+                        <Link
+                            to={feedLink({ seller_id: store.user_id, ...catalogFilters })}
+                            className="text-sm border border-line px-4 py-2 rounded-full hover:border-ink transition-colors"
+                        >
+                            {t("products.shopFeed")}
+                        </Link>
+                    </div>
                     <ProductFilters singleStore onChange={setCatalogFilters} />
 
                     <ProductGrid
@@ -363,6 +521,17 @@ export default function StorePage() {
                         emptyTitle={t("store.noProductsTitle")}
                         emptyHint={t("store.noProductsHint")}
                     />
+
+                    {storeServices.length > 0 && (
+                        <section className="mt-12">
+                            <h2 className="font-display text-xl mb-4">{t("seo.store.services")}</h2>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                {storeServices.map((service) => (
+                                    <ServiceCard key={service.id} service={service} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
 
                 <div className="pb-16 max-w-2xl">

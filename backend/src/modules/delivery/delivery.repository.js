@@ -6,9 +6,16 @@ const db = require("../../config/db");
 exports.findAvailableForPickup = async () => {
     const [rows] = await db.query(
         `SELECT o.id AS order_id, o.order_number, o.shipping_address,
-                o.shipping_city, o.shipping_region, o.total_amount
+                o.shipping_city, o.shipping_region, o.total_amount,
+                o.delivery_lat, o.delivery_lng,
+                (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
+                sp.store_name, sp.address AS pickup_address, sp.city AS pickup_city,
+                sp.pickup_lat, sp.pickup_lng
         FROM orders o
         LEFT JOIN deliveries d ON d.order_id = o.id
+        LEFT JOIN seller_profiles sp ON sp.user_id = (
+            SELECT oi2.seller_id FROM order_items oi2 WHERE oi2.order_id = o.id ORDER BY oi2.id LIMIT 1
+        )
         WHERE o.status = 'shipped' AND d.id IS NULL AND o.delivery_mode = 'platform'
         ORDER BY o.created_at ASC`
     );
@@ -41,6 +48,16 @@ exports.findByOrderId = async (orderId) => {
         [orderId]
     );
     return rows[0];
+};
+
+// Pickup confirmation photo (Phase 5, P1) - separate from updateStatus
+// above since the photo is attached after the status already moved to
+// "picked_up", not as part of that transition.
+exports.recordPickupPhoto = async (deliveryId, photoUrl) => {
+    await db.query(
+        "UPDATE deliveries SET pickup_confirmed_at = NOW(), pickup_photo_url = ? WHERE id = ?",
+        [photoUrl, deliveryId]
+    );
 };
 
 // Same lookup as findByOrderId, but also brings back the assigned
@@ -134,7 +151,11 @@ exports.findByAgent = async (agentId) => {
     return rows;
 };
 
-exports.updateStatus = async (deliveryId, status, notes) => {
+// Delivery proof fields (Phase 5, P0) - `proof` carries the handover
+// verification outcome, only ever populated on a transition to
+// "delivered" (undefined/null fields elsewhere are harmless no-ops via
+// COALESCE, same pattern the existing timestamp columns already use).
+exports.updateStatus = async (deliveryId, status, notes, proof = {}) => {
     const deliveredAt = status === "delivered" ? new Date() : null;
     const pickedUpAt = status === "picked_up" ? new Date() : null;
     const inTransitAt = status === "in_transit" ? new Date() : null;
@@ -145,9 +166,22 @@ exports.updateStatus = async (deliveryId, status, notes) => {
             notes = COALESCE(?, notes),
             picked_up_at = COALESCE(?, picked_up_at),
             in_transit_at = COALESCE(?, in_transit_at),
-            delivered_at = COALESCE(?, delivered_at)
+            delivered_at = COALESCE(?, delivered_at),
+            handover_verified = COALESCE(?, handover_verified),
+            handover_method = COALESCE(?, handover_method),
+            dropoff_photo_url = COALESCE(?, dropoff_photo_url),
+            dropoff_distance_m = COALESCE(?, dropoff_distance_m),
+            dropoff_flagged = COALESCE(?, dropoff_flagged)
         WHERE id = ?`,
-        [status, notes || null, pickedUpAt, inTransitAt, deliveredAt, deliveryId]
+        [
+            status, notes || null, pickedUpAt, inTransitAt, deliveredAt,
+            proof.handoverVerified ?? null,
+            proof.handoverMethod ?? null,
+            proof.dropoffPhotoUrl ?? null,
+            proof.dropoffDistanceM ?? null,
+            proof.dropoffFlagged ?? null,
+            deliveryId
+        ]
     );
 };
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
+import Skeleton from "../../components/Skeleton";
+import ErrorState from "../../components/ui/ErrorState";
 import MaintenanceScreen from "../../components/MaintenanceScreen";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
@@ -19,6 +20,7 @@ export default function SellerWallet() {
     const [withdrawals, setWithdrawals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [loadFailed, setLoadFailed] = useState(false);
     const [maintenance, setMaintenance] = useState(null);
 
     const [showForm, setShowForm] = useState(false);
@@ -29,9 +31,12 @@ export default function SellerWallet() {
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState("");
 
-    const load = () => {
-        setLoading(true);
+    // `silent` refreshes after a withdrawal keep the page on screen
+    // instead of flashing the skeleton.
+    const load = (silent = false) => {
+        if (!silent) setLoading(true);
         setError("");
+        setLoadFailed(false);
         setMaintenance(null);
         Promise.all([
             api.get("/wallet"),
@@ -45,17 +50,28 @@ export default function SellerWallet() {
                 if (err.response?.data?.code === "MODULE_MAINTENANCE") {
                     setMaintenance(err.response.data.message);
                 } else {
-                    setError("Couldn't load your wallet.");
+                    setLoadFailed(true);
+                    setError("Couldn't load your wallet. Check your connection and try again.");
                 }
             })
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(() => { load(false); }, []);
 
     const submitWithdrawal = async (e) => {
         e.preventDefault();
         setFormError("");
+
+        const requested = Number(amount);
+        if (!Number.isFinite(requested) || requested <= 0) {
+            setFormError("Enter an amount greater than zero.");
+            return;
+        }
+        if (wallet && requested > Number(wallet.balance)) {
+            setFormError(`You can withdraw up to ${formatMoney(wallet.balance)} right now.`);
+            return;
+        }
         setSubmitting(true);
 
         try {
@@ -69,7 +85,7 @@ export default function SellerWallet() {
             setPayoutDetails("");
             setPayoutCurrency("TZS");
             setShowForm(false);
-            load();
+            load(true);
         } catch (err) {
             setFormError(extractErrorMessage(err));
         } finally {
@@ -77,9 +93,30 @@ export default function SellerWallet() {
         }
     };
 
-    if (loading) return <PageLoader />;
-    if (maintenance) return <MaintenanceScreen title="Wallet is under maintenance" message={maintenance} onRetry={load} />;
-    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
+    if (loading) {
+        return (
+            <div className="animate-fade-in" aria-busy="true" aria-label="Loading wallet">
+                <Skeleton className="h-7 w-32 mb-2" />
+                <Skeleton className="h-4 w-64 mb-8" />
+                <div className="border border-line rounded-lg p-6 mb-8">
+                    <Skeleton className="h-3 w-28 mb-3" />
+                    <Skeleton className="h-9 w-48" />
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                    {Array.from({ length: 2 }).map((_, col) => (
+                        <div key={col} className="space-y-2">
+                            <Skeleton className="h-4 w-40 mb-3" />
+                            {Array.from({ length: 4 }).map((__, i) => (
+                                <Skeleton key={i} className="h-14 w-full" />
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    if (maintenance) return <MaintenanceScreen title="Wallet is under maintenance" message={maintenance} onRetry={() => load(false)} />;
+    if (loadFailed) return <ErrorState title="Couldn't load your wallet" hint={error} onRetry={() => load(false)} />;
     if (!wallet) return null;
 
     return (
@@ -117,15 +154,26 @@ export default function SellerWallet() {
                 <form onSubmit={submitWithdrawal} className="border border-line rounded-lg p-4 mb-10 space-y-3">
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
-                    <Input
-                        label="Amount (TZS)"
-                        type="number"
-                        min="1"
-                        step="1"
-                        required
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                    />
+                    <div>
+                        <Input
+                            label="Amount (TZS)"
+                            type="number"
+                            min="1"
+                            max={Number(wallet.balance) || undefined}
+                            step="1"
+                            required
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setAmount(String(Math.floor(Number(wallet.balance) || 0)))}
+                            disabled={!(Number(wallet.balance) >= 1)}
+                            className="text-xs text-teal hover:underline mt-1 disabled:opacity-50 disabled:no-underline"
+                        >
+                            Withdraw full balance ({formatMoney(wallet.balance)})
+                        </button>
+                    </div>
 
                     <div>
                         <label htmlFor="payoutMethod" className="text-xs text-ash block mb-1">Payout method</label>

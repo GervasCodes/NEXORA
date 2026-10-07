@@ -8,7 +8,31 @@
 const CACHE_VERSION = "nexora-v4";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
+const IMAGE_CACHE = `${CACHE_VERSION}-images`;
 const OFFLINE_URL = "/offline.html";
+const MAX_CACHED_IMAGES = 120;
+
+// Cloudinary product/service/store images only - a narrow, deliberately
+// specific origin+destination match (not "any cross-origin GET") so this
+// can't accidentally start caching some other third party's response.
+// Cache-first: these URLs are content-hashed by Cloudinary (a given
+// transform URL never changes what it returns), so there's no
+// staleness risk in serving a cached copy indefinitely, unlike the
+// network-first treatment the CACHEABLE_API_PATHS get above.
+const isCacheableImageRequest = (request, url) =>
+    request.destination === "image" && url.hostname === "res.cloudinary.com";
+
+// Cache storage isn't bounded by itself - without a cap this would grow
+// unboundedly as someone browses the catalog. Trim oldest-inserted
+// entries (insertion order == Cache API iteration order) past the cap
+// whenever a new image is added.
+async function trimImageCache() {
+    const cache = await caches.open(IMAGE_CACHE);
+    const keys = await cache.keys();
+    if (keys.length <= MAX_CACHED_IMAGES) return;
+    const excess = keys.length - MAX_CACHED_IMAGES;
+    await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)));
+}
 
 // Only public, non-personal GET endpoints are ever cached. Cart, orders,
 // account, messages, seller/admin data, and anything else that requires
@@ -85,7 +109,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((key) => key.startsWith("nexora-") && key !== APP_SHELL_CACHE && key !== API_CACHE)
+                    .filter((key) => key.startsWith("nexora-") && key !== APP_SHELL_CACHE && key !== API_CACHE && key !== IMAGE_CACHE)
                     .map((key) => caches.delete(key))
             )
         ).then(() => self.clients.claim())
@@ -160,8 +184,30 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Cross-origin (Cloudinary images, fonts, etc.) - let the browser
-    // handle these normally rather than trying to cache/manage them here.
+    // Cloudinary product/service/store images: cache-first (see
+    // isCacheableImageRequest above for why cache-first is safe here).
+    if (isCacheableImageRequest(request, url)) {
+        event.respondWith(
+            caches.match(request).then(
+                (cached) =>
+                    cached ||
+                    fetch(request).then((response) => {
+                        const clone = response.clone();
+                        caches
+                            .open(IMAGE_CACHE)
+                            .then((cache) => cache.put(request, clone))
+                            .then(trimImageCache)
+                            .catch(() => {});
+                        return response;
+                    })
+            )
+        );
+        return;
+    }
+
+    // Cross-origin (fonts, etc. - Cloudinary images are handled above) -
+    // let the browser handle these normally rather than trying to
+    // cache/manage them here.
     if (url.origin !== self.location.origin && !isCacheableApiRequest(url)) return;
 
     if (isCacheableApiRequest(url)) {

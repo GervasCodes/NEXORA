@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
@@ -9,8 +9,10 @@ import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
+import ErrorState from "../../components/ui/ErrorState";
 
 const PAGE_SIZE = 20;
+const LOW_STOCK_THRESHOLD = 5;
 
 export default function SellerProducts() {
     const { t } = useLanguage();
@@ -18,6 +20,8 @@ export default function SellerProducts() {
     const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const requestId = useRef(0);
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
 
@@ -49,8 +53,13 @@ export default function SellerProducts() {
         api.get("/categories").then(({ data }) => setCategories(data.data)).catch(() => {});
     }, []);
 
-    const load = () => {
-        setLoading(true);
+    // `silent` refreshes (after activate/deactivate/bulk actions) keep the
+    // current rows on screen instead of swapping the list for a skeleton,
+    // so the page doesn't jump and scroll position survives.
+    const load = (silent = false) => {
+        const thisRequest = ++requestId.current;
+        if (!silent) setLoading(true);
+        setLoadError("");
         const params = { page, limit: PAGE_SIZE };
         if (search.trim()) params.search = search.trim();
         if (categoryId) params.category_id = categoryId;
@@ -58,21 +67,28 @@ export default function SellerProducts() {
 
         api.get("/products/mine/list", { params })
             .then(({ data }) => {
+                // A slower, older response must not overwrite a newer one.
+                if (requestId.current !== thisRequest) return;
                 setProducts(data.data);
                 setPagination(data.pagination || { page: 1, totalPages: 1, total: data.data.length });
                 setSelectedIds([]);
             })
-            .catch((err) => toast?.error(extractErrorMessage(err)))
-            .finally(() => setLoading(false));
+            .catch((err) => {
+                if (requestId.current !== thisRequest) return;
+                setLoadError(extractErrorMessage(err));
+            })
+            .finally(() => {
+                if (requestId.current === thisRequest) setLoading(false);
+            });
     };
 
-    useEffect(load, [search, categoryId, status, page, toast]);
+    useEffect(() => { load(false); }, [search, categoryId, status, page]);
 
     const toggleActive = async (product) => {
         setBusyId(product.id);
         try {
             await api.put(`/products/${product.id}/${product.is_active ? "deactivate" : "activate"}`);
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -97,7 +113,7 @@ export default function SellerProducts() {
         setBulkBusy(true);
         try {
             await api.put("/products/bulk/status", { ids: selectedIds, is_active: isActive });
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -120,7 +136,7 @@ export default function SellerProducts() {
             toast?.success(`Updated pricing on ${data.data.updated} product(s).`);
             setShowBulkPrice(false);
             setBulkPriceValue("");
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -200,6 +216,13 @@ export default function SellerProducts() {
                 </div>
             </div>
 
+            {loadError && !loading ? (
+                <ErrorState
+                    title="Couldn't load your products"
+                    hint={loadError}
+                    onRetry={() => load(false)}
+                />
+            ) : (
             <DataTable
                 items={products}
                 loading={loading}
@@ -288,6 +311,11 @@ export default function SellerProducts() {
                                 </span>
                             </div>
                             <p className="price text-xs text-ash">{formatMoney(p.discount_price || p.price)} · {t("seller.products.stockSuffix", { count: p.stock })}</p>
+                            {Number(p.stock) <= 0 ? (
+                                <p className="text-xs text-coral mt-0.5">Out of stock</p>
+                            ) : Number(p.stock) <= LOW_STOCK_THRESHOLD ? (
+                                <p className="text-xs text-mango-dark mt-0.5">Low stock</p>
+                            ) : null}
                         </div>
 
                         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -318,6 +346,7 @@ export default function SellerProducts() {
                     onPageChange: setPage
                 }}
             />
+            )}
         </div>
     );
 }

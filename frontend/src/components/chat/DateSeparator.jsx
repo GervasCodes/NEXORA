@@ -13,7 +13,7 @@
 export default function DateSeparator({ label }) {
     return (
         <div className="flex items-center justify-center py-1" role="separator" aria-label={label}>
-            <span className="text-[11px] font-medium tracking-wide uppercase text-ash backdrop-blur-md bg-paper/70 dark:bg-abyss/45 border border-ink/5 rounded-full px-3 py-1 shadow-[0_2px_10px_rgba(0,0,0,0.06)]">
+            <span className="text-[11px] font-medium tracking-wide uppercase text-ash backdrop-blur-md bg-paper/70 dark:bg-abyss/45 border border-ink/5 rounded-full px-3 py-1 elevation-1">
                 {label}
             </span>
         </div>

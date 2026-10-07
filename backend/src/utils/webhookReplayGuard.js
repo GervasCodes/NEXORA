@@ -121,3 +121,21 @@ exports.recordDelivery = async (provider, raw) => {
         throw error;
     }
 };
+
+// Releases a recorded delivery so the provider's retry of the same bytes is
+// treated as fresh. Called when processing failed AFTER the delivery was
+// recorded - otherwise the retry would be rejected as a "replay" and the
+// payment would never be applied. Never throws.
+exports.forgetDelivery = async (provider, raw) => {
+    const payload = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), "utf8");
+    const payloadHash = crypto.createHash("sha256").update(provider).update(payload).digest("hex");
+
+    try {
+        await db.query(
+            "DELETE FROM webhook_replay_guard WHERE provider = ? AND payload_hash = ?",
+            [provider, payloadHash]
+        );
+    } catch (error) {
+        logger.error({ err: error, provider }, "[webhook replay guard] failed to release a delivery after a processing failure");
+    }
+};

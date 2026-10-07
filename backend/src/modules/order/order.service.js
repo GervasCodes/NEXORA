@@ -13,6 +13,10 @@ const referralService = require("../referral/referral.service");
 const businessService = require("../business/business.service");
 const buyerAddressService = require("../buyerAddress/buyerAddress.service");
 const couponService = require("../coupon/coupon.service");
+const paymentRepository = require("../payment/payment.repository");
+const refundService = require("../refund/refund.service");
+const refundCapService = require("../refund/refundCap.service");
+const walletService = require("../wallet/wallet.service");
 const logger = require("../../utils/logger").child({ module: "order" });
 const Sentry = require("../../config/sentry");
 const {
@@ -22,7 +26,8 @@ const {
     BUYER_PROTECTION_FEE_MIN,
     BUYER_PROTECTION_FEE_MAX,
     DEFAULT_PREORDER_DEPOSIT_PERCENT,
-    DEFAULT_PREORDER_LEAD_TIME_DAYS
+    DEFAULT_PREORDER_LEAD_TIME_DAYS,
+    MIN_PAYABLE_ORDER_AMOUNT
 } = require("../../constants/orderStatus");
 
 const generateOrderNumber = () => {
@@ -44,6 +49,37 @@ const generateOrderNumber = () => {
 const buildItemSummary = (itemName, itemCount) => {
     if (!itemName) return null;
     return itemCount > 1 ? `${itemName} +${itemCount - 1} more` : itemName;
+};
+
+// Delivery proof handover code notices (Phase 5, P0) - see the call
+// site in checkout() above. One SMS + one WhatsApp per deliverable
+// order, each reading back that order's own delivery_handover_code
+// (generated in insertOrderRow, not returned from createOrder/
+// createSplitOrder, so re-fetched here rather than threading a new
+// return shape through three call sites for this one notification).
+const sendHandoverCodeNotices = async (orderIds, buyerId, shippingPhone) => {
+    const smsProvider = require("../sms/providers/sms.provider");
+
+    for (const id of orderIds) {
+        const order = await orderRepository.findOrderById(id);
+        if (!order?.delivery_handover_code) continue;
+
+        await notificationService.notify({
+            userId: buyerId,
+            type: "delivery_handover_code",
+            titleKey: "notifications.order.handoverCode.title",
+            messageKey: "notifications.order.handoverCode.message",
+            messageParams: { orderNumber: order.order_number, code: order.delivery_handover_code },
+            relatedOrderId: id,
+            withWhatsApp: true
+        }).catch((err) => logger.error({ err, orderId: id }, "handover code WhatsApp/in-app notice error"));
+
+        if (shippingPhone && smsProvider.isConfigured()) {
+            const body = `Your NEXORA order ${order.order_number} delivery code is ${order.delivery_handover_code}. Give this to the rider on delivery.`;
+            await smsProvider.sendText(shippingPhone, body)
+                .catch((err) => logger.error({ err, orderId: id }, "handover code SMS send error"));
+        }
+    }
 };
 
 // Checkout buyer-protection insurance add-on (Phase Q1): a flat
@@ -87,6 +123,20 @@ exports.checkout = async (buyerId, shippingInfo) => {
     const variants = variantIds.length ? await cartRepository.findVariantsByIds(variantIds) : [];
     const variantsById = new Map(variants.map((v) => [v.id, v]));
 
+    // Batch bulk-tier pricing (Phase 3) - was one businessService call per
+    // cart line item inside the loop below (an N+1 on every checkout, same
+    // shape as the product/variant batching above already fixed). One
+    // query up front covers every distinct product in the cart instead.
+    const bulkUnitPriceByProduct = await businessService.getBulkUnitPrices(productIds, cart);
+
+    // Seller-eligibility check (Phase 3) - batched once for every distinct
+    // seller in the cart, not per line item. A seller whose account is
+    // suspended or deleted between adding to cart and checking out must
+    // not be checked out from, even though their products technically
+    // still exist - see cartRepository.findActiveSellerIds's comment.
+    const cartSellerIds = [...new Set(cart.map((item) => item.seller_id))];
+    const activeSellerIds = new Set(await cartRepository.findActiveSellerIds(cartSellerIds));
+
     for (const item of cart) {
         const product = productsById.get(item.product_id);
 
@@ -96,6 +146,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
 
         if (product.is_active === 0) {
             throw new Error(`"${item.name}" is no longer available`);
+        }
+
+        if (!activeSellerIds.has(item.seller_id)) {
+            throw new Error(`"${item.name}" is no longer available - the seller's store isn't currently active`);
         }
 
         const variant = item.variant_id ? variantsById.get(item.variant_id) : null;
@@ -119,12 +173,13 @@ exports.checkout = async (buyerId, shippingInfo) => {
         // whether the base price came from a bulk tier or the regular/
         // discount price - it's an adjustment for the specific
         // combination selected, not an alternative to bulk pricing.
-        const bulkUnitPrice = await businessService.getBulkUnitPrice(item.product_id, item.quantity);
+        const bulkUnitPrice = bulkUnitPriceByProduct.get(item.product_id, item.quantity);
         const basePrice = bulkUnitPrice ?? (item.discount_price ?? item.price);
         const unitPrice = variant ? Number((basePrice + Number(variant.price_delta || 0)).toFixed(2)) : basePrice;
         const subtotal = Number((unitPrice * item.quantity).toFixed(2));
 
         const cartItem = {
+            cart_item_id: item.cart_item_id,
             product_id: item.product_id,
             variant_id: variant ? variant.id : null,
             variant_label: variant ? Object.entries(variant.options).map(([k, v]) => `${k}: ${v}`).join(", ") : null,
@@ -147,6 +202,30 @@ exports.checkout = async (buyerId, shippingInfo) => {
         group.items.push(cartItem);
         group.subtotal = Number((group.subtotal + subtotal).toFixed(2));
         bySeller.set(item.seller_id, group);
+    }
+
+    // Commission at checkout (Phase 2). Each item's platform commission is
+    // now snapshotted onto order_items right here, at the rate that applies
+    // AT CHECKOUT, and wallet.service.js#creditSellersForOrder uses that
+    // stored rate unchanged when the payment is confirmed - a seller
+    // upgrading/downgrading plans (or an admin changing the commission
+    // rate) between checkout and payment confirmation can no longer
+    // silently change what a buyer's already-placed order actually earns
+    // the seller. One lookup per distinct seller, same reasoning as
+    // creditSellersForOrder's own commissionRateBySeller map.
+    const subscriptionService = require("../subscription/subscription.service");
+    const distinctSellerIds = [...new Set(cartItems.map((item) => item.seller_id))];
+    const commissionRateBySeller = new Map(
+        await Promise.all(
+            distinctSellerIds.map(async (sellerId) => [sellerId, await subscriptionService.getEffectiveCommissionRate(sellerId)])
+        )
+    );
+    for (const item of cartItems) {
+        const commissionRate = commissionRateBySeller.get(item.seller_id);
+        const commissionAmount = Number((item.subtotal * (commissionRate / 100)).toFixed(2));
+        item.commission_rate = commissionRate;
+        item.commission_amount = commissionAmount;
+        item.seller_net_amount = Number((item.subtotal - commissionAmount).toFixed(2));
     }
 
     const orderNumber = generateOrderNumber();
@@ -220,7 +299,32 @@ exports.checkout = async (buyerId, shippingInfo) => {
         totalAmount
     );
 
-    const roundedTotal = Number((totalAmount + buyerProtectionFee - loyaltyDiscount - couponDiscount).toFixed(2));
+    // Loyalty cap (Phase 3, P0) - previously nothing stopped
+    // couponDiscount + loyaltyDiscount from exceeding what's left to
+    // discount, which could drive the charged total to zero or negative
+    // (a buyer with enough points plus a generous coupon could check out
+    // for free, or for a "negative" amount the payment providers would
+    // reject in stranger ways). The coupon is applied first (its own cap
+    // in coupon.service.js#quote already keeps it from exceeding the
+    // pre-fee subtotal on its own); loyalty points are capped against
+    // whatever's left after that, down to MIN_PAYABLE_ORDER_AMOUNT, and
+    // the actual points redeemed are rounded DOWN to match - a buyer is
+    // never charged for points beyond what the cap actually let them use.
+    const preLoyaltyTotal = Number((totalAmount + buyerProtectionFee - couponDiscount).toFixed(2));
+    const maxLoyaltyDiscount = Math.max(0, Number((preLoyaltyTotal - MIN_PAYABLE_ORDER_AMOUNT).toFixed(2)));
+
+    let cappedPointsRedeemed = pointsRedeemed;
+    let cappedLoyaltyDiscount = loyaltyDiscount;
+    if (cappedLoyaltyDiscount > maxLoyaltyDiscount) {
+        cappedPointsRedeemed = Math.floor(maxLoyaltyDiscount / referralService.POINT_VALUE_TZS);
+        cappedLoyaltyDiscount = Number((cappedPointsRedeemed * referralService.POINT_VALUE_TZS).toFixed(2));
+    }
+
+    const roundedTotal = Number((preLoyaltyTotal - cappedLoyaltyDiscount).toFixed(2));
+
+    if (roundedTotal <= 0) {
+        throw new Error("This order's total can't be reduced to zero or below - please use fewer points or remove the coupon and try again");
+    }
 
     // Progressive KYC  a buyer's tier caps how large a single
     // order can be - see kyc.service.js#enforceOrderLimit. Checked here,
@@ -229,8 +333,19 @@ exports.checkout = async (buyerId, shippingInfo) => {
     // behind to clean up.
     await kycService.enforceOrderLimit(buyerId, roundedTotal);
 
+    // Cash on Delivery (Phase 2) - COD has no payment confirmation at all
+    // until the cash is actually handed over, so it gets its own stricter
+    // checks on top of the general order-value cap above: a lower per-order
+    // cap, a ceiling on how many COD orders a buyer can have in flight at
+    // once, and a hard block for buyers with too many refused deliveries.
+    if (shippingInfo.payment_method === "cash_on_delivery") {
+        await kycService.enforceCodNotBlocked(buyerId);
+        await kycService.enforceCodOrderLimit(buyerId, roundedTotal);
+        await kycService.enforceUnpaidCodLimit(buyerId);
+    }
+
     const buyerProtection = { addon: wantsBuyerProtection, fee: buyerProtectionFee };
-    const loyalty = { pointsRedeemed, discountAmount: loyaltyDiscount };
+    const loyalty = { pointsRedeemed: cappedPointsRedeemed, discountAmount: cappedLoyaltyDiscount };
     const couponInfo = { couponId: coupon?.id ?? null, discountAmount: couponDiscount };
 
     // Pre-order / made-to-order (Phase 8). Scope deliberately narrow for
@@ -287,9 +402,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
 
     let orderId;
     let vendorCount = 1;
+    let deliverableOrderIds = [];
 
     if (isMultiVendor) {
-        const { parentOrderId } = await orderRepository.createSplitOrder(
+        const { parentOrderId, childOrders } = await orderRepository.createSplitOrder(
             buyerId,
             orderNumber,
             shippingInfo,
@@ -303,6 +419,10 @@ exports.checkout = async (buyerId, shippingInfo) => {
         );
         orderId = parentOrderId;
         vendorCount = bySeller.size;
+        // Each vendor's child order ships (and gets delivered)
+        // independently, so the handover code that actually matters is
+        // each child's, not the parent row's unused one.
+        deliverableOrderIds = childOrders.map((c) => c.orderId);
     } else {
         orderId = await orderRepository.createOrder(
             buyerId,
@@ -317,24 +437,22 @@ exports.checkout = async (buyerId, shippingInfo) => {
             couponInfo,
             preorder
         );
+        deliverableOrderIds = [orderId];
     }
 
-    // Only now that the order row genuinely exists do we actually burn
-    // the points quoted above (see quoteRedemption's comment) - fire-
-    // and-forget is NOT appropriate here (unlike most other post-order
-    // side effects in this file), so this is awaited before continuing.
-    await referralService.commitRedemption(buyerId, pointsRedeemed);
-
-    // Same quote-then-commit reasoning as loyalty points above - the
-    // code's one-per-buyer redemption is only recorded once the order
-    // genuinely exists.
-    await couponService.commitRedemption(coupon?.id, buyerId, orderId, couponDiscount);
+    // Coupon/points integrity (Phase 3, P0): both redemptions are now
+    // committed INSIDE createOrder/createSplitOrder's own transaction (see
+    // order.repository.js#commitDiscountRedemptions), not here as a
+    // separate post-creation step - a checkout that fails partway through
+    // the order-creation transaction now rolls the redemption back along
+    // with the order itself, instead of having already burned the buyer's
+    // code/points for an order that was never actually placed.
 
     // Affiliate attribution fire-and-forget, resolves to a
     // no-op if no click_token was submitted or it doesn't check out (see
     // affiliate.service.js#attributeOrder). Uses the actual order total
-    // (post buyer-protection-fee, post loyalty-discount) since that's
-    // genuinely what NEXORA earned commission-worthy revenue on.
+    // The conversion is only recorded as pending here; commission is on the
+    // goods subtotal (not fees) and is paid after delivery and the return window.
     require("../affiliate/affiliate.service").attributeOrder(orderId, buyerId, shippingInfo.affiliate_click_token)
         .catch((err) => logger.error({ err, orderId }, "affiliate attribution error"));
 
@@ -352,9 +470,24 @@ exports.checkout = async (buyerId, shippingInfo) => {
         withWhatsApp: true
     });
 
+    // Delivery proof handover code (Phase 5, P0) - told to the buyer
+    // right away by SMS and WhatsApp (in-app notify's withWhatsApp leg
+    // plus a direct SMS, since this one specifically needs to reach a
+    // phone even for a buyer who doesn't have WhatsApp configured) so
+    // they have it in hand well before a rider arrives. Sent once per
+    // deliverable order - a split cart has one code per vendor, since
+    // each child order is delivered independently by its own rider.
+    // Best-effort: never block checkout on an SMS/WhatsApp send failing.
+    sendHandoverCodeNotices(deliverableOrderIds, buyerId, shippingInfo.shipping_phone)
+        .catch((err) => logger.error({ err, orderId }, "handover code notice error"));
+
     // Fire-and-forget: fraud flagging is advisory (surfaces in the admin
     // panel for review) and must never delay or fail a real checkout.
-    fraudService.evaluateOrder({ id: orderId, buyer_id: buyerId, total_amount: totalAmount })
+    // Phase 3: evaluated against what the buyer is actually being charged
+    // (post buyer-protection-fee, post coupon/loyalty discount), not the
+    // pre-discount cart subtotal - a heavily-discounted order and its
+    // full-price equivalent are very different fraud signals.
+    fraudService.evaluateOrder({ id: orderId, buyer_id: buyerId, total_amount: roundedTotal })
         .catch((err) => {
             logger.error({ err, orderId }, "fraud order evaluation failed");
             Sentry.captureException(err, { tags: { area: "order", stage: "fraud-evaluation" }, extra: { orderId } });
@@ -432,6 +565,111 @@ exports.getOrderDetail = async (orderId, buyerId) => {
     return { ...order, items };
 };
 
+// Cancel a paid order (Phase 3, P0). Shared by cancelOrder (buyer-
+// initiated, below) and autoCancelStaleOrder (system-initiated) - called
+// only AFTER the order's status has actually flipped to cancelled this
+// call (not a race loser - see the conditional UPDATEs in
+// order.repository.js), so it never runs twice for the same order.
+// Reverses whatever financial state the order had accumulated:
+//   - Loyalty points redeemed at checkout are given back.
+//   - A redeemed coupon is freed up for the buyer to use again.
+//   - If payment had reached paid/deposit_paid, the seller(s)' already-
+//     credited earnings are reversed and the buyer is automatically
+//     refunded what they actually paid (the deposit only, for a pre-order
+//     that never reached full payment).
+//   - Any in-flight delivery offer/assignment is called off.
+// Best-effort past the status flip itself: a failure in any one step here
+// is logged/Sentry-captured and does NOT throw back to the caller - the
+// order is genuinely cancelled either way, and refund.service.js's own
+// retry + admin-queue machinery (failed/manual_required status, visible
+// on the refunds dashboard) is exactly what exists to recover from a
+// refund-step failure without ever blocking the cancellation on it.
+const reverseCancelledOrderEffects = async (order) => {
+    // Loyalty points and a coupon are only ever recorded against the
+    // top-level order row (parent for a split cart, or the order itself
+    // for a standalone one - see order.repository.js#createSplitOrder),
+    // so these two only need to run once regardless of is_parent.
+    if (order.loyalty_points_redeemed > 0) {
+        await referralService.reverseRedemption(order.buyer_id, order.loyalty_points_redeemed, order.id)
+            .catch((err) => {
+                logger.error({ err, orderId: order.id }, "cancel: loyalty points reversal error");
+                Sentry.captureException(err, { tags: { area: "order", stage: "cancel-loyalty-reversal" }, extra: { orderId: order.id } });
+            });
+    }
+
+    if (order.coupon_id) {
+        await couponService.reverseRedemption(order.id).catch((err) => {
+            logger.error({ err, orderId: order.id }, "cancel: coupon reversal error");
+            Sentry.captureException(err, { tags: { area: "order", stage: "cancel-coupon-reversal" }, extra: { orderId: order.id } });
+        });
+    }
+
+    // Call off any in-flight delivery before touching money - a rider
+    // shouldn't show up (or keep an offer open) for a pickup that no
+    // longer exists, whether or not the order was ever paid for.
+    const activeOffer = await deliveryRepository.findActiveOffer(order.id).catch(() => null);
+    if (activeOffer) {
+        await deliveryRepository.expireOffer(activeOffer.id).catch((err) => {
+            logger.error({ err, orderId: order.id }, "cancel: delivery offer expiry error");
+        });
+    }
+
+    const delivery = await deliveryRepository.findByOrderId(order.id).catch(() => null);
+    // deliveries.status has no 'cancelled' value (see migration 008) -
+    // 'failed' is the closest existing status for "this delivery is no
+    // longer happening"; the notes column records why.
+    if (delivery && !["delivered", "failed"].includes(delivery.status)) {
+        await deliveryRepository.updateStatus(delivery.id, "failed", "Order cancelled").catch((err) => {
+            logger.error({ err, orderId: order.id }, "cancel: delivery status update error");
+        });
+    }
+
+    if (!["paid", "deposit_paid"].includes(order.payment_status)) {
+        return;
+    }
+
+    await walletService.reverseSellerEarningsForOrder(order.id).catch((err) => {
+        logger.error({ err, orderId: order.id }, "cancel: seller earnings reversal error");
+        Sentry.captureException(err, { tags: { area: "order", stage: "cancel-wallet-reversal" }, extra: { orderId: order.id } });
+    });
+
+    // Only a deposit was ever actually charged for a pre-order that's
+    // cancelled before the balance is paid - refunding the full
+    // total_amount would hand back money the buyer never paid in the
+    // first place.
+    const refundAmount = order.payment_status === "deposit_paid"
+        ? Number(order.deposit_amount)
+        : Number(order.total_amount);
+
+    if (!refundAmount || refundAmount <= 0) return;
+
+    // Refund cap (Phase 5, P0) - shares the same reservation dispute and
+    // return refunds use, so a cancellation refund can't push the
+    // order's total refunded past what was paid even if a dispute/return
+    // partial refund already happened on this order. A reservation
+    // failure here (cap already exhausted - shouldn't normally happen
+    // for a whole-order cancellation refund, but could if a dispute
+    // already refunded part of this order before it was cancelled) is
+    // logged and the auto-refund is skipped rather than thrown, since
+    // the order is already cancelled at this point and this path is
+    // best-effort/fire-and-forget by design.
+    try {
+        await refundCapService.withTransaction((connection) =>
+            refundCapService.reserveRefund(connection, { orderId: order.id, orderItemId: null, amount: refundAmount })
+        );
+    } catch (err) {
+        logger.error({ err, orderId: order.id }, "cancel: refund cap reservation error");
+        Sentry.captureException(err, { tags: { area: "order", stage: "cancel-refund-cap" }, extra: { orderId: order.id } });
+        return;
+    }
+
+    await refundService.autoRefundForCancellation({ order, amount: refundAmount, requestedBy: null })
+        .catch((err) => {
+            logger.error({ err, orderId: order.id }, "cancel: auto-refund error");
+            Sentry.captureException(err, { tags: { area: "order", stage: "cancel-auto-refund" }, extra: { orderId: order.id } });
+        });
+};
+
 exports.cancelOrder = async (orderId, buyerId) => {
     const order = await orderRepository.findOrderById(orderId);
 
@@ -446,6 +684,8 @@ exports.cancelOrder = async (orderId, buyerId) => {
         throw new Error("Cancel the full order instead of a single vendor's part of it");
     }
 
+    let cancelled;
+
     if (order.is_parent) {
         const children = await orderRepository.findChildOrders(orderId);
         const nonCancellable = children.find((child) => !CANCELLABLE_STATUSES.includes(child.status));
@@ -456,28 +696,58 @@ exports.cancelOrder = async (orderId, buyerId) => {
             );
         }
 
-        // (Backend N+1 Fixes & Read Replica Adoption): was N
-        // sequential UPDATEs (one per child order) in a loop - now one
-        // query covers every child order at once. `children` above is
-        // still needed for the cancellability check right before this,
-        // so that fetch stays; only the per-row update collapses.
-        await orderRepository.updateOrderStatusForChildren(orderId, "cancelled");
-        // Stock-restoration fix: a split cart's items live on the child
-        // orders, not the parent row itself (see createSplitOrder), so
-        // restoring stock for a cancelled parent means restoring every
-        // child's items in one pass - see restoreStockForChildOrders.
-        await orderRepository.restoreStockForChildOrders(orderId);
-    } else if (!CANCELLABLE_STATUSES.includes(order.status)) {
-        throw new Error(`Order can no longer be cancelled (status: ${order.status})`);
+        // Cancel a paid order (Phase 3, P0): conditional, not a plain
+        // UPDATE - see order.repository.js#cancelChildOrdersIfCancellable.
+        // The read-based check just above already gives a friendly
+        // per-vendor error for the common case; this is the actual race
+        // guard, covering a buyer cancel that lands in the same instant as
+        // the stale-order sweep job cancelling the same order. A genuine
+        // race (this returns fewer than `children.length`) is treated as
+        // "someone else already finished cancelling it" - not an error,
+        // just nothing further to do here.
+        const changed = await orderRepository.cancelChildOrdersIfCancellable(orderId, CANCELLABLE_STATUSES);
+        cancelled = changed > 0;
+
+        if (cancelled) {
+            // Stock-restoration fix: a split cart's items live on the
+            // child orders, not the parent row itself (see
+            // createSplitOrder), so restoring stock for a cancelled parent
+            // means restoring every child's items in one pass - see
+            // restoreStockForChildOrders. Only runs when this call is the
+            // one that actually changed something - restoring stock twice
+            // for the same cancellation would double-credit it back.
+            await orderRepository.restoreStockForChildOrders(orderId);
+            await orderRepository.cancelOrderIfCancellable(orderId, CANCELLABLE_STATUSES);
+        }
     } else {
-        // Stock-restoration fix: give back whatever this standalone
-        // order's items took at checkout - otherwise a cancelled order
-        // permanently keeps its reserved stock, and a product can read
-        // "out of stock" for a sale that never actually completed.
-        await orderRepository.restoreStockForOrder(orderId);
+        if (!CANCELLABLE_STATUSES.includes(order.status)) {
+            throw new Error(`Order can no longer be cancelled (status: ${order.status})`);
+        }
+
+        cancelled = await orderRepository.cancelOrderIfCancellable(orderId, CANCELLABLE_STATUSES);
+
+        if (cancelled) {
+            // Stock-restoration fix: give back whatever this standalone
+            // order's items took at checkout - otherwise a cancelled order
+            // permanently keeps its reserved stock, and a product can read
+            // "out of stock" for a sale that never actually completed.
+            await orderRepository.restoreStockForOrder(orderId);
+        }
     }
 
-    await orderRepository.updateOrderStatus(orderId, "cancelled");
+    if (!cancelled) {
+        // Lost the race entirely (e.g. the stale-order sweep job
+        // cancelled this exact order between the check above and the
+        // conditional UPDATE) - it's cancelled either way, which is what
+        // the buyer asked for, so this isn't an error.
+        return;
+    }
+
+    // Cancel a paid order (Phase 3, P0) - reverses loyalty/coupon,
+    // seller earnings, and triggers an automatic refund if money was
+    // actually paid. See reverseCancelledOrderEffects' own comment for
+    // why this is fire-and-forget from here.
+    await reverseCancelledOrderEffects(order);
 
     // Item context for the notification (Phase 6, UI/UX remediation) -
     // null for a multi-vendor parent order (its items live on the child
@@ -501,29 +771,54 @@ exports.cancelOrder = async (orderId, buyerId) => {
 // System-initiated (not buyer-initiated) - called by the staleOrders
 // background job. Unlike cancelOrder above, there's no buyer ownership
 // check since there's no requesting user; the query that selects
-// candidates (findStalePendingMobileMoneyOrders) is what scopes this.
+// candidates (findStalePendingMobileMoneyOrders) is what scopes this -
+// which, per Phase 1's provider-status-check fix, only ever selects
+// orders confirmed NOT paid at the provider, so reverseCancelledOrderEffects'
+// paid/deposit_paid branch is normally a no-op here. It's still called
+// unconditionally (not skipped for this caller) because loyalty/coupon
+// reversal applies regardless of payment status, and because a pre-order
+// deposit genuinely can have been paid before the order went stale and
+// unpaid on the (separate) balance leg.
 exports.autoCancelStaleOrder = async (order) => {
+    let cancelled;
+
     if (order.is_parent) {
-        // Phase 5 (Backend N+1 Fixes & Read Replica Adoption): this used
-        // to fetch every child order just to loop over them with one
-        // UPDATE each - N+1 twice over (a SELECT to list children, then
-        // N UPDATEs). Unlike cancelOrder above, there's no per-child
-        // validation needed here (no buyer-facing cancellability check -
-        // see the comment above this function), so the fetch itself was
-        // pure overhead; one batched UPDATE replaces both the SELECT and
-        // the loop.
-        await orderRepository.updateOrderStatusForChildren(order.id, "cancelled");
-        // Stock-restoration fix: same reasoning as cancelOrder above -
-        // these orders never got a payment confirmation at all, so the
-        // stock they reserved at checkout must go back.
-        await orderRepository.restoreStockForChildOrders(order.id);
+        // Cancel a paid order (Phase 3, P0): conditional, not a plain
+        // UPDATE - see order.repository.js#cancelChildOrdersIfCancellable.
+        // Unlike cancelOrder above, there's no per-child validation needed
+        // here (no buyer-facing cancellability check - see the comment
+        // above this function), so this can go straight to the conditional
+        // UPDATE without a separate read-based check first.
+        const changed = await orderRepository.cancelChildOrdersIfCancellable(order.id, CANCELLABLE_STATUSES);
+        cancelled = changed > 0;
+
+        if (cancelled) {
+            // Stock-restoration fix: same reasoning as cancelOrder above -
+            // these orders never got a payment confirmation at all, so the
+            // stock they reserved at checkout must go back. Only runs when
+            // this call is the one that actually changed something -
+            // restoring stock twice (e.g. racing a buyer-initiated cancel
+            // of the same order) would double-credit it back.
+            await orderRepository.restoreStockForChildOrders(order.id);
+            await orderRepository.cancelOrderIfCancellable(order.id, CANCELLABLE_STATUSES);
+        }
     } else {
-        // Stock-restoration fix: standalone stale/unpaid order - restore
-        // its own items' stock the same way.
-        await orderRepository.restoreStockForOrder(order.id);
+        cancelled = await orderRepository.cancelOrderIfCancellable(order.id, CANCELLABLE_STATUSES);
+
+        if (cancelled) {
+            // Stock-restoration fix: standalone stale/unpaid order -
+            // restore its own items' stock the same way.
+            await orderRepository.restoreStockForOrder(order.id);
+        }
     }
 
-    await orderRepository.updateOrderStatus(order.id, "cancelled");
+    if (!cancelled) {
+        // A buyer-initiated cancelOrder (or a previous run of this same
+        // job) already got there first - nothing further to do.
+        return;
+    }
+
+    await reverseCancelledOrderEffects(order);
 
     // Item context for the notification (Phase 6, UI/UX remediation) -
     // same lookup/fallback shape as cancelOrder above: null for a

@@ -8,18 +8,18 @@ import { SkeletonList } from "../components/Skeleton";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import ListFilters from "../components/ui/ListFilters";
+import StatusBadge from "../components/ui/StatusBadge";
 import PageMeta from "../components/PageMeta";
 import { OrdersIcon } from "../components/NavIcons";
 
-const statusStyles = {
-    pending: "bg-line text-ash",
-    processing: "bg-mango/20 text-mango-dark",
-    shipped: "bg-teal/10 text-teal",
-    delivered: "bg-teal text-white",
-    cancelled: "bg-coral/10 text-coral"
-};
-
-const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
+// Buyer-facing tabs mapped onto the order statuses the API already filters by.
+const TABS = [
+    { key: "all", status: undefined, labelKey: "orders.tab.all" },
+    { key: "pay", status: "pending", labelKey: "orders.tab.toPay" },
+    { key: "ship", status: "processing", labelKey: "orders.tab.toShip" },
+    { key: "receive", status: "shipped", labelKey: "orders.tab.toReceive" },
+    { key: "delivered", status: "delivered", labelKey: "orders.tab.delivered" }
+];
 
 const SORT_OPTIONS = [
     { value: "newest", label: "Newest first" },
@@ -65,6 +65,7 @@ export default function Orders() {
     }, [filters]);
 
     const hasActiveFilters = Boolean(filters.status || filters.from || filters.to || filters.q);
+    const activeTab = TABS.find((tab) => tab.status === filters.status) || TABS[0];
 
     if (loading) {
         return (
@@ -88,8 +89,30 @@ export default function Orders() {
             <PageMeta title="My Orders" noIndex />
             <h1 className="font-display text-3xl mb-6">{t("orders.title")}</h1>
 
+            <div className="flex gap-1 overflow-x-auto -mx-1 px-1 mb-4" role="tablist" aria-label={t("orders.tab.label")}>
+                {TABS.map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab.key === tab.key}
+                        onClick={() => setFilters({ ...filters, status: tab.status })}
+                        className={`shrink-0 text-sm px-3 py-1.5 rounded-full transition-colors ${
+                            activeTab.key === tab.key ? "bg-ink text-paper" : "text-ash hover:bg-line/50"
+                        }`}
+                    >
+                        {t(tab.labelKey)}
+                    </button>
+                ))}
+                <Link
+                    to="/returns"
+                    className="shrink-0 text-sm px-3 py-1.5 rounded-full text-ash hover:bg-line/50 transition-colors"
+                >
+                    {t("orders.tab.returns")}
+                </Link>
+            </div>
+
             <ListFilters
-                statusOptions={STATUS_OPTIONS}
                 sortOptions={SORT_OPTIONS}
                 filters={filters}
                 onChange={setFilters}
@@ -125,12 +148,26 @@ export default function Orders() {
                                             {t("orders.vendorsBadge", { count: order.vendor_count })}
                                         </span>
                                     ) : (
-                                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize transition-colors ${statusStyles[order.status] || "bg-line text-ash"}`}>
-                                            {order.status}
-                                        </span>
+                                        // (Phase 4 remediation): was a
+                                        // raw, untranslated `order.status`
+                                        // string in a locally-styled pill -
+                                        // now the shared StatusBadge, same
+                                        // table as booking/dispute/return/
+                                        // group-buy statuses.
+                                        <StatusBadge domain="order" status={order.status} />
                                     )}
                                     <p className="price text-sm font-medium">{format(order.total_amount)}</p>
                                 </Link>
+                                {!order.is_parent && order.status !== "cancelled" && (
+                                    <div className="flex gap-4 pb-3 text-xs">
+                                        <Link to={`/orders/${order.id}`} className="text-teal hover:underline">
+                                            {order.status === "shipped" || order.status === "processing" ? t("orders.trackOrder") : t("orders.viewDetails")}
+                                        </Link>
+                                        <Link to={`/disputes/new?order_id=${order.id}`} className="text-ash hover:text-ink hover:underline">
+                                            {t("orders.helpWithOrder")}
+                                        </Link>
+                                    </div>
+                                )}
                             </li>
                         ))}
                     </ul>

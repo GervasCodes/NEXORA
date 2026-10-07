@@ -6,33 +6,54 @@ import { useWishlist } from "../context/WishlistContext";
 import { useCart } from "../context/CartContext";
 import { useToast } from "../context/ToastContext";
 import { useDataSaver } from "../context/DataSaverContext";
+import { useLanguage } from "../context/LanguageContext";
 import Button from "./ui/Button";
 import VerificationBadge from "./VerificationBadge";
+import { imageSrcSet } from "../utils/imageVariants";
 
+const NEW_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const CARD_SIZES = "(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
+// 44px hit area; the visible circle is drawn inside it.
+const SAVE_BUTTON = "absolute top-3 right-2 z-10 w-11 h-11 flex items-center justify-center";
 
-function ProductCard({ product, layout = "grid" }) {
+function HeartIcon({ filled }) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill={filled ? "#e4572e" : "none"}
+            stroke={filled ? "#e4572e" : "currentColor"}
+            strokeWidth="2"
+            className="w-3.5 h-3.5"
+            aria-hidden="true"
+        >
+            <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+        </svg>
+    );
+}
+
+function ProductCard({ product, priority = false }) {
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const { user } = useAuth();
     const wishlist = useWishlist();
     const cart = useCart();
     const toast = useToast();
     const dataSaver = useDataSaver();
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
+    const discountPct = hasDiscount ? Math.round((1 - Number(product.discount_price) / Number(product.price)) * 100) : 0;
     const stock = Number(product.stock);
     const saved = wishlist?.isSaved(product.id);
-    const isList = layout === "list";
+    const isNew = Boolean(product.created_at) && Date.now() - new Date(product.created_at).getTime() < NEW_WINDOW_MS;
+    const isGuest = !user;
+    // Guests are sent to sign in and come back to this product.
+    const loginHref = (intent) => `/login?returnTo=${encodeURIComponent(`/products/${product.slug}`)}&intent=${intent}`;
+    const hasVideo = product.has_video || product.videos?.length > 0;
     const [adding, setAdding] = useState(false);
 
-    const handleToggleSave = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        wishlist?.toggle(product.id);
-    };
+    const handleToggleSave = () => wishlist?.toggle(product.id);
 
-   
-    const handleAddToCart = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleAddToCart = async () => {
         if (adding || stock === 0) return;
 
         setAdding(true);
@@ -40,61 +61,46 @@ function ProductCard({ product, layout = "grid" }) {
         setAdding(false);
 
         if (result?.success) {
-            toast?.success(`Added "${product.name}" to cart.`);
+            toast?.success(t("products.feedAddedToCart", { name: product.name }));
         } else {
-            toast?.error(result?.message || "Couldn't add to cart. Please try again.");
+            toast?.error(result?.message || t("products.feedAddFailed"));
         }
     };
 
     const media = (
-        <div className={`bg-line/40 rounded-md overflow-hidden relative ${isList ? "w-24 h-24 sm:w-32 sm:h-32 shrink-0" : "aspect-square mb-3"}`}>
+        <div className="bg-line/40 rounded-md overflow-hidden relative aspect-square mb-3">
             {product.image_url ? (
                 <img
                     src={dataSaver?.optimize(product.image_url) || product.image_url}
+                    srcSet={imageSrcSet(product.image_url)}
+                    sizes={CARD_SIZES}
                     alt={product.name}
-                    loading="lazy"
+                    width={400}
+                    height={400}
+                    loading={priority ? "eager" : "lazy"}
+                    fetchPriority={priority ? "high" : "auto"}
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
             ) : (
                 <div className="w-full h-full flex items-center justify-center text-ash text-xs">
-                    No image
+                    {t("products.noImage")}
                 </div>
             )}
 
-            {/* Save for later - buyers only; hidden for sellers/guests
-                browsing their own or others' catalogs. */}
-            {user?.role === "buyer" && (
-                <button
-                    type="button"
-                    onClick={handleToggleSave}
-                    aria-label={saved ? "Remove from saved" : "Save for later"}
-                    aria-pressed={saved}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full glass-strong flex items-center justify-center hover:scale-110 transition-transform"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill={saved ? "#e4572e" : "none"}
-                        stroke={saved ? "#e4572e" : "currentColor"}
-                        strokeWidth="2"
-                        className="w-3.5 h-3.5"
-                    >
-                        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
-                    </svg>
-                </button>
+            <VerificationBadge entity={product} corner="top-left" />
+
+            {hasDiscount && (
+                <span className="absolute bottom-2 right-2 bg-coral text-frost text-[11px] font-semibold rounded-full px-2 py-0.5">
+                    -{discountPct}%
+                </span>
             )}
 
-            <VerificationBadge entity={product} corner="top-left" compact={isList} />
-
-            {/* Video cue. The /products list response doesn't include
-                videos today, so this stays dormant until it carries
-                `videos` (as the detail endpoint does) or a `has_video`
-                flag - see the phase-7 CHANGES.md. */}
-            {(product.has_video || product.videos?.length > 0) && (
+            {/* Video cue. Driven by has_video / first_video_url from the list response. */}
+            {hasVideo && (
                 <span
                     role="img"
-                    aria-label="Has video"
+                    aria-label={t("products.feedVideo")}
                     className="absolute bottom-2 left-2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3" aria-hidden="true">
@@ -109,8 +115,8 @@ function ProductCard({ product, layout = "grid" }) {
         <p className="text-xs text-ash uppercase tracking-wide mb-1 flex items-center gap-1">
             <span className="truncate min-w-0">{product.store_name}</span>
             {product.region && (
-                <span className="normal-case tracking-normal text-ash/80 flex items-center gap-0.5 shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5 shrink-0">
+                <span className="normal-case tracking-normal text-ash flex items-center gap-0.5 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5 shrink-0" aria-hidden="true">
                         <path d="M12 21s-6.5-5.4-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.6 12 21 12 21Z" />
                         <circle cx="12" cy="10.5" r="2" />
                     </svg>
@@ -130,75 +136,83 @@ function ProductCard({ product, layout = "grid" }) {
                     {format(product.price)}
                 </span>
             )}
+            {isNew && (
+                <span className="ml-auto text-[11px] font-semibold text-teal">{t("products.newBadge")}</span>
+            )}
         </div>
     );
 
     const ratingAndStock = (
-        <div className={isList ? "flex items-center gap-3 mt-1" : "flex items-center justify-between mt-1"}>
+        <div className="flex items-center justify-between mt-1">
             {product.average_rating ? (
                 <p className="text-xs text-ash flex items-center gap-0.5">
                     <span className="text-mango">★</span> {Number(product.average_rating).toFixed(1)}
-                    <span className="text-ash/70">({product.review_count})</span>
+                    <span className="text-ash">({product.review_count})</span>
                 </p>
             ) : <span />}
 
             {stock === 0 ? (
-                <p className="text-xs text-coral font-medium">Out of stock</p>
+                <p className="text-xs text-coral font-medium">{t("products.outOfStock")}</p>
             ) : stock <= 5 ? (
-                <p className="text-xs text-mango-dark font-medium">Only {stock} left</p>
+                <p className="text-xs text-mango-dark font-medium">{t("products.onlyLeft", { count: stock })}</p>
             ) : null}
         </div>
     );
 
-
-   
-    
-    const addToCartButton = user?.role === "buyer" && (isList ? stock > 0 : true) && (
-        <Button
-            type="button"
-            onClick={handleAddToCart}
-            disabled={adding || stock === 0}
-            size="sm"
-            className={isList ? "shrink-0 self-center" : "w-full mt-2"}
-        >
-            {adding ? "Adding…" : "Add to cart"}
-        </Button>
+    // Save: buyers toggle it; guests are sent to sign in. Sellers see neither.
+    const saveButton = (user?.role === "buyer" || isGuest) && (
+        isGuest ? (
+            <Link to={loginHref("save")} aria-label={t("products.feedSignIn")} className={SAVE_BUTTON}>
+                <span className="w-7 h-7 rounded-full glass-strong flex items-center justify-center"><HeartIcon filled={false} /></span>
+            </Link>
+        ) : (
+            <button
+                type="button"
+                onClick={handleToggleSave}
+                aria-label={saved ? t("products.feedRemoveSaved") : t("products.feedSave")}
+                aria-pressed={!!saved}
+                className={SAVE_BUTTON}
+            >
+                <span className="w-7 h-7 rounded-full glass-strong flex items-center justify-center hover:scale-110 transition-transform"><HeartIcon filled={!!saved} /></span>
+            </button>
+        )
     );
 
-    if (isList) {
-        return (
+    const addToCartButton = (isGuest || user?.role === "buyer") && (
+        isGuest ? (
             <Link
-                to={`/products/${product.slug}`}
-                className="tag-string group relative flex gap-4 bg-paper border border-line rounded-lg p-3 hover:shadow-md hover:-translate-y-0.5 transition-all"
+                to={loginHref("add-to-cart")}
+                className="mt-2 flex w-full min-h-[44px] items-center justify-center rounded-md border border-ink text-sm font-medium hover:bg-ink hover:text-paper transition-colors"
             >
-                {media}
-
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    {storeLine}
-                    <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
-                    {priceRow}
-                    {ratingAndStock}
-                </div>
-
-                {addToCartButton}
+                {t("products.feedAddToCart")}
             </Link>
-        );
-    }
+        ) : (
+            <Button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={adding || stock === 0}
+                size="sm"
+                className="w-full mt-2 min-h-[44px]"
+            >
+                {adding ? "…" : t("products.feedAddToCart")}
+            </Button>
+        )
+    );
 
+    // Save and add-to-cart sit beside the link, not inside it, so there are
+    // no nested interactive elements.
     return (
-        <Link
-            to={`/products/${product.slug}`}
-            className="tag-string group relative block bg-paper border border-line rounded-lg pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5 transition-all"
-        >
-            {media}
-
-            {storeLine}
-            <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
-
-            {priceRow}
-            {ratingAndStock}
+        <div className="tag-string group relative block bg-paper border border-line rounded-lg pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5 transition-all">
+            <Link to={`/products/${product.slug}`} className="block">
+                {media}
+                {storeLine}
+                <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
+                {priceRow}
+                {ratingAndStock}
+            </Link>
+            {saveButton}
             {addToCartButton}
-        </Link>
+        </div>
     );
 }
 

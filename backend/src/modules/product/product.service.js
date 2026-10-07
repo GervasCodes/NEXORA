@@ -132,6 +132,9 @@ exports.listProducts = async (query) => {
         region: parseLocation(query.region),
         minRating: parseMinRating(query.min_rating),
         sort: parseSort(query.sort),
+        inStock: query.in_stock === "1" || query.in_stock === "true",
+        onSale: query.on_sale === "1" || query.on_sale === "true",
+        verifiedOnly: query.verified === "1" || query.verified === "true",
         page,
         limit
     };
@@ -507,4 +510,149 @@ exports.setProductActiveBySeller = async (sellerId, productId, isActive) => {
         cache.bumpVersion(CACHE_NAMESPACE),
         cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
     ]);
+};
+
+// Drafts (Phase 13a). A draft is a product row with is_draft = TRUE and
+// is_active = FALSE, so buyer queries and the listing-limit count never see
+// it. Publishing re-runs the same gates createProduct uses.
+const DRAFT_FIELDS = [
+    "name", "description", "price", "discount_price", "stock", "brand",
+    "product_condition", "category_id", "is_preorder", "preorder_lead_time_days"
+];
+// Empty strings in these clear the column; in the rest they mean "not sent".
+const NULLABLE_DRAFT_FIELDS = new Set([
+    "description", "discount_price", "brand", "category_id", "preorder_lead_time_days"
+]);
+
+const pickDraftFields = (data) => {
+    const picked = {};
+    for (const key of DRAFT_FIELDS) {
+        const value = data[key];
+        if (value === undefined) continue;
+        if (value === "") {
+            if (NULLABLE_DRAFT_FIELDS.has(key)) picked[key] = null;
+            continue;
+        }
+        picked[key] = value;
+    }
+    return picked;
+};
+
+const slugifyName = (name) => name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "");
+
+const loadOwnedDraft = async (sellerId, productId) => {
+    const product = await productRepository.findById(productId);
+    if (!product || product.seller_id !== sellerId) {
+        throw Object.assign(new Error("Product not found"), { status: 404 });
+    }
+    if (!product.is_draft) {
+        throw Object.assign(new Error("This product is already published - edit it from your product list"), {
+            code: "NOT_A_DRAFT",
+            status: 409
+        });
+    }
+    return product;
+};
+
+exports.createDraft = async (sellerId, data) => {
+    const name = typeof data.name === "string" ? data.name.trim() : "";
+    if (name.length < 3) {
+        throw Object.assign(new Error("Enter a product name (at least 3 characters) to start saving"), {
+            code: "DRAFT_NAME_REQUIRED",
+            status: 400
+        });
+    }
+    const picked = pickDraftFields({ ...data, name });
+    if (picked.category_id) {
+        await assertCategoryIsActive(picked.category_id);
+    }
+
+    // Placeholder slug: the real one is derived from the name at publish
+    // time, so a draft never collides with a live product's slug.
+    const productId = await productRepository.createDraft({
+        seller_id: sellerId,
+        category_id: picked.category_id ?? null,
+        name,
+        slug: `draft-${require("crypto").randomBytes(8).toString("hex")}`
+    });
+
+    return { productId };
+};
+
+exports.saveDraft = async (sellerId, productId, data) => {
+    await loadOwnedDraft(sellerId, productId);
+    const picked = pickDraftFields(data);
+    if (picked.name !== undefined) {
+        picked.name = picked.name.trim();
+    }
+    if (picked.category_id) {
+        await assertCategoryIsActive(picked.category_id);
+    }
+    await productRepository.updateDraftFields(productId, picked);
+    return { productId };
+};
+
+exports.publishDraft = async (sellerId, productId, data) => {
+    const draft = await loadOwnedDraft(sellerId, productId);
+    const merged = { ...draft, ...pickDraftFields(data) };
+
+    const name = typeof merged.name === "string" ? merged.name.trim() : "";
+    if (name.length < 3) {
+        throw Object.assign(new Error("Product name is too short"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    const price = Number(merged.price);
+    if (merged.price === null || merged.price === "" || Number.isNaN(price) || price < 0) {
+        throw Object.assign(new Error("Enter a valid price"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    if (!merged.category_id) {
+        throw Object.assign(new Error("Choose a category"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    await assertCategoryIsActive(merged.category_id);
+
+    if (merged.is_preorder) {
+        await assertSellerAcceptsPreorders(sellerId);
+    }
+
+    // Same listing cap as createProduct. Drafts are not counted, so this is
+    // the first point where a draft starts using a listing slot.
+    const subscriptionService = require("../subscription/subscription.service");
+    const listingCheck = await subscriptionService.canCreateListing(sellerId);
+    if (!listingCheck.allowed) {
+        throw Object.assign(new Error(listingCheck.message), {
+            code: "LISTING_LIMIT_REACHED",
+            status: 403
+        });
+    }
+
+    const fields = { ...pickDraftFields(merged), name, slug: slugifyName(name) };
+
+    let published;
+    try {
+        published = await productRepository.publishDraft(productId, fields);
+    } catch (error) {
+        if (error && error.code === "ER_DUP_ENTRY") {
+            throw Object.assign(new Error("Another product already uses this name - change the name and try again"), {
+                code: "SLUG_TAKEN",
+                status: 409
+            });
+        }
+        throw error;
+    }
+    if (!published) {
+        throw Object.assign(new Error("This product was already published"), { code: "NOT_A_DRAFT", status: 409 });
+    }
+
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
+
+    const storeService = require("../store/store.service");
+    storeService.notifyFollowersOfNewListing(sellerId, { name, slug: fields.slug }).catch(() => {});
+
+    return { productId, slug: fields.slug };
 };

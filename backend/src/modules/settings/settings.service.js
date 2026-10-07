@@ -48,6 +48,13 @@ const DEFAULTS = {
     // getEscrowHoldDays() below.
     escrow_hold_days: "5",
 
+    // Group buys (Phase 3) - how long after a group buy's deadline
+    // resolves to 'successful' a participant still has to complete their
+    // discounted checkout before forfeiting their spot. Was a hardcoded
+    // constant in groupBuy.service.js; admin-editable like every other
+    // rate/window above now.
+    group_buy_claim_window_hours: "48",
+
     // Escalating search radius for nearest-agent dispatch matching
     // (Phase 1, Durable Dispatch Foundation - see
     // delivery.service.js#offerToNextCandidate). Ascending km steps: an
@@ -91,7 +98,52 @@ const DEFAULTS = {
     ai_daily_token_cap_per_user: "20000",
     ai_monthly_token_cap_per_user: "300000",
     ai_daily_token_cap_global: "2000000",
-    ai_monthly_token_cap_global: "30000000"
+    ai_monthly_token_cap_global: "30000000",
+
+    // Wallets, escrow, COD & withdrawals (master prompt Phase 2) - see
+    // wallet.service.js#requestWithdrawal / payment.service.js#initiateWalletTopUp
+    // / order.service.js#checkout for the readers of each of these.
+    withdrawal_min_amount: "5000",
+    withdrawal_max_amount: "5000000",
+    // Per day, by the seller's users.verification_tier.
+    withdrawal_daily_cap_none: "200000",
+    withdrawal_daily_cap_id_verified: "2000000",
+    withdrawal_daily_cap_business_verified: "10000000",
+    // Hours a seller's FIRST withdrawal to a given payout method+details
+    // combination is held before an admin can approve it.
+    withdrawal_new_payout_hold_hours: "24",
+    // A seller with this many currently open/under_review disputes cannot
+    // request a new withdrawal.
+    withdrawal_open_dispute_block_threshold: "3",
+    topup_min_amount: "1000",
+    topup_max_amount: "3000000",
+    // Per day, by the buyer's KYC tier (kyc.service.js's tier0/1/2).
+    topup_daily_cap_tier0: "500000",
+    topup_daily_cap_tier1: "2000000",
+    topup_daily_cap_tier2: "10000000",
+    // Hours after `delivered`, with no open dispute, before a Cash on
+    // Delivery order is auto-confirmed instead of waiting on the buyer.
+    cod_auto_confirm_hours: "48",
+    // A buyer with this many "refused" Cash on Delivery deliveries loses
+    // access to the Cash on Delivery payment method at checkout.
+    cod_block_after_refused_count: "3",
+
+    // Phase 7 guardrails. commission_rate_max caps what an admin can set;
+    // usd_exchange_rate_max_change_percent is the band beyond which a rate
+    // change needs a second confirmation; retention 0 = keep documents.
+    commission_rate_max: "30",
+    usd_exchange_rate_max_change_percent: "10",
+    approved_document_retention_days: "0"
+};
+
+const ESCROW_HOLD_MIN_DAYS = 0;
+const ESCROW_HOLD_MAX_DAYS = 60;
+
+const badRequest = (message, extra = {}) => {
+    const error = new Error(message);
+    error.status = 400;
+    Object.assign(error, extra);
+    return error;
 };
 
 const isEnabled = (value) => value === "true" || value === true;
@@ -213,6 +265,79 @@ exports.getDepartmentSponsorshipDailyRate = async () => {
 exports.getEscrowHoldDays = async () => {
     const map = await getCachedAll();
     return Number(map.escrow_hold_days);
+};
+
+exports.getApprovedDocumentRetentionDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.approved_document_retention_days);
+};
+
+exports.getCommissionRateMax = async () => {
+    const map = await getCachedAll();
+    const max = Number(map.commission_rate_max);
+    return Number.isFinite(max) && max > 0 ? max : 30;
+};
+
+exports.getGroupBuyClaimWindowHours = async () => {
+    const map = await getCachedAll();
+    return Number(map.group_buy_claim_window_hours);
+};
+
+// ---- Disputes & returns (Phase 5) ----------------------------------------
+
+exports.getReturnWindowDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.return_window_days);
+};
+
+exports.getReturnWindowInsuredDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.return_window_insured_days);
+};
+
+exports.getDisputeSellerResponseHours = async () => {
+    const map = await getCachedAll();
+    return Number(map.dispute_seller_response_hours);
+};
+
+// ---- Wallets, escrow, COD & withdrawals (Phase 2) ------------------------
+
+exports.getWithdrawalLimits = async () => {
+    const map = await getCachedAll();
+    return {
+        minAmount: Number(map.withdrawal_min_amount),
+        maxAmount: Number(map.withdrawal_max_amount),
+        dailyCapByTier: {
+            none: Number(map.withdrawal_daily_cap_none),
+            id_verified: Number(map.withdrawal_daily_cap_id_verified),
+            business_verified: Number(map.withdrawal_daily_cap_business_verified)
+        },
+        newPayoutHoldHours: Number(map.withdrawal_new_payout_hold_hours),
+        openDisputeBlockThreshold: Number(map.withdrawal_open_dispute_block_threshold)
+    };
+};
+
+exports.getTopUpLimits = async () => {
+    const map = await getCachedAll();
+    return {
+        minAmount: Number(map.topup_min_amount),
+        maxAmount: Number(map.topup_max_amount),
+        dailyCapByTier: {
+            tier0: Number(map.topup_daily_cap_tier0),
+            tier1: Number(map.topup_daily_cap_tier1),
+            tier2: Number(map.topup_daily_cap_tier2)
+        }
+    };
+};
+
+exports.getCodAutoConfirmHours = async () => {
+    const map = await getCachedAll();
+    return Number(map.cod_auto_confirm_hours);
+};
+
+exports.getCodBlockAfterRefusedCount = async () => {
+    const map = await getCachedAll();
+    return Number(map.cod_block_after_refused_count);
 };
 
 // ---- Monetization Master Switch ------------------------------------------
@@ -363,57 +488,125 @@ exports.getPublicMonetizationStatus = async () => {
     }, {});
 };
 
-exports.updateSettings = async (data) => {
-    if (data.commission_rate !== undefined) {
-        await settingsRepository.upsert("commission_rate", String(data.commission_rate));
-    }
-    if (data.rider_delivery_fee !== undefined) {
-        await settingsRepository.upsert("rider_delivery_fee", String(data.rider_delivery_fee));
-    }
-    if (data.usd_exchange_rate !== undefined) {
-        await settingsRepository.upsert("usd_exchange_rate", String(data.usd_exchange_rate));
+// Writes only keys whose value actually changes, records old -> new in
+// platform_setting_history, and enforces the Phase 7 guardrails:
+//  - commission_rate is capped at commission_rate_max and a change needs
+//    confirm_commission_change: true (the UI shows current -> new first);
+//  - usd_exchange_rate moves beyond usd_exchange_rate_max_change_percent need
+//    confirm_large_exchange_rate_change: true;
+//  - escrow_hold_days is bounded;
+//  - expected_updated_at (ISO time the admin loaded the page) rejects the save
+//    if any key being changed was edited by someone else since.
+const asComparable = (value) => (value === undefined || value === null ? "" : String(value));
+
+exports.updateSettings = async (data, { actorId = null } = {}) => {
+    const { rows: currentRows, map: current } = await (async () => {
+        const rows = await settingsRepository.findAll();
+        const map = { ...DEFAULTS };
+        rows.forEach((row) => { map[row.setting_key] = row.setting_value; });
+        return { rows, map };
+    })();
+    const updatedAtByKey = Object.fromEntries(currentRows.map((r) => [r.setting_key, r.updated_at]));
+
+    const NUMBER_KEYS = [
+        "commission_rate", "rider_delivery_fee", "usd_exchange_rate",
+        "sponsorship_daily_rate", "featured_store_daily_rate", "department_sponsorship_daily_rate",
+        "escrow_hold_days",
+        "withdrawal_min_amount", "withdrawal_max_amount",
+        "withdrawal_daily_cap_none", "withdrawal_daily_cap_id_verified", "withdrawal_daily_cap_business_verified",
+        "withdrawal_new_payout_hold_hours", "withdrawal_open_dispute_block_threshold",
+        "topup_min_amount", "topup_max_amount",
+        "topup_daily_cap_tier0", "topup_daily_cap_tier1", "topup_daily_cap_tier2",
+        "cod_auto_confirm_hours", "cod_block_after_refused_count",
+        "delivery_offer_timeout_ms",
+        "ai_daily_token_cap_per_user", "ai_monthly_token_cap_per_user",
+        "ai_daily_token_cap_global", "ai_monthly_token_cap_global",
+        "approved_document_retention_days"
+    ];
+
+    const changes = [];
+    const queue = (key, nextValue) => {
+        if (asComparable(current[key]) !== nextValue) {
+            changes.push({ key, oldValue: current[key] === undefined ? null : String(current[key]), newValue: nextValue });
+        }
+    };
+
+    for (const key of NUMBER_KEYS) {
+        if (data[key] !== undefined) queue(key, String(data[key]));
     }
     if (data.delivery_distance_bands !== undefined) {
-        await settingsRepository.upsert("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
-    }
-    if (data.sponsorship_daily_rate !== undefined) {
-        await settingsRepository.upsert("sponsorship_daily_rate", String(data.sponsorship_daily_rate));
-    }
-    if (data.featured_store_daily_rate !== undefined) {
-        await settingsRepository.upsert("featured_store_daily_rate", String(data.featured_store_daily_rate));
-    }
-    if (data.department_sponsorship_daily_rate !== undefined) {
-        await settingsRepository.upsert("department_sponsorship_daily_rate", String(data.department_sponsorship_daily_rate));
-    }
-    if (data.escrow_hold_days !== undefined) {
-        await settingsRepository.upsert("escrow_hold_days", String(data.escrow_hold_days));
+        queue("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
     }
     if (data.delivery_offer_radius_steps_km !== undefined) {
-        await settingsRepository.upsert(
-            "delivery_offer_radius_steps_km",
-            JSON.stringify(data.delivery_offer_radius_steps_km)
-        );
+        queue("delivery_offer_radius_steps_km", JSON.stringify(data.delivery_offer_radius_steps_km));
     }
-    if (data.delivery_offer_timeout_ms !== undefined) {
-        await settingsRepository.upsert("delivery_offer_timeout_ms", String(data.delivery_offer_timeout_ms));
-    }
-    // Nexora Assistant admin controls (Phase 7) - see the DEFAULTS comment
-    // above and exports.getAiSettings, the only reader of these five keys.
     if (data.ai_enabled !== undefined) {
-        await settingsRepository.upsert("ai_enabled", data.ai_enabled ? "true" : "false");
+        queue("ai_enabled", data.ai_enabled ? "true" : "false");
     }
-    if (data.ai_daily_token_cap_per_user !== undefined) {
-        await settingsRepository.upsert("ai_daily_token_cap_per_user", String(data.ai_daily_token_cap_per_user));
+
+    const changing = (key) => changes.find((c) => c.key === key);
+
+    const commission = changing("commission_rate");
+    if (commission) {
+        const max = Number(current.commission_rate_max) || 30;
+        if (Number(commission.newValue) > max) {
+            throw badRequest(`Commission cannot be set above the platform maximum of ${max}%.`);
+        }
+        if (data.confirm_commission_change !== true) {
+            throw badRequest(
+                `Changing commission from ${commission.oldValue}% to ${commission.newValue}% needs confirmation.`,
+                { code: "CONFIRMATION_REQUIRED", field: "commission_rate" }
+            );
+        }
     }
-    if (data.ai_monthly_token_cap_per_user !== undefined) {
-        await settingsRepository.upsert("ai_monthly_token_cap_per_user", String(data.ai_monthly_token_cap_per_user));
+
+    const fx = changing("usd_exchange_rate");
+    if (fx) {
+        const previous = Number(fx.oldValue);
+        const band = Number(current.usd_exchange_rate_max_change_percent) || 10;
+        const movedPercent = previous > 0 ? (Math.abs(Number(fx.newValue) - previous) / previous) * 100 : 0;
+        if (movedPercent > band && data.confirm_large_exchange_rate_change !== true) {
+            throw badRequest(
+                `This moves the exchange rate by ${movedPercent.toFixed(1)}% (limit without extra confirmation: ${band}%).`,
+                { code: "CONFIRMATION_REQUIRED", field: "usd_exchange_rate" }
+            );
+        }
     }
-    if (data.ai_daily_token_cap_global !== undefined) {
-        await settingsRepository.upsert("ai_daily_token_cap_global", String(data.ai_daily_token_cap_global));
+
+    const escrow = changing("escrow_hold_days");
+    if (escrow) {
+        const days = Number(escrow.newValue);
+        if (!Number.isInteger(days) || days < ESCROW_HOLD_MIN_DAYS || days > ESCROW_HOLD_MAX_DAYS) {
+            throw badRequest(`Escrow hold must be a whole number of days from ${ESCROW_HOLD_MIN_DAYS} to ${ESCROW_HOLD_MAX_DAYS}.`);
+        }
     }
-    if (data.ai_monthly_token_cap_global !== undefined) {
-        await settingsRepository.upsert("ai_monthly_token_cap_global", String(data.ai_monthly_token_cap_global));
+
+    if (data.expected_updated_at) {
+        const loadedAt = new Date(data.expected_updated_at).getTime();
+        const stale = changes.find((c) => {
+            const t = updatedAtByKey[c.key] ? new Date(updatedAtByKey[c.key]).getTime() : 0;
+            return Number.isFinite(loadedAt) && t > loadedAt;
+        });
+        if (stale) {
+            const error = badRequest(
+                `"${stale.key}" was changed by someone else after you opened this page. Reload and try again.`,
+                { code: "STALE_SETTINGS" }
+            );
+            error.status = 409;
+            throw error;
+        }
     }
+
+    for (const change of changes) {
+        await settingsRepository.upsert(change.key, change.newValue);
+        await settingsRepository.recordHistory(change.key, change.oldValue, change.newValue, actorId);
+    }
+
     invalidateCache();
     return exports.getAll();
 };
+
+exports.getSettingHistory = async (key, limit = 50) => settingsRepository.findHistory(key, limit);
+
+// "Last changed by / when" for every key that has history.
+exports.getSettingsMeta = async () => settingsRepository.findLastChanges();

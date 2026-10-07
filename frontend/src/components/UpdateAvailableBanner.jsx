@@ -30,8 +30,9 @@ const UNSAFE_ROUTE_PATTERNS = [
 
 const isUnsafeRoute = (pathname) => UNSAFE_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
 
-export default function UpdateAvailableBanner() {
+export default function UpdateAvailableBanner({ onVisibilityChange }) {
     const [visible, setVisible] = useState(false);
+    useEffect(() => { onVisibilityChange?.(visible); }, [visible, onVisibilityChange]);
     const [dismissed, setDismissed] = useState(false);
     const pendingRef = useRef(false);
     const availableSinceRef = useRef(0);
@@ -89,7 +90,7 @@ export default function UpdateAvailableBanner() {
     return (
         <div
             role="status"
-            className="fixed bottom-[calc(14rem+env(safe-area-inset-bottom))] md:bottom-24 inset-x-4 sm:inset-x-auto sm:left-4 z-[1100] sm:w-80
+            className="fixed bottom-[calc(14rem+env(safe-area-inset-bottom))] md:bottom-24 inset-x-4 sm:inset-x-auto sm:left-4 z-[var(--z-banner-top)] sm:w-80
                 glass-strong border border-azure/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

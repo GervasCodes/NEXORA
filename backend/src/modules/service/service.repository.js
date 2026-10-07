@@ -71,7 +71,7 @@ exports.findById = async (serviceId) => {
 //
 // Public service browsing/search - same reasoning as
 // product.repository.js#findAll.
-exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region, minRating, sort, page, limit }) => {
+exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region, minRating, sort, near = null, page, limit }) => {
     const offset = (page - 1) * limit;
     const conditions = ["s.is_active = 1", "s.status = 'published'"];
     const params = [];
@@ -101,6 +101,17 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
     conditions.push(...locationRating.conditions);
     params.push(...locationRating.params);
 
+    // Distance from the buyer in km (haversine, same formula as utils/geo.js).
+    // Only computed when the buyer shares a location; never exposes the
+    // provider's coordinates, just the rounded distance.
+    const DIST = "(6371 * acos(LEAST(1, cos(radians(?)) * cos(radians(s.lat)) * cos(radians(s.lng) - radians(?)) + sin(radians(?)) * sin(radians(s.lat)))))";
+    let distanceSelectParams = [];
+    if (near) {
+        conditions.push(`s.lat IS NOT NULL AND s.lng IS NOT NULL AND ${DIST} <= ?`);
+        params.push(near.lat, near.lng, near.lat, near.radiusKm);
+        distanceSelectParams = [near.lat, near.lng, near.lat];
+    }
+
     // See utils/productSearch.js for why this is BOOLEAN MODE + prefix
     // wildcards rather than NATURAL LANGUAGE MODE, and why 1-2 char terms
     // still fall back to a plain LIKE scan. Reused as-is (not
@@ -119,10 +130,11 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
         params.push(`%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`, `%${searchPlan.raw}%`);
     }
 
-    const orderBy = buildOrderByClause(sort, selectExtra.length > 0);
+    const orderBy = near ? "distance_km ASC, s.created_at DESC" : buildOrderByClause(sort, selectExtra.length > 0);
 
     const whereClause = conditions.join(" AND ");
     const relevanceParam = selectExtra.length ? [searchPlan.booleanQuery] : [];
+    if (near) selectExtra.push(`ROUND(${DIST}, 1) AS distance_km`);
 
     const [rows] = await dbRead.query(
         `SELECT
@@ -152,7 +164,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
         WHERE ${whereClause}
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?`,
-        [...relevanceParam, ...params, limit, offset]
+        [...relevanceParam, ...distanceSelectParams, ...params, limit, offset]
     );
 
     const [[{ total }]] = await dbRead.query(
@@ -204,6 +216,7 @@ exports.findBySlug = async (slug) => {
         `SELECT
             s.*,
             sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified,
+            sp.social_whatsapp, sp.public_phone,
             sc.name AS category_name, sc.slug AS category_slug,
             (
                 SELECT AVG(r.rating) FROM reviews r
@@ -379,4 +392,16 @@ exports.setPricingRuleActive = async (ruleId, isActive) => {
 
 exports.deletePricingRule = async (ruleId) => {
     await db.query("DELETE FROM service_pricing_rules WHERE id = ?", [ruleId]);
+};
+
+// Drafts (Phase 13a): hidden from buyers and from the listing-limit count
+// (is_active = FALSE) until publish. Pricing starts at 0 and the placeholder
+// slug is replaced when the listing is published.
+exports.createDraft = async ({ provider_id, category_id, title, slug }) => {
+    const [result] = await db.query(
+        `INSERT INTO services (provider_id, category_id, title, slug, base_price, status, is_active)
+         VALUES (?, ?, ?, ?, 0, 'draft', FALSE)`,
+        [provider_id, category_id ?? null, title, slug]
+    );
+    return result.insertId;
 };

@@ -3,28 +3,9 @@ import api from "../api/client";
 import ServiceCard from "./ServiceCard";
 
 const PAGE_SIZE = 24;
-const VIEW_STORAGE_KEY = "nexora_service_view";
+const GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
 
-function readStoredView() {
-    if (typeof window === "undefined") return "grid";
-    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return stored === "list" ? "list" : "grid";
-}
-
-export function ServiceCardSkeleton({ layout }) {
-    if (layout === "list") {
-        return (
-            <div className="animate-pulse flex gap-4 border border-line rounded-lg p-3">
-                <div className="w-24 h-24 sm:w-32 sm:h-32 shrink-0 bg-line/50 rounded-md" />
-                <div className="flex-1 min-w-0 flex flex-col justify-center gap-2">
-                    <div className="h-2.5 w-1/3 bg-line/50 rounded" />
-                    <div className="h-3.5 w-2/3 bg-line/50 rounded" />
-                    <div className="h-3.5 w-1/4 bg-line/50 rounded" />
-                </div>
-            </div>
-        );
-    }
-
+export function ServiceCardSkeleton() {
     return (
         <div className="animate-pulse">
             <div className="aspect-square bg-line/50 rounded-md mb-3" />
@@ -35,28 +16,16 @@ export function ServiceCardSkeleton({ layout }) {
     );
 }
 
-function containerClass(layout) {
-    return layout === "list"
-        ? "flex flex-col gap-3"
-        : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
-}
-
-export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, emptyAction }) {
+// startPage (optional): first page to load, for URL-addressable listings (?page=N).
+// onResults receives (total, totalPages).
+export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, emptyAction, startPage = 1 }) {
     const [services, setServices] = useState([]);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(startPage);
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
-    const [layout, setLayout] = useState(readStoredView);
     const sentinelRef = useRef(null);
-
-    const changeLayout = (next) => {
-        setLayout(next);
-        if (typeof window !== "undefined") {
-            window.localStorage.setItem(VIEW_STORAGE_KEY, next);
-        }
-    };
 
     // Same reasoning as ProductGrid.jsx - `params` is a fresh object every
     // render, so a stable string is used as the effect dependency.
@@ -65,18 +34,18 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
     useEffect(() => {
         setLoading(true);
         setError("");
-        setPage(1);
+        setPage(startPage);
 
-        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: 1 } })
+        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: startPage } })
             .then(({ data }) => {
                 setServices(data.data);
                 setTotalPages(data.pagination?.totalPages || 1);
-                onResults?.(data.pagination?.total ?? data.data.length);
+                onResults?.(data.pagination?.total ?? data.data.length, data.pagination?.totalPages || 1);
             })
             .catch(() => setError("Couldn't load services right now."))
             .finally(() => setLoading(false));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [paramsKey]);
+    }, [paramsKey, startPage]);
 
     const loadMore = useCallback(() => {
         if (loading || loadingMore || page >= totalPages) return;
@@ -105,48 +74,20 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
         return () => observer.disconnect();
     }, [loadMore]);
 
-    const viewToggle = (
-        <div className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Service view">
-            <button
-                type="button"
-                onClick={() => changeLayout("grid")}
-                aria-label="Grid view"
-                aria-pressed={layout === "grid"}
-                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "grid" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-                </svg>
-            </button>
-            <button
-                type="button"
-                onClick={() => changeLayout("list")}
-                aria-label="List view"
-                aria-pressed={layout === "list"}
-                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "list" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <rect x="3" y="4" width="18" height="3.5" rx="1" />
-                    <rect x="3" y="10.25" width="18" height="3.5" rx="1" />
-                    <rect x="3" y="16.5" width="18" height="3.5" rx="1" />
-                </svg>
-            </button>
-        </div>
-    );
-
     if (error) return <p className="text-coral">{error}</p>;
 
     if (loading) {
-        return (
-            <>
-                {viewToggle}
-                <div className={containerClass(layout)}>
-                    {Array.from({ length: 8 }).map((_, i) => <ServiceCardSkeleton key={i} layout={layout} />)}
+        if (services.length > 0) {
+            return (
+                <div aria-busy="true" className={`${GRID_CLASS} opacity-50 transition-opacity`}>
+                    {services.map((service) => <ServiceCard key={service.id} service={service} />)}
                 </div>
-            </>
+            );
+        }
+        return (
+            <div className={GRID_CLASS}>
+                {Array.from({ length: 8 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
+            </div>
         );
     }
 
@@ -167,18 +108,16 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
 
     return (
         <>
-            {viewToggle}
-
-            <div className={containerClass(layout)}>
+            <div className={GRID_CLASS}>
                 {services.map((service) => (
-                    <ServiceCard key={service.id} service={service} layout={layout} />
+                    <ServiceCard key={service.id} service={service} />
                 ))}
             </div>
 
             <div ref={sentinelRef} />
             {loadingMore && (
-                <div className={`${containerClass(layout)} mt-4 sm:mt-5`}>
-                    {Array.from({ length: 4 }).map((_, i) => <ServiceCardSkeleton key={i} layout={layout} />)}
+                <div className={`${GRID_CLASS} mt-4 sm:mt-5`}>
+                    {Array.from({ length: 4 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
                 </div>
             )}
             {!loadingMore && page < totalPages && (

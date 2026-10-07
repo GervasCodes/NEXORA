@@ -51,7 +51,7 @@ export default function RouteProgressBar() {
     return (
         <div
             aria-hidden="true"
-            className="fixed top-0 left-0 right-0 z-[60] h-[3px] pointer-events-none"
+            className="fixed top-0 left-0 right-0 z-[var(--z-float)] h-[3px] pointer-events-none"
         >
             <div
                 className="h-full bg-gradient-to-r from-azure via-mango to-coral transition-[width,opacity] duration-300 ease-out"

@@ -13,6 +13,7 @@ import Avatar from "../components/ui/Avatar";
 import Input from "../components/ui/Input";
 import AddressBook from "../components/AddressBook";
 import ImageLightbox from "../components/chat/ImageLightbox";
+import ImageCropper from "../components/ImageCropper";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -78,22 +79,32 @@ export default function Account() {
     // SellerStore.jsx#handleLogoUpload, just for the shared
     // buyer/seller/delivery-agent profile photo endpoint instead of the
     // seller-only store logo one.
-    const handlePhotoUpload = async (e) => {
+    // Picking a file opens the crop step; only the cropped square is uploaded.
+    const [cropFile, setCropFile] = useState(null);
+    const handlePhotoSelected = (e) => {
         const file = e.target.files[0];
+        e.target.value = "";
         if (!file) return;
+        if (!file.type.startsWith("image/")) {
+            toast?.error("Please choose an image file.");
+            return;
+        }
+        setCropFile(file);
+    };
+    const handleCroppedUpload = async (blob) => {
         setUploadingPhoto(true);
         try {
             const body = new FormData();
-            body.append("photo", file);
+            body.append("photo", blob, "profile.jpg");
             const { data } = await api.post("/account/photo", body);
             setProfile((prev) => ({ ...prev, photo_url: data.data.photoUrl }));
             updateUser({ photo_url: data.data.photoUrl });
             toast?.success("Photo updated.");
+            setCropFile(null);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
             setUploadingPhoto(false);
-            e.target.value = "";
         }
     };
 
@@ -253,7 +264,7 @@ export default function Account() {
                     <div className="flex items-center gap-2">
                         <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
                             {uploadingPhoto ? "Uploading…" : "Change photo"}
-                            <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                            <input type="file" accept="image/*" onChange={handlePhotoSelected} disabled={uploadingPhoto} className="hidden" />
                         </label>
                         {profile?.photo_url && (
                             <button
@@ -267,6 +278,13 @@ export default function Account() {
                         )}
                     </div>
                 </div>
+
+                <ImageCropper
+                    file={cropFile}
+                    busy={uploadingPhoto}
+                    onConfirm={handleCroppedUpload}
+                    onCancel={() => setCropFile(null)}
+                />
 
                 <ImageLightbox
                     src={photoLightboxOpen ? profile?.photo_url : null}

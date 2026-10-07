@@ -141,10 +141,14 @@ exports.createUser = async (user, conn) => {
     return result.insertId;
 };
 
-exports.insertVerificationDocument = async (userId, documentType, fileUrl, conn) => {
+// `stored` is the { publicId, resourceType, format } of a private
+// (authenticated) Cloudinary upload - no public URL is kept.
+exports.insertVerificationDocument = async (userId, documentType, stored, conn) => {
     await runner(conn).query(
-        "INSERT INTO account_verification_documents (user_id, document_type, file_url) VALUES (?, ?, ?)",
-        [userId, documentType, fileUrl]
+        `INSERT INTO account_verification_documents
+            (user_id, document_type, file_public_id, file_resource_type, file_format, file_storage)
+        VALUES (?, ?, ?, ?, ?, 'authenticated')`,
+        [userId, documentType, stored.publicId, stored.resourceType, stored.format]
     );
 };
 

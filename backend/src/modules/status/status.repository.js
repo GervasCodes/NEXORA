@@ -64,3 +64,22 @@ exports.update = async (id, data) => {
     values.push(id);
     await db.query(`UPDATE status_incidents SET ${fields.join(", ")} WHERE id = ?`, values);
 };
+
+// Subscribers (migration 134). INSERT IGNORE keeps re-subscribing idempotent
+// without revealing whether an address was already on the list.
+exports.addSubscriber = async (email, token) => {
+    await db.query(
+        "INSERT IGNORE INTO status_subscribers (email, unsubscribe_token) VALUES (?, ?)",
+        [email, token]
+    );
+};
+
+exports.removeSubscriberByToken = async (token) => {
+    const [result] = await db.query("DELETE FROM status_subscribers WHERE unsubscribe_token = ?", [token]);
+    return result.affectedRows > 0;
+};
+
+exports.listSubscribers = async () => {
+    const [rows] = await db.query("SELECT email, unsubscribe_token FROM status_subscribers");
+    return rows;
+};

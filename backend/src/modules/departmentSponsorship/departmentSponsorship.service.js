@@ -7,6 +7,7 @@ const walletRepository = require("../wallet/wallet.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit.service");
+const { computeCancelRefund } = require("../sponsorship/sponsorship.service");
 
 // Same bounds as sponsorship.service.js  and
 // featuredStore.service.js , for the same reason: long enough to
@@ -79,18 +80,6 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
         throw new Error("You need an active, published product in this department before you can sponsor it");
     }
 
-    // A seller paying for a second campaign of their own in a department
-    // they're already sponsoring would just be wasted spend - the
-    // homepage ordering can't put the same department ahead of itself
-    // twice. Blocked here rather than left to silently overlap, same
-    // reasoning featuredStore.service.js#createCampaign gives (this does
-    // not stop a *different* seller from also sponsoring the same
-    // department - see hasActiveForSellerCategory's comment).
-    const alreadyActive = await departmentSponsorshipRepository.hasActiveForSellerCategory(sellerId, categoryId);
-    if (alreadyActive) {
-        throw new Error("You already have an active sponsorship campaign for this department");
-    }
-
     const dailyRate = await settingsService.getDepartmentSponsorshipDailyRate();
     // Monetization Master Switch: monetization_sponsorship_enabled now
     // means "may this seller buy sponsorship a la carte at all". Included
@@ -105,6 +94,19 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
 
         await walletRepository.ensureWallet(sellerId, connection);
         const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
+
+        // Duplicate check (Phase 6, item 2). Runs here, after the wallet
+        // lock, so two requests from the same seller are serialised and
+        // the second one sees the first. A campaign whose end date has
+        // passed but which the sweep has not reached yet is ended first,
+        // so it cannot block a fresh one.
+        await departmentSponsorshipRepository.expireStaleForSellerCategory(sellerId, categoryId, connection);
+        const alreadyActive = await departmentSponsorshipRepository.hasActiveForSellerCategory(
+            sellerId, categoryId, connection
+        );
+        if (alreadyActive) {
+            throw new Error("You already have an active sponsorship campaign for this department");
+        }
 
         // Funding: included credits first (1 credit = 1 campaign-day),
         // then the paid a la carte flow for whatever days they don't
@@ -126,10 +128,20 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
 
         const endsAt = new Date(Date.now() + parsedDays * MS_PER_DAY);
 
-        const campaignId = await departmentSponsorshipRepository.create(
-            { sellerId, categoryId, dailyRate, days: parsedDays, totalCost, creditsUsed: creditDays, endsAt },
-            connection
-        );
+        // The unique key (migration 126) is the backstop for the check
+        // above; a collision means a concurrent request won the race.
+        let campaignId;
+        try {
+            campaignId = await departmentSponsorshipRepository.create(
+                { sellerId, categoryId, dailyRate, days: parsedDays, totalCost, creditsUsed: creditDays, endsAt },
+                connection
+            );
+        } catch (err) {
+            if (err && err.code === "ER_DUP_ENTRY") {
+                throw new Error("You already have an active sponsorship campaign for this department");
+            }
+            throw err;
+        }
 
         await sponsorshipCreditService.consumeCredits(funding.periodId, creditDays, connection);
 
@@ -174,29 +186,122 @@ exports.getMyCampaigns = async (sellerId) => {
     return departmentSponsorshipRepository.findBySeller(sellerId);
 };
 
-// Ends a still-running campaign early. Deliberately no pro-rated refund -
-// same policy as sponsorship.service.js#cancelCampaign (Phase 8A) and
-// featuredStore.service.js#cancelCampaign (Phase 8B) for the same reason
-// (see those phases' READMEs' "Not in scope" sections).
+// --- Cancel with refund (Phase 6, follow-up) -------------------------------
+//
+// Same policy as sponsorship.service.js#cancelCampaign: unused paid days go
+// back to the wallet, unused credit days go back to the current credit
+// period, and a repeat cancel returns the original result. Lock order is
+// wallet, then campaign, then credit period.
+
+const toCancelResult = (campaign) => ({
+    status: "cancelled",
+    refund_amount: Number(campaign.refund_amount) || 0,
+    credit_days_returned: Number(campaign.credit_days_returned) || 0,
+    cancelled_at: campaign.cancelled_at
+});
+
+exports.previewCancel = async (sellerId, campaignId) => {
+    const campaign = await departmentSponsorshipRepository.findById(campaignId);
+    if (!campaign || campaign.seller_id !== sellerId) {
+        throw new Error("Campaign not found");
+    }
+    if (campaign.status !== "active") {
+        return { can_cancel: false, reason: `This campaign is already "${campaign.status}"`, ...toCancelResult(campaign) };
+    }
+
+    const plan = computeCancelRefund({
+        days: campaign.days,
+        creditsUsed: campaign.credits_used,
+        dailyRate: campaign.daily_rate,
+        endsAt: campaign.ends_at,
+        now: new Date()
+    });
+    const periodId = plan.creditDaysToReturn > 0
+        ? await sponsorshipCreditService.findCurrentPeriodId(sellerId)
+        : null;
+
+    return {
+        can_cancel: true,
+        refund_amount: plan.refundAmount,
+        refund_days: plan.refundDays,
+        credit_days: periodId ? plan.creditDaysToReturn : 0,
+        credit_days_lost: periodId ? 0 : plan.creditDaysToReturn,
+        remaining_days: plan.remainingDays
+    };
+};
+
 exports.cancelCampaign = async (sellerId, campaignId) => {
     const connection = await db.getConnection();
 
     try {
         await connection.beginTransaction();
 
+        await walletRepository.ensureWallet(sellerId, connection);
+        const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
+
         const campaign = await departmentSponsorshipRepository.findByIdForUpdate(campaignId, connection);
 
         if (!campaign || campaign.seller_id !== sellerId) {
             throw new Error("Campaign not found");
         }
+
+        if (campaign.status === "cancelled" && campaign.cancelled_at) {
+            await connection.commit();
+            return toCancelResult(campaign);
+        }
+
         if (campaign.status !== "active") {
             throw new Error(`This campaign is already "${campaign.status}"`);
         }
 
-        await departmentSponsorshipRepository.updateStatus(campaignId, "cancelled", connection);
+        const plan = computeCancelRefund({
+            days: campaign.days,
+            creditsUsed: campaign.credits_used,
+            dailyRate: campaign.daily_rate,
+            endsAt: campaign.ends_at,
+            now: new Date()
+        });
+
+        let creditDaysReturned = 0;
+        if (plan.creditDaysToReturn > 0) {
+            const periodId = await sponsorshipCreditService.findCurrentPeriodIdForUpdate(sellerId, connection);
+            if (periodId) {
+                await sponsorshipCreditService.returnCredits(periodId, plan.creditDaysToReturn, connection);
+                creditDaysReturned = plan.creditDaysToReturn;
+            }
+        }
+
+        let balanceAfter = Number(wallet.balance);
+        if (plan.refundAmount > 0) {
+            balanceAfter = await walletRepository.incrementBalance(sellerId, plan.refundAmount, connection);
+            await walletRepository.insertTransaction({
+                sellerId,
+                type: "credit",
+                amount: plan.refundAmount,
+                balanceAfter,
+                referenceType: "department_sponsorship_campaign_refund",
+                referenceId: campaignId,
+                description: `Refund for cancelled department sponsorship campaign #${campaignId} (${plan.refundDays} unused paid day${plan.refundDays === 1 ? "" : "s"})`
+            }, connection);
+        }
+
+        const updated = await departmentSponsorshipRepository.markCancelled(
+            campaignId,
+            { refundAmount: plan.refundAmount, creditDaysReturned },
+            connection
+        );
+        if (!updated) {
+            throw new Error("Campaign could not be cancelled. Please refresh and try again.");
+        }
 
         await connection.commit();
-        return { status: "cancelled" };
+
+        return {
+            status: "cancelled",
+            refund_amount: plan.refundAmount,
+            credit_days_returned: creditDaysReturned,
+            balance: balanceAfter
+        };
 
     } catch (error) {
         await connection.rollback();
@@ -216,39 +321,41 @@ exports.cancelCampaign = async (sellerId, campaignId) => {
 // status - the homepage ranking query reads `status`/`ends_at` directly,
 // so flipping the status here is the whole effect.
 exports.expireDueCampaigns = async () => {
-    const connection = await db.getConnection();
+    const due = await departmentSponsorshipRepository.findExpiredActiveIds();
+    let expired = 0;
 
-    try {
-        await connection.beginTransaction();
+    for (const candidate of due) {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        const due = await departmentSponsorshipRepository.findExpiredActive(connection);
+            const changed = await departmentSponsorshipRepository.expireIfDue(candidate.id, connection);
+            if (!changed) {
+                await connection.rollback();
+                continue;
+            }
 
-        for (const campaign of due) {
-            await departmentSponsorshipRepository.updateStatus(campaign.id, "expired", connection);
-        }
+            await connection.commit();
+            expired += 1;
 
-        await connection.commit();
-
-        for (const campaign of due) {
             notificationService.notify({
-                userId: campaign.seller_id,
+                userId: candidate.seller_id,
                 type: "department_sponsorship_expired",
                 titleKey: "notifications.departmentSponsorship.expired.title",
                 messageKey: "notifications.departmentSponsorship.expired.message",
-                messageParams: { categoryName: campaign.category_name },
+                messageParams: { categoryName: candidate.category_name },
                 withEmail: false
             }).catch((err) => logger.warn({ err }, "department sponsorship expiry notify error"));
+
+        } catch (error) {
+            await connection.rollback().catch(() => {});
+            logger.error({ err: error, campaignId: candidate.id }, "department sponsorship expiry failed for campaign; continuing");
+        } finally {
+            connection.release();
         }
-
-        return due.length;
-
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-
-    } finally {
-        connection.release();
     }
+
+    return expired;
 };
 
 // --- Admin oversight (read-only) -----------------------------------------

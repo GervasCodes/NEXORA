@@ -97,7 +97,7 @@ exports.findById = async (productId) => {
 // canonical "read-heavy, lag-tolerant, no read-after-write" case from
 // docs/SCALABILITY_REPORT.md §3. Nothing in this request path writes
 // then re-reads through this function.
-exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, region, minRating, sort, page, limit }) => {
+exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, region, minRating, sort, inStock, onSale, verifiedOnly, page, limit }) => {
     const offset = (page - 1) * limit;
     const conditions = ["p.is_active = 1"];
     const params = [];
@@ -115,6 +115,10 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
     const locationRating = buildLocationRatingConditions({ region, minRating });
     conditions.push(...locationRating.conditions);
     params.push(...locationRating.params);
+
+    if (inStock) conditions.push("p.stock > 0");
+    if (onSale) conditions.push("p.discount_price IS NOT NULL AND p.discount_price < p.price");
+    if (verifiedOnly) conditions.push("(sp.is_verified = 1 OR sp.is_business_verified = 1)");
 
     // See utils/productSearch.js for why this is BOOLEAN MODE + prefix
     // wildcards rather than NATURAL LANGUAGE MODE, and why 1-2 char terms
@@ -146,8 +150,8 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
 
     const [rows] = await dbRead.query(
         `SELECT
-            p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
-            sp.store_name, sp.is_verified, sp.is_business_verified, sp.region,
+            p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand, p.created_at,
+            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified, sp.region,
             ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
                 SELECT pi.image_url FROM product_images pi
@@ -155,7 +159,9 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
                 LIMIT 1
             ) AS image_url,
             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
-            (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
+            (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count,
+            (SELECT pv.video_url FROM product_videos pv WHERE pv.product_id = p.id ORDER BY pv.display_order, pv.id LIMIT 1) AS first_video_url,
+            EXISTS (SELECT 1 FROM product_videos pv2 WHERE pv2.product_id = p.id) AS has_video
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
         LEFT JOIN categories c ON c.id = p.category_id
@@ -509,9 +515,10 @@ exports.findAllBySeller = async ({ sellerId, search, categoryId, status, page, l
 // erroring per-id.
 exports.setActiveBulkBySeller = async (sellerId, ids, isActive) => {
     if (!ids.length) return;
+    // Phase 6, item 5: deactivating clears the sponsored flag too.
     await db.query(
-        "UPDATE products SET is_active = ? WHERE seller_id = ? AND id IN (?)",
-        [isActive, sellerId, ids]
+        "UPDATE products SET is_active = ?, is_sponsored = IF(?, is_sponsored, 0) WHERE seller_id = ? AND id IN (?)",
+        [isActive, isActive ? 1 : 0, sellerId, ids]
     );
 };
 
@@ -580,7 +587,12 @@ exports.update = async (productId, data) => {
 };
 
 exports.setActive = async (productId, isActive) => {
-    await db.query("UPDATE products SET is_active = ? WHERE id = ?", [isActive, productId]);
+    // Deactivating a product also clears its sponsored flag (Phase 6, item 5),
+    // so a hidden product cannot keep a sponsored placement.
+    await db.query(
+        "UPDATE products SET is_active = ?, is_sponsored = IF(?, is_sponsored, 0) WHERE id = ?",
+        [isActive, isActive ? 1 : 0, productId]
+    );
 };
 
 // Shared setter reused by both the admin manual toggle (admin.repository.js)
@@ -591,4 +603,57 @@ exports.setActive = async (productId, isActive) => {
 // insert.
 exports.setSponsored = async (productId, isSponsored, executor = db) => {
     await executor.query("UPDATE products SET is_sponsored = ? WHERE id = ?", [isSponsored, productId]);
+};
+
+// Drafts (Phase 13a). Only these fields can be written through the draft
+// path - the shared update() above has its own whitelist and must not be
+// widened to accept is_active / is_draft from request bodies.
+const DRAFT_WRITABLE = [
+    "name", "slug", "description", "price", "discount_price", "stock", "brand",
+    "product_condition", "category_id", "is_preorder", "preorder_lead_time_days"
+];
+
+const buildDraftSet = (fields) => {
+    const sets = [];
+    const params = [];
+    for (const key of DRAFT_WRITABLE) {
+        if (fields[key] !== undefined) {
+            sets.push(`${key} = ?`);
+            params.push(fields[key]);
+        }
+    }
+    return { sets, params };
+};
+
+exports.createDraft = async ({ seller_id, category_id, name, slug }) => {
+    const [result] = await db.query(
+        `INSERT INTO products (seller_id, category_id, name, slug, price, stock, is_active, is_draft)
+         VALUES (?, ?, ?, ?, 0, 0, FALSE, TRUE)`,
+        [seller_id, category_id ?? null, name, slug]
+    );
+    return result.insertId;
+};
+
+// Only touches rows that are still drafts, so a stale autosave cannot
+// overwrite a product that has since been published.
+exports.updateDraftFields = async (productId, fields) => {
+    const { sets, params } = buildDraftSet(fields);
+    if (sets.length === 0) return;
+    await db.query(
+        `UPDATE products SET ${sets.join(", ")} WHERE id = ? AND is_draft = TRUE`,
+        [...params, productId]
+    );
+};
+
+// Returns false when the row was no longer a draft (double-submit or a
+// second tab publishing first), so the caller can report it instead of
+// publishing twice.
+exports.publishDraft = async (productId, fields) => {
+    const { sets, params } = buildDraftSet(fields);
+    sets.push("is_active = TRUE", "is_draft = FALSE");
+    const [result] = await db.query(
+        `UPDATE products SET ${sets.join(", ")} WHERE id = ? AND is_draft = TRUE`,
+        [...params, productId]
+    );
+    return result.affectedRows > 0;
 };

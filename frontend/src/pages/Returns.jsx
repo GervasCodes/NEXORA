@@ -9,18 +9,9 @@ import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import EmptyState from "../components/ui/EmptyState";
 import ListFilters from "../components/ui/ListFilters";
+import StatusBadge from "../components/ui/StatusBadge";
 
-const STATUS_STYLES = {
-    requested: "bg-mango/20 text-mango-dark",
-    approved: "bg-azure/10 text-azure",
-    shipped_back: "bg-azure/10 text-azure",
-    received: "bg-azure/10 text-azure",
-    refunded: "bg-teal text-white",
-    rejected: "bg-coral/10 text-coral",
-    cancelled: "bg-line text-ash"
-};
-
-const STATUS_OPTIONS = Object.keys(STATUS_STYLES);
+const STATUS_OPTIONS = ["requested", "approved", "shipped_back", "received", "refunded", "rejected", "cancelled"];
 const FILTER_DEBOUNCE_MS = 350;
 
 export default function Returns() {
@@ -99,9 +90,7 @@ export default function Returns() {
                                 >
                                     <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                                         <p className="text-xs text-ash">{t("dispute.list.orderPrefix")} {r.order_number}</p>
-                                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[r.status] || "bg-line text-ash"}`}>
-                                            {r.status.replace("_", " ")}
-                                        </span>
+                                        <StatusBadge domain="return" status={r.status} />
                                     </div>
                                     <p className="text-sm font-medium mb-1">{t(`return.reason.${r.reason}`)}</p>
                                     {r.refund_amount && (

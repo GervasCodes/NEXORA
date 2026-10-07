@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
-    <meta name="theme-color" content="#070912" />
+    <meta name="description" content="Shop products from local sellers and book services on NEXORA, a regional multi-vendor marketplace with delivery tracked door to door." data-rh="true" />
+    <meta name="theme-color" content="#f7f8fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#070912" media="(prefers-color-scheme: dark)" />
     <!--
       (Resilience & Growth): these five href/src values used to be
       relative ("public/manifest.json", "public/icon-180.png", "src/main.jsx").
@@ -32,7 +33,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NEXORA" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>NEXORA — Marketplace</title>
+    <title>NEXORA — Shop Local Products &amp; Book Services</title>
     <!--
       (Branding): dedicated 1200x630 Open Graph banner
       (og-banner.png) - replaces the icon-512.png fallback used while no
@@ -46,38 +47,48 @@
       render JS, since they're appended after this static markup in the
       document.
     -->
-    <meta property="og:site_name" content="NEXORA" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="NEXORA " />
-    <meta property="og:description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
-    <meta property="og:image" content="/og-banner.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="NEXORA — Marketplace" />
-    <meta name="twitter:description" content="NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners." />
-    <meta name="twitter:image" content="/og-banner.png" />
+    <meta property="og:site_name" content="NEXORA" data-rh="true" />
+    <meta property="og:type" content="website" data-rh="true" />
+    <meta property="og:title" content="NEXORA  Shop Local Products &amp; Book Services" data-rh="true" />
+    <meta property="og:description" content="Shop products from local sellers and book services on NEXORA, a regional multi-vendor marketplace with delivery tracked door to door." data-rh="true" />
+    <meta property="og:image" content="https://nexoramarketplace.online/og-banner.png" data-rh="true" />
+    <meta property="og:image:width" content="1200" data-rh="true" />
+    <meta property="og:image:height" content="630" data-rh="true" />
+    <meta name="twitter:card" content="summary_large_image" data-rh="true" />
+    <meta name="twitter:title" content="NEXORA  Shop Local Products &amp; Book Services" data-rh="true" />
+    <meta name="twitter:description" content="Shop products from local sellers and book services on NEXORA, a regional multi-vendor marketplace with delivery tracked door to door." data-rh="true" />
+    <meta name="twitter:image" content="https://nexoramarketplace.online/og-banner.png" data-rh="true" />
     <!--
-      (SEO Critical): site-wide Organization structured data.
-      Static (not per-page like PageMeta.jsx's optional `jsonLd` prop)
-      since it describes NEXORA itself, not the current page - present
-      on every route including ones link-preview bots/crawlers see
-      before any JS runs. sameAs is left empty (no official social
-      profile URLs exist in this codebase to point to) rather than
-      guessed - see PHASE_1_NOTES.md.
+      Site-wide Organization structured data. Static (not per-page) because
+      it describes NEXORA itself and must be present before any JS runs.
+      All URLs are absolute (schema.org consumers don't resolve relative
+      ones), and @id lets the homepage's WebSite markup (see Home.jsx)
+      reference this same entity as its publisher. sameAs lists only the
+      official profiles already linked from the site footer.
     -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "Organization",
+        "@id": "https://nexoramarketplace.online/#organization",
         "name": "NEXORA",
-        "url": "/",
-        "logo": "/icon-512.png",
-        "description": "NEXORA — a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners."
+        "url": "https://nexoramarketplace.online/",
+        "logo": "https://nexoramarketplace.online/icon-512.png",
+        "description": "NEXORA is a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners.",
+        "sameAs": [
+          "https://www.instagram.com/nexora.marketplace",
+          "https://www.tiktok.com/@nexoramarketplace4",
+          "https://www.youtube.com/@Nexoramarketplace"
+        ]
       }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Every product/service/store image is served from here - preconnecting
+         saves the DNS+TLS handshake on the very first image request instead
+         of paying it mid-render. (The API origin is env-configured per
+         deployment, so it can't be preconnected from this static file.) -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
     <link
         href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
         rel="stylesheet"
@@ -85,6 +96,18 @@
 </head>
 <body class="bg-paper text-ink font-sans antialiased">
     <div id="root"></div>
+    <noscript>
+        <h1>NEXORA</h1>
+        <p>A regional multi-vendor marketplace connecting buyers, sellers, and delivery partners. NEXORA needs JavaScript enabled to run.</p>
+        <nav aria-label="Explore NEXORA">
+            <a href="/products">Shop all products</a> ·
+            <a href="/services">Book services</a> ·
+            <a href="/guides">Buying guides</a> ·
+            <a href="/group-buys">Group buys</a> ·
+            <a href="/live-selling">Live selling</a> ·
+            <a href="/legal/company-information">Company information</a>
+        </nav>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

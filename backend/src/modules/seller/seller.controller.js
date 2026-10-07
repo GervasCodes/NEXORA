@@ -395,3 +395,16 @@ exports.setMerchantType = async (req, res) => {
         });
     }
 };
+
+exports.getOverview = async (req, res) => {
+    try {
+        const overview = await sellerService.getOverview(req.user.id, {
+            from: req.query.from,
+            to: req.query.to
+        });
+
+        return res.json({ success: true, data: overview });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};

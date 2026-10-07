@@ -18,7 +18,15 @@ exports.createSellerValidation = [
     body("store_type_id")
         .optional()
         .isInt({ gt: 0 })
-        .withMessage("Invalid store type")
+        .withMessage("Invalid store type"),
+
+    // Optional here (Phase 4 remediation): store creation defaults to
+    // 'product' when omitted, matching the column default - the same
+    // onboarding flow that skips this field keeps working unchanged.
+    body("merchant_type")
+        .optional()
+        .isIn(["product", "service", "hybrid"])
+        .withMessage("merchant_type must be one of: product, service, hybrid")
 ];
 
 exports.updateSellerValidation = [
@@ -83,6 +91,14 @@ exports.updateSellerValidation = [
         .trim()
         .isLength({ max: 20 })
         .withMessage("Invalid WhatsApp number."),
+
+    // Public call number (shown as a Call button). Digits, spaces, + and -
+    // only; blank clears it.
+    body("public_phone")
+        .optional({ nullable: true })
+        .trim()
+        .matches(/^[+0-9 ()-]{0,20}$/)
+        .withMessage("Call number can only contain digits, spaces, +, - and brackets."),
 
     // Pre-order / made-to-order (Phase 8) - store-level toggle + defaults.
     body("accepts_preorders")

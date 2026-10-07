@@ -10,7 +10,9 @@ const {
     userIdValidation,
     rejectValidation,
     requestIdValidation,
-    rejectRequestValidation
+    rejectRequestValidation,
+    documentIdValidation,
+    flagDocumentValidation
 } = require("./accountVerification.validator");
 
 // Centralized seller/delivery-agent account verification review - the
@@ -27,6 +29,11 @@ router.get("/business-requests", controller.listBusinessRequests);
 router.get("/business-requests/:requestId", requestIdValidation, validationMiddleware, controller.getBusinessRequestDetail);
 router.put("/business-requests/:requestId/approve", requestIdValidation, validationMiddleware, controller.approveBusinessRequest);
 router.put("/business-requests/:requestId/reject", rejectRequestValidation, validationMiddleware, controller.rejectBusinessRequest);
+
+// Failing-document tags on a single submitted document (verification
+// review screen). Three segments, so it can't collide with "/:id/...".
+router.put("/documents/:docId/flag", flagDocumentValidation, validationMiddleware, controller.flagDocument);
+router.delete("/documents/:docId/flag", documentIdValidation, validationMiddleware, controller.unflagDocument);
 
 router.get("/:id", userIdValidation, validationMiddleware, controller.getDetail);
 router.put("/:id/approve", userIdValidation, validationMiddleware, controller.approve);

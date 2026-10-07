@@ -5,7 +5,11 @@ import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import ActionDialog from "../../components/ActionDialog";
 import EmptyState from "../../components/ui/EmptyState";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
 
 
 export default function AdminDeletedAccounts() {
@@ -13,32 +17,15 @@ export default function AdminDeletedAccounts() {
     const isSuperAdmin = currentUser?.admin_level === "super_admin";
     const toast = useToast();
 
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState(null);
+    const [dialogUser, setDialogUser] = useState(null);
 
-    const load = () => {
-        api.get("/admin/deleted-users")
-            .then(({ data }) => setUsers(data.data))
-            .catch((err) => toast?.error(extractErrorMessage(err)))
-            .finally(() => setLoading(false));
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; `load` is redefined every render
-    useEffect(() => { load(); }, []);
+    const list = useAdminPagedList("/admin/deleted-users", { onError: (m) => toast?.error(m) });
+    const { items: users, loading, meta } = list;
+    const load = list.reload;
 
     const handlePermanentDelete = async (u) => {
-        const typed = window.prompt(
-            `This permanently erases ${u.first_name} ${u.last_name}'s personal data, deletes their documents and Cloudinary assets, and can't be undone.\n\n` +
-            `Type this account's email address to confirm:\n${u.email}`
-        );
-
-        if (typed === null) return;
-        if (typed.trim().toLowerCase() !== u.email.toLowerCase()) {
-            toast?.error("That didn't match the account's email. Nothing was deleted.");
-            return;
-        }
-
+        setDialogUser(null);
         setBusyId(u.id);
         try {
             const { data } = await api.delete(`/admin/deleted-users/${u.id}`);
@@ -55,7 +42,7 @@ export default function AdminDeletedAccounts() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading && !meta) return <PageLoader />;
 
     return (
         <div>
@@ -65,6 +52,15 @@ export default function AdminDeletedAccounts() {
                 Accounts that deleted themselves. They can no longer log in and can't be reactivated.
                 {isSuperAdmin && " Super admins can permanently erase one below."}
             </p>
+
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search name, email or phone"
+                ariaLabel="Search deleted accounts"
+                filters={[{ key: "status", label: "Filter by status", value: list.filters.status || "", options: [{ value: "", label: "All accounts" },{ value: "pending_review", label: "Awaiting review" },{ value: "removed", label: "Permanently removed" }], onChange: (v) => list.applyFilters({ ...list.filters, status: v }) }]}
+            />
 
             {users.length === 0 ? (
                 <EmptyState title="No deleted accounts." />
@@ -94,7 +90,7 @@ export default function AdminDeletedAccounts() {
                                     </span>
                                 ) : isSuperAdmin ? (
                                     <button
-                                        onClick={() => handlePermanentDelete(u)}
+                                        onClick={() => setDialogUser(u)}
                                         disabled={busyId === u.id}
                                         className="w-full sm:w-auto text-xs font-medium px-3 py-1.5 rounded-full border border-coral text-coral hover:bg-coral hover:text-white transition disabled:opacity-50"
                                     >
@@ -106,6 +102,20 @@ export default function AdminDeletedAccounts() {
                     ))}
                 </ul>
             )}
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Deleted account pages" />
+
+            <ActionDialog
+                open={!!dialogUser}
+                title="Permanently delete this account?"
+                description={dialogUser ? `This permanently erases ${dialogUser.first_name} ${dialogUser.last_name}'s personal data, deletes their documents and stored files, and can't be undone.` : ""}
+                confirmText={dialogUser?.email}
+                confirmTextLabel="Type the account's email address to confirm:"
+                confirmLabel="Delete permanently"
+                danger
+                onConfirm={() => handlePermanentDelete(dialogUser)}
+                onCancel={() => setDialogUser(null)}
+            />
         </div>
     );
 }

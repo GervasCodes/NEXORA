@@ -56,6 +56,51 @@ exports.hasActiveForSellerCategory = async (sellerId, categoryId, executor = db)
     return rows.length > 0;
 };
 
+// Ends this seller's stale 'active' campaign in one department if its end
+// date has passed (status-conditional). Keeps the unique key from being hit
+// by a campaign the sweep has not reached yet.
+exports.expireStaleForSellerCategory = async (sellerId, categoryId, executor = db) => {
+    await executor.query(
+        `UPDATE department_sponsorship_campaigns
+        SET status = 'expired'
+        WHERE seller_id = ? AND category_id = ? AND status = 'active' AND ends_at <= NOW()`,
+        [sellerId, categoryId]
+    );
+};
+
+// Conditional on the row still being 'active' and past its end date.
+exports.expireIfDue = async (id, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE department_sponsorship_campaigns
+        SET status = 'expired'
+        WHERE id = ? AND status = 'active' AND ends_at <= NOW()`,
+        [id]
+    );
+    return result.affectedRows > 0;
+};
+
+exports.findExpiredActiveIds = async () => {
+    const [rows] = await db.query(
+        `SELECT dsc.id, dsc.seller_id, c.name AS category_name
+        FROM department_sponsorship_campaigns dsc
+        JOIN categories c ON c.id = dsc.category_id
+        WHERE dsc.status = 'active' AND dsc.ends_at <= NOW()`
+    );
+    return rows;
+};
+
+// Conditional: only flips a row still 'active', so a cancel that loses a race
+// with the expiry sweep is reported, not swallowed.
+exports.markCancelled = async (id, { refundAmount, creditDaysReturned }, executor = db) => {
+    const [result] = await executor.query(
+        `UPDATE department_sponsorship_campaigns
+        SET status = 'cancelled', refund_amount = ?, credit_days_returned = ?, cancelled_at = NOW()
+        WHERE id = ? AND status = 'active'`,
+        [refundAmount, creditDaysReturned, id]
+    );
+    return result.affectedRows > 0;
+};
+
 exports.updateStatus = async (id, status, executor = db) => {
     await executor.query(
         "UPDATE department_sponsorship_campaigns SET status = ? WHERE id = ?",

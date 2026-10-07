@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { register, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword, logout, me } = require("./auth.controller");
+const { register, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword, logout, me, csrfRefresh } = require("./auth.controller");
 const { registerValidation } = require("./auth.validator");
 const { authLimiter } = require("../../middleware/rateLimit.middleware");
 const authMiddleware = require("../../middleware/auth.middleware");
@@ -36,5 +36,6 @@ router.post("/reset-password", authLimiter, resetPassword);
 // Phase 4 (Testing & Session Hardening)
 router.post("/logout", logout);
 router.get("/me", authMiddleware, me);
+router.get("/csrf", authMiddleware, csrfRefresh);
 
 module.exports = router;

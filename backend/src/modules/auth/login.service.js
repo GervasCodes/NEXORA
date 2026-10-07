@@ -67,7 +67,7 @@ exports.login = async (email, password) => {
     // ticking for 5 minutes after the code had already stopped working.
     // Use requestOtp's own returned value instead so the two can never
     // drift apart again.
-    const { expiresInSeconds } = await otpService.requestOtp(user, "login");
+    const { expiresInSeconds, delivered } = await otpService.requestOtp(user, "login");
 
     const preAuthToken = generateShortLivedToken(PRE_AUTH_TYP, { id: user.id }, PRE_AUTH_EXPIRY);
 
@@ -75,10 +75,10 @@ exports.login = async (email, password) => {
     // without ever having the full address in a network response.
     const maskedEmail = user.email.replace(/^(.{2}).+(@.+)$/, "$1***$2");
 
-    return { preAuthToken, maskedEmail, expiresInSeconds };
+    return { preAuthToken, maskedEmail, expiresInSeconds, codeDelivered: delivered };
 };
 
-exports.resendLoginOtp = async (preAuthToken) => {
+exports.resendLoginOtp = async (preAuthToken, channel) => {
     const { id } = verifyShortLivedToken(PRE_AUTH_TYP, preAuthToken);
     const user = await userRepository.findById(id);
 
@@ -91,7 +91,7 @@ exports.resendLoginOtp = async (preAuthToken) => {
     // (and keep emailing the account holder).
     loginLockoutService.assertNotLocked(user);
 
-    const result = await otpService.requestOtp(user, "login");
+    const result = await otpService.requestOtp(user, "login", { channel });
 
     // userId is only for the caller's monitoring log (see authEvents.js).
     return { ...result, userId: user.id };

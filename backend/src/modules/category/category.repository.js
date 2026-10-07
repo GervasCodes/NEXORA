@@ -145,7 +145,8 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
-        WHERE p.category_id = ? AND p.is_active = 1 AND p.is_sponsored = 1
+        JOIN users seller ON seller.id = p.seller_id
+        WHERE p.category_id = ? AND p.is_active = 1 AND p.is_sponsored = 1 AND p.stock > 0 AND seller.suspended_at IS NULL AND seller.is_active = 1 AND seller.verification_tier <> 'none'
         ORDER BY p.created_at DESC
         LIMIT ?`,
         [categoryId, limit]
@@ -266,7 +267,8 @@ exports.findGlobalSponsored = async (limit) => {
             ) AS image_url
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
-        WHERE p.is_active = 1 AND p.is_sponsored = 1
+        JOIN users seller ON seller.id = p.seller_id
+        WHERE p.is_active = 1 AND p.is_sponsored = 1 AND p.stock > 0 AND seller.suspended_at IS NULL AND seller.is_active = 1 AND seller.verification_tier <> 'none'
         ORDER BY p.created_at DESC
         LIMIT ?`,
         [limit]

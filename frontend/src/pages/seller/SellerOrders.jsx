@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
+import { SkeletonList } from "../../components/Skeleton";
+import ErrorState from "../../components/ui/ErrorState";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
@@ -26,6 +27,8 @@ export default function SellerOrders() {
     const [orders, setOrders] = useState([]);
     const [roster, setRoster] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const requestId = useRef(0);
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
     const [shipChoice, setShipChoice] = useState({}); // orderId -> agentId or "" for platform
@@ -42,17 +45,37 @@ export default function SellerOrders() {
         return () => clearTimeout(handle);
     }, [searchInput]);
 
-    const load = () => {
-        setLoading(true);
+    // `silent` refreshes (after accept/ship/deliver) keep the list on
+    // screen. Previously every action swapped the whole page for a
+    // spinner, which also threw away the seller's scroll position.
+    const load = (silent = false) => {
+        const thisRequest = ++requestId.current;
+        if (!silent) setLoading(true);
+        setLoadError("");
         const params = {};
         if (search.trim()) params.q = search.trim();
         if (status) params.status = status;
         if (sort) params.sort = sort;
-        api.get("/orders/seller/list", { params }).then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
-        api.get("/seller/delivery-agents").then(({ data }) => setRoster(data.data)).catch(() => {});
+        api.get("/orders/seller/list", { params })
+            .then(({ data }) => {
+                if (requestId.current !== thisRequest) return;
+                setOrders(data.data);
+            })
+            .catch((err) => {
+                if (requestId.current !== thisRequest) return;
+                setLoadError(extractErrorMessage(err));
+            })
+            .finally(() => {
+                if (requestId.current === thisRequest) setLoading(false);
+            });
     };
 
-    useEffect(load, [search, status, sort]);
+    useEffect(() => { load(false); }, [search, status, sort]);
+
+    // The delivery roster doesn't depend on the filters - fetch it once.
+    useEffect(() => {
+        api.get("/seller/delivery-agents").then(({ data }) => setRoster(data.data)).catch(() => {});
+    }, []);
 
     const applySavedFilters = (filters) => {
         setSearchInput(filters.search || "");
@@ -67,7 +90,7 @@ export default function SellerOrders() {
                 status,
                 ...(agentId ? { agent_id: agentId } : {})
             });
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -82,15 +105,13 @@ export default function SellerOrders() {
         try {
             await api.post(`/orders/${orderId}/request-balance`);
             toast?.success("Buyer has been notified that the balance is due");
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
             setBusyId(null);
         }
     };
-
-    if (loading) return <PageLoader />;
 
     return (
         <div>
@@ -143,11 +164,17 @@ export default function SellerOrders() {
             </div>
 
 
-            {orders.length === 0 && (
+            {loading && <SkeletonList rows={5} />}
+
+            {!loading && loadError && (
+                <ErrorState title="Couldn't load your orders" hint={loadError} onRetry={() => load(false)} />
+            )}
+
+            {!loading && !loadError && orders.length === 0 && (
                 <EmptyState title={(search || status) ? "No orders match these filters" : t("seller.orders.empty")} />
             )}
 
-            <ul className="divide-y divide-line border-y border-line">
+            <ul className={`divide-y divide-line border-y border-line ${loading || loadError || orders.length === 0 ? "hidden" : ""}`}>
                 {orders.map((order) => (
                     <li key={order.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <div className="min-w-0 flex-1">

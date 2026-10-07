@@ -170,14 +170,21 @@ exports.resendLoginOtp = async (req, res) => {
     try {
         // (OTP resend/expiry UX) - previously discarded, so the
         // frontend had no way to restart its countdown after a resend.
-        const { expiresInSeconds, userId } = await loginService.resendLoginOtp(req.body.pre_auth_token);
+        const { expiresInSeconds, userId, delivered, channel } = await loginService.resendLoginOtp(
+            req.body.pre_auth_token,
+            req.body.channel
+        );
 
-        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: "success", userId });
+        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: delivered ? "success" : "failure", userId, reason: delivered ? undefined : "code_not_delivered" });
 
+        // A failed channel is still a 200 so the user can pick another one
+        // straight away; the message tells them what happened.
         res.json({
             success: true,
-            message: "A new code has been sent.",
-            data: { expiresInSeconds }
+            message: delivered
+                ? "A new code has been sent."
+                : t(req.locale, "otp.channelFailed", { channel: t(req.locale, `otp.channelName.${channel}`) }),
+            data: { expiresInSeconds, delivered, channel }
         });
 
     } catch (error) {
@@ -205,8 +212,9 @@ exports.forgotPassword = async (req, res) => {
     // exists, so this stays safe for the anti-enumeration guarantee
     // above.
     let expiresInSeconds = otpService.OTP_EXPIRY_SECONDS;
+    let channelUnavailable = false;
     try {
-        ({ expiresInSeconds } = await passwordResetService.requestPasswordReset(req.body.email));
+        ({ expiresInSeconds, channelUnavailable } = await passwordResetService.requestPasswordReset(req.body.email, req.body.channel));
     } catch (error) {
         // Swallowed deliberately - an OTP send failure here shouldn't
         // reveal anything different to the caller than the happy path.
@@ -215,7 +223,7 @@ exports.forgotPassword = async (req, res) => {
     res.json({
         success: true,
         message: "If an account exists for that email, we've sent a reset code.",
-        data: { expiresInSeconds }
+        data: { expiresInSeconds, channelUnavailable }
     });
 };
 
@@ -272,4 +280,15 @@ exports.me = async (req, res) => {
     // from the frontend's own JS, not on the backend reading its own
     // cookies.
     res.json({ success: true, data: { user, csrfToken: req.cookies?.nexora_csrf || null } });
+};
+
+// GET /auth/csrf - re-issues the nexora_csrf cookie for a session that is
+// still valid but whose CSRF cookie was cleared (Safari ITP, long idle).
+// Requires authMiddleware, so an anonymous caller cannot mint tokens. The
+// token is also returned in the body, matching login (see the comment there).
+exports.csrfRefresh = async (req, res) => {
+    const csrfToken = generateCsrfToken();
+    res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
+    res.set("Cache-Control", "no-store");
+    return res.json({ success: true, data: { csrfToken } });
 };

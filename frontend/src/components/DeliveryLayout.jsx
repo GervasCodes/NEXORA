@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAgentShift } from "../hooks/useAgentShift";
+import useAvailablePool from "../hooks/useAvailablePool";
 import IncomingOfferModal from "./IncomingOfferModal";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
@@ -16,6 +17,7 @@ const tabs = [
 
 function ApprovedDeliveryLayout() {
     const { online, goOnline, goOffline, locationError, pushWarning } = useAgentShift();
+    const pool = useAvailablePool();
 
     const toggleShift = () => (online ? goOffline() : goOnline());
 
@@ -52,14 +54,25 @@ function ApprovedDeliveryLayout() {
                     <h1 className="font-display text-2xl">Your delivery rounds</h1>
                 </div>
 
+            </div>
+
+            {/* Large, sticky shift switch - the one control an agent needs
+                within thumb reach on every delivery screen. */}
+            <div className="sticky top-0 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 bg-paper/95 backdrop-blur border-b border-line">
                 <button
+                    type="button"
                     onClick={toggleShift}
-                    className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                        online ? "bg-teal text-white" : "bg-line text-ash hover:text-ink"
+                    role="switch"
+                    aria-checked={online}
+                    className={`w-full flex items-center justify-between gap-3 px-5 py-4 rounded-2xl text-base font-semibold transition-colors ${
+                        online ? "bg-teal text-white" : "bg-line text-ink hover:bg-line/70"
                     }`}
                 >
-                    <span className={`w-2 h-2 rounded-full ${online ? "bg-white" : "bg-ash"}`} />
-                    {online ? "On shift" : "Off shift"}
+                    <span className="flex items-center gap-3">
+                        <span className={`w-3 h-3 rounded-full ${online ? "bg-white animate-pulse" : "bg-ash"}`} />
+                        {online ? "On shift" : "Off shift"}
+                    </span>
+                    <span className="text-sm font-medium opacity-80">{online ? "Tap to go off shift" : "Tap to start your shift"}</span>
                 </button>
             </div>
 
@@ -90,12 +103,17 @@ function ApprovedDeliveryLayout() {
                         }
                     >
                         {tab.label}
+                        {tab.to === "/delivery" && pool.orders.length > 0 && (
+                            <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-mango text-abyss text-xs font-mono font-semibold">
+                                {pool.orders.length > 9 ? "9+" : pool.orders.length}
+                            </span>
+                        )}
                     </NavLink>
                 ))}
             </nav>
 
             <PageTransition granular>
-                <Outlet />
+                <Outlet context={{ pool }} />
             </PageTransition>
 
             <MobileBottomNav items={deliveryBottomNavItems} />

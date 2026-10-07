@@ -29,8 +29,7 @@ export default function NexoraAIButton() {
             aria-label="Open Nexora Assistant"
             title="Nexora Assistant"
             className="
-                fixed right-4 z-50
-                bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6
+                relative
                 group flex items-center justify-center
                 rounded-full shadow-lg shadow-azure/25
                 bg-gradient-to-br from-azure-light to-azure-deep

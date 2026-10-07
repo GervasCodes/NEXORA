@@ -4,13 +4,14 @@ import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
 
 const emptyForm = { first_name: "", last_name: "", email: "", phone: "", password: "", admin_level: "admin" };
 
 export default function AdminManageAdmins() {
     const { user } = useAuth();
-    const [admins, setAdmins] = useState([]);
-    const [loading, setLoading] = useState(true);
     const toast = useToast();
     const [busyId, setBusyId] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -18,12 +19,9 @@ export default function AdminManageAdmins() {
 
     const isSuperAdmin = user?.admin_level === "super_admin";
 
-    const load = () => {
-        api.get("/admin/admins").then(({ data }) => setAdmins(data.data)).catch((err) => toast?.error(extractErrorMessage(err))).finally(() => setLoading(false));
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-runs when isSuperAdmin changes
-    useEffect(() => { if (isSuperAdmin) load(); else setLoading(false); }, [isSuperAdmin]);
+    const list = useAdminPagedList("/admin/admins", { onError: (m) => toast?.error(m), enabled: isSuperAdmin });
+    const { items: admins, loading, meta } = list;
+    const load = list.reload;
 
     if (!isSuperAdmin) {
         return (
@@ -108,6 +106,15 @@ export default function AdminManageAdmins() {
                 </button>
             </form>
 
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search name or email"
+                ariaLabel="Search admins"
+                filters={[{ key: "status", label: "Filter by status", value: list.filters.status || "", options: [{ value: "", label: "All admins" },{ value: "active", label: "Active" },{ value: "inactive", label: "Inactive" }], onChange: (v) => list.applyFilters({ ...list.filters, status: v }) }]}
+            />
+
             {loading ? <p className="text-ash">Loading admins…</p> : (
                 <ul className="divide-y divide-line border-y border-line">
                     {admins.map((a) => (
@@ -146,6 +153,8 @@ export default function AdminManageAdmins() {
                     ))}
                 </ul>
             )}
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Admin pages" />
         </div>
     );
 }

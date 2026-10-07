@@ -81,10 +81,11 @@ const insertParams = (connection) => {
     return call ? call[1] : null;
 };
 
-// The two consent columns are the last two placeholders in the INSERT.
+// The two consent columns sit just before delivery_handover_code, which is
+// the final placeholder in the INSERT (see order.repository.js#insertOrderRow).
 const consentColumns = (params) => ({
-    acceptedAt: params[params.length - 2],
-    version: params[params.length - 1]
+    acceptedAt: params[params.length - 3],
+    version: params[params.length - 2]
 });
 
 // --- validator -------------------------------------------------------

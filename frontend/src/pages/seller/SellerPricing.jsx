@@ -5,8 +5,9 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
-const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_KEYS = ["day.0", "day.1", "day.2", "day.3", "day.4", "day.5", "day.6"];
 
 // (Growth) - Dynamic Pricing. Mirrors SellerAvailability.jsx's
 // shape (service picker + form + list) since both are "manage something
@@ -15,6 +16,7 @@ const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Fri
 // sits behind SellerAvailability's manual per-date price override - see
 // utils/dynamicPricing.js for the priority order between the two.
 export default function SellerPricing() {
+    const { t } = useLanguage();
     const { profile } = useOutletContext();
     const isProvider = profile?.merchant_type === "service" || profile?.merchant_type === "hybrid";
 
@@ -115,23 +117,23 @@ export default function SellerPricing() {
     if (!isProvider) {
         return (
             <div>
-                <h1 className="font-display text-2xl mb-2">Dynamic pricing</h1>
+                <h1 className="font-display text-2xl mb-2">{t("seller.pricing.title")}</h1>
                 <p className="text-ash text-sm mb-4">
-                    Dynamic pricing is for service providers. Add services to your store first.
+                    {t("seller.pricing.providerOnly")}
                 </p>
-                <Link to="/seller/services" className="text-teal hover:underline text-sm">Go to Services</Link>
+                <Link to="/seller/services" className="text-teal hover:underline text-sm">{t("seller.pricing.goToServices")}</Link>
             </div>
         );
     }
 
-    if (loadingServices) return <p className="text-ash">Loading your services…</p>;
+    if (loadingServices) return <p className="text-ash">{t("seller.pricing.loadingServices")}</p>;
 
     if (services.length === 0) {
         return (
             <div>
-                <h1 className="font-display text-2xl mb-2">Dynamic pricing</h1>
-                <p className="text-ash text-sm mb-4">You need at least one service listing before you can set pricing rules.</p>
-                <Link to="/seller/services/new" className="text-teal hover:underline text-sm">Create a service</Link>
+                <h1 className="font-display text-2xl mb-2">{t("seller.pricing.title")}</h1>
+                <p className="text-ash text-sm mb-4">{t("seller.pricing.needService")}</p>
+                <Link to="/seller/services/new" className="text-teal hover:underline text-sm">{t("seller.pricing.createService")}</Link>
             </div>
         );
     }
@@ -139,16 +141,14 @@ export default function SellerPricing() {
     return (
         <div>
             <PageMeta title="Pricing Rules" noIndex />
-            <h1 className="font-display text-2xl mb-1">Dynamic pricing</h1>
+            <h1 className="font-display text-2xl mb-1">{t("seller.pricing.title")}</h1>
             <p className="text-ash text-sm mb-6 max-w-xl">
-                Automatically adjust a service's price for weekends or a date range, instead of setting every
-                date's price by hand in Availability. A manual date override there always takes priority over
-                these rules.
+                {t("seller.pricing.intro")}
             </p>
 
             <div className="grid md:grid-cols-[1fr_360px] gap-8">
                 <div>
-                    <label htmlFor="pricing-service" className="block text-sm text-ash mb-1">Service</label>
+                    <label htmlFor="pricing-service" className="block text-sm text-ash mb-1">{t("seller.pricing.service")}</label>
                     <select
                         id="pricing-service"
                         value={serviceId}
@@ -163,9 +163,9 @@ export default function SellerPricing() {
                     {error && <p role="alert" className="text-coral text-xs mb-3">{error}</p>}
 
                     {loadingRules ? (
-                        <p className="text-ash text-sm">Loading pricing rules…</p>
+                        <p className="text-ash text-sm">{t("seller.pricing.loadingRules")}</p>
                     ) : rules.length === 0 ? (
-                        <EmptyState title="No pricing rules yet for this service." />
+                        <EmptyState title={t("seller.pricing.noRules")} />
                     ) : (
                         <ul className="divide-y divide-line border-y border-line">
                             {rules.map((rule) => (
@@ -174,19 +174,19 @@ export default function SellerPricing() {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <p className="text-sm font-medium truncate">
                                                 {rule.label || (rule.rule_type === "day_of_week"
-                                                    ? `Every ${DAY_LABELS[rule.day_of_week]}`
+                                                    ? t("seller.pricing.everyDay", { day: t(DAY_KEYS[rule.day_of_week]) })
                                                     : `${rule.start_date} → ${rule.end_date}`)}
                                             </p>
                                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
                                                 rule.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"
                                             }`}>
-                                                {rule.is_active ? "Active" : "Paused"}
+                                                {rule.is_active ? t("seller.pricing.active") : t("seller.pricing.paused")}
                                             </span>
                                         </div>
                                         <p className="text-xs text-ash">
                                             {rule.adjustment_type === "percentage"
                                                 ? `${rule.adjustment_value > 0 ? "+" : ""}${rule.adjustment_value}%`
-                                                : `${rule.adjustment_value > 0 ? "+" : ""}${rule.adjustment_value} flat`}
+                                                : `${rule.adjustment_value > 0 ? "+" : ""}${rule.adjustment_value} ${t("seller.pricing.flatSuffix")}`}
                                         </p>
                                     </div>
 
@@ -196,7 +196,7 @@ export default function SellerPricing() {
                                             disabled={busyId === rule.id}
                                             className="text-xs text-ash hover:text-ink disabled:opacity-50"
                                         >
-                                            {rule.is_active ? "Pause" : "Resume"}
+                                            {rule.is_active ? t("seller.pricing.pause") : t("seller.pricing.resume")}
                                         </button>
 
                                         <button
@@ -204,7 +204,7 @@ export default function SellerPricing() {
                                             disabled={busyId === rule.id}
                                             className="text-xs text-coral hover:underline disabled:opacity-50"
                                         >
-                                            Remove
+                                            {t("seller.pricing.remove")}
                                         </button>
                                     </div>
                                 </li>
@@ -214,39 +214,39 @@ export default function SellerPricing() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="border border-line rounded-lg p-4 h-fit">
-                    <p className="text-sm font-medium mb-4">Add a pricing rule</p>
+                    <p className="text-sm font-medium mb-4">{t("seller.pricing.addRule")}</p>
 
                     <div className="mb-3">
-                        <label htmlFor="pricing-rule-type" className="block text-xs text-ash mb-1">Applies to</label>
+                        <label htmlFor="pricing-rule-type" className="block text-xs text-ash mb-1">{t("seller.pricing.appliesTo")}</label>
                         <select
                             id="pricing-rule-type"
                             value={ruleType}
                             onChange={(e) => setRuleType(e.target.value)}
                             className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                         >
-                            <option value="day_of_week">A day of the week</option>
-                            <option value="date_range">A date range (season)</option>
+                            <option value="day_of_week">{t("seller.pricing.dayOfWeek")}</option>
+                            <option value="date_range">{t("seller.pricing.dateRange")}</option>
                         </select>
                     </div>
 
                     {ruleType === "day_of_week" ? (
                         <div className="mb-3">
-                            <label htmlFor="pricing-day" className="block text-xs text-ash mb-1">Day</label>
+                            <label htmlFor="pricing-day" className="block text-xs text-ash mb-1">{t("seller.pricing.day")}</label>
                             <select
                                 id="pricing-day"
                                 value={dayOfWeek}
                                 onChange={(e) => setDayOfWeek(e.target.value)}
                                 className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                             >
-                                {DAY_LABELS.map((dayLabel, index) => (
-                                    <option key={dayLabel} value={index}>{dayLabel}</option>
+                                {DAY_KEYS.map((dayKey, index) => (
+                                    <option key={dayKey} value={index}>{t(dayKey)}</option>
                                 ))}
                             </select>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div>
-                                <label htmlFor="pricing-start" className="block text-xs text-ash mb-1">Start date</label>
+                                <label htmlFor="pricing-start" className="block text-xs text-ash mb-1">{t("seller.pricing.startDate")}</label>
                                 <Input
                                     id="pricing-start"
                                     type="date"
@@ -256,7 +256,7 @@ export default function SellerPricing() {
                                 />
                             </div>
                             <div>
-                                <label htmlFor="pricing-end" className="block text-xs text-ash mb-1">End date</label>
+                                <label htmlFor="pricing-end" className="block text-xs text-ash mb-1">{t("seller.pricing.endDate")}</label>
                                 <Input
                                     id="pricing-end"
                                     type="date"
@@ -270,27 +270,27 @@ export default function SellerPricing() {
 
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                            <label htmlFor="pricing-adjustment-type" className="block text-xs text-ash mb-1">Adjustment</label>
+                            <label htmlFor="pricing-adjustment-type" className="block text-xs text-ash mb-1">{t("seller.pricing.adjustment")}</label>
                             <select
                                 id="pricing-adjustment-type"
                                 value={adjustmentType}
                                 onChange={(e) => setAdjustmentType(e.target.value)}
                                 className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                             >
-                                <option value="percentage">Percentage</option>
-                                <option value="fixed">Fixed amount</option>
+                                <option value="percentage">{t("seller.pricing.percentage")}</option>
+                                <option value="fixed">{t("seller.pricing.fixedAmount")}</option>
                             </select>
                         </div>
                         <div>
                             <label htmlFor="pricing-adjustment-value" className="block text-xs text-ash mb-1">
-                                {adjustmentType === "percentage" ? "% change" : "Amount"}
+                                {adjustmentType === "percentage" ? t("seller.pricing.percentChange") : t("seller.pricing.amount")}
                             </label>
                             <Input
                                 id="pricing-adjustment-value"
                                 type="number"
                                 step="0.01"
                                 required
-                                placeholder={adjustmentType === "percentage" ? "e.g. 20 or -10" : "e.g. 30000 or -5000"}
+                                placeholder={adjustmentType === "percentage" ? t("seller.pricing.percentPlaceholder") : t("seller.pricing.amountPlaceholder")}
                                 value={adjustmentValue}
                                 onChange={(e) => setAdjustmentValue(e.target.value)}
                             />
@@ -298,12 +298,12 @@ export default function SellerPricing() {
                     </div>
 
                     <div className="mb-4">
-                        <label htmlFor="pricing-label" className="block text-xs text-ash mb-1">Label (optional)</label>
+                        <label htmlFor="pricing-label" className="block text-xs text-ash mb-1">{t("seller.pricing.labelOptional")}</label>
                         <Input
                             id="pricing-label"
                             type="text"
                             maxLength={100}
-                            placeholder="e.g. Weekend rate"
+                            placeholder={t("seller.pricing.labelPlaceholder")}
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
                         />
@@ -314,7 +314,7 @@ export default function SellerPricing() {
                         disabled={saving}
                         fullWidth
                     >
-                        {saving ? "Saving…" : "Add rule"}
+                        {saving ? t("seller.pricing.saving") : t("seller.pricing.addRuleSubmit")}
                     </Button>
                 </form>
             </div>

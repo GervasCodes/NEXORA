@@ -29,15 +29,29 @@
 #     VITE_API_URL/VITE_SOCKET_URL, which are only known at build/deploy
 #     time, not when this static file is written.
 #
-# REQUIRED MANUAL STEP: replace the two placeholder origins below with
+# NOTE: connect-src below allows api.nexoramarketplace.online and Render's *.onrender.com
+# (both hosts referenced in this repo). Tighten to your single real API host once settled.
+# (Original note) replace the two placeholder origins below with
 # your actual deployed backend API and Socket.IO URLs (the same values
 # you set for VITE_API_URL/VITE_SOCKET_URL - see frontend/.env.example)
 # before relying on this in production. Until you do, the app will work
 # in development (no CSP applies to `npm run dev`) but a cross-origin
 # API/socket connection will be silently blocked once this header is
 # live on Netlify.
+# Phase 7 additions to the CSP below (each one is something the app already
+# loads and was being blocked or relied on a missing directive):
+#   img-src      images.unsplash.com (seed/demo imagery), unpkg.com (Leaflet
+#                marker icons), blob: (client-side upload previews);
+#   media-src    Cloudinary-hosted product video;
+#   frame-src    only the live-selling embeds (YouTube, Facebook); the
+#                backend and liveSellingEmbed.js refuse every other host;
+#   connect-src  Nominatim (address search) and Sentry's ingest hosts;
+#   form-action / worker-src / manifest-src / upgrade-insecure-requests.
+# Private verification documents open in a separate tab through a signed
+# Cloudinary link, so they need no CSP entry. If you use a Sentry region
+# other than the three listed, add its ingest host to connect-src.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com https://*.tile.openstreetmap.org; connect-src 'self' https://api.nexoramarketplace.online wss://api.nexoramarketplace.online; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://unpkg.com https://*.tile.openstreetmap.org; media-src 'self' https://res.cloudinary.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://www.facebook.com; connect-src 'self' https://api.nexoramarketplace.online wss://api.nexoramarketplace.online https://*.onrender.com wss://*.onrender.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(self), camera=(), microphone=()

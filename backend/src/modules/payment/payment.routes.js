@@ -28,6 +28,16 @@ const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middlewar
 router.post("/webhooks/malipopay", verifyMalipopayWebhook, paymentController.malipopayWebhook);
 router.post("/webhooks/selcom", verifySelcomWebhook, paymentController.selcomWebhook);
 
+// NOTE: the PayPal webhook (POST /webhooks/paypal) is registered in app.js
+// with the raw body parser, like the Snippe / MalipoPay Card webhooks.
+
+// Admin: payments that need a human decision (paid after cancel, amount
+// mismatch, duplicate payment, chargeback, completed-at-provider-but-not-
+// here). Literal paths - must stay registered before "/:orderId/...".
+router.get("/review-queue", authMiddleware, authorize("admin"), paymentController.listPaymentReviews);
+router.post("/review-queue/:reviewId/resolve", authMiddleware, authorize("admin"), paymentController.resolvePaymentReview);
+router.post("/review-queue/:reviewId/accept", authMiddleware, authorize("admin"), paymentController.acceptPaymentReview);
+
 // IMPORTANT: the "paypal/capture" literal-path route below MUST stay
 // registered before the "/:orderId/..." routes further down. Express
 // matches routes in registration order, and "/:orderId/snippe/checkout"

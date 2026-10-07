@@ -103,7 +103,7 @@ export function ToastProvider({ children }) {
                 Same calc() pattern as those two floating buttons. Kept at
                 a plain bottom-20 from md up, where MobileBottomNav doesn't
                 render at all. */}
-            <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-20 inset-x-4 sm:inset-x-auto sm:right-4 z-[1000] flex flex-col gap-2 sm:w-80 pointer-events-none">
+            <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-20 inset-x-4 sm:inset-x-auto sm:right-4 z-[var(--z-banner-top)] flex flex-col gap-2 sm:w-80 pointer-events-none">
                 {toasts.map((toast) => (
                     <ToastItem key={toast.id} toast={toast} onClose={() => dismiss(toast.id)} />
                 ))}

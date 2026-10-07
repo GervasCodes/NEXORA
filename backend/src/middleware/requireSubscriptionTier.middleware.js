@@ -1,5 +1,8 @@
 const subscriptionRepository = require("../modules/subscription/subscription.repository");
 
+// Benefit gate: only a plan still inside its period (or its grace window)
+// counts. A lapsed row that still says status=active does not unlock this.
+
 // Replaces the old requireVerificationFeePaid gate on Analytics/AI once
 // the one-time verification fee was retired (see syncBadge in
 // seller.service.js). Analytics and the AI seller-advisory endpoints now
@@ -17,8 +20,10 @@ const subscriptionRepository = require("../modules/subscription/subscription.rep
 // seller have a paid-tier plan" are two different questions.
 module.exports = async (req, res, next) => {
     try {
-        const current = await subscriptionRepository.findCurrentForSeller(req.user.id);
-        const onPaidTier = !!current && current.status === "active" && current.plan_code !== "free";
+        const current = await subscriptionRepository.findEntitledForSeller(req.user.id);
+        const onPaidTier = !!current
+            && (current.status === "active" || current.status === "past_due")
+            && current.plan_code !== "free";
 
         if (!onPaidTier) {
             return res.status(403).json({

@@ -7,16 +7,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
 import { useLanguage } from "../context/LanguageContext";
-
-const STATUS_STYLES = {
-    requested: "bg-mango/20 text-mango-dark",
-    approved: "bg-azure/10 text-azure",
-    shipped_back: "bg-azure/10 text-azure",
-    received: "bg-azure/10 text-azure",
-    refunded: "bg-teal text-white",
-    rejected: "bg-coral/10 text-coral",
-    cancelled: "bg-line text-ash"
-};
+import StatusBadge from "../components/ui/StatusBadge";
 
 export default function ReturnDetail() {
     const { id } = useParams();
@@ -78,9 +69,7 @@ export default function ReturnDetail() {
             <PageMeta title={t("returns.title")} noIndex />
             <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
                 <h1 className="font-display text-2xl">Return #{ret.id}</h1>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[ret.status] || "bg-line text-ash"}`}>
-                    {ret.status.replace("_", " ")}
-                </span>
+                <StatusBadge domain="return" status={ret.status} />
             </div>
             <p className="text-ash text-sm mb-1">{t(`return.reason.${ret.reason}`)}</p>
             {ret.description && <p className="text-sm mb-4">{ret.description}</p>}

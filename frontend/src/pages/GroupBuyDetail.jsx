@@ -4,14 +4,29 @@ import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
 import PageLoader from "../components/PageLoader";
 import PhoneInput from "../components/PhoneInput";
+import StatusBadge from "../components/ui/StatusBadge";
+import { WhatsAppShareButton, NativeShareButton } from "../components/ShareButtons";
 import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
 import { formatTimeRemaining } from "../utils/format";
+
+// Status -> buyer-facing explanation (Phase 4 remediation) - a status
+// badge alone ("Failed") doesn't tell a buyer who already joined what
+// actually happened or whether they're owed anything; this fills that
+// gap next to the badge.
+const STATUS_EXPLANATIONS = {
+    open: null,
+    successful: "group.status.explain.successful",
+    failed: "group.status.explain.failed",
+    cancelled: "group.status.explain.cancelled"
+};
 
 export default function GroupBuyDetail() {
     const { id } = useParams();
     const { user } = useAuth();
     const { format } = useCurrency();
+    const { t } = useLanguage();
     const navigate = useNavigate();
 
     const [group, setGroup] = useState(null);
@@ -29,6 +44,18 @@ export default function GroupBuyDetail() {
 
     useEffect(load, [id]);
 
+    // Live countdown (Phase 4 remediation) - formatTimeRemaining()
+    // computes off Date.now() at call time, but nothing was forcing a
+    // re-render as time passed, so "2 hours left" sat frozen on screen
+    // until the next unrelated re-render (e.g. after join/claim). A
+    // 30s tick is enough resolution for a countdown measured in
+    // minutes/hours without re-rendering more than this page needs.
+    const [, setTick] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => setTick((n) => n + 1), 30000);
+        return () => clearInterval(timer);
+    }, []);
+
     // Share ( UI/UX remediation) - a group buy inherently
     // depends on the buyer recruiting others to hit the threshold, so
     // "share this" is core to the feature, not a nice-to-have - reuses
@@ -39,23 +66,23 @@ export default function GroupBuyDetail() {
         ? `Join this group buy for ${group.product_name} on NEXORA - the more of us that join, the cheaper it gets: ${shareUrl}`
         : "";
 
-    const handleNativeShare = async () => {
-        if (!navigator.share) return;
-        try {
-            await navigator.share({ title: group?.product_name, text: shareMessage, url: shareUrl });
-        } catch {
-            // Cancelling the native share sheet throws - not an error.
-        }
-    };
-
-    const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
-
     const join = async () => {
+        // Guests ( UI/UX remediation): previously the Join
+        // button simply didn't render for a signed-out visitor, so a
+        // guest who followed a shared group-buy link had no way to act
+        // on it short of noticing the separate login link in the header.
+        // Sending them to login with a returnTo lands them right back
+        // here, able to join immediately, same pattern as the
+        // add-to-cart/save guest flow elsewhere in the app.
+        if (!user) {
+            navigate(`/login?returnTo=${encodeURIComponent(`/group-buys/${id}`)}`);
+            return;
+        }
         setBusy(true);
         setError("");
         try {
             await api.post(`/group-buys/${id}/join`);
-            setMessage("You're in! We'll notify you once the group buy is resolved.");
+            setMessage("You're in! We'll notify you once the group buy is resolved - no payment is taken now.");
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -89,49 +116,51 @@ export default function GroupBuyDetail() {
     }
 
     const progress = Math.min(100, Math.round((group.participant_count / group.min_participants) * 100));
+    const moreNeeded = Math.max(0, group.min_participants - group.participant_count);
+    const explanationKey = STATUS_EXPLANATIONS[group.status];
 
     return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title={group.product_name} noIndex />
+
+            {group.product_image && (
+                <Link to={`/products/${group.product_slug}`} className="block rounded-lg overflow-hidden mb-4 border border-line">
+                    <img src={group.product_image} alt={group.product_name} className="w-full h-48 object-cover" loading="lazy" width="600" height="192" />
+                </Link>
+            )}
             <Link to={`/products/${group.product_slug}`} className="text-teal text-sm hover:underline">{group.product_name}</Link>
             <h1 className="font-display text-2xl mt-1 mb-4">Group buy</h1>
 
             <div className="border border-line rounded-lg p-6 mb-6">
-                <div className="flex items-baseline gap-3 mb-4">
-                    <p className="price font-display text-2xl">{format(group.group_price)}</p>
-                    <p className="text-ash line-through">{format(group.product_price)}</p>
+                <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                    <div className="flex items-baseline gap-3">
+                        <p className="price font-display text-2xl">{format(group.group_price)}</p>
+                        <p className="text-ash line-through">{format(group.product_price)}</p>
+                    </div>
+                    <StatusBadge domain="groupBuy" status={group.status} />
                 </div>
                 <div className="h-2 bg-line rounded-full overflow-hidden mb-2">
                     <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
                 </div>
-                <p className="text-sm text-ash">{group.participant_count}/{group.min_participants} joined</p>
-                <p className="text-sm text-ash mt-1">
-                    {group.status === "open"
-                        ? (formatTimeRemaining(group.deadline) || `Ends ${new Date(group.deadline).toLocaleString()}`)
-                        : `Status: ${group.status}`}
+                <p className="text-sm text-ash">
+                    {group.participant_count}/{group.min_participants} joined
+                    {group.status === "open" && moreNeeded > 0 && (
+                        <span className="text-mango-dark font-medium"> · {moreNeeded} more {moreNeeded === 1 ? "person" : "people"} needed</span>
+                    )}
                 </p>
+                {group.status === "open" && (
+                    <p className="text-sm text-ash mt-1">
+                        {formatTimeRemaining(group.deadline) || `Ends ${new Date(group.deadline).toLocaleString()}`}
+                    </p>
+                )}
+                {explanationKey && (
+                    <p className="text-sm text-ash mt-1">{t(explanationKey)}</p>
+                )}
 
                 {group.status === "open" && (
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-line">
-                        <a
-                            href={whatsappShareUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 bg-[#25D366] text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:opacity-90 transition-opacity"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                                <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.4.7-.4h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.2 2.4 1.5 2.7 1.7.3.2.5.1.6-.1l1-1.1c.2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.1 1.3Z" />
-                            </svg>
-                            Share on WhatsApp
-                        </a>
-                        {navigator.share && (
-                            <button
-                                onClick={handleNativeShare}
-                                className="border border-line px-3 py-1.5 rounded-md text-xs font-semibold hover:border-ink transition-colors"
-                            >
-                                Share…
-                            </button>
-                        )}
+                        <WhatsAppShareButton url={shareUrl} text={shareMessage} size="sm" />
+                        <NativeShareButton title={group?.product_name} text={shareMessage} url={shareUrl} size="sm" />
                     </div>
                 )}
             </div>
@@ -139,14 +168,25 @@ export default function GroupBuyDetail() {
             {error && <p className="text-sm text-coral mb-4">{error}</p>}
             {message && <p className="text-sm text-teal mb-4">{message}</p>}
 
-            {user?.role === "buyer" && group.status === "open" && (
-                <button
-                    disabled={busy}
-                    onClick={join}
-                    className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                    {busy ? "Joining…" : "Join this group buy"}
-                </button>
+            {/* Guests now see Join too (see the `join` handler above) -
+                previously gated to `user?.role === "buyer"`, so a guest
+                saw no call to action at all. `(!user || user.role ===
+                "buyer")` keeps sellers/agents from seeing a Join button
+                that isn't meant for them while still showing it to a
+                signed-out visitor. */}
+            {(!user || user.role === "buyer") && group.status === "open" && (
+                <div>
+                    <button
+                        disabled={busy}
+                        onClick={join}
+                        className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+                    >
+                        {busy ? "Joining…" : "Join - no payment yet"}
+                    </button>
+                    <p className="text-xs text-ash mt-2">
+                        Joining is free. You'll only pay if the group buy reaches {group.min_participants} people before the deadline.
+                    </p>
+                </div>
             )}
 
             {user?.role === "buyer" && group.status === "successful" && !showClaimForm && (
@@ -160,6 +200,7 @@ export default function GroupBuyDetail() {
 
             {showClaimForm && (
                 <form onSubmit={claim} className="space-y-3 mt-4 border border-line rounded-lg p-4">
+                    <p className="text-sm font-medium">Delivery details - payment of {format(group.group_price)} happens on the next step</p>
                     <input required placeholder="Delivery address" value={form.shipping_address} onChange={(e) => setForm({ ...form, shipping_address: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     <div className="grid grid-cols-2 gap-3">
                         <input required placeholder="City" value={form.shipping_city} onChange={(e) => setForm({ ...form, shipping_city: e.target.value })} className="border border-line rounded-md px-3 py-2 text-sm focus-ring" />

@@ -50,7 +50,9 @@ const productAlertRoutes = require("./modules/productAlert/productAlert.routes")
 const sellerSavedFilterRoutes = require("./modules/sellerSavedFilter/sellerSavedFilter.routes");
 const disputeRoutes = require("./modules/dispute/dispute.routes");
 const returnRoutes = require("./modules/return/return.routes");
+const refundRoutes = require("./modules/refund/refund.routes");
 const kycRoutes = require("./modules/kyc/kyc.routes");
+const documentAccessRoutes = require("./modules/documentAccess/documentAccess.routes");
 const buyerWalletRoutes = require("./modules/buyerWallet/buyerWallet.routes");
 const supportRoutes = require("./modules/support/support.routes");
 const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
@@ -62,6 +64,7 @@ const groupBuyRoutes = require("./modules/groupBuy/groupBuy.routes");
 const liveSellingRoutes = require("./modules/liveSelling/liveSelling.routes");
 const businessRoutes = require("./modules/business/business.routes");
 const affiliateRoutes = require("./modules/affiliate/affiliate.routes");
+const affiliateAdminRoutes = require("./modules/affiliate/affiliate.admin.routes");
 const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
 const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
@@ -69,6 +72,7 @@ const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const subscriptionRoutes = require("./modules/subscription/subscription.routes");
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
 const statusRoutes = require("./modules/status/status.routes");
+const seoMetricsRoutes = require("./modules/seoMetrics/seoMetrics.routes");
 const aiRoutes = require("./modules/ai/ai.routes");
 // Phase 1 (SEO Critical). Controller only - this is a single public
 // GET mounted directly below, not a full router, since /sitemap.xml is
@@ -172,6 +176,14 @@ app.post(
     "/api/v1/payments/webhooks/malipopay-card",
     express.raw({ type: "application/json" }),
     require("./modules/payment/payment.controller").malipopayCardWebhook
+);
+
+// PayPal webhook - raw body for the same reason as Snippe/MalipoPay Card;
+// verified through PayPal's verify-webhook-signature API (PAYPAL_WEBHOOK_ID).
+app.post(
+    "/api/v1/payments/webhooks/paypal",
+    express.raw({ type: "application/json" }),
+    require("./modules/payment/payment.controller").paypalWebhook
 );
 
 // WhatsApp Cloud API inbound webhook  - same raw-body
@@ -319,6 +331,7 @@ app.get("/", (req, res) => {
 // and this frontend proxies its own /sitemap.xml straight through to
 // it (see frontend/public/_redirects) rather than to any API route.
 app.get("/sitemap.xml", sitemapController.getSitemap);
+app.get(/^\/sitemap-(\d+)\.xml$/, sitemapController.getSitemapPart);
 
 app.use("/api/v1/auth", authRoutes);
 // Must be mounted BEFORE /api/v1/seller: it is a more specific prefix
@@ -382,11 +395,13 @@ app.use("/api/v1/settings", settingsRoutes);
 // route accidentally added to admin.routes.js matching this path would
 // silently shadow this router entirely.
 app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
+app.use("/api/v1/admin/documents", documentAccessRoutes);
 app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 app.use("/api/v1/admin/maintenance", maintenanceRoutes);
 // Same more-specific-prefix-first reasoning as the two mounts above.
 app.use("/api/v1/admin/data-reset", dataResetRoutes);
 app.use("/api/v1/admin/broadcasts", broadcastRoutes);
+app.use("/api/v1/admin/affiliates", affiliateAdminRoutes);
 // Brevo delivery-status webhook (Phase 5, production error fixes) -
 // intentionally NOT under the admin-authenticated broadcastRoutes above
 // (Brevo's own servers call this, not a signed-in admin) and not
@@ -421,6 +436,7 @@ app.use("/api/v1", productAlertRoutes);
 app.use("/api/v1/seller-filters", sellerSavedFilterRoutes);
 app.use("/api/v1/disputes", disputeRoutes);
 app.use("/api/v1/returns", returnRoutes);
+app.use("/api/v1/admin/refunds", refundRoutes);
 app.use("/api/v1/kyc", kycRoutes);
 // Deliberately NOT nested under "/api/v1/wallet" (the seller wallet
 // module's mount) - that router's own auth/role middleware runs on
@@ -445,6 +461,7 @@ app.use("/api/v1/affiliate", affiliateRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);
+app.use("/api/v1/seo", seoMetricsRoutes);
 // Nexora AI  - see modules/ai/ai.service.js's header comment
 // for the safety/grounding rules every route here shares.
 app.use("/api/v1/ai", aiRoutes);

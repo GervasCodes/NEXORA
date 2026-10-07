@@ -53,6 +53,12 @@ module.exports = {
     },
 
     notifications: {
+        booking: {
+            confirmed: {
+                title: "Uhifadhi umethibitishwa",
+                message: "Uhifadhi wako {reference} umethibitishwa."
+            }
+        },
         "message.new.title": "Ujumbe mpya kutoka kwa {senderName}",
         "message.new.message": "{preview}",
 
@@ -129,11 +135,17 @@ module.exports = {
         "order.placed.title": "Agizo limewekwa",
         "order.placed.messageMultiVendor": "Agizo lako {orderNumber} (wachuuzi {vendorCount}) limewekwa kwa mafanikio.",
         "order.placed.messageSingle": "Agizo lako {orderNumber} ({itemSummary}) limewekwa kwa mafanikio.",
+        "order.handoverCode.title": "Nambari yako ya uwasilishaji",
+        "order.handoverCode.message": "Nambari ya uwasilishaji ya agizo lako la NEXORA {orderNumber} ni {code}. Mpe rider nambari hii agizo lako linapowasili - usiitoe kabla ya hapo.",
         "order.cancelled.title": "Agizo limeghairiwa",
         "order.cancelled.message": "Agizo lako {orderNumber} limeghairiwa.",
         "order.cancelled.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) limeghairiwa.",
         "order.cancelledUnpaid.message": "Agizo lako {orderNumber} limeghairiwa kwa sababu malipo hayakukamilika. Jisikie huru kuliweka tena.",
         "order.cancelledUnpaid.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) limeghairiwa kwa sababu malipo hayakukamilika. Jisikie huru kuliweka tena.",
+        "payment.paidAfterCancel.title": "Malipo yamepokelewa kwa agizo lililoghairiwa",
+        "payment.paidAfterCancel.message": "Tumepokea malipo yako ya agizo {orderNumber}, lakini agizo lilikuwa limeghairiwa tayari. Timu yetu itayakagua na kukurudishia pesa zako.",
+        "payment.notReceived.title": "Hatukupokea malipo yako",
+        "payment.notReceived.message": "Hatukupokea malipo yako, kwa hivyo hayakukamilika. Tafadhali jaribu tena.",
         "order.statusUpdated.title": "Hali ya agizo imesasishwa",
         "order.statusUpdated.message": "Agizo lako {orderNumber} sasa ni \"{status}\".",
         "order.statusUpdated.messageWithItem": "Agizo lako {orderNumber} ({itemSummary}) sasa ni \"{status}\".",
@@ -144,6 +156,8 @@ module.exports = {
 
         "wallet.credited.title": "Pochi imeongezwa fedha",
         "wallet.credited.message": "Pochi yako imeongezwa fedha kwa ajili ya agizo #{orderId}.",
+        "wallet.codCommissionDebited.title": "Kamisheni ya malipo ya mkononi imekatwa",
+        "wallet.codCommissionDebited.message": "Kamisheni ya jukwaa kwa agizo la malipo ya mkononi #{orderId} imekatwa kutoka kwenye pochi yako.",
         "wallet.released.title": "Mapato yaliyoshikiliwa yametolewa",
         "wallet.released.message": "Baadhi ya mapato yako yaliyoshikiliwa yamemaliza kipindi cha kusubiri na sasa yanapatikana kutolewa.",
         "withdrawal.status.title": "Utoaji {status}",
@@ -164,10 +178,36 @@ module.exports = {
         "departmentSponsorship.started.title": "Kampeni ya udhamini wa idara imeanza",
         "departmentSponsorship.started.message": "Kampeni yako ya udhamini ya siku {days} kwa idara \"{categoryName}\" kwenye ukurasa wa nyumbani sasa inaonekana (kiasi {amount} kimetozwa kwenye pochi yako).",
         "departmentSponsorship.expired.title": "Kampeni ya udhamini wa idara imekamilika",
-        "departmentSponsorship.expired.message": "Kampeni yako ya udhamini wa idara \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji."
+        "departmentSponsorship.expired.message": "Kampeni yako ya udhamini wa idara \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji.",
+
+        "subscription.expiring.title": "Mpango wako wa muuzaji unakaribia kuisha",
+        "subscription.expiring.message": "Mpango wako wa {planName} unaendelea hadi {date}. Hufanya upya kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa yake.",
+        "subscription.renewal.title": "Hufanya upya mpango wako wa muuzaji",
+        "subscription.renewal.message": "Mpango wako wa {planName} unafanywa upya tarehe {date}. Lipa kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa bila pengo."
     },
 
+    otp: {
+        channelName: { email: "barua pepe", sms: "SMS", whatsapp: "WhatsApp" },
+        channelFailed: "Hatukuweza kutuma msimbo kupitia {channel}. Tafadhali chagua njia nyingine.",
+        subject: {
+            login: "Msimbo wako wa kuingia NEXORA",
+            password_change: "Msimbo wako wa kubadilisha nenosiri la NEXORA",
+            password_reset: "Msimbo wako wa kuweka upya nenosiri la NEXORA",
+            default: "Msimbo wako wa uthibitisho wa NEXORA"
+        },
+        intro: {
+            login: "Tumia msimbo huu kumaliza kuingia NEXORA:",
+            password_change: "Tumia msimbo huu kuthibitisha kuwa ni wewe kabla ya kubadilisha nenosiri lako la NEXORA:",
+            password_reset: "Tumia msimbo huu kuweka upya nenosiri lako la NEXORA:"
+        },
+        expiry: "Msimbo huu unaisha baada ya dakika {minutes}. Usipoomba msimbo huu, unaweza kupuuza ujumbe huu.",
+        sms: "Msimbo wa NEXORA: {code}. Unaisha baada ya dakika {minutes}. Usimshirikishe mtu yeyote msimbo huu."
+    },
     email: {
-        footer: "Huu ni ujumbe wa kiotomatiki kutoka NEXORA. Tafadhali usijibu moja kwa moja kwa barua pepe hii."
+        cta: { view: "Tazama kwenye NEXORA" },
+        supportLabel: "Unahitaji msaada? Wasiliana nasi",
+        manageLabel: "Dhibiti barua pepe za arifa",
+        footer: "Huu ni ujumbe wa kiotomatiki kutoka NEXORA. Tafadhali usijibu moja kwa moja kwa barua pepe hii.",
+        tagline: "Soko la Tanzania"
     }
 };

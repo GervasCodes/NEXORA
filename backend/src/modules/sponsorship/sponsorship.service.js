@@ -130,28 +130,141 @@ exports.getMyCampaigns = async (sellerId) => {
     return sponsorshipRepository.findBySeller(sellerId);
 };
 
-// Ends a still-running campaign early. Deliberately no pro-rated refund -
-// see README-phase-8A.md's "Not in scope" section for why that's a later
-// decision rather than bundled in here. Only clears is_sponsored if no
-// second, independent campaign is still actively running for the same
-// product (a seller - or admin - could in principle have more than one
-// active reason for the flag to be on).
+// --- Cancel with refund (Phase 6, item 1) ---------------------------------
+//
+// Pure. Works out what a cancel returns, from the campaign as it stands.
+//
+// Unused days are counted in whole days remaining (floor), so a campaign
+// with 10 hours left refunds nothing for that partial day. Paid days are
+// refunded first, at the rate snapshotted on the campaign; any unused days
+// beyond that are returned as included credit days, up to the credits the
+// campaign actually used. The sum of refunded paid days and returned credit
+// days never exceeds the unused days.
+exports.computeCancelRefund = ({ days, creditsUsed, dailyRate, endsAt, now }) => {
+    const totalDays = Math.max(0, Number(days) || 0);
+    const usedCredits = Math.max(0, Number(creditsUsed) || 0);
+    const rate = Number(dailyRate) || 0;
+
+    const remainingMs = new Date(endsAt).getTime() - new Date(now).getTime();
+    const remainingDays = Math.min(totalDays, Math.max(0, Math.floor(remainingMs / MS_PER_DAY)));
+
+    const paidDays = Math.max(0, totalDays - usedCredits);
+    const refundDays = Math.min(remainingDays, paidDays);
+    const refundAmount = Number((refundDays * rate).toFixed(2));
+    const creditDaysToReturn = Math.min(remainingDays - refundDays, usedCredits);
+
+    return { remainingDays, refundDays, refundAmount, creditDaysToReturn };
+};
+
+const toCancelResult = (campaign) => ({
+    status: "cancelled",
+    refund_amount: Number(campaign.refund_amount) || 0,
+    credit_days_returned: Number(campaign.credit_days_returned) || 0,
+    cancelled_at: campaign.cancelled_at
+});
+
+// Read-only. Shown to the seller on the confirm screen before they commit,
+// so the amounts they see are the amounts a cancel will actually move. The
+// credit days shown are only the days that will land in a current period.
+exports.previewCancel = async (sellerId, campaignId) => {
+    const campaign = await sponsorshipRepository.findById(campaignId);
+    if (!campaign || campaign.seller_id !== sellerId) {
+        throw new Error("Campaign not found");
+    }
+    if (campaign.status !== "active") {
+        return { can_cancel: false, reason: `This campaign is already "${campaign.status}"`, ...toCancelResult(campaign) };
+    }
+
+    const plan = exports.computeCancelRefund({
+        days: campaign.days,
+        creditsUsed: campaign.credits_used,
+        dailyRate: campaign.daily_rate,
+        endsAt: campaign.ends_at,
+        now: new Date()
+    });
+    const periodId = plan.creditDaysToReturn > 0
+        ? await sponsorshipCreditService.findCurrentPeriodId(sellerId)
+        : null;
+
+    return {
+        can_cancel: true,
+        refund_amount: plan.refundAmount,
+        refund_days: plan.refundDays,
+        credit_days: periodId ? plan.creditDaysToReturn : 0,
+        credit_days_lost: periodId ? 0 : plan.creditDaysToReturn,
+        remaining_days: plan.remainingDays
+    };
+};
+
+// Ends a still-running campaign early and refunds the unused part.
+//
+// One transaction. Lock order is wallet, then campaign, then credit period,
+// the same order the campaign-start path uses, so the two cannot deadlock.
+// Idempotent: a campaign that is already cancelled returns the result of
+// the cancel that first did it, and nothing is refunded twice.
 exports.cancelCampaign = async (sellerId, campaignId) => {
     const connection = await db.getConnection();
 
     try {
         await connection.beginTransaction();
 
+        await walletRepository.ensureWallet(sellerId, connection);
+        const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
+
         const campaign = await sponsorshipRepository.findByIdForUpdate(campaignId, connection);
 
         if (!campaign || campaign.seller_id !== sellerId) {
             throw new Error("Campaign not found");
         }
+
+        if (campaign.status === "cancelled" && campaign.cancelled_at) {
+            await connection.commit();
+            return toCancelResult(campaign);
+        }
+
         if (campaign.status !== "active") {
             throw new Error(`This campaign is already "${campaign.status}"`);
         }
 
-        await sponsorshipRepository.updateStatus(campaignId, "cancelled", connection);
+        const plan = exports.computeCancelRefund({
+            days: campaign.days,
+            creditsUsed: campaign.credits_used,
+            dailyRate: campaign.daily_rate,
+            endsAt: campaign.ends_at,
+            now: new Date()
+        });
+
+        let creditDaysReturned = 0;
+        if (plan.creditDaysToReturn > 0) {
+            const periodId = await sponsorshipCreditService.findCurrentPeriodIdForUpdate(sellerId, connection);
+            if (periodId) {
+                await sponsorshipCreditService.returnCredits(periodId, plan.creditDaysToReturn, connection);
+                creditDaysReturned = plan.creditDaysToReturn;
+            }
+        }
+
+        let balanceAfter = Number(wallet.balance);
+        if (plan.refundAmount > 0) {
+            balanceAfter = await walletRepository.incrementBalance(sellerId, plan.refundAmount, connection);
+            await walletRepository.insertTransaction({
+                sellerId,
+                type: "credit",
+                amount: plan.refundAmount,
+                balanceAfter,
+                referenceType: "sponsorship_campaign_refund",
+                referenceId: campaignId,
+                description: `Refund for cancelled sponsorship campaign #${campaignId} (${plan.refundDays} unused paid day${plan.refundDays === 1 ? "" : "s"})`
+            }, connection);
+        }
+
+        const updated = await sponsorshipRepository.markCancelled(
+            campaignId,
+            { refundAmount: plan.refundAmount, creditDaysReturned },
+            connection
+        );
+        if (!updated) {
+            throw new Error("Campaign could not be cancelled. Please refresh and try again.");
+        }
 
         const stillSponsored = await sponsorshipRepository.hasOtherActiveCampaign(
             campaign.product_id, campaign.id, connection
@@ -161,7 +274,13 @@ exports.cancelCampaign = async (sellerId, campaignId) => {
         }
 
         await connection.commit();
-        return { status: "cancelled" };
+
+        return {
+            status: "cancelled",
+            refund_amount: plan.refundAmount,
+            credit_days_returned: creditDaysReturned,
+            balance: balanceAfter
+        };
 
     } catch (error) {
         await connection.rollback();
@@ -174,50 +293,53 @@ exports.cancelCampaign = async (sellerId, campaignId) => {
 
 // --- Cron job entry point (jobs/sponsorshipExpiry.job.js) ---------------
 //
-// Closes out every campaign whose ends_at has passed. Idempotent: only
-// ever touches rows still marked 'active', so it's safe to run on every
-// tick even if the previous run already handled everything.
+// Phase 6, item 4. Each due campaign is processed in its own transaction,
+// so one failure is logged and skipped rather than stopping the others. Each
+// step is conditional on the campaign still being 'active' and past its end
+// date, so a repeat run (or a cancel that landed first) changes nothing.
 exports.expireDueCampaigns = async () => {
-    const connection = await db.getConnection();
+    const due = await sponsorshipRepository.findExpiredActiveIds();
+    let expired = 0;
 
-    try {
-        await connection.beginTransaction();
+    for (const candidate of due) {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        const due = await sponsorshipRepository.findExpiredActive(connection);
-
-        for (const campaign of due) {
-            await sponsorshipRepository.updateStatus(campaign.id, "expired", connection);
+            const changed = await sponsorshipRepository.expireIfDue(candidate.id, connection);
+            if (!changed) {
+                await connection.rollback();
+                continue;
+            }
 
             const stillSponsored = await sponsorshipRepository.hasOtherActiveCampaign(
-                campaign.product_id, campaign.id, connection
+                candidate.product_id, candidate.id, connection
             );
             if (!stillSponsored) {
-                await productRepository.setSponsored(campaign.product_id, false, connection);
+                await productRepository.setSponsored(candidate.product_id, false, connection);
             }
-        }
 
-        await connection.commit();
+            await connection.commit();
+            expired += 1;
 
-        for (const campaign of due) {
             notificationService.notify({
-                userId: campaign.seller_id,
+                userId: candidate.seller_id,
                 type: "sponsorship_expired",
                 titleKey: "notifications.sponsorship.expired.title",
                 messageKey: "notifications.sponsorship.expired.message",
-                messageParams: { productName: campaign.product_name },
+                messageParams: { productName: candidate.product_name },
                 withEmail: false
             }).catch((err) => logger.warn({ err }, "sponsorship expiry notify error"));
+
+        } catch (error) {
+            await connection.rollback().catch(() => {});
+            logger.error({ err: error, campaignId: candidate.id }, "sponsorship expiry failed for campaign; continuing");
+        } finally {
+            connection.release();
         }
-
-        return due.length;
-
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-
-    } finally {
-        connection.release();
     }
+
+    return expired;
 };
 
 // --- Admin oversight (read-only - the manual sponsor/unsponsor toggle in

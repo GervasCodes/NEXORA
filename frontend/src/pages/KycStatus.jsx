@@ -1,86 +1,163 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
-import PageLoader from "../components/PageLoader";
+import PageState from "../components/ui/PageState";
+import useFetch from "../hooks/useFetch";
 import { useCurrency } from "../context/CurrencyContext";
+import { useLanguage } from "../context/LanguageContext";
+import { convertImageFileToPdf, convertImageFilesToPdf } from "../utils/imageToPdf";
 
-const TIER_LABELS = {
-    tier0: "Light signup",
-    tier1: "ID verified",
-    tier2: "Enhanced verification"
+const MAX_FILE_MB = 8;
+
+// Document type options per tier, described in buyer terms rather than
+// the backend's tier0/tier1/tier2 codes (Phase 4 remediation - this was
+// previously a free-text <input>, so a buyer could type anything,
+// including something an admin reviewer couldn't act on). `needsBack`
+// drives the front/back capture UI below.
+const DOCUMENT_TYPES = {
+    tier1: [
+        { value: "National ID", needsBack: true },
+        { value: "Voter ID", needsBack: true },
+        { value: "Driver's License", needsBack: true },
+        { value: "Passport", needsBack: false }
+    ],
+    tier2: [
+        { value: "Utility bill", needsBack: false },
+        { value: "Bank statement", needsBack: false },
+        { value: "Tenancy agreement", needsBack: false }
+    ]
 };
+
+// Buyer-facing description of what each tier unlocks, instead of the
+// bare TIER_LABELS strings this page used to show on their own with no
+// context (Phase 4 remediation: "describe tiers in buyer terms").
+const TIER_COPY = {
+    tier0: { labelKey: "kyc.tier.tier0.label", descKey: "kyc.tier.tier0.desc" },
+    tier1: { labelKey: "kyc.tier.tier1.label", descKey: "kyc.tier.tier1.desc" },
+    tier2: { labelKey: "kyc.tier.tier2.label", descKey: "kyc.tier.tier2.desc" }
+};
+
+function FilePicker({ id, label, file, onChange, captureHint }) {
+    const inputRef = useRef(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+
+    const handleChange = (e) => {
+        const f = e.target.files?.[0] || null;
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(f && f.type.startsWith("image/") ? URL.createObjectURL(f) : null);
+        onChange(f);
+    };
+
+    return (
+        <div>
+            <label htmlFor={id} className="block text-sm mb-1">{label}</label>
+            <input
+                id={id}
+                ref={inputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                capture={captureHint}
+                required
+                onChange={handleChange}
+                className="text-sm"
+            />
+            {previewUrl && (
+                <img src={previewUrl} alt="" className="mt-2 h-28 rounded-md border border-line object-cover" />
+            )}
+            {file && !previewUrl && (
+                <p className="text-xs text-ash mt-1">{file.name}</p>
+            )}
+        </div>
+    );
+}
 
 export default function KycStatus() {
     const { format } = useCurrency();
-    const fileInputRef = useRef(null);
+    const { t } = useLanguage();
 
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState("");
+    // (Phase 4 remediation) - previously a `.finally(() =>
+    // setLoading(false))` with the error caught but no retry affordance
+    // at all; `useFetch`/`PageState` give it the same error-with-retry
+    // every other page gets now.
+    const { data: status, loading, error, retry } = useFetch(
+        () => api.get("/kyc/me").then(({ data }) => data.data),
+        []
+    );
 
     const [documentType, setDocumentType] = useState("");
+    const [frontFile, setFrontFile] = useState(null);
+    const [backFile, setBackFile] = useState(null);
     const [note, setNote] = useState("");
     const [busy, setBusy] = useState(false);
-    const [error, setError] = useState("");
+    const [converting, setConverting] = useState(false);
+    const [formError, setFormError] = useState("");
 
-    const load = () => {
-        api.get("/kyc/me")
-            .then(({ data }) => setStatus(data.data))
-            .catch((err) => setLoadError(extractErrorMessage(err)))
-            .finally(() => setLoading(false));
-    };
+    if (loading || error) {
+        return (
+            <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
+                <PageMeta title="Verification level" noIndex />
+                <PageState
+                    loading={loading}
+                    error={error}
+                    onRetry={retry}
+                    errorProps={{ title: "Couldn't load your verification status", hint: "Check your connection and try again." }}
+                />
+            </div>
+        );
+    }
 
-    useEffect(load, []);
+    const limitFor = (tier) => status.limits.find((l) => l.tier === tier);
+    const docOptions = status.nextTier ? DOCUMENT_TYPES[status.nextTier] || [] : [];
+    const selectedDoc = docOptions.find((d) => d.value === documentType);
 
     const submit = async (e) => {
         e.preventDefault();
-        const file = fileInputRef.current?.files?.[0];
-        if (!file) {
-            setError("A document upload is required");
+        if (!frontFile) {
+            setFormError(t("kyc.form.documentRequired"));
+            return;
+        }
+        if (selectedDoc?.needsBack && !backFile) {
+            setFormError(t("kyc.form.backRequired"));
             return;
         }
         setBusy(true);
-        setError("");
+        setFormError("");
         try {
+            // Store PDFs, not photos (Phase 4 remediation, per the
+            // PDF-only decision carried over from earlier phases) - a
+            // camera-captured photo is converted to PDF right here in
+            // the browser before it's ever sent; front+back becomes one
+            // 2-page PDF instead of two separate uploads, since the
+            // upload endpoint takes a single `document` file.
+            setConverting(true);
+            const toUpload = selectedDoc?.needsBack
+                ? await convertImageFilesToPdf([frontFile, backFile])
+                : await convertImageFileToPdf(frontFile);
+            setConverting(false);
+
             const formData = new FormData();
-            formData.append("document", file);
+            formData.append("document", toUpload);
             formData.append("documentType", documentType);
             formData.append("note", note);
             await api.post("/kyc/upgrade", formData, {
                 headers: { "Content-Type": "multipart/form-data" }
             });
             setDocumentType("");
+            setFrontFile(null);
+            setBackFile(null);
             setNote("");
-            if (fileInputRef.current) fileInputRef.current.value = "";
-            load();
+            retry();
         } catch (err) {
-            setError(extractErrorMessage(err));
+            setFormError(extractErrorMessage(err));
         } finally {
             setBusy(false);
+            setConverting(false);
         }
     };
-
-    if (loading) return <PageLoader />;
-    if (loadError || !status) {
-        return <div className="max-w-xl mx-auto px-6 py-24 text-center text-ash text-sm">{loadError}</div>;
-    }
-
-    const limitFor = (tier) => status.limits.find((l) => l.tier === tier);
 
     return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Verification level" noIndex />
-            {/*
-              (New UI/UX & Imagery Additions, item 20): supporting
-              imagery for the trust/verification flow, which was
-              previously text-and-badge-only. No photography has been
-              supplied for this, so this is an illustrated trust badge
-              (an inline SVG, not a placeholder <img> - a badge/shield
-              motif reads fine at any resolution and doesn't need a real
-              photo shoot the way Home.jsx's hero collage or
-              OnboardingTour's steps do). Flagging in case the team would
-              rather commission real photography here instead.
-            */}
             <div className="flex items-center gap-4 mb-6 border border-line rounded-lg p-4 bg-teal/5">
                 <div className="w-14 h-14 rounded-full bg-teal/10 flex items-center justify-center shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-7 h-7 text-teal">
@@ -89,60 +166,88 @@ export default function KycStatus() {
                     </svg>
                 </div>
                 <div>
-                    {/* Phase 4 (SEO Supporting, H1 audit): this was a <p> styled
-                        as a heading, and it's this page's title - the page had
-                        no <h1> at all, even though an <h2> ("Upgrade to …")
-                        appears further down. Promoted; visual style unchanged. */}
-                    <h1 className="font-display text-lg mb-1">Verification level</h1>
-                    <p className="text-ash text-sm">
-                        Higher verification tiers raise how much you can spend in a single order.
-                    </p>
+                    <h1 className="font-display text-lg mb-1">{t("kyc.title")}</h1>
+                    <p className="text-ash text-sm">{t("kyc.subtitle")}</p>
                 </div>
             </div>
 
-            <div className="border border-line rounded-lg p-4 mb-8">
-                <p className="text-xs uppercase tracking-widest text-ash mb-1">Current tier</p>
-                <p className="font-display text-xl mb-1">{TIER_LABELS[status.tier]}</p>
+            <div className="border border-line rounded-lg p-4 mb-4">
+                <p className="text-xs uppercase tracking-widest text-ash mb-1">{t("kyc.currentTier")}</p>
+                <p className="font-display text-xl mb-1">{t(TIER_COPY[status.tier].labelKey)}</p>
+                <p className="text-sm text-ash mb-2">{t(TIER_COPY[status.tier].descKey)}</p>
                 {limitFor(status.tier)?.max_order_amount ? (
-                    <p className="text-sm text-ash">Order limit: {format(limitFor(status.tier).max_order_amount)}</p>
+                    <p className="text-sm text-ash">{t("kyc.orderLimit")}: {format(limitFor(status.tier).max_order_amount)}</p>
                 ) : (
-                    <p className="text-sm text-ash">No order limit</p>
+                    <p className="text-sm text-ash">{t("kyc.noOrderLimit")}</p>
                 )}
             </div>
 
+            {status.rejectedRequest && (
+                <div className="border border-coral/30 bg-coral/5 rounded-lg p-4 mb-4 text-sm">
+                    <p className="font-medium text-coral mb-1">{t("kyc.rejected.title")}</p>
+                    <p className="text-ash text-xs mb-2">
+                        {t("kyc.rejected.documentType")}: {status.rejectedRequest.document_type}
+                    </p>
+                    <p>{status.rejectedRequest.rejection_reason}</p>
+                    <p className="text-ash text-xs mt-2">{t("kyc.rejected.hint")}</p>
+                </div>
+            )}
+
             {status.pendingRequest ? (
                 <div className="border border-line rounded-lg p-4 text-sm">
-                    <p className="font-medium mb-1">Upgrade request pending review</p>
-                    <p className="text-ash text-xs">Requested tier: {TIER_LABELS[status.pendingRequest.target_tier]}</p>
+                    <p className="font-medium mb-1">{t("kyc.pending.title")}</p>
+                    <p className="text-ash text-xs">{t("kyc.pending.targetTier")}: {t(TIER_COPY[status.pendingRequest.target_tier].labelKey)}</p>
                 </div>
             ) : status.nextTier ? (
                 <form onSubmit={submit} className="space-y-4">
-                    <h2 className="font-display text-lg">Upgrade to {TIER_LABELS[status.nextTier]}</h2>
+                    <h2 className="font-display text-lg">{t("kyc.upgradeTo")} {t(TIER_COPY[status.nextTier].labelKey)}</h2>
+                    <p className="text-sm text-ash -mt-2">{t(TIER_COPY[status.nextTier].descKey)}</p>
                     {limitFor(status.nextTier)?.max_order_amount ? (
-                        <p className="text-sm text-ash -mt-2">New order limit: {format(limitFor(status.nextTier).max_order_amount)}</p>
+                        <p className="text-sm text-ash -mt-2">{t("kyc.newOrderLimit")}: {format(limitFor(status.nextTier).max_order_amount)}</p>
                     ) : (
-                        <p className="text-sm text-ash -mt-2">Removes your order limit</p>
+                        <p className="text-sm text-ash -mt-2">{t("kyc.removesOrderLimit")}</p>
                     )}
 
                     <div>
-                        <label htmlFor="kyc-doc-type" className="block text-sm mb-1">Document type</label>
-                        <input
+                        <label htmlFor="kyc-doc-type" className="block text-sm mb-1">{t("kyc.form.documentType")}</label>
+                        <select
                             id="kyc-doc-type"
                             required
                             value={documentType}
-                            onChange={(e) => setDocumentType(e.target.value)}
-                            placeholder="e.g. National ID, Passport"
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring"
-                        />
+                            onChange={(e) => { setDocumentType(e.target.value); setFrontFile(null); setBackFile(null); }}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-white"
+                        >
+                            <option value="" disabled>{t("kyc.form.selectDocumentType")}</option>
+                            {docOptions.map((d) => (
+                                <option key={d.value} value={d.value}>{d.value}</option>
+                            ))}
+                        </select>
                     </div>
 
-                    <div>
-                        <label htmlFor="kyc-doc-file" className="block text-sm mb-1">Upload document</label>
-                        <input id="kyc-doc-file" ref={fileInputRef} type="file" required className="text-sm" />
-                    </div>
+                    {documentType && (
+                        <div className="space-y-3 border border-line rounded-lg p-3">
+                            <FilePicker
+                                id="kyc-doc-front"
+                                label={selectedDoc?.needsBack ? t("kyc.form.frontSide") : t("kyc.form.document")}
+                                file={frontFile}
+                                onChange={setFrontFile}
+                                captureHint="environment"
+                            />
+                            {selectedDoc?.needsBack && (
+                                <FilePicker
+                                    id="kyc-doc-back"
+                                    label={t("kyc.form.backSide")}
+                                    file={backFile}
+                                    onChange={setBackFile}
+                                    captureHint="environment"
+                                />
+                            )}
+                            <p className="text-xs text-ash">{t("kyc.form.sizeHint", { size: MAX_FILE_MB })}</p>
+                        </div>
+                    )}
 
                     <div>
-                        <label htmlFor="kyc-note" className="block text-sm mb-1">Note (optional)</label>
+                        <label htmlFor="kyc-note" className="block text-sm mb-1">{t("kyc.form.note")}</label>
                         <textarea
                             id="kyc-note"
                             rows={3}
@@ -152,18 +257,18 @@ export default function KycStatus() {
                         />
                     </div>
 
-                    {error && <p className="text-sm text-coral">{error}</p>}
+                    {formError && <p className="text-sm text-coral">{formError}</p>}
 
                     <button
                         type="submit"
                         disabled={busy}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                     >
-                        {busy ? "Submitting…" : "Submit for review"}
+                        {converting ? t("kyc.form.preparing") : busy ? t("kyc.form.submitting") : t("kyc.form.submit")}
                     </button>
                 </form>
             ) : (
-                <p className="text-sm text-ash">You're at the highest verification tier.</p>
+                <p className="text-sm text-ash">{t("kyc.highestTier")}</p>
             )}
         </div>
     );

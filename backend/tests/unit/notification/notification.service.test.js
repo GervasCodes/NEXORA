@@ -12,6 +12,10 @@ jest.mock("../../../src/i18n", () => ({
     })
 }));
 
+// Pin the email base URL so the CTA assertions don't depend on whatever a
+// developer's local .env sets FRONTEND_URL to (emailTemplate.js reads it per call).
+process.env.FRONTEND_URL = "https://nexora.co.tz";
+
 const notificationRepository = require("../../../src/modules/notification/notification.repository");
 const adminNotificationService = require("../../../src/modules/adminNotification/adminNotification.service");
 const sendEmail = require("../../../src/utils/sendEmail");
@@ -106,7 +110,36 @@ describe("notification.service.notify", () => {
 
         await notificationService.notify({ userId: 1, type: "custom", title: "T", message: "M", withEmail: true });
 
-        expect(sendEmail).toHaveBeenCalledWith("buyer@example.com", "T", expect.stringContaining("M"));
+        // sendEmail(to, subject, plainText, html) - every notification email
+        // is rendered through the shared branded layout (utils/emailTemplate)
+        // with one call-to-action; with no link supplied it points at the
+        // notifications page.
+        expect(sendEmail).toHaveBeenCalledWith(
+            "buyer@example.com",
+            "T",
+            expect.stringContaining("M"),
+            expect.stringContaining("<!DOCTYPE html>")
+        );
+        const [, , text, html] = sendEmail.mock.calls[0];
+        expect(text).toContain("T");
+        expect(text).toContain("/notifications");
+        expect(html).toContain("<h1");
+        expect(html).toContain("<p>M</p>");
+        expect(html).toContain("en:email.cta.view");
+        expect(html).toContain('href="https://nexora.co.tz/notifications"');
+    });
+
+    it("points the email's call-to-action at the order page when the notification is about an order", async () => {
+        notificationRepository.getUserContact.mockResolvedValue({ language: "en", email: "buyer@example.com" });
+        resolveLocale.mockReturnValue("en");
+
+        await notificationService.notify({
+            userId: 1, type: "custom", title: "T", message: "M", relatedOrderId: 5, withEmail: true
+        });
+
+        const [, , text, html] = sendEmail.mock.calls[0];
+        expect(text).toContain("/orders/5");
+        expect(html).toContain('href="https://nexora.co.tz/orders/5"');
     });
 
     // Phase 6 (UI/UX remediation, notifications) - related_conversation_id

@@ -52,10 +52,10 @@ async function resolveSearchIntent(query) {
     }
 }
 
-// Same URL shape as before for a plain search ("/?search=..."); price/sort
+// Search results page URL ("/search?search=..."); price/sort
 // are only appended when the parse actually found them.
 function buildResultsUrl({ search, min_price, max_price, sort }) {
-    let url = `/?search=${encodeURIComponent(search)}`;
+    let url = `/search?search=${encodeURIComponent(search)}`;
     if (min_price !== undefined) url += `&min_price=${min_price}`;
     if (max_price !== undefined) url += `&max_price=${max_price}`;
     if (sort) url += `&sort=${sort}`;

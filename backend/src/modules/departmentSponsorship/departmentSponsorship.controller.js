@@ -52,6 +52,15 @@ exports.getMyCampaigns = async (req, res) => {
     }
 };
 
+exports.previewCancelCampaign = async (req, res) => {
+    try {
+        const preview = await departmentSponsorshipService.previewCancel(req.user.id, req.params.id);
+        return res.json({ success: true, data: preview });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 exports.cancelCampaign = async (req, res) => {
     try {
         const result = await departmentSponsorshipService.cancelCampaign(req.user.id, req.params.id);

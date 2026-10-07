@@ -144,7 +144,8 @@ export function AuthProvider({ children }) {
                 // the API response (see login.service.js) so Login.jsx can
                 // drive a live "expires in mm:ss" countdown instead of
                 // hardcoding a duration that could drift from the server's.
-                expiresInSeconds: data.data.expiresInSeconds
+                expiresInSeconds: data.data.expiresInSeconds,
+                codeDelivered: data.data.codeDelivered !== false
             };
         } catch (error) {
             if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
@@ -179,16 +180,23 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const resendLoginOtp = useCallback(async (preAuthToken) => {
+    const resendLoginOtp = useCallback(async (preAuthToken, channel = "email") => {
         try {
-            const response = await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken });
+            const response = await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken, channel });
             //  (OTP resend/expiry UX) - lets the caller restart both
             // the expiry countdown and its own resend cooldown from the
             // real value instead of assuming the same number as before.
             // Optional-chained throughout since this response shape isn't
             // guaranteed by every caller in tests (or, in principle, an
             // unexpected 2xx from a proxy/gateway in front of the API).
-            return { success: true, expiresInSeconds: response?.data?.data?.expiresInSeconds };
+            // delivered=false means the chosen channel failed or isn't set up;
+            // the message tells the user to pick another method.
+            return {
+                success: true,
+                expiresInSeconds: response?.data?.data?.expiresInSeconds,
+                delivered: response?.data?.data?.delivered !== false,
+                message: response?.data?.message
+            };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
         }

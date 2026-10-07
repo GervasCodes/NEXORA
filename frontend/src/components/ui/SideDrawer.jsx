@@ -61,7 +61,7 @@ export default function SideDrawer({
     const closedTransform = side === "left" ? "-translate-x-full" : "translate-x-full";
 
     return (
-        <div className="fixed inset-0 z-[1100]">
+        <div className="fixed inset-0 z-[var(--z-drawer)]">
             <div
                 className={`absolute inset-0 bg-abyss/50 transition-opacity ease-out ${shown ? "opacity-100" : "opacity-0"}`}
                 style={{ transitionDuration: `${TRANSITION_MS}ms` }}

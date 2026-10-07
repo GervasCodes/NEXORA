@@ -1,5 +1,5 @@
 /**
- * Phase 9 (UI/UX remediation) - Live Selling in-app viewing.
+ * (UI/UX remediation) - Live Selling in-app viewing.
  *
  * live_selling_sessions only ever stores a plain external_link (see
  * migration 089/099's comments - this is a scheduling/announcement
@@ -11,8 +11,28 @@
  * recognize still gets a working "open in new tab" link - this never
  * blocks watching a session, it only sometimes upgrades the experience.
  */
+// Mirrors backend/src/utils/liveSellingLink.js. Rows saved before the
+// backend rule existed may hold any URL, so every place that renders a
+// stored link checks it here first.
+const ALLOWED_HOSTS = ["youtube.com", "youtu.be", "facebook.com", "fb.watch", "instagram.com", "tiktok.com"];
+
+export function isSafeLiveSellingLink(url) {
+    try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        return (
+            parsed.protocol === "https:" &&
+            !parsed.username &&
+            !parsed.password &&
+            ALLOWED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
+        );
+    } catch {
+        return false;
+    }
+}
+
 export function getEmbedUrl(url) {
-    if (!url) return null;
+    if (!url || !isSafeLiveSellingLink(url)) return null;
 
     try {
         const parsed = new URL(url);

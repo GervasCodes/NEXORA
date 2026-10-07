@@ -44,7 +44,7 @@ export default function ConfirmDialog({
     return (
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click-outside-to-dismiss backdrop; keyboard users dismiss via the Escape handler above and the Cancel button
         <div
-            className="fixed inset-0 z-[1200] bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-[var(--z-modal)] bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4"
             onClick={onCancel}
         >
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, so a click inside the dialog doesn't reach the dismiss backdrop */}

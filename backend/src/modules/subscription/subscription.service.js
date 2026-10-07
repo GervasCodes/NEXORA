@@ -2,6 +2,14 @@ const db = require("../../config/db");
 const subscriptionRepository = require("./subscription.repository");
 const settingsService = require("../settings/settings.service");
 const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit.service");
+const notificationService = require("../notification/notification.service");
+const logger = require("../../utils/logger").child({ module: "subscription" });
+
+// Days a seller keeps plan benefits after a renewing period ends
+// without renewal. Benefits lapse at grace_ends_at, not at period end.
+const GRACE_DAYS = 3;
+// How far ahead the "your plan expires" reminder goes out.
+const REMINDER_DAYS = 3;
 
 // Activating a subscription row starts a billing period, and every
 // billing period comes with its own sponsorship-credit allotment - so the
@@ -11,11 +19,17 @@ const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit
 // new subscription id and gets a fresh grant; the old period's unused
 // credits are not carried over. Re-activating the same subscription id
 // (a replayed webhook) is harmless - the grant is idempotent per id.
+// Returns false (and grants nothing) when the subscription was already
+// active, so a replayed payment webhook does not reset the period.
 const activateAndGrantCredits = async (subscription, plan, connection) => {
-    await subscriptionRepository.activateSubscription(subscription.id, subscription.seller_id, plan.billing_cycle, connection);
+    const transitioned = await subscriptionRepository.activateSubscription(
+        subscription.id, subscription.seller_id, plan.billing_cycle, connection
+    );
+    if (!transitioned) return false;
 
     const activated = await subscriptionRepository.findById(subscription.id, connection);
     await sponsorshipCreditService.grantForSubscription({ subscription: activated, plan }, connection);
+    return true;
 };
 
 // ---- Public / seller-facing ---------------------------------------------
@@ -26,7 +40,7 @@ exports.listPlans = async () => {
 };
 
 exports.getMySubscription = async (sellerId) => {
-    const current = await subscriptionRepository.findCurrentForSeller(sellerId);
+    const current = await subscriptionRepository.findEntitledForSeller(sellerId);
     const listingCount = await subscriptionRepository.countActiveListingsForSeller(sellerId);
 
     if (!current) {
@@ -75,8 +89,8 @@ exports.getEffectiveCommissionRate = async (sellerId) => {
         return 0;
     }
 
-    const current = await subscriptionRepository.findCurrentForSeller(sellerId);
-    if (current && current.status === "active" && current.commission_rate_override !== null) {
+    const current = await subscriptionRepository.findEntitledForSeller(sellerId);
+    if (current && (current.status === "active" || current.status === "past_due") && current.commission_rate_override !== null) {
         return Number(current.commission_rate_override);
     }
     return settingsService.getCommissionRate();
@@ -88,10 +102,10 @@ exports.getEffectiveCommissionRate = async (sellerId) => {
 // unlimited free tier, so the limit is always enforced from the same
 // source - the subscription_plans row - not a separate hardcoded number.
 exports.canCreateListing = async (sellerId) => {
-    const current = await subscriptionRepository.findCurrentForSeller(sellerId);
+    const current = await subscriptionRepository.findEntitledForSeller(sellerId);
     let maxActiveListings = null;
 
-    if (current && current.status === "active") {
+    if (current) {
         maxActiveListings = current.max_active_listings;
     } else {
         const freePlan = await subscriptionRepository.findPlanByCode("free");
@@ -137,16 +151,15 @@ exports.activateSubscription = async (subscriptionId) => {
 };
 
 exports.cancelMySubscription = async (sellerId) => {
-    const current = await subscriptionRepository.findCurrentForSeller(sellerId);
+    const current = await subscriptionRepository.findEntitledForSeller(sellerId);
     if (!current || current.status !== "active") {
         throw new Error("You have no active paid subscription to cancel");
     }
     await subscriptionRepository.cancelSubscription(current.id);
     // auto_renew = FALSE, but the seller keeps plan benefits until
-    // current_period_end - status stays "active" until it actually
-    // lapses (a future renewal job, out of scope here, would flip it to
-    // "expired" once current_period_end passes with auto_renew off).
-    return { message: "Auto-renew turned off. Your plan benefits remain active until the end of the current billing period." };
+    // current_period_end. subscriptionLifecycle.job.js moves the row to
+    // "expired" once that passes (no grace window when auto-renew is off).
+    return { message: "Renewal turned off. Your plan benefits remain active until the end of the current billing period." };
 };
 
 // ---- Monetization Master Switch: free-launch activation -------------------
@@ -180,6 +193,57 @@ exports.subscribeFree = async (sellerId, planCode) => {
     }
 
     return exports.getMySubscription(sellerId);
+};
+
+// ---- Lifecycle (called daily from jobs/subscriptionLifecycle.job.js) -----
+
+// Each transition is its own conditional UPDATE, so a re-run or a second
+// worker can never double-apply it. Benefits do not depend on these
+// transitions: findEntitledForSeller decides against NOW().
+exports.runLifecycleSweep = async () => {
+    const ended = await subscriptionRepository.findPeriodEnded();
+    let movedToPastDue = 0;
+    let movedToExpired = 0;
+
+    for (const row of ended) {
+        if (row.auto_renew) {
+            if (await subscriptionRepository.markPastDue(row.id, GRACE_DAYS)) movedToPastDue++;
+        } else if (await subscriptionRepository.markExpired(row.id)) {
+            movedToExpired++;
+        }
+    }
+
+    const graceEnded = await subscriptionRepository.findGraceEnded();
+    for (const row of graceEnded) {
+        if (await subscriptionRepository.markExpired(row.id)) movedToExpired++;
+    }
+
+    return { movedToPastDue, movedToExpired };
+};
+
+exports.sendExpiryReminders = async () => {
+    const expiring = await subscriptionRepository.findExpiringSoon(REMINDER_DAYS);
+    let sent = 0;
+
+    for (const row of expiring) {
+        if (!(await subscriptionRepository.claimExpiryReminder(row.id))) continue;
+
+        const date = new Date(row.current_period_end).toISOString().slice(0, 10);
+        // Auto-renew plans get a renewal prompt: the seller pays from their
+        // dashboard, and a missed payment moves the plan into the grace window.
+        const renews = Boolean(row.auto_renew);
+        notificationService.notify({
+            userId: row.seller_id,
+            type: renews ? "subscription_renewal_due" : "subscription_expiring",
+            titleKey: renews ? "notifications.subscription.renewal.title" : "notifications.subscription.expiring.title",
+            messageKey: renews ? "notifications.subscription.renewal.message" : "notifications.subscription.expiring.message",
+            messageParams: { planName: row.plan_name, date },
+            withEmail: true
+        }).catch((err) => logger.warn({ err, subscriptionId: row.id }, "subscription expiry notify error"));
+        sent++;
+    }
+
+    return sent;
 };
 
 // ---- Admin ----------------------------------------------------------------

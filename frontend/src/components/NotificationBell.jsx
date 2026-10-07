@@ -208,7 +208,7 @@ export default function NotificationBell() {
                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
                 {unread > 0 && (
-                    <span className={`absolute -top-1.5 -right-1.5 bg-coral text-paper text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center ${justBumped ? "animate-pop-in" : ""}`}>
+                    <span className={`absolute -top-1.5 -right-1.5 bg-coral text-paper text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center ${justBumped ? "animate-pop-in" : ""}`}>
                         {unread > 99 ? "99+" : unread}
                     </span>
                 )}
@@ -259,7 +259,7 @@ export default function NotificationBell() {
                                         {item.title}
                                     </span>
                                     <span className="block text-xs text-ash line-clamp-2 mt-0.5">{item.message}</span>
-                                    <span className="block text-[11px] text-ash/70 mt-1">{formatDate(item.created_at)}</span>
+                                    <span className="block text-[11px] text-ash mt-1">{formatDate(item.created_at)}</span>
                                 </span>
                             </button>
                         ))}

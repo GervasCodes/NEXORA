@@ -19,7 +19,7 @@ see `backend/.env.example`.
 
 ## Schema overview
 
-82 migrations as of Phase RF6 (API & Architecture Docs), grouped by
+130 migrations as of Phase RF6 (API & Architecture Docs), grouped by
 domain. This is a map of what each migration added, not a full column
 reference — for exact columns, types, and constraints, read the
 migration file itself (`database/migrations/NNN_*.sql`), which is the

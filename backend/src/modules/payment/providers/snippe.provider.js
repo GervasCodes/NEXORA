@@ -69,6 +69,39 @@ exports.createCheckoutSession = async ({ amountTzs, reference, description, succ
 // transactionReference: the reference stored on the payments row for
 // this Snippe payment (see payment.service.js handleSnippeWebhookEvent).
 // amountTzs: decimal TZS amount to refund - full or partial.
+// Read-only status of a hosted checkout session - used by the stale sweep
+// and reconciliation before a payment is failed. Confirm the exact path and
+// status words against Snippe's docs / sandbox (same caveat as the rest of
+// this file).
+exports.getCheckoutSession = async (sessionId) => {
+    if (!exports.isConfigured()) {
+        throw new Error("Snippe is not configured");
+    }
+
+    const { classifyStatus } = require("../providerStatus");
+
+    const response = await fetch(`${baseUrl()}/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+        headers: { Authorization: `Bearer ${process.env.SNIPPE_SECRET_KEY}` }
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.message || `Snippe session lookup failed (${response.status})`);
+    }
+
+    const session = data.data || data;
+    const state = classifyStatus(session.payment_status || session.status);
+    const rawAmount = session.amount_total ?? session.amount_paid ?? session.amount;
+
+    return {
+        state,
+        providerStatus: session.payment_status || session.status,
+        transactionReference: session.payment_id || session.id || sessionId,
+        amount: rawAmount === undefined || rawAmount === null ? null : Number(rawAmount),
+        currency: session.currency || null
+    };
+};
+
 exports.refundPayment = async ({ transactionReference, amountTzs, reason }) => {
     if (!exports.isConfigured()) {
         throw new Error("Snippe is not configured");

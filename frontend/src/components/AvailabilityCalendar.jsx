@@ -264,7 +264,7 @@ export default function AvailabilityCalendar({
                                             ? canClick
                                                 ? "bg-teal/10 text-ink hover:bg-teal/20 cursor-pointer"
                                                 : "bg-teal/10 text-ink"
-                                            : "text-ash/50 line-through"
+                                            : "text-ash line-through"
                                 }`}
                             >
                                 <span>{day}</span>
@@ -281,7 +281,7 @@ export default function AvailabilityCalendar({
             </div>
 
             {clickable && typeof onRangeSelect === "function" && (
-                <p className="text-[11px] text-ash/70 mt-2">{t("calendar.dragHint")}</p>
+                <p className="text-[11px] text-ash mt-2">{t("calendar.dragHint")}</p>
             )}
         </div>
     );

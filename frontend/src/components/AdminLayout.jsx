@@ -4,6 +4,7 @@ import PageTransition from "./PageTransition";
 import ConfirmDialog from "./ConfirmDialog";
 import NotificationBell from "./NotificationBell";
 import SideDrawer from "./ui/SideDrawer";
+import AdminCommandPalette from "./admin/AdminCommandPalette";
 import { useAuth } from "../context/AuthContext";
 import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 
@@ -81,6 +82,19 @@ const groups = [
 
 const allTabs = groups.flatMap((g) => g.tabs);
 
+// Flat, group-tagged list for the Ctrl+K palette.
+const paletteItems = groups.flatMap((g) => g.tabs.map((tab) => ({ to: tab.to, label: tab.label, group: g.label })));
+
+const RAIL_STORAGE_KEY = "nexora.adminRail.collapsed";
+
+function readRailCollapsed() {
+    try {
+        return window.localStorage.getItem(RAIL_STORAGE_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
 function tabIsActive(tab, pathname) {
     return tab.end ? pathname === tab.to : pathname.startsWith(tab.to);
 }
@@ -88,6 +102,8 @@ function tabIsActive(tab, pathname) {
 export default function AdminLayout() {
     const { pathname } = useLocation();
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
+    const [paletteOpen, setPaletteOpen] = useState(false);
     const { logout } = useAuth();
     const navigate = useNavigate();
 
@@ -110,121 +126,230 @@ export default function AdminLayout() {
         setDrawerOpen(false);
     }, [pathname]);
 
+    // Ctrl+K / Cmd+K toggles the palette from anywhere in the Control room.
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                setPaletteOpen((open) => !open);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
+    const toggleRail = () => {
+        setRailCollapsed((v) => {
+            const next = !v;
+            try {
+                window.localStorage.setItem(RAIL_STORAGE_KEY, next ? "1" : "0");
+            } catch {
+                /* storage unavailable (private mode): the preference just won't persist */
+            }
+            return next;
+        });
+    };
+
     const currentTab = allTabs.find((tab) => tabIsActive(tab, pathname));
 
     return (
-        <div className="max-w-6xl mx-auto sm:px-6 sm:py-8">
-            {/* UI Modernization Phase 2: one persistent toggle bar at every
-                breakpoint (previously mobile-only, with desktop instead
-                getting a permanently-visible ~200px sidebar) feeding a
-                single shared SideDrawer. Reclaims that column's width for
-                content on desktop while keeping the toggle discoverable -
-                it's a persistent, always-visible bar, not buried behind
-                another control - per Phase 2's requirement. */}
-            <div className="glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
-                <div className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto sm:px-6 sm:py-8 md:flex md:items-start md:gap-6 md:px-6 md:py-8">
+            {/* Persistent desktop rail (Phase 8). Always visible from md up,
+                so on a laptop/desktop the whole Control room is one click
+                away without opening the drawer. Collapses to an icon-width
+                strip of initials; the choice is remembered per browser. */}
+            <aside
+                aria-label="Control room navigation"
+                className={`hidden md:flex md:flex-col shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto glass-strong border border-line/60 rounded-lg p-2 transition-[width] duration-150 ${
+                    railCollapsed ? "w-16" : "w-60"
+                }`}
+            >
+                <div className={`flex items-center gap-2 mb-2 ${railCollapsed ? "flex-col" : ""}`}>
                     <Link
                         to="/"
                         aria-label="Home"
                         title="Home"
-                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring transition-colors"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring"
                     >
                         <HomeIcon className="w-5 h-5" />
                     </Link>
-                    {/* NotificationBell's icon/badge colors (text-frost,
-                        etc.) are built for the dark storefront Header it
-                        used to live in exclusively - it never expected to
-                        render on this panel's light glass-strong surface.
-                        The dark chip gives it the same background it
-                        always had, so it stays visible here without
-                        needing a second, admin-specific color variant of
-                        the component itself. */}
-                    <div className="shrink-0 w-9 h-9 rounded-md bg-abyss flex items-center justify-center">
-                        <NotificationBell />
-                    </div>
+                    {!railCollapsed && <span className="flex-1 text-xs uppercase tracking-widest text-ash">Control room</span>}
                     <button
                         type="button"
-                        onClick={() => setDrawerOpen((v) => !v)}
-                        aria-expanded={drawerOpen}
-                        aria-controls="admin-nav-drawer"
-                        className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
+                        onClick={toggleRail}
+                        aria-expanded={!railCollapsed}
+                        aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+                        title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring"
                     >
-                        <span className="min-w-0 text-left">
-                            <span className="block text-xs uppercase tracking-widest text-ash">Control room</span>
-                            <span className="block font-display text-lg truncate">
-                                {currentTab?.label ?? "Control room"}
-                            </span>
-                        </span>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className={`w-5 h-5 shrink-0 text-ink/70 transition-transform ${drawerOpen ? "rotate-180" : ""}`}
-                        >
-                            <path d="m6 9 6 6 6-6" />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 transition-transform ${railCollapsed ? "rotate-180" : ""}`} aria-hidden="true">
+                            <path d="m15 6-6 6 6 6" />
                         </svg>
                     </button>
                 </div>
-            </div>
 
-            <SideDrawer
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                side="left"
-                id="admin-nav-drawer"
-                ariaLabel="Control room navigation"
-                widthClassName="w-80 max-w-[85vw]"
-            >
-                <nav className="p-4">
+                <button
+                    type="button"
+                    onClick={() => setPaletteOpen(true)}
+                    title="Jump to a page (Ctrl+K)"
+                    className={`mb-3 flex items-center gap-2 text-xs text-ash border border-line rounded-md hover:border-ink transition-colors ${
+                        railCollapsed ? "justify-center h-9 w-9 mx-auto" : "px-2.5 py-1.5"
+                    }`}
+                >
+                    <span aria-hidden="true">⌘K</span>
+                    {!railCollapsed && <span>Jump to…</span>}
+                </button>
+
+                <nav className="flex-1 space-y-3">
                     {groups.map((group) => (
-                        <div key={group.label} className="mb-4 last:mb-0">
-                            <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
-                            <div className="grid grid-cols-2 gap-1.5">
+                        <div key={group.label}>
+                            {!railCollapsed && <p className="text-[10px] uppercase tracking-widest text-ash px-2 mb-1">{group.label}</p>}
+                            <ul className="space-y-0.5">
                                 {group.tabs.map((tab) => (
-                                    <NavLink
-                                        key={tab.to}
-                                        to={tab.to}
-                                        end={tab.end}
-                                        className={({ isActive }) =>
-                                            `text-sm px-3 py-2 rounded-md transition-colors ${
-                                                isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
-                                            }`
-                                        }
-                                    >
-                                        {tab.label}
-                                    </NavLink>
+                                    <li key={tab.to}>
+                                        <NavLink
+                                            to={tab.to}
+                                            end={tab.end}
+                                            title={tab.label}
+                                            aria-label={railCollapsed ? tab.label : undefined}
+                                            className={({ isActive }) =>
+                                                `block text-sm rounded-md transition-colors ${
+                                                    railCollapsed ? "h-9 w-9 mx-auto flex items-center justify-center text-[11px] font-medium" : "px-2.5 py-1.5"
+                                                } ${isActive ? "bg-ink text-paper" : "text-ink/80 hover:bg-line/50"}`
+                                            }
+                                        >
+                                            {railCollapsed ? tab.label.slice(0, 2) : tab.label}
+                                        </NavLink>
+                                    </li>
                                 ))}
-                            </div>
+                            </ul>
                         </div>
                     ))}
+                </nav>
 
-                    <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                <div className="pt-2 mt-2 border-t border-line/60">
+                    <button
+                        type="button"
+                        onClick={() => setSignOutConfirmOpen(true)}
+                        title="Sign out"
+                        className={`flex items-center gap-2 text-sm rounded-md text-coral hover:bg-coral/10 ${railCollapsed ? "h-9 w-9 justify-center mx-auto" : "px-2.5 py-1.5 w-full"}`}
+                    >
+                        <SignOutIcon className="w-4 h-4 shrink-0" />
+                        {!railCollapsed && "Sign out"}
+                    </button>
+                </div>
+            </aside>
+
+            <div className="min-w-0 flex-1">
+                {/* Mobile / tablet toggle bar. The desktop rail replaces it
+                    at md and up. */}
+                <div className="md:hidden glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
+                    <div className="flex items-center gap-2">
                         <Link
-                            to="/admin/settings"
-                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                            to="/"
+                            aria-label="Home"
+                            title="Home"
+                            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-ink/70 hover:text-ink hover:bg-line/50 focus-ring transition-colors"
                         >
-                            <AccountIcon className="w-4 h-4 shrink-0" />
-                            Account
+                            <HomeIcon className="w-5 h-5" />
                         </Link>
+                        {/* NotificationBell's icon/badge colors (text-frost,
+                            etc.) are built for the dark storefront Header it
+                            used to live in exclusively - it never expected to
+                            render on this panel's light glass-strong surface.
+                            The dark chip gives it the same background it
+                            always had, so it stays visible here without
+                            needing a second, admin-specific color variant of
+                            the component itself. */}
+                        <div className="shrink-0 w-9 h-9 rounded-md bg-abyss flex items-center justify-center">
+                            <NotificationBell />
+                        </div>
                         <button
                             type="button"
-                            onClick={() => setSignOutConfirmOpen(true)}
-                            className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                            onClick={() => setDrawerOpen((v) => !v)}
+                            aria-expanded={drawerOpen}
+                            aria-controls="admin-nav-drawer"
+                            className="flex-1 min-w-0 flex items-center justify-between gap-3 focus-ring rounded-md"
                         >
-                            <SignOutIcon className="w-4 h-4 shrink-0" />
-                            Sign out
+                            <span className="min-w-0 text-left">
+                                <span className="block text-xs uppercase tracking-widest text-ash">Control room</span>
+                                <span className="block font-display text-lg truncate">
+                                    {currentTab?.label ?? "Control room"}
+                                </span>
+                            </span>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                className={`w-5 h-5 shrink-0 text-ink/70 transition-transform ${drawerOpen ? "rotate-180" : ""}`}
+                            >
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
                         </button>
                     </div>
-                </nav>
-            </SideDrawer>
+                </div>
 
-            <div className="min-w-0 px-4 pb-6 pt-4 sm:px-0">
-                <PageTransition granular>
-                    <Outlet />
-                </PageTransition>
+                <SideDrawer
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    side="left"
+                    id="admin-nav-drawer"
+                    ariaLabel="Control room navigation"
+                    widthClassName="w-80 max-w-[85vw]"
+                >
+                    <nav className="p-4">
+                        {groups.map((group) => (
+                            <div key={group.label} className="mb-4 last:mb-0">
+                                <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {group.tabs.map((tab) => (
+                                        <NavLink
+                                            key={tab.to}
+                                            to={tab.to}
+                                            end={tab.end}
+                                            className={({ isActive }) =>
+                                                `text-sm px-3 py-2 rounded-md transition-colors ${
+                                                    isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
+                                                }`
+                                            }
+                                        >
+                                            {tab.label}
+                                        </NavLink>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+
+                        <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
+                            <Link
+                                to="/admin/settings"
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-ink/80 border border-line/60"
+                            >
+                                <AccountIcon className="w-4 h-4 shrink-0" />
+                                Account
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setSignOutConfirmOpen(true)}
+                                className="flex items-center gap-2 text-sm px-3 py-2 rounded-md bg-paper text-coral border border-line/60"
+                            >
+                                <SignOutIcon className="w-4 h-4 shrink-0" />
+                                Sign out
+                            </button>
+                        </div>
+                    </nav>
+                </SideDrawer>
+
+                <div className="min-w-0 px-4 pb-6 pt-4 sm:px-0">
+                    <PageTransition granular>
+                        <Outlet />
+                    </PageTransition>
+                </div>
             </div>
+
+            <AdminCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
 
             <ConfirmDialog
                 open={signOutConfirmOpen}

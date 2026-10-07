@@ -80,9 +80,13 @@ exports.findTransactions = async (sellerId, limit = 50) => {
 
 // Line items for this order that haven't been turned into a wallet credit
 // yet, grouped implicitly by seller (caller groups in JS).
+// commission_rate/commission_amount/seller_net_amount are included here
+// because Phase 2 snapshots them at checkout (order.service.js) - when
+// present, creditSellersForOrder uses them as-is instead of recomputing
+// against whatever the seller's commission rate happens to be right now.
 exports.findUncreditedItemsByOrder = async (orderId, executor = db) => {
     const [rows] = await executor.query(
-        `SELECT id, seller_id, subtotal
+        `SELECT id, seller_id, subtotal, commission_rate, commission_amount, seller_net_amount
         FROM order_items
         WHERE order_id = ? AND wallet_credited = FALSE
         FOR UPDATE`,
@@ -161,7 +165,15 @@ exports.markItemsCredited = async (items, released, executor = db) => {
 // still need to apply the dispute-freeze rule themselves (see
 // wallet.service.js#releaseEligibleEarnings) - this query only handles
 // the timing half of "eligible for release".
-exports.findReleasableItems = async (holdDays, executor = db) => {
+// Escrow must not release before the buyer's return window closes
+// (Phase 5) - releasing earnings while a return could still be opened
+// would make a seller's money withdrawable, then potentially need
+// reversing (possibly into a negative balance) the moment a return
+// comes in. holdDays (the escrow_hold_days setting) is now a *floor*,
+// not the only gate: the actual wait is GREATEST(escrow hold days, the
+// return window that applies to this specific order - 14 days if it
+// bought buyer-protection insurance, otherwise the plain return window).
+exports.findReleasableItems = async (holdDays, returnWindowDays, returnWindowInsuredDays, executor = db) => {
     const [rows] = await executor.query(
         `SELECT oi.id, oi.order_id, oi.seller_id, oi.seller_net_amount
         FROM order_items oi
@@ -171,8 +183,8 @@ exports.findReleasableItems = async (holdDays, executor = db) => {
             AND oi.wallet_released = FALSE
             AND o.status = 'delivered'
             AND d.delivered_at IS NOT NULL
-            AND d.delivered_at <= (NOW() - INTERVAL ? DAY)`,
-        [Number(holdDays)]
+            AND d.delivered_at <= (NOW() - INTERVAL GREATEST(?, IF(o.buyer_protection_addon, ?, ?)) DAY)`,
+        [Number(holdDays), Number(returnWindowInsuredDays), Number(returnWindowDays)]
     );
     return rows;
 };
@@ -201,6 +213,35 @@ exports.markItemReleased = async (itemId, executor = db) => {
     await executor.query(
         "UPDATE order_items SET wallet_released = TRUE WHERE id = ?",
         [itemId]
+    );
+};
+
+// Cancel a paid order (Phase 3, P0) - every already-credited item for a
+// standalone/parent order's whole tree (covers the multi-vendor split
+// case, where items live on child orders rather than the parent row - see
+// order.repository.js#restoreStockForChildOrders for the same `orders`
+// self-join shape). FOR UPDATE so a cancel racing the escrow-release job
+// for the same order can't read a half-updated held_balance.
+exports.findCreditedItemsForOrderTree = async (orderId, executor = db) => {
+    const [rows] = await executor.query(
+        `SELECT oi.id, oi.seller_id, oi.seller_net_amount
+        FROM order_items oi
+        WHERE oi.wallet_credited = TRUE AND oi.wallet_released = FALSE
+            AND (oi.order_id = ? OR oi.order_id IN (SELECT id FROM orders WHERE parent_order_id = ?))
+        FOR UPDATE`,
+        [orderId, orderId]
+    );
+    return rows;
+};
+
+// Batched counterpart of markItemReleased, for reverseSellerEarningsForOrder
+// below - one UPDATE for every item being closed out by a cancellation
+// instead of one per item.
+exports.markItemsReleased = async (itemIds, executor = db) => {
+    if (!itemIds.length) return;
+    await executor.query(
+        "UPDATE order_items SET wallet_released = TRUE WHERE id IN (?)",
+        [itemIds]
     );
 };
 
@@ -281,19 +322,51 @@ exports.markBookingItemReleased = async (itemId, executor = db) => {
 // currency payouts) default to TZS/null/null when the caller doesn't
 // pass them, so any existing call site keeps behaving exactly as
 // before this column existed.
-exports.createWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, executor = db, payoutCurrency = "TZS", payoutAmount = null, payoutExchangeRate = null) => {
+// holdUntil/payoutDetailsIsNew (Phase 2): the 24-hour hold on a seller's
+// first-ever withdrawal to a given payout method+details combination -
+// see wallet.service.js#requestWithdrawal for how they're computed.
+exports.createWithdrawal = async (
+    sellerId, amount, payoutMethod, payoutDetails, executor = db,
+    payoutCurrency = "TZS", payoutAmount = null, payoutExchangeRate = null,
+    holdUntil = null, payoutDetailsIsNew = false
+) => {
     const [result] = await executor.query(
-        `INSERT INTO withdrawal_requests (seller_id, amount, payout_method, payout_details, payout_currency, payout_amount, payout_exchange_rate)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [sellerId, amount, payoutMethod, payoutDetails, payoutCurrency, payoutAmount, payoutExchangeRate]
+        `INSERT INTO withdrawal_requests
+        (seller_id, amount, payout_method, payout_details, payout_currency, payout_amount, payout_exchange_rate, hold_until, payout_details_is_new)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sellerId, amount, payoutMethod, payoutDetails, payoutCurrency, payoutAmount, payoutExchangeRate, holdUntil, payoutDetailsIsNew]
     );
     return result.insertId;
+};
+
+// Has this seller ever had a withdrawal (any status except rejected - a
+// rejected one never actually reached this payout detail) to this exact
+// payout method+details combination before? Used to decide whether a NEW
+// request needs the 24-hour first-time-payout-details hold.
+exports.hasPriorPayoutUsage = async (sellerId, payoutMethod, payoutDetails) => {
+    const [[row]] = await db.query(
+        `SELECT COUNT(*) AS count FROM withdrawal_requests
+        WHERE seller_id = ? AND payout_method = ? AND payout_details = ? AND status != 'rejected'`,
+        [sellerId, payoutMethod, payoutDetails]
+    );
+    return Number(row.count) > 0;
+};
+
+// Sum of this seller's withdrawals requested today (server "today", UTC
+// date boundary), excluding rejected ones - used for the daily cap.
+exports.sumWithdrawalsRequestedToday = async (sellerId) => {
+    const [[row]] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawal_requests
+        WHERE seller_id = ? AND status != 'rejected' AND DATE(requested_at) = CURDATE()`,
+        [sellerId]
+    );
+    return Number(row.total);
 };
 
 exports.findWithdrawalsBySeller = async (sellerId) => {
     const [rows] = await db.query(
         `SELECT id, amount, status, payout_method, payout_details, admin_note, requested_at, processed_at,
-                payout_currency, payout_amount, payout_exchange_rate
+                payout_currency, payout_amount, payout_exchange_rate, payout_reference, hold_until
         FROM withdrawal_requests
         WHERE seller_id = ?
         ORDER BY requested_at DESC`,
@@ -307,6 +380,7 @@ exports.findAllWithdrawals = async () => {
         `SELECT wr.id, wr.seller_id, wr.amount, wr.status, wr.payout_method, wr.payout_details,
                 wr.admin_note, wr.requested_at, wr.processed_at,
                 wr.payout_currency, wr.payout_amount, wr.payout_exchange_rate,
+                wr.payout_reference, wr.hold_until, wr.payout_details_is_new,
                 sp.store_name, u.first_name, u.last_name, u.email
         FROM withdrawal_requests wr
         JOIN users u ON u.id = wr.seller_id
@@ -324,11 +398,129 @@ exports.findWithdrawalById = async (id, executor = db) => {
     return rows[0];
 };
 
-exports.updateWithdrawalStatus = async (id, status, adminNote, executor = db) => {
+// payoutReference (Phase 2): the receipt/reference an admin records when
+// marking a withdrawal "paid" - required by wallet.service.js#processWithdrawal
+// for that action, optional (and typically unused) for approve/reject.
+exports.updateWithdrawalStatus = async (id, status, adminNote, executor = db, payoutReference = null) => {
     await executor.query(
         `UPDATE withdrawal_requests
-        SET status = ?, admin_note = ?, processed_at = NOW()
+        SET status = ?, admin_note = ?, processed_at = NOW(), payout_reference = COALESCE(?, payout_reference)
         WHERE id = ?`,
-        [status, adminNote ?? null, id]
+        [status, adminNote ?? null, payoutReference, id]
     );
+};
+
+// A seller's users.verification_tier - used for the withdrawal daily cap
+// (higher tier, higher cap; see wallet.service.js#requestWithdrawal).
+exports.getSellerVerificationTier = async (sellerId) => {
+    const [rows] = await db.query("SELECT verification_tier FROM users WHERE id = ?", [sellerId]);
+    return rows[0] ? rows[0].verification_tier : "none";
+};
+
+// ---- Negative seller balances (Phase 2) -----------------------------------
+// Admin-visible list: a seller's future earnings automatically repay the
+// deficit (every credit is a plain balance += delta), so this is purely
+// informational - nothing here needs to "do" anything about a negative
+// balance, just surface it.
+// ---- Nightly wallet reconciliation (Phase 2) ------------------------------
+// Recomputes each wallet's balance from its own ledger (wallet_transactions)
+// and compares it with the balance column actually on the row - any
+// mismatch means a code path somewhere updated one without the other (or a
+// direct DB edit). Scoped to wallets with at least one ledger row so an
+// untouched wallet isn't reported as "drifted" against its own default 0.
+exports.findBalanceDrift = async () => {
+    const [rows] = await db.query(
+        `SELECT sw.seller_id AS owner_id, sw.balance AS recorded_balance,
+                COALESCE(SUM(CASE WHEN wt.type = 'credit' THEN wt.amount ELSE -wt.amount END), 0) AS computed_balance
+        FROM seller_wallets sw
+        JOIN wallet_transactions wt ON wt.seller_id = sw.seller_id
+        GROUP BY sw.seller_id, sw.balance
+        HAVING ABS(sw.balance - computed_balance) > 0.01`
+    );
+    return rows;
+};
+
+exports.insertReconciliationFlag = async ({ walletType, ownerId, recordedBalance, computedBalance }) => {
+    await db.query(
+        `INSERT INTO wallet_reconciliation_flags (wallet_type, owner_id, recorded_balance, computed_balance, drift)
+        VALUES (?, ?, ?, ?, ?)`,
+        [walletType, ownerId, recordedBalance, computedBalance, Number((recordedBalance - computedBalance).toFixed(2))]
+    );
+};
+
+exports.findOpenReconciliationFlags = async () => {
+    const [rows] = await db.query(
+        "SELECT * FROM wallet_reconciliation_flags WHERE status = 'open' ORDER BY created_at DESC"
+    );
+    return rows;
+};
+
+// --- Phase 8: paged + filtered withdrawal list for the admin queue ---
+// Tab counts and totals ignore the search/status filter so each tab shows
+// its real size. Pending sorts oldest first (the queue order admins work
+// through); other views stay newest first.
+// Whitelisted admin sort orders for the paged withdrawals list. Anything
+// else falls back to the default queue order below.
+const WITHDRAWAL_SORTS = {
+    amount_desc: "wr.amount DESC, wr.id DESC",
+    amount_asc: "wr.amount ASC, wr.id ASC",
+    requested_asc: "wr.requested_at ASC, wr.id ASC",
+    requested_desc: "wr.requested_at DESC, wr.id DESC"
+};
+
+exports.findWithdrawalsPage = async ({ q, status, sort, limit, offset }) => {
+    const { likeTerm, isNumericTerm } = require("../../utils/adminListQuery");
+    const conditions = ["1 = 1"];
+    const params = [];
+
+    if (status) {
+        conditions.push("wr.status = ?");
+        params.push(status);
+    }
+    if (q) {
+        const like = likeTerm(q);
+        const clauses = [
+            "sp.store_name LIKE ?",
+            "u.email LIKE ?",
+            "CONCAT(u.first_name, ' ', u.last_name) LIKE ?",
+            "wr.payout_reference LIKE ?"
+        ];
+        params.push(like, like, like, like);
+        if (isNumericTerm(q)) {
+            clauses.push("wr.id = ?");
+            params.push(Number(q));
+        }
+        conditions.push(`(${clauses.join(" OR ")})`);
+    }
+
+    const where = conditions.join(" AND ");
+    const orderBy = WITHDRAWAL_SORTS[sort]
+        || (status === "pending" ? "wr.requested_at ASC, wr.id ASC" : "wr.requested_at DESC, wr.id DESC");
+    const joins = `FROM withdrawal_requests wr
+        JOIN users u ON u.id = wr.seller_id
+        LEFT JOIN seller_profiles sp ON sp.user_id = wr.seller_id`;
+
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total ${joins} WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT wr.id, wr.seller_id, wr.amount, wr.status, wr.payout_method, wr.payout_details,
+                wr.admin_note, wr.requested_at, wr.processed_at,
+                wr.payout_currency, wr.payout_amount, wr.payout_exchange_rate,
+                wr.payout_reference, wr.hold_until, wr.payout_details_is_new,
+                sp.store_name, u.first_name, u.last_name, u.email
+        ${joins}
+        WHERE ${where}
+        ORDER BY ${orderBy}
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};
+
+exports.findWithdrawalTotalsByStatus = async () => {
+    const [rows] = await db.query(
+        `SELECT status, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
+        FROM withdrawal_requests
+        GROUP BY status`
+    );
+    return rows.map((r) => ({ status: r.status, count: Number(r.count), amount: Number(r.amount) }));
 };

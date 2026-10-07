@@ -12,7 +12,7 @@ const api = axios.create({
     withCredentials: true
 });
 
-// Phase 4: reads the CSRF token out of the (deliberately non-httpOnly)
+// reads the CSRF token out of the (deliberately non-httpOnly)
 // nexora_csrf cookie the backend sets alongside the session cookie at
 // login - see backend/src/middleware/csrf.middleware.js for the
 // double-submit pattern this is half of. document.cookie is a flat
@@ -80,7 +80,7 @@ export const registerCsrfExpiredHandler = (handler) => {
 };
 
 api.interceptors.request.use((config) => {
-    // Phase 4 (Testing & Session Hardening): no more reading a token out
+    // (Testing & Session Hardening): no more reading a token out
     // of localStorage to build an Authorization header - the httpOnly
     // session cookie is attached automatically by the browser via
     // withCredentials above. What DOES still need explicit JS is the
@@ -137,6 +137,22 @@ api.interceptors.response.use(
             error.response?.status === 403 &&
             error.response?.data?.code === "CSRF_TOKEN_INVALID"
         ) {
+            // One silent recovery: re-issue the CSRF token for this (still
+            // valid) session and replay the request. Only if that fails does
+            // the person see the blocking "please refresh" prompt.
+            const original = error.config;
+            if (original && !original._csrfRetried) {
+                original._csrfRetried = true;
+                return api.get("/auth/csrf")
+                    .then(({ data }) => {
+                        setCsrfToken(data?.data?.csrfToken || null);
+                        return api(original);
+                    })
+                    .catch(() => {
+                        csrfExpiredHandler?.();
+                        return Promise.reject(error);
+                    });
+            }
             csrfExpiredHandler?.();
             return Promise.reject(error);
         }

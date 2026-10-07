@@ -124,7 +124,7 @@ export default function MessageBubble({
                             ? "italic text-ash bg-line/30 rounded-bl-[6px]"
                             : mine
                                 ? "text-frost rounded-br-[6px] shadow-[0_6px_20px_-4px_rgba(124,58,237,0.35)]"
-                                : "text-ink rounded-bl-[6px] backdrop-blur-md bg-paper/70 dark:bg-abyss/45 border border-ink/5 shadow-[0_2px_10px_rgba(0,0,0,0.06)]"
+                                : "text-ink rounded-bl-[6px] backdrop-blur-md bg-paper/70 dark:bg-abyss/45 border border-ink/5 elevation-1"
                     } ${hasAttachment && !m.message ? "p-1.5" : ""}`}
                     style={
                         !m.is_deleted && mine

@@ -33,6 +33,33 @@ router.post(
 );
 
 router.post(
+    "/draft",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.createDraft
+);
+
+router.put(
+    "/draft/:id",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.saveDraft
+);
+
+router.post(
+    "/draft/:id/publish",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    requireProductProvider,
+    productController.publishDraft
+);
+
+router.post(
     "/:id/images",
     authMiddleware,
     authorize("seller"),

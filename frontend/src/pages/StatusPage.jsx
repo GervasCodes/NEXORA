@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import api from "../api/client";
+import { useSearchParams } from "react-router-dom";
+import api, { extractErrorMessage } from "../api/client";
+import { useLanguage } from "../context/LanguageContext";
 import { formatDate } from "../utils/format";
 import PageLoader from "../components/PageLoader";
 import PageMeta from "../components/PageMeta";
@@ -24,17 +26,83 @@ const SLA_TARGETS = [
     { label: "Support ticket first response", target: "< 24 hours" }
 ];
 
+const CACHE_KEY = "nexora_status_cache";
+
+const readCache = () => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+        return parsed?.data ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
 export default function StatusPage() {
+    const { t } = useLanguage();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [cachedAt, setCachedAt] = useState(null);
+
+    const [email, setEmail] = useState("");
+    const [subscribing, setSubscribing] = useState(false);
+    const [subscribeMsg, setSubscribeMsg] = useState("");
+    const [subscribeErr, setSubscribeErr] = useState("");
+    const [unsubscribeMsg, setUnsubscribeMsg] = useState("");
 
     useEffect(() => {
         api.get("/status")
-            .then(({ data }) => setData(data.data))
-            .catch(() => setError("Couldn't load platform status."))
+            .then(({ data }) => {
+                setData(data.data);
+                try {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({ data: data.data, at: Date.now() }));
+                } catch { /* storage unavailable */ }
+            })
+            .catch(() => {
+                // The API is the thing that may be down - fall back to the
+                // last status this device saw, clearly dated.
+                const cached = readCache();
+                if (cached) {
+                    setData(cached.data);
+                    setCachedAt(cached.at);
+                }
+                setError(t("status.loadError"));
+            })
             .finally(() => setLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Link from the unsubscribe line of every status email.
+    useEffect(() => {
+        const token = searchParams.get("unsubscribe");
+        if (!token) return;
+        api.post("/status/unsubscribe", { token })
+            .then(() => setUnsubscribeMsg(t("status.unsubscribed")))
+            .catch((err) => setUnsubscribeMsg(extractErrorMessage(err)))
+            .finally(() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("unsubscribe");
+                setSearchParams(next, { replace: true });
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const subscribe = async (e) => {
+        e.preventDefault();
+        setSubscribing(true);
+        setSubscribeErr("");
+        setSubscribeMsg("");
+        try {
+            await api.post("/status/subscribe", { email });
+            setSubscribeMsg(t("status.subscribed"));
+            setEmail("");
+        } catch (err) {
+            setSubscribeErr(extractErrorMessage(err));
+        } finally {
+            setSubscribing(false);
+        }
+    };
 
     if (loading) return <PageLoader />;
 
@@ -46,7 +114,12 @@ export default function StatusPage() {
             <h1 className="font-display text-3xl mb-1">NEXORA status</h1>
             <p className="text-ash text-sm mb-8">Current platform health, active incidents, and our service targets.</p>
 
-            {error && <p role="alert" className="text-coral text-sm mb-6">{error}</p>}
+            {unsubscribeMsg && <p role="status" className="text-teal text-sm mb-6">{unsubscribeMsg}</p>}
+            {error && <p role="alert" className="text-coral text-sm mb-2">{error}</p>}
+            {error && cachedAt && (
+                <p className="text-xs text-ash mb-6">{t("status.showingSaved", { date: formatDate(new Date(cachedAt).toISOString()) })}</p>
+            )}
+            {error && !cachedAt && <p className="text-xs text-ash mb-6">{t("status.noSaved")}</p>}
 
             {data && (
                 <>
@@ -91,6 +164,33 @@ export default function StatusPage() {
                                 </li>
                             ))}
                         </ul>
+                    </div>
+
+                    <div className="mb-8 border border-line rounded-lg p-4">
+                        <h2 className="font-display text-lg mb-1">{t("status.subscribe.title")}</h2>
+                        <p className="text-sm text-ash mb-3">{t("status.subscribe.body")}</p>
+                        <form onSubmit={subscribe} className="flex flex-col sm:flex-row gap-2">
+                            <input
+                                type="email"
+                                required
+                                autoComplete="email"
+                                inputMode="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                aria-label={t("status.subscribe.emailLabel")}
+                                placeholder={t("status.subscribe.emailLabel")}
+                                className="flex-1 border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                            />
+                            <button
+                                type="submit"
+                                disabled={subscribing}
+                                className="bg-ink text-paper px-5 py-2 rounded-md text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                            >
+                                {subscribing ? t("status.subscribe.sending") : t("status.subscribe.button")}
+                            </button>
+                        </form>
+                        {subscribeMsg && <p role="status" className="text-teal text-xs mt-2">{subscribeMsg}</p>}
+                        {subscribeErr && <p role="alert" className="text-coral text-xs mt-2">{subscribeErr}</p>}
                     </div>
 
                     <div>

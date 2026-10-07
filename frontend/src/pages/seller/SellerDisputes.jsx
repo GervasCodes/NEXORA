@@ -5,14 +5,7 @@ import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
-
-const STATUS_STYLES = {
-    open: "bg-mango/20 text-mango-dark",
-    under_review: "bg-azure/10 text-azure",
-    resolved: "bg-teal text-white",
-    rejected: "bg-coral/10 text-coral",
-    withdrawn: "bg-line text-ash"
-};
+import StatusBadge from "../../components/ui/StatusBadge";
 
 const TYPE_LABELS = {
     damaged_item: "Damaged item",
@@ -54,9 +47,7 @@ export default function SellerDisputes() {
                                         <p className="price text-sm font-medium">{d.dispute_number}</p>
                                         <p className="text-xs text-ash">Order {d.order_number}</p>
                                     </div>
-                                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[d.status] || "bg-line text-ash"}`}>
-                                        {d.status.replace("_", " ")}
-                                    </span>
+                                    <StatusBadge domain="dispute" status={d.status} />
                                 </div>
                                 <p className="text-sm font-medium mb-1">{d.subject}</p>
                                 <p className="text-xs text-ash mb-1">{TYPE_LABELS[d.type] || d.type}</p>

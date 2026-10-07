@@ -33,6 +33,17 @@ const initialForm = {
     checkout_terms_accepted: false
 };
 
+const LAST_PAYMENT_KEY = "nexora_last_payment_method";
+
+// Tanzanian mobile numbers: +255 then 6xx / 7xx and 7 more digits.
+// Other countries' numbers are left to the server's own validation.
+const phoneProblem = (phone) => {
+    if (!phone) return false;
+    const digits = String(phone).replace(/[^\d]/g, "");
+    if (!digits.startsWith("255")) return false;
+    return !/^255[67]\d{8}$/.test(digits);
+};
+
 // Mirrors order.service.js#calculateBuyerProtectionFee - client-side
 // estimate only, purely for display; the backend recomputes and charges
 // the authoritative amount.
@@ -329,6 +340,20 @@ export default function Checkout() {
         ...filterStatic(PAYMENT_METHODS_AFTER_CARDS)
     ];
 
+    // Preselect the method this buyer used last time, if it is still offered.
+    useEffect(() => {
+        if (configuredProviders === null) return;
+        try {
+            const remembered = localStorage.getItem(LAST_PAYMENT_KEY);
+            if (remembered && visiblePaymentMethods.some((m) => m.value === remembered)) {
+                setForm((current) => (current.payment_method === initialForm.payment_method
+                    ? { ...current, payment_method: remembered }
+                    : current));
+            }
+        } catch { /* storage unavailable */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [configuredProviders]);
+
     // If the currently-selected method turns out not to be configured
     // (e.g. someone lands here with mobile_money selected but only cash
     // on delivery is actually configured on this deployment), fall back
@@ -352,6 +377,12 @@ export default function Checkout() {
         // message instead of a 400 from the API. The backend enforces
         // this independently (order.validator.js + order.repository.js) -
         // this is convenience, not the control.
+        if (phoneProblem(form.shipping_phone)) {
+            toast?.error(t("checkout.phoneInvalid"));
+            return;
+        }
+        try { localStorage.setItem(LAST_PAYMENT_KEY, form.payment_method); } catch { /* storage unavailable */ }
+
         if (!form.checkout_terms_accepted) {
             toast?.error("Please accept the Terms of Service, Privacy Policy, and Refund Policy to place your order");
             return;
@@ -480,15 +511,22 @@ export default function Checkout() {
     const deliveryInfoComplete = deliveryType === "pickup"
         ? Boolean(form.pickup_point_id)
         : Boolean(form.shipping_address?.trim());
-    const checkoutStepIndex = deliveryInfoComplete ? 2 : 0;
+    const checkoutStepIndex = !deliveryInfoComplete ? 0 : form.checkout_terms_accepted ? 2 : 1;
+    const phoneInvalid = phoneProblem(form.shipping_phone);
+
+    const paymentNextStep = {
+        mobile_money: t("checkout.next.mobileMoney"),
+        cash_on_delivery: t("checkout.next.cod"),
+        wallet: t("checkout.next.wallet")
+    }[form.payment_method] || t("checkout.next.card");
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-5 gap-10 animate-fade-in">
             <PageMeta title="Checkout" noIndex />
-            <form onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up">
+            <form id="checkout-form" onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up pb-28 md:pb-0">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
-                <CheckoutSteps steps={["Delivery", "Payment", "Review"]} currentIndex={checkoutStepIndex} />
+                <CheckoutSteps steps={[t("checkout.step.delivery"), t("checkout.step.payment"), t("checkout.step.review")]} currentIndex={checkoutStepIndex} />
 
                 <div className="flex gap-2 mb-2">
                     <button
@@ -611,6 +649,9 @@ export default function Checkout() {
                         value={form.shipping_phone}
                         onChange={(shipping_phone) => setForm({ ...form, shipping_phone })}
                     />
+                    {phoneInvalid && (
+                        <p role="alert" className="text-coral text-xs mt-1">{t("checkout.phoneInvalid")}</p>
+                    )}
                 </div>
 
                 <LocationPicker
@@ -743,10 +784,25 @@ export default function Checkout() {
                     </label>
                 </div>
 
-                <Button type="submit" disabled={busy || !form.checkout_terms_accepted} fullWidth className="gap-2 active:scale-[0.99]">
-                    {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
-                    {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(grandTotal)}`}
-                </Button>
+                <div className="hidden md:block">
+                    <Button type="submit" disabled={busy || !form.checkout_terms_accepted || phoneInvalid} fullWidth className="gap-2 active:scale-[0.99]">
+                        {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                        {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(grandTotal)}`}
+                    </Button>
+                </div>
+                <p className="text-xs text-ash">{paymentNextStep}</p>
+
+                {/* Phones: total and the order button stay in view above the bottom nav. */}
+                <div className="md:hidden fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3">
+                    <div className="shrink-0">
+                        <p className="text-xs text-ash">{t("common.total")}</p>
+                        <p className="price font-medium">{format(grandTotal)}</p>
+                    </div>
+                    <Button type="submit" form="checkout-form" disabled={busy || !form.checkout_terms_accepted || phoneInvalid} fullWidth className="gap-2">
+                        {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                        {busy ? t("checkout.placingOrder") : t("checkout.placeOrderButton")}
+                    </Button>
+                </div>
             </form>
 
             <div className="md:col-span-2 animate-slide-up" style={{ animationDelay: "80ms" }}>

@@ -10,8 +10,13 @@ exports.create = async ({ productId, sellerId, groupPrice, minParticipants, dead
 };
 
 exports.findById = async (id) => {
+    // p.image_url AS product_image (Phase 4 remediation) - the detail
+    // and list pages previously showed no product photo at all, just
+    // text, which made a group buy hard to recognize at a glance
+    // against the product someone had actually been browsing.
     const [rows] = await db.query(
         `SELECT g.*, p.name AS product_name, p.slug AS product_slug, p.price AS product_price,
+                p.image_url AS product_image,
                 (SELECT COUNT(*) FROM group_buy_participants gp WHERE gp.group_buy_id = g.id) AS participant_count
         FROM group_buys g
         JOIN products p ON p.id = g.product_id
@@ -31,6 +36,7 @@ exports.findOpen = async ({ productId } = {}) => {
 
     const [rows] = await db.query(
         `SELECT g.*, p.name AS product_name, p.slug AS product_slug, p.price AS product_price,
+                p.image_url AS product_image,
                 (SELECT COUNT(*) FROM group_buy_participants gp WHERE gp.group_buy_id = g.id) AS participant_count
         FROM group_buys g
         JOIN products p ON p.id = g.product_id
@@ -96,8 +102,40 @@ exports.findParticipants = async (groupBuyId) => {
 
 exports.markParticipantOrdered = async (groupBuyId, buyerId, orderId) => {
     await db.query(
-        "UPDATE group_buy_participants SET order_id = ? WHERE group_buy_id = ? AND buyer_id = ?",
+        "UPDATE group_buy_participants SET order_id = ?, claim_locked_at = NULL WHERE group_buy_id = ? AND buyer_id = ?",
         [orderId, groupBuyId, buyerId]
+    );
+};
+
+// Claim lock (Phase 3) - group_buy_participants.order_id can't double as
+// the lock itself (a real FK to orders(id), so there's no safe sentinel
+// value to stake a claim with before the order actually exists - see
+// migration 121's header comment). This is the atomic compare-and-swap
+// instead: only succeeds while order_id is still NULL and no OTHER claim
+// is currently in flight for this participant (claim_locked_at NULL, or
+// stale past 5 minutes - self-heals a crash mid-claim without needing a
+// cleanup job). A double-tap claim's second call gets affectedRows = 0
+// and is rejected before ever reaching order creation.
+exports.lockClaim = async (groupBuyId, buyerId) => {
+    const [result] = await db.query(
+        `UPDATE group_buy_participants
+        SET claim_locked_at = NOW()
+        WHERE group_buy_id = ? AND buyer_id = ? AND order_id IS NULL
+            AND (claim_locked_at IS NULL OR claim_locked_at < (NOW() - INTERVAL 5 MINUTE))`,
+        [groupBuyId, buyerId]
+    );
+    return result.affectedRows > 0;
+};
+
+// Releases a claim lock without having completed it - used when order
+// creation itself fails after lockClaim succeeded, so the buyer can retry
+// immediately instead of waiting out the 5-minute self-heal window.
+exports.releaseClaimLock = async (groupBuyId, buyerId) => {
+    await db.query(
+        `UPDATE group_buy_participants
+        SET claim_locked_at = NULL
+        WHERE group_buy_id = ? AND buyer_id = ? AND order_id IS NULL`,
+        [groupBuyId, buyerId]
     );
 };
 

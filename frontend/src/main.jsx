@@ -15,6 +15,7 @@ import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { AIAssistantProvider } from "./context/AIAssistantContext.jsx";
+import { initWebVitals } from "./utils/seoMetrics.js";
 import "./index.css";
 
 // Same "degrade gracefully when unconfigured" pattern as the backend
@@ -28,6 +29,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
         environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE
     });
 }
+
+// Field Core Web Vitals (sampled) - see utils/seoMetrics.js.
+initWebVitals();
 
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {

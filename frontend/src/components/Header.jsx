@@ -8,6 +8,7 @@ import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
+import ThemeToggle from "./ThemeToggle";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
@@ -88,11 +89,20 @@ function IconNavLink({ to, label, icon: Icon, active, badge, onClick }) {
                 className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-abyss text-frost text-xs px-2 py-1
                     opacity-0 scale-95 translate-y-0.5 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0
                     group-focus-visible:opacity-100 group-focus-visible:scale-100 group-focus-visible:translate-y-0
-                    transition-all duration-150 ease-out z-50"
+                    transition-all duration-150 ease-out z-[var(--z-nav)]"
             >
                 {label}
             </span>
         </Link>
+    );
+}
+
+function GuestSearchIcon({ className }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className} aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+        </svg>
     );
 }
 
@@ -103,6 +113,21 @@ export default function Header() {
     const navigate = useNavigate();
     const location = useLocation();
     const [menuOpen, setMenuOpen] = useState(false);
+    // Mobile: the search row folds away while the page scrolls down and comes
+    // back on scroll up. Below 80px it is always shown.
+    const [searchCollapsed, setSearchCollapsed] = useState(false);
+    useEffect(() => {
+        let lastY = window.scrollY;
+        const onScroll = () => {
+            const y = window.scrollY;
+            if (y < 80) setSearchCollapsed(false);
+            else if (y > lastY + 4) setSearchCollapsed(true);
+            else if (y < lastY - 4) setSearchCollapsed(false);
+            lastY = y;
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        return () => window.removeEventListener("scroll", onScroll);
+    }, []);
     const links = useNavLinks();
     // Desktop icon row only ever shows the primary links directly - the
     // rest live inside ToolsMenu. The mobile drawer below still maps
@@ -153,11 +178,20 @@ export default function Header() {
     // (Wallet added in Phase Q2) live in the desktop icon row/Account
     // page instead of competing for a bottom-nav slot; Cart keeps its
     // slot here as the buyer's actual highest-frequency action.
+    // Guest bottom bar: Home, Search, Categories, Cart, Sign in.
+    const guestBottomNavItems = [
+        { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
+        { to: "/search", label: t("nav.search"), icon: GuestSearchIcon },
+        { to: "/products", label: t("nav.categories"), icon: BrowseIcon },
+        { to: "/cart", label: t("nav.cart"), icon: CartIcon },
+        { to: "/login", label: t("nav.signIn"), icon: SignInIcon }
+    ];
+
     const buyerBottomNavItems = [
         { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
         { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
         { to: "/messages", label: t("nav.messages"), icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-sans font-semibold tabular-nums rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
                 {unreadMessages > 9 ? "9+" : unreadMessages}
             </span>
         ) },
@@ -166,7 +200,7 @@ export default function Header() {
             label: t("nav.cart"),
             icon: CartIcon,
             badge: itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-sans font-semibold tabular-nums rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
                     {itemCount > 9 ? "9+" : itemCount}
                 </span>
             )
@@ -178,7 +212,7 @@ export default function Header() {
 
     return (
         <>
-        <header className="glass-dark text-frost sticky top-0 z-40">
+        <header className="glass-dark text-frost sticky top-0 z-[var(--z-sticky)]">
             {/* (UI/UX remediation): the cart/messages/notification
                 badge counts above only ever updated visually - a
                 screen-reader user had no way to learn a new item landed
@@ -243,11 +277,11 @@ export default function Header() {
                             active={isActive(link.to)}
                             badge={
                                 link.to === "/cart" && itemCount > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                         {itemCount > 9 ? "9+" : itemCount}
                                     </span>
                                 ) : link.to === "/messages" && unreadMessages > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                         {unreadMessages > 9 ? "9+" : unreadMessages}
                                     </span>
                                 ) : null
@@ -271,13 +305,14 @@ export default function Header() {
                                 className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-abyss text-frost text-xs px-2 py-1
                                     opacity-0 scale-95 translate-y-0.5 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0
                                     group-focus-visible:opacity-100 group-focus-visible:scale-100 group-focus-visible:translate-y-0
-                                    transition-all duration-150 ease-out z-50"
+                                    transition-all duration-150 ease-out z-[var(--z-nav)]"
                             >
                                 {t("nav.signOut")}
                             </span>
                         </button>
                     ) : !user ? (
                         <>
+                            <ThemeToggle className="mr-1" />
                             <IconNavLink
                                 to="/login"
                                 label={t("nav.signIn")}
@@ -306,7 +341,7 @@ export default function Header() {
                         <Link to="/cart" className="relative text-frost/90 shrink-0 transition-transform duration-150 ease-out active:scale-90" aria-label={t("nav.cart")}>
                             <CartIcon className="w-6 h-6" />
                             {itemCount > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                     {itemCount > 9 ? "9+" : itemCount}
                                 </span>
                             )}
@@ -334,7 +369,13 @@ export default function Header() {
                 </div>
             </div>
 
-            <div className="md:hidden px-4 pb-3">
+            <div
+                className={`md:hidden px-4 overflow-hidden transition-[max-height,opacity,padding] duration-200 motion-reduce:transition-none ${
+                    searchCollapsed ? "max-h-0 opacity-0 pb-0" : "max-h-24 opacity-100 pb-3"
+                }`}
+                aria-hidden={searchCollapsed}
+                {...(searchCollapsed ? { inert: "" } : {})}
+            >
                 <SearchBox
                     placeholder={t("nav.searchPlaceholder")}
                     submitLabel={t("nav.go")}
@@ -360,6 +401,7 @@ export default function Header() {
                 fixed MobileBottomNav below so the last item can scroll
                 clear of it instead of ending up hidden underneath. */}
             {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
+            {!user && <MobileBottomNav items={guestBottomNavItems} />}
         </header>
 
         <SideDrawer
@@ -407,12 +449,12 @@ export default function Header() {
                                     <Icon className="w-[18px] h-[18px] shrink-0" />
                                     <span className="flex-1">{link.label}</span>
                                     {link.to === "/cart" && itemCount > 0 && (
-                                        <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
+                                        <span className="bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full w-5 h-5 flex items-center justify-center">
                                             {itemCount}
                                         </span>
                                     )}
                                     {link.to === "/messages" && unreadMessages > 0 && (
-                                        <span className="bg-coral text-frost text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
+                                        <span className="bg-coral text-frost text-[10px] font-sans font-semibold tabular-nums rounded-full w-5 h-5 flex items-center justify-center">
                                             {unreadMessages > 9 ? "9+" : unreadMessages}
                                         </span>
                                     )}
@@ -430,6 +472,7 @@ export default function Header() {
                             </button>
                         ) : !user ? (
                             <div className="py-3 flex items-center gap-3">
+                                <ThemeToggle />
                                 <Link
                                     to="/login"
                                     onClick={() => setMenuOpen(false)}

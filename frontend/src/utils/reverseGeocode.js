@@ -17,7 +17,7 @@ const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 // real contact email - Nominatim's own docs accept a plain app name here
 // for exactly this "browser can't set User-Agent" case; a fabricated-
 // looking email would be worse, not better.
-const APP_IDENTIFIER = "nexora-marketplace";
+const APP_IDENTIFIER = "nexora marketplace";
 
 // Reverse-geocodes {lat, lng} and returns the best-guess {address, city,
 // region} strings for pre-filling a form. Any field Nominatim can't

@@ -279,7 +279,7 @@ export default function Register() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-16">
-            <PageMeta title="Create Account" />
+            <PageMeta title="Create Account" noIndexFollow />
             <h1 className="font-display text-2xl mb-1">{t("auth.registerTitle")}</h1>
             <p className="text-ash text-sm mb-8">{t("auth.registerSubtitle")}</p>
 

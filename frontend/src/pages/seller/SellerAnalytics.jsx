@@ -11,6 +11,8 @@ import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
+import ErrorState from "../../components/ui/ErrorState";
+import { useToast } from "../../context/ToastContext";
 
 function useStatusLabels(t) {
     return {
@@ -72,6 +74,7 @@ export default function SellerAnalytics() {
     const { t } = useLanguage();
     const STATUS_LABELS = useStatusLabels(t);
     const { profile } = useOutletContext();
+    const toast = useToast();
     const merchantType = profile?.merchant_type || "product";
     const showProducts = merchantType === "product" || merchantType === "hybrid";
     const showServices = merchantType === "service" || merchantType === "hybrid";
@@ -157,8 +160,9 @@ export default function SellerAnalytics() {
                 link.remove();
                 window.URL.revokeObjectURL(url);
             })
+            .catch((err) => toast?.error(extractErrorMessage(err) || "Couldn't export that report. Try again."))
             .finally(() => setExportingType(null));
-    }, []);
+    }, [toast]);
 
     // Skeleton mirrors the real dashboard's shape (stat cards, chart,
     // two product/service lists) rather than a full-page blocking
@@ -221,7 +225,7 @@ export default function SellerAnalytics() {
         );
     }
 
-    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
+    if (error) return <ErrorState title="Couldn't load analytics" hint={error} onRetry={load} />;
     if (!analytics) return null;
 
     const { totals, commissionRate, statusBreakdown, dailySales, topProducts, repeatCustomers } = analytics;

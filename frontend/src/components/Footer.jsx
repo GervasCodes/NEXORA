@@ -108,7 +108,37 @@ export default function Footer() {
                     </div>
                 </div>
 
-                <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-frost/10 pt-4 text-frost/60">
+                <nav aria-label="Explore NEXORA" className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-frost/10 pt-4 text-frost/60">
+                    <Link to="/about" className="hover:text-frost hover:underline">
+                        About NEXORA
+                    </Link>
+                    <Link to="/products" className="hover:text-frost hover:underline">
+                        Shop all products
+                    </Link>
+                    <Link to="/services" className="hover:text-frost hover:underline">
+                        Book services
+                    </Link>
+                    <Link to="/guides" className="hover:text-frost hover:underline">
+                        Buying guides
+                    </Link>
+                    <Link to="/group-buys" className="hover:text-frost hover:underline">
+                        Group buys
+                    </Link>
+                    <Link to="/live-selling" className="hover:text-frost hover:underline">
+                        Live selling
+                    </Link>
+                    <Link to="/sell" className="hover:text-frost hover:underline">
+                        {t("footer.sell")}
+                    </Link>
+                    <Link to="/how-it-works" className="hover:text-frost hover:underline">
+                        {t("footer.howItWorks")}
+                    </Link>
+                    <Link to="/contact" className="hover:text-frost hover:underline">
+                        {t("footer.contact")}
+                    </Link>
+                </nav>
+
+                <nav aria-label="Legal and platform information" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-frost/60">
                     <Link to="/status" className="hover:text-frost hover:underline">
                         {t("footer.status")}
                     </Link>

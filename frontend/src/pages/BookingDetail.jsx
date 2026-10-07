@@ -107,6 +107,9 @@ export default function BookingDetail() {
                 .then(({ data }) => {
                     if (data.data?.success) {
                         setMessage(t("booking.payment.success"));
+                    } else if (data.data?.status === "pending") {
+                        setMessage(t("booking.payment.confirming"));
+                        pollForPaymentConfirmation();
                     } else {
                         setError(t("booking.payment.notCompleted"));
                     }

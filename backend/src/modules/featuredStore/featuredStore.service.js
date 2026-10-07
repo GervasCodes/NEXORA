@@ -194,20 +194,23 @@ exports.cancelCampaign = async (sellerId, campaignId) => {
 // clear alongside the status - the ranking join reads `status`/`ends_at`
 // directly, so flipping the status here is the whole effect.
 exports.expireDueCampaigns = async () => {
-    const connection = await db.getConnection();
+    const due = await featuredStoreRepository.findExpiredActive();
+    let expired = 0;
 
-    try {
-        await connection.beginTransaction();
+    for (const campaign of due) {
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
 
-        const due = await featuredStoreRepository.findExpiredActive(connection);
+            const changed = await featuredStoreRepository.expireIfDue(campaign.id, connection);
+            if (!changed) {
+                await connection.rollback();
+                continue;
+            }
 
-        for (const campaign of due) {
-            await featuredStoreRepository.updateStatus(campaign.id, "expired", connection);
-        }
+            await connection.commit();
+            expired += 1;
 
-        await connection.commit();
-
-        for (const campaign of due) {
             notificationService.notify({
                 userId: campaign.seller_id,
                 type: "featured_store_expired",
@@ -216,17 +219,16 @@ exports.expireDueCampaigns = async () => {
                 messageParams: { categoryName: campaign.category_name },
                 withEmail: false
             }).catch((err) => logger.warn({ err }, "featured store expiry notify error"));
+
+        } catch (error) {
+            await connection.rollback().catch(() => {});
+            logger.error({ err: error, campaignId: campaign.id }, "featured store expiry failed for campaign; continuing");
+        } finally {
+            connection.release();
         }
-
-        return due.length;
-
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-
-    } finally {
-        connection.release();
     }
+
+    return expired;
 };
 
 // --- Admin oversight (read-only) -----------------------------------------

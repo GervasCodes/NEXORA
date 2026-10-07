@@ -7,9 +7,20 @@ const db = require("../../config/db");
 // exactly one set, mirroring the DB's own CHECK constraint.
 
 exports.add = async (userId, { productId, serviceId }) => {
+    if (productId) {
+        // Snapshot the effective (discounted if lower) price at save time so
+        // the Saved page can show a badge when it later drops.
+        await db.query(
+            `INSERT IGNORE INTO wishlist_items (user_id, product_id, service_id, saved_price)
+             SELECT ?, p.id, NULL, LEAST(p.price, COALESCE(p.discount_price, p.price))
+               FROM products p WHERE p.id = ?`,
+            [userId, productId]
+        );
+        return;
+    }
     await db.query(
         `INSERT IGNORE INTO wishlist_items (user_id, product_id, service_id) VALUES (?, ?, ?)`,
-        [userId, productId || null, serviceId || null]
+        [userId, null, serviceId || null]
     );
 };
 
@@ -55,7 +66,14 @@ exports.findProductsByUser = async (userId) => {
             ) AS image_url,
             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count,
-            w.created_at AS saved_at
+            w.created_at AS saved_at,
+            w.saved_price,
+            (w.saved_price IS NOT NULL AND LEAST(p.price, COALESCE(p.discount_price, p.price)) < w.saved_price) AS price_dropped,
+            CASE
+                WHEN w.saved_price IS NOT NULL AND LEAST(p.price, COALESCE(p.discount_price, p.price)) < w.saved_price
+                THEN ROUND((w.saved_price - LEAST(p.price, COALESCE(p.discount_price, p.price))) / w.saved_price * 100)
+                ELSE 0
+            END AS price_drop_pct
         FROM wishlist_items w
         JOIN products p ON p.id = w.product_id
         JOIN seller_profiles sp ON sp.user_id = p.seller_id

@@ -100,6 +100,24 @@ export default function Messages() {
         return isMeBuyer ? c.seller_photo_url : c.buyer_photo_url;
     };
 
+    // Pinned chats live on this device (per account) and float to the top.
+    const pinKey = `nexora_pinned_chats_${user?.id}`;
+    const [pinnedIds, setPinnedIds] = useState(() => {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(pinKey) || "[]");
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    });
+    const togglePin = (conversationId) => {
+        setPinnedIds((prev) => {
+            const next = prev.includes(conversationId) ? prev.filter((id) => id !== conversationId) : [...prev, conversationId];
+            try { localStorage.setItem(pinKey, JSON.stringify(next)); } catch { /* storage unavailable */ }
+            return next;
+        });
+    };
+
     const filtered = conversations.filter((c) => {
         const q = query.trim().toLowerCase();
         if (!q) return true;
@@ -108,7 +126,7 @@ export default function Messages() {
             (c.product_name || "").toLowerCase().includes(q) ||
             (c.last_message || "").toLowerCase().includes(q)
         );
-    });
+    }).sort((a, b) => Number(pinnedIds.includes(b.id)) - Number(pinnedIds.includes(a.id)));
 
     const handleDeleteConversation = async (conversationId) => {
         setDeletingId(conversationId);
@@ -282,6 +300,7 @@ export default function Messages() {
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 justify-between gap-2">
                                         <span className="flex items-center gap-1.5 min-w-0">
+                                            {pinnedIds.includes(c.id) && <span aria-label={t("messages.pinned")} title={t("messages.pinned")}>📌</span>}
                                             <p className="text-sm font-medium truncate">{otherPartyName(c)}</p>
                                             {c.my_muted_at && (
                                                 <span title={t("messages.mutedIndicator")} aria-label={t("messages.mutedIndicator")} className="text-ash shrink-0">
@@ -290,7 +309,7 @@ export default function Messages() {
                                             )}
                                         </span>
                                         {c.unread_count > 0 && (
-                                            <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shrink-0">
+                                            <span className="bg-mango text-abyss text-xs font-mono font-semibold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0">
                                                 {c.unread_count > 9 ? "9+" : c.unread_count}
                                             </span>
                                         )}
@@ -304,6 +323,15 @@ export default function Messages() {
 
                             {confirmingId !== c.id ? (
                                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                    <button
+                                        type="button"
+                                        onClick={() => togglePin(c.id)}
+                                        aria-pressed={pinnedIds.includes(c.id)}
+                                        aria-label={pinnedIds.includes(c.id) ? t("messages.unpinAria") : t("messages.pinAria")}
+                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash text-sm transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5"
+                                    >
+                                        📌
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => handleToggleMute(c)}

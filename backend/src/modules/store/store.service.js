@@ -7,7 +7,13 @@ exports.getPublicStoreProfile = async (slug) => {
         throw new Error("Store not found.");
     }
 
-    return store;
+    // Signals are additive fields; a failure here must not hide the store page.
+    try {
+        const signals = await storeRepository.findStoreSignals(store.user_id);
+        return { ...store, ...signals };
+    } catch (err) {
+        return { ...store, sold_count: 0, response_minutes: null, response_samples: 0 };
+    }
 };
 
 // Seller Collections. No "store not found" check here (unlike
@@ -18,6 +24,12 @@ exports.getPublicStoreProfile = async (slug) => {
 // has a valid store profile loaded from the call above.
 exports.getStoreCollections = async (slug) => {
     return storeRepository.findCollectionsBySlug(slug);
+};
+
+// Services listed on a store page. Like collections, an unknown slug just
+// returns an empty array.
+exports.getStoreServices = async (slug) => {
+    return storeRepository.findPublishedServicesBySlug(slug);
 };
 
 exports.search = async (query) => {

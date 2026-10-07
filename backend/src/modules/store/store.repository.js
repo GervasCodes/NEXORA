@@ -79,9 +79,9 @@ exports.findPublicBySlug = async (slug) => {
     const [rows] = await dbRead.query(
         `SELECT
             sp.user_id, sp.store_name, sp.store_slug, sp.store_description,
-            sp.store_tagline,
+            sp.store_tagline, sp.opening_hours,
             sp.store_logo, sp.store_banner, sp.store_theme, sp.promo_video_url,
-            sp.social_instagram, sp.social_facebook, sp.social_whatsapp,
+            sp.social_instagram, sp.social_facebook, sp.social_whatsapp, sp.public_phone,
             sp.country, sp.region, sp.city,
             sp.is_verified, sp.is_business_verified, sp.created_at,
             (sp.pickup_lat IS NOT NULL AND sp.pickup_lng IS NOT NULL) AS has_pickup_pin,
@@ -105,6 +105,43 @@ exports.findPublicBySlug = async (slug) => {
     );
 
     return rows[0];
+};
+
+// Published services of one public store, same card shape as the public
+// services list (service.repository#findAll) so ServiceCard takes them as-is.
+exports.findPublishedServicesBySlug = async (slug, limit = 12) => {
+    const [rows] = await dbRead.query(
+        `SELECT
+            s.id, s.title, s.slug, s.pricing_model, s.base_price, s.discount_price,
+            s.city, s.region, s.created_at,
+            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sc.name AS category_name, sc.slug AS category_slug,
+            (
+                SELECT sm.media_url FROM service_media sm
+                WHERE sm.service_id = s.id AND sm.is_primary = 1
+                LIMIT 1
+            ) AS image_url,
+            (
+                SELECT AVG(r.rating) FROM reviews r
+                JOIN bookings b ON b.id = r.booking_id
+                WHERE b.service_id = s.id
+            ) AS average_rating,
+            (
+                SELECT COUNT(*) FROM reviews r
+                JOIN bookings b ON b.id = r.booking_id
+                WHERE b.service_id = s.id
+            ) AS review_count
+        FROM services s
+        JOIN seller_profiles sp ON sp.user_id = s.provider_id
+        JOIN users u ON u.id = sp.user_id
+        LEFT JOIN service_categories sc ON sc.id = s.category_id
+        WHERE sp.store_slug = ? AND u.is_active = 1
+          AND s.is_active = 1 AND s.status = 'published'
+        ORDER BY s.created_at DESC
+        LIMIT ?`,
+        [slug, limit]
+    );
+    return rows;
 };
 
 // Public store collections -  (Seller Collections). A seller can
@@ -239,4 +276,47 @@ exports.search = async ({ search, limit = 5 }) => {
         [`%${search}%`, limit]
     );
     return rows;
+};
+
+// Store page signals (sold count + typical reply time). Read-only, public,
+// single call site (store.service.js#getPublicStoreProfile).
+//
+// sold_count: units on paid orders for this seller's items. Counts only
+// payment_status = 'paid', so unpaid/cancelled checkouts never inflate it.
+//
+// response_minutes: average minutes from a buyer's first message in a
+// conversation to this seller's first reply after it, over the last 90
+// days. Conversations with no reply yet are excluded, so an ignored
+// conversation doesn't drag the number up.
+exports.findStoreSignals = async (sellerUserId) => {
+    const [[sold]] = await dbRead.query(
+        `SELECT COALESCE(SUM(oi.quantity), 0) AS sold_count
+           FROM order_items oi
+           JOIN orders o ON o.id = oi.order_id
+          WHERE oi.seller_id = ? AND o.payment_status = 'paid'`,
+        [sellerUserId]
+    );
+    const [[reply]] = await dbRead.query(
+        `SELECT AVG(TIMESTAMPDIFF(MINUTE, t.first_buyer_at, t.first_reply_at)) AS response_minutes,
+                COUNT(*) AS response_samples
+           FROM (
+               SELECT
+                   (SELECT MIN(m.created_at) FROM messages m
+                     WHERE m.conversation_id = c.id AND m.sender_id = c.buyer_id) AS first_buyer_at,
+                   (SELECT MIN(m2.created_at) FROM messages m2
+                     WHERE m2.conversation_id = c.id AND m2.sender_id = c.seller_id
+                       AND m2.created_at > (SELECT MIN(m3.created_at) FROM messages m3
+                                             WHERE m3.conversation_id = c.id AND m3.sender_id = c.buyer_id)
+                   ) AS first_reply_at
+                 FROM conversations c
+                WHERE c.seller_id = ? AND c.updated_at > NOW() - INTERVAL 90 DAY
+           ) t
+          WHERE t.first_buyer_at IS NOT NULL AND t.first_reply_at IS NOT NULL`,
+        [sellerUserId]
+    );
+    return {
+        sold_count: Number(sold.sold_count) || 0,
+        response_minutes: reply.response_minutes === null ? null : Math.round(Number(reply.response_minutes)),
+        response_samples: Number(reply.response_samples) || 0,
+    };
 };

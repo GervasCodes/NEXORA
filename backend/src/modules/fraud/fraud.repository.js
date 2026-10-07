@@ -171,3 +171,39 @@ exports.getTopFlaggedEntities = async (limit) => {
         personEmail: r.person_email || null
     }));
 };
+
+// Phase 8: paged open-flag list with search by person or order number.
+exports.findOpenPage = async ({ q, limit, offset }) => {
+    const { likeTerm } = require("../../utils/adminListQuery");
+    const conditions = ["f.status = 'open'"];
+    const params = [];
+    if (q) {
+        const like = likeTerm(q);
+        conditions.push(
+            `(o.order_number LIKE ? OR buyer.email LIKE ? OR seller.email LIKE ?
+              OR CONCAT(buyer.first_name, ' ', buyer.last_name) LIKE ?
+              OR CONCAT(seller.first_name, ' ', seller.last_name) LIKE ?)`
+        );
+        params.push(like, like, like, like, like);
+    }
+    const where = conditions.join(" AND ");
+    const from = `FROM fraud_flags f
+        LEFT JOIN orders o ON f.entity_type = 'order' AND o.id = f.entity_id
+        LEFT JOIN users buyer ON f.entity_type = 'order' AND buyer.id = o.buyer_id
+        LEFT JOIN users seller ON f.entity_type = 'seller' AND seller.id = f.entity_id`;
+    const [[countRow]] = await db.query(`SELECT COUNT(*) AS total ${from} WHERE ${where}`, params);
+    const [rows] = await db.query(
+        `SELECT f.*,
+            CASE WHEN f.entity_type = 'order' THEN o.order_number ELSE NULL END AS order_number,
+            CASE WHEN f.entity_type = 'order' THEN o.total_amount ELSE NULL END AS order_amount,
+            CASE WHEN f.entity_type = 'order' THEN buyer.first_name ELSE seller.first_name END AS person_first_name,
+            CASE WHEN f.entity_type = 'order' THEN buyer.last_name ELSE seller.last_name END AS person_last_name,
+            CASE WHEN f.entity_type = 'order' THEN buyer.email ELSE seller.email END AS person_email
+        ${from}
+        WHERE ${where}
+        ORDER BY f.severity = 'high' DESC, f.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+    );
+    return { rows, total: Number(countRow.total) };
+};

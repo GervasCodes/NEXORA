@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Input from "../../components/ui/Input";
+import { compressImage } from "../../utils/imageCompression";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
@@ -24,6 +25,81 @@ const swapWithNeighbour = (list, index, direction) => {
     return next;
 };
 
+// Listing-strength checks. Weights add up to 100. Photos carry the most
+// weight because listings without them convert poorly.
+const LISTING_CHECKS = [
+    { label: "a clear product name", weight: 15, passes: (f) => f.name.trim().length >= 3 },
+    { label: "a description of 40+ characters", weight: 20, passes: (f) => (f.description || "").trim().length >= 40 },
+    { label: "a price", weight: 15, passes: (f) => f.price !== "" },
+    { label: "a category", weight: 15, passes: (f) => Boolean(f.category_id) },
+    { label: "a stock count", weight: 10, passes: (f) => f.stock !== "" },
+    { label: "at least one photo", weight: 25, passes: (_f, photoCount) => photoCount > 0 }
+];
+
+const computeListingStrength = (form, photoCount) => {
+    let score = 0;
+    const missing = [];
+    for (const check of LISTING_CHECKS) {
+        if (check.passes(form, photoCount)) score += check.weight;
+        else missing.push(check.label);
+    }
+    return { score, missing };
+};
+
+// Shape sent to the draft and publish endpoints. Numbers stay as typed; the
+// backend validates and converts them.
+const buildPayload = (form) => ({
+    ...form,
+    preorder_lead_time_days: form.preorder_lead_time_days === "" ? null : form.preorder_lead_time_days
+});
+
+// Status line beside the publish button.
+function SaveStatus({ savedId, isDraft, dirty, saveState }) {
+    if (!savedId) return null;
+    let text = "";
+    if (dirty && saveState !== "saving") text = "Unsaved changes";
+    else if (saveState === "saving") text = "Saving draft…";
+    else if (saveState === "error") text = "Couldn't save draft";
+    else if (isDraft) text = "Draft saved";
+    return text ? <span role="status" className="text-xs text-ash">{text}</span> : null;
+}
+
+// Listing-strength meter and a live card preview of how buyers will see it.
+function ListingPanel({ form, images }) {
+    const primary = images.find((img) => img.is_primary) || images[0];
+    const { score, missing } = computeListingStrength(form, images.length);
+    return (
+        <div className="border border-line rounded-lg p-4 mb-6 space-y-3">
+            <div className="flex gap-3 items-center">
+                <div className="w-16 h-16 rounded-md overflow-hidden border border-line bg-paper flex-shrink-0 flex items-center justify-center">
+                    {primary
+                        ? <img src={primary.image_url} alt="" className="w-full h-full object-cover" />
+                        : <span className="text-[10px] text-ash">No photo</span>}
+                </div>
+                <div className="min-w-0">
+                    <p className="font-medium truncate">{form.name.trim() || "Your product name"}</p>
+                    <p className="text-sm text-ash">
+                        {form.price !== "" ? `Price ${form.price}` : "Price not set"}
+                        {form.discount_price !== "" && form.discount_price != null ? ` · Sale ${form.discount_price}` : ""}
+                    </p>
+                </div>
+            </div>
+            <div>
+                <div className="flex justify-between text-xs text-ash mb-1">
+                    <span>Listing strength</span>
+                    <span>{score}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-paper border border-line overflow-hidden" role="progressbar" aria-valuenow={score} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="h-full bg-teal transition-all" style={{ width: `${score}%` }} />
+                </div>
+                {missing.length > 0 && (
+                    <p className="text-xs text-ash mt-1">Add {missing.join(", ")} to strengthen this listing.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function SellerProductForm() {
     const { id } = useParams();
     const isEdit = Boolean(id);
@@ -40,6 +116,17 @@ export default function SellerProductForm() {
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [savedId, setSavedId] = useState(isEdit ? id : null);
+    // isDraft: the row is a draft (not visible to buyers yet). New products
+    // start as drafts on their first field, so photos can be added right away.
+    const [isDraft, setIsDraft] = useState(!isEdit);
+    // dirty: edits not yet saved. editCount lets an autosave that finishes
+    // after newer typing know not to clear the dirty flag.
+    const [dirty, setDirty] = useState(false);
+    const editCount = useRef(0);
+    const creatingDraft = useRef(null);
+    const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+    const [uploadProgress, setUploadProgress] = useState("");
+    const [categoryQuery, setCategoryQuery] = useState("");
 
     // Tracks which single media row (e.g. "image-12") is mid-request, so
     // only that row's controls disable during a delete/reorder/set-primary
@@ -72,30 +159,93 @@ export default function SellerProductForm() {
             setImages(p.images || []);
             setVideos(p.videos || []);
             setAudio(p.audio || []);
+            setIsDraft(Boolean(p.is_draft));
+            setDirty(false);
         });
     }, [id, isEdit]);
 
-    const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-    const updateChecked = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
+    const markEdited = () => {
+        editCount.current += 1;
+        setDirty(true);
+    };
+
+    const update = (field) => (e) => {
+        setForm((f) => ({ ...f, [field]: e.target.value }));
+        markEdited();
+    };
+    const updateChecked = (field) => (e) => {
+        setForm((f) => ({ ...f, [field]: e.target.checked }));
+        markEdited();
+    };
+
+    // Returns the product id, creating the draft on the first call. Concurrent
+    // callers (e.g. a photo pick during the name-blur request) share one request.
+    const ensureDraft = async () => {
+        if (savedId) return savedId;
+        if (creatingDraft.current) return creatingDraft.current;
+        creatingDraft.current = api.post("/products/draft", buildPayload(form))
+            .then(({ data }) => {
+                setSavedId(data.data.productId);
+                setIsDraft(true);
+                // Mark dirty so the full form (not just the name) is autosaved next.
+                markEdited();
+                return data.data.productId;
+            })
+            .finally(() => {
+                creatingDraft.current = null;
+            });
+        return creatingDraft.current;
+    };
+
+    const handleNameBlur = () => {
+        if (savedId || form.name.trim().length < 3) return;
+        ensureDraft().catch((err) => setError(extractErrorMessage(err)));
+    };
+
+    // Autosave drafts 1.5s after the last edit.
+    useEffect(() => {
+        if (!savedId || !isDraft || !dirty) return undefined;
+        const timer = setTimeout(async () => {
+            const version = editCount.current;
+            setSaveState("saving");
+            try {
+                await api.put(`/products/draft/${savedId}`, buildPayload(form));
+                if (editCount.current === version) setDirty(false);
+                setSaveState("saved");
+            } catch (err) {
+                setSaveState("error");
+                setError(extractErrorMessage(err));
+            }
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [form, savedId, isDraft, dirty]);
+
+    // Browser warning when leaving with unsaved edits.
+    useEffect(() => {
+        if (!dirty) return undefined;
+        const warn = (e) => {
+            e.preventDefault();
+            e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [dirty]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError("");
 
-        const payload = {
-            ...form,
-            preorder_lead_time_days: form.preorder_lead_time_days === "" ? null : form.preorder_lead_time_days
-        };
-
         try {
-            if (isEdit) {
-                await api.put(`/products/${id}`, payload);
-                navigate("/seller/products");
+            const productId = await ensureDraft();
+            if (!isDraft) {
+                // Already-published product: plain edit, no publish step.
+                await api.put(`/products/${productId}`, buildPayload(form));
             } else {
-                const { data } = await api.post("/products", payload);
-                setSavedId(data.data.productId);
+                await api.post(`/products/draft/${productId}/publish`, buildPayload(form));
             }
+            setDirty(false);
+            navigate("/seller/products");
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -104,21 +254,43 @@ export default function SellerProductForm() {
     };
 
     const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || !savedId) return;
+        const files = Array.from(e.target.files || []);
+        e.target.value = "";
+        if (files.length === 0) return;
 
-        setUploading(true);
         setError("");
+        let productId;
         try {
-            const body = new FormData();
-            body.append("image", file);
-            const { data } = await api.post(`/products/${savedId}/images`, body);
-            setImages([...images, { id: data.data.id, image_url: data.data.imageUrl, is_primary: data.data.isPrimary }]);
+            productId = await ensureDraft();
         } catch (err) {
             setError(extractErrorMessage(err));
+            return;
+        }
+
+        setUploading(true);
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const label = files.length > 1 ? `Photo ${i + 1} of ${files.length}` : "Photo";
+                setUploadProgress(`${label}: preparing…`);
+                try {
+                    const file = await compressImage(files[i]);
+                    const body = new FormData();
+                    body.append("image", file);
+                    const { data } = await api.post(`/products/${productId}/images`, body, {
+                        onUploadProgress: (ev) => {
+                            if (!ev.total) return;
+                            setUploadProgress(`${label}: uploading ${Math.round((ev.loaded / ev.total) * 100)}%`);
+                        }
+                    });
+                    setImages((prev) => [...prev, { id: data.data.id, image_url: data.data.imageUrl, is_primary: data.data.isPrimary }]);
+                } catch (err) {
+                    // Keep going so one bad file doesn't drop the rest of the batch.
+                    setError(`${label} failed: ${extractErrorMessage(err)}`);
+                }
+            }
         } finally {
             setUploading(false);
-            e.target.value = "";
+            setUploadProgress("");
         }
     };
 
@@ -299,10 +471,13 @@ export default function SellerProductForm() {
                 </p>
             )}
 
+            <ListingPanel form={form} images={images} />
+
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
                     label="Product name"
                     required minLength={3} value={form.name} onChange={update("name")}
+                    onBlur={handleNameBlur}
                 />
 
                 <div>
@@ -375,33 +550,52 @@ export default function SellerProductForm() {
                     </div>
                     <div>
                         <label htmlFor="productCategory" className="block text-sm mb-1">Category</label>
+                        <input
+                            type="search"
+                            aria-label="Search categories"
+                            placeholder="Search categories"
+                            value={categoryQuery}
+                            onChange={(e) => setCategoryQuery(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-1.5 mb-1 text-sm focus-ring bg-paper"
+                        />
                         <select id="productCategory" required value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="">Select…</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
+                            {categories
+                                .filter((c) => c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase()) || String(c.id) === String(form.category_id))
+                                .map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
                         </select>
                     </div>
                 </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button type="submit" disabled={submitting}>
-                    {submitting ? "Saving…" : isEdit ? "Save changes" : "Create product"}
-                </Button>
+                <div className="flex items-center justify-between gap-3">
+                    <Button type="submit" disabled={submitting || uploading}>
+                        {submitting ? "Publishing…" : isEdit && !isDraft ? "Save changes" : "Publish product"}
+                    </Button>
+                    <SaveStatus savedId={savedId} isDraft={isDraft} dirty={dirty} saveState={saveState} />
+                </div>
             </form>
+
+            {!savedId && (
+                <p className="mt-10 border-t border-line pt-6 text-ash text-sm">
+                    Enter a product name to start your draft. Photos, videos and audio unlock once it's saved.
+                </p>
+            )}
 
             {savedId && (
                 <div className="mt-10 border-t border-line pt-6">
-                    {!isEdit && (
+                    {isDraft && (
                         <p className="text-teal text-sm mb-6 -mt-2">
-                            Product saved — now add photos, videos, and audio below. You can come back and edit
-                            these anytime from your product list.
+                            Draft saved and hidden from buyers. Add photos, videos and audio, then publish above.
                         </p>
                     )}
 
-                    <h2 className="font-display text-lg mb-3">Photos</h2>
+                    <h2 className="font-display text-lg mb-1">Photos</h2>
+                    <p className="text-xs text-ash mb-3">Large photos are resized on your device before upload.</p>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {images.map((img, i) => {
@@ -463,10 +657,17 @@ export default function SellerProductForm() {
                         })}
                     </div>
 
-                    <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploading ? "Uploading…" : "+ Add photo"}
-                        <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} className="hidden" />
-                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {uploading ? "Uploading…" : "+ Choose photos"}
+                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                        </label>
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            Take photo
+                            <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                        </label>
+                    </div>
+                    {uploadProgress && <p role="status" className="text-sm text-ash mt-2">{uploadProgress}</p>}
 
                     <h2 className="font-display text-lg mb-3 mt-8">Videos</h2>
 

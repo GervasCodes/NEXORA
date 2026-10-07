@@ -2,11 +2,17 @@ const bcrypt = require("bcrypt");
 
 const otpRepository = require("./otp.repository");
 const { sendTransactionalEmail } = require("../../config/brevo");
+const smsProvider = require("../sms/providers/sms.provider");
+const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
+const { renderEmail } = require("../../utils/emailTemplate");
+const { t, resolveLocale } = require("../../i18n");
+const logger = require("../../utils/logger").child({ module: "otp" });
 
 const CODE_LENGTH = 6;
 const EXPIRY_MINUTES = 5;
 const RESEND_THROTTLE_MINUTES = 1;
 const MAX_REQUESTS_PER_WINDOW = 5;
+const CHANNELS = ["email", "sms", "whatsapp"];
 
 // (OTP resend/expiry UX) - exported so callers that need to hand
 // the frontend an expiry countdown (but aren't themselves the ones
@@ -23,32 +29,92 @@ const generateCode = () => {
     return String(Math.floor(Math.random() * 1_000_000)).padStart(CODE_LENGTH, "0");
 };
 
-const SUBJECTS = {
-    login: "Your NEXORA sign-in code",
-    password_change: "Your NEXORA password change code",
-    password_reset: "Your NEXORA password reset code"
-};
+const SUBJECT_PURPOSES = ["login", "password_reset", "password_change"];
+const INTRO_PURPOSES = ["login", "password_reset", "password_change"];
 
-const bodyFor = (purpose, code) => {
-    let intro;
-    if (purpose === "login") {
-        intro = "Use this code to finish signing in to NEXORA:";
-    } else if (purpose === "password_reset") {
-        intro = "Use this code to reset your NEXORA password:";
-    } else {
-        intro = "Use this code to verify it's you before changing your NEXORA password:";
-    }
+// Email and SMS copy comes from the recipient's own locale, same as
+// notifications. Unknown purposes fall back to the generic wording.
+const buildMessages = (locale, purpose, code) => {
+    const subject = t(locale, `otp.subject.${SUBJECT_PURPOSES.includes(purpose) ? purpose : "default"}`);
+    const intro = t(locale, `otp.intro.${INTRO_PURPOSES.includes(purpose) ? purpose : "password_change"}`);
+    const minutes = String(EXPIRY_MINUTES);
 
     return {
-        text: `${intro}\n\n${code}\n\nThis code expires in ${EXPIRY_MINUTES} minutes. If you didn't request this, you can safely ignore this email.`,
-        html: `<p>${intro}</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0;">${code}</p><p>This code expires in ${EXPIRY_MINUTES} minutes. If you didn't request this, you can safely ignore this email.</p>`
+        subject,
+        email: renderEmail({
+            locale,
+            heading: subject,
+            message: `${intro}\n\n${t(locale, "otp.expiry", { minutes })}`,
+            code
+        }),
+        sms: t(locale, "otp.sms", { code, minutes })
     };
 };
 
-// Generates a code, stores its hash, emails it. Throws if the send fails
-// (unlike the app's fire-and-forget notification emails, OTP delivery
-// failing means the caller genuinely cannot proceed).
-exports.requestOtp = async (user, purpose) => {
+// SMS and WhatsApp are optional: each is offered only when its env is set
+// (SMS gateway keys; WhatsApp Cloud API keys plus an approved OTP template
+// name). This check touches no account, so it reveals nothing about whether
+// an account exists.
+const channelConfigured = (channel) => {
+    if (channel === "email") return true;
+    if (channel === "sms") return smsProvider.isConfigured();
+    if (channel === "whatsapp") {
+        return whatsappProvider.isConfigured() && Boolean(process.env.WHATSAPP_OTP_TEMPLATE_NAME);
+    }
+    return false;
+};
+
+const sendOn = async (channel, user, code, messages) => {
+    if (channel === "email") {
+        await sendTransactionalEmail({
+            to: user.email,
+            toName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+            subject: messages.subject,
+            text: messages.email.text,
+            html: messages.email.html
+        });
+        return;
+    }
+
+    const result = channel === "sms"
+        ? await smsProvider.sendText(user.phone, messages.sms)
+        : await whatsappProvider.sendOtpTemplate(user.phone, code);
+
+    if (!result || result.success === false) {
+        throw new Error(`${channel} gateway did not accept the message`);
+    }
+};
+
+// Tries the one channel the user picked. Never throws and never falls back
+// to another channel: the user is told it failed and picks another method
+// themselves. Email is always configured; SMS/WhatsApp need a phone on file.
+const deliverCode = async (user, purpose, code, channel) => {
+    const locale = resolveLocale(user.language);
+    const reachable = channel === "email" ? Boolean(user.email) : Boolean(user.phone);
+
+    if (!channelConfigured(channel) || !reachable) {
+        return { delivered: false, reason: "not_available" };
+    }
+
+    try {
+        await sendOn(channel, user, code, buildMessages(locale, purpose, code));
+        return { delivered: true, reason: null };
+    } catch (error) {
+        logger.warn({ err: error, channel, userId: user.id, purpose }, "one-time code delivery failed on this channel");
+        return { delivered: false, reason: "send_failed" };
+    }
+};
+
+// Generates a code, stores its hash and delivers it on the chosen channel.
+// Returns { expiresInSeconds, channel, delivered, reason }. A channel that
+// isn't set up or fails does not throw; the caller shows "choose another
+// method". Only the one new code is retired on failure, so a code the user
+// already received keeps working.
+exports.requestOtp = async (user, purpose, { channel = "email" } = {}) => {
+    if (!CHANNELS.includes(channel)) {
+        throw new Error("Unsupported code channel.");
+    }
+
     const recentCount = await otpRepository.countRecent(user.id, purpose, RESEND_THROTTLE_MINUTES);
     if (recentCount >= MAX_REQUESTS_PER_WINDOW) {
         throw new Error("Too many codes requested. Please wait a minute and try again.");
@@ -58,21 +124,19 @@ exports.requestOtp = async (user, purpose) => {
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + EXPIRY_MINUTES * 60 * 1000);
 
-    await otpRepository.invalidateActive(user.id, purpose);
-    await otpRepository.create(user.id, purpose, codeHash, expiresAt);
+    const newId = await otpRepository.create(user.id, purpose, codeHash, expiresAt);
+    const { delivered, reason } = await deliverCode(user, purpose, code, channel);
 
-    const { text, html } = bodyFor(purpose, code);
+    if (delivered) {
+        await otpRepository.invalidateOthers(user.id, purpose, newId);
+    } else {
+        await otpRepository.consume(newId);
+    }
 
-    await sendTransactionalEmail({
-        to: user.email,
-        toName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-        subject: SUBJECTS[purpose] || "Your NEXORA verification code",
-        text,
-        html
-    });
-
-    return { expiresInSeconds: EXPIRY_MINUTES * 60 };
+    return { expiresInSeconds: EXPIRY_MINUTES * 60, channel, delivered, reason };
 };
+
+exports.channelConfigured = channelConfigured;
 
 // `failureReason` is a machine-readable tag for callers that need to tell a
 // genuinely wrong guess apart from an expired/used-up code (login lockout

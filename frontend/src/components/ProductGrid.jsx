@@ -7,7 +7,6 @@ import EmptyState from "./ui/EmptyState";
 import ErrorState from "./ui/ErrorState";
 
 const PAGE_SIZE = 24;
-const VIEW_STORAGE_KEY = "nexora_product_view";
 // Phase 6.1 follow-up: the /products request here had no per-request
 // timeout, unlike useUnreadMessagesCount.js and NotificationBell.jsx's
 // polls, both of which were fixed under Phase 5 (production error fixes)
@@ -23,26 +22,7 @@ const VIEW_STORAGE_KEY = "nexora_product_view";
 // where it was missing rather than a new guess.
 const REQUEST_TIMEOUT_MS = 10000;
 
-function readStoredView() {
-    if (typeof window === "undefined") return "grid";
-    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return stored === "list" ? "list" : "grid";
-}
-
-export function ProductCardSkeleton({ layout }) {
-    if (layout === "list") {
-        return (
-            <div className="animate-pulse flex gap-4 border border-line rounded-lg p-3">
-                <div className="w-24 h-24 sm:w-32 sm:h-32 shrink-0 bg-line/50 rounded-md" />
-                <div className="flex-1 min-w-0 flex flex-col justify-center gap-2">
-                    <div className="h-2.5 w-1/3 bg-line/50 rounded" />
-                    <div className="h-3.5 w-2/3 bg-line/50 rounded" />
-                    <div className="h-3.5 w-1/4 bg-line/50 rounded" />
-                </div>
-            </div>
-        );
-    }
-
+export function ProductCardSkeleton() {
     return (
         <div className="animate-pulse">
             <div className="aspect-square bg-line/50 rounded-md mb-3" />
@@ -53,48 +33,30 @@ export function ProductCardSkeleton({ layout }) {
     );
 }
 
+const GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
 
-function containerClass(layout) {
-    return layout === "list"
-        ? "flex flex-col gap-3"
-        : "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
-}
-
-
-export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, emptyAction, forceFeedOnly = false, onFeedClose }) {
+// startPage (optional): first page to load, for URL-addressable listings (?page=N).
+// onResults receives (total, totalPages).
+export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, emptyAction, forceFeedOnly = false, onFeedClose, startPage = 1, feedPage = false, initialIndex = 0, onIndexChange, feedFilterPanel }) {
     const { t } = useLanguage();
     const [products, setProducts] = useState([]);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(startPage);
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
-    const [layout, setLayout] = useState(readStoredView);
     const [retryCount, setRetryCount] = useState(0);
     const sentinelRef = useRef(null);
     const viewToggleRef = useRef(null);
-    // The swipe feed is a mobile-only full-screen overlay, not a persisted
-    // layout: grid/list stays the stored preference (readStoredView /
-    // changeLayout are untouched), so closing the feed - or opening the
-    // site later - lands exactly where the shopper was before.
-    // forceFeedOnly (Browse All only - see BrowseProducts.jsx) changes
-    // that: there's no grid/list to remember, swipe is the only view, so
-    // this starts already open instead of waiting for a toggle click.
+    // The swipe feed is an overlay launched from the toolbar button below.
+    // forceFeedOnly (Browse All - see BrowseProducts.jsx) opens it immediately.
     const [feedOpen, setFeedOpen] = useState(forceFeedOnly);
-    // forceFeedOnly's one way back to the grid/list toggle-free page is
+    // forceFeedOnly's one way back to the plain listing is
     // the feed's own "Filters" button, which needs the plain product list
     // visible underneath while filters are open. Once a filter change
     // brings back a fresh result set, hop straight back into swipe rather
-    // than leaving the shopper stranded on a bare list - that's tracked
-    // here rather than by re-showing the (removed, in this mode) toggle.
+    // than leaving the shopper stranded on a bare list - tracked here.
     const returnToFeedRef = useRef(false);
-
-    const changeLayout = (next) => {
-        setLayout(next);
-        if (typeof window !== "undefined") {
-            window.localStorage.setItem(VIEW_STORAGE_KEY, next);
-        }
-    };
 
     // `params` is a fresh object every render, so a stable string is used
     // as the effect dependency instead of the object reference itself.
@@ -104,7 +66,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         let ignore = false;
         setLoading(true);
         setError("");
-        setPage(1);
+        setPage(startPage);
 
         // Guard against an out-of-order response: if the filters/sort
         // change again before this request resolves (e.g. quickly
@@ -114,12 +76,12 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         // while re-checking Phase 6.1 - not the confirmed root cause of
         // the reported bug, but a real correctness gap in the same
         // fetch path.
-        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: 1 }, timeout: REQUEST_TIMEOUT_MS })
+        api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: startPage }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
                 if (ignore) return;
                 setProducts(data.data);
                 setTotalPages(data.pagination?.totalPages || 1);
-                onResults?.(data.pagination?.total ?? data.data.length);
+                onResults?.(data.pagination?.total ?? data.data.length, data.pagination?.totalPages || 1);
             })
             .catch(() => { if (!ignore) setError("Couldn't load products right now."); })
             .finally(() => {
@@ -133,7 +95,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
 
         return () => { ignore = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [paramsKey, retryCount]);
+    }, [paramsKey, retryCount, startPage]);
 
     const loadMore = useCallback(() => {
         if (loading || loadingMore || page >= totalPages) return;
@@ -183,38 +145,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     }, [forceFeedOnly]);
 
     const viewToggle = forceFeedOnly ? null : (
-        <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4" role="group" aria-label="Product view">
-            <button
-                type="button"
-                onClick={() => changeLayout("grid")}
-                aria-label={t("products.viewGrid")}
-                aria-pressed={layout === "grid"}
-                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "grid" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-                </svg>
-            </button>
-            <button
-                type="button"
-                onClick={() => changeLayout("list")}
-                aria-label={t("products.viewList")}
-                aria-pressed={layout === "list"}
-                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${layout === "list" ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                    <rect x="3" y="4" width="18" height="3.5" rx="1" />
-                    <rect x="3" y="10.25" width="18" height="3.5" rx="1" />
-                    <rect x="3" y="16.5" width="18" height="3.5" rx="1" />
-                </svg>
-            </button>
-            {/* Third view: launches the full-screen swipe feed. Now
-                available at every viewport width, not just mobile - see
-                ProductSwipeFeed.jsx for the desktop-width sizing that
-                makes that not look broken on a wide monitor. */}
+        <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4">
             <button
                 type="button"
                 onClick={() => setFeedOpen(true)}
@@ -230,10 +161,6 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         </div>
     );
 
-    // forceFeedOnly has no list toggle, so it always falls back to plain
-    // grid - ignoring whatever grid/list preference another page (which
-    // shares the same stored key) last left behind.
-    const effectiveLayout = forceFeedOnly ? "grid" : layout;
 
     if (error) {
         return (
@@ -249,9 +176,15 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         return (
             <>
                 {viewToggle}
-                <div className={containerClass(effectiveLayout)}>
-                    {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} layout={effectiveLayout} />)}
-                </div>
+                {products.length > 0 ? (
+                    <div aria-busy="true" className={`${GRID_CLASS} opacity-50 transition-opacity`}>
+                        {products.map((product) => <ProductCard key={product.id} product={product} />)}
+                    </div>
+                ) : (
+                    <div className={GRID_CLASS}>
+                        {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)}
+                    </div>
+                )}
             </>
         );
     }
@@ -266,13 +199,30 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         );
     }
 
+    // Feed-as-a-page (/feed): the swipe feed IS the page, so the grid is
+    // never rendered underneath it.
+    if (feedPage) {
+        return (
+            <ProductSwipeFeed
+                products={products}
+                hasMore={page < totalPages}
+                loadingMore={loadingMore}
+                onLoadMore={loadMore}
+                onClose={onFeedClose}
+                filterPanel={feedFilterPanel}
+                initialIndex={initialIndex}
+                onIndexChange={onIndexChange}
+            />
+        );
+    }
+
     return (
         <>
             {viewToggle}
 
-            <div className={containerClass(effectiveLayout)}>
-                {products.map((product) => (
-                    <ProductCard key={product.id} product={product} layout={effectiveLayout} />
+            <div className={GRID_CLASS}>
+                {products.map((product, index) => (
+                    <ProductCard key={product.id} product={product} priority={index < 4} />
                 ))}
             </div>
 
@@ -280,8 +230,8 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 anyone whose browser/extensions block IntersectionObserver. */}
             <div ref={sentinelRef} />
             {loadingMore && (
-                <div className={`${containerClass(effectiveLayout)} mt-4 sm:mt-5`}>
-                    {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} layout={effectiveLayout} />)}
+                <div className={`${GRID_CLASS} mt-4 sm:mt-5`}>
+                    {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)}
                 </div>
             )}
             {!loadingMore && page < totalPages && (

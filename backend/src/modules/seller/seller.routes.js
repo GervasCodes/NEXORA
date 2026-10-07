@@ -167,6 +167,14 @@ router.delete(
 // for Analytics specifically - the one-time verification fee that used
 // to gate this was retired; see requireSubscriptionTier.middleware.js.
 router.get(
+    "/overview",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    sellerController.getOverview
+);
+
+router.get(
     "/analytics",
     authMiddleware,
     authorize("seller"),

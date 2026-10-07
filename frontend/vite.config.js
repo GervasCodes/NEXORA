@@ -35,6 +35,18 @@ export default defineConfig({
                 // blob on every deploy - and keeps any one chunk small
                 // enough to not warrant the warning.
                 manualChunks(id) {
+                    // Vite's own tiny helpers (the dynamic-import preload
+                    // helper used by every lazy route, and the CommonJS
+                    // interop helper) have no node_modules path, so left
+                    // unassigned Rollup was parking them inside whichever
+                    // vendor chunk it processed first - which here was
+                    // vendor-three. The entry chunk imports that helper
+                    // statically, so the ~725kB three.js chunk was being
+                    // downloaded (and modulepreloaded) on EVERY page,
+                    // defeating the lazy Hero3DScene split below. Pinning
+                    // them to the always-loaded React chunk keeps three.js
+                    // off every route except the 3D hero.
+                    if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers")) return "vendor-react";
                     if (!id.includes("node_modules")) return undefined;
                     if (id.includes("react-router")) return "vendor-router";
                     if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("scheduler")) return "vendor-react";

@@ -7,6 +7,8 @@ const walletRepository = require("../wallet/wallet.repository");
 const notificationService = require("../notification/notification.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const refundService = require("../refund/refund.service");
+const refundCapService = require("../refund/refundCap.service");
+const settingsService = require("../settings/settings.service");
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
 
 const generateDisputeNumber = () => {
@@ -47,13 +49,22 @@ const getFullDispute = async (disputeId) => {
         throw new Error("Dispute not found");
     }
 
-    const [evidence, messages, history] = await Promise.all([
+    const [evidence, messages, history, refund] = await Promise.all([
         disputeRepository.findEvidence(disputeId),
         disputeRepository.findMessages(disputeId),
-        disputeRepository.findHistory(disputeId)
+        disputeRepository.findHistory(disputeId),
+        // (Phase 5) - a resolved dispute with a refund attached was
+        // previously indistinguishable, to the buyer, from one where the
+        // money had actually landed: the dispute's own `status` flips to
+        // "resolved" the instant an admin picks refund_full/partial, well
+        // before refund.service.js's provider call (fire-and-forget) has
+        // actually succeeded or failed. Exposing the refund row lets the
+        // frontend show "resolved - refund pending" until refund.status
+        // is "completed".
+        refundService.getRefundForDispute(disputeId)
     ]);
 
-    return { ...dispute, evidence, messages, history };
+    return { ...dispute, evidence, messages, history, refund: refund || null };
 };
 
 // ---- Buyer: create dispute ---------------------------------------------
@@ -182,6 +193,16 @@ exports.addMessage = async (disputeId, userId, role, message) => {
         await disputeRepository.addHistory(disputeId, "under_review", "Seller responded", userId);
     }
 
+    // SLA (Phase 5) - first_response_at is set once, the first time the
+    // seller actually replies, regardless of what status the dispute was
+    // already in (a seller might reply again after an admin already
+    // moved it to under_review). The repository call itself is a no-op
+    // once it's already set, so calling it on every seller message is
+    // safe.
+    if (role === "seller") {
+        await disputeRepository.markFirstResponse(disputeId);
+    }
+
     const notifyUserId = role === "buyer" ? dispute.seller_id : dispute.buyer_id;
     if (notifyUserId) {
         notificationService.notify({
@@ -285,18 +306,54 @@ exports.resolveDispute = async (disputeId, adminId, { resolution, resolution_not
 
     if (needsRefundAmount) {
         const order = await orderRepository.findOrderById(dispute.order_id);
-        const orderTotal = Number(order.total_amount);
+
+        // Item-level refunds (P0) - a dispute tied to a specific
+        // order_item_id (the common case: "this item arrived damaged")
+        // only refunds that item's subtotal, not the whole order.
+        // Previously `refund_full` always used order.total_amount
+        // regardless of whether the dispute was about one item in a
+        // multi-item order. A dispute with no order_item_id (e.g.
+        // missing_delivery against the whole shipment) still refunds the
+        // full order, which is the correct scope for that kind of issue.
+        let disputedAmount;
+        if (dispute.order_item_id) {
+            const items = await orderRepository.findOrderItems(dispute.order_id);
+            const item = items.find((i) => i.id === dispute.order_item_id);
+            if (!item) throw new Error("The disputed item could not be found on this order");
+            disputedAmount = Number(item.subtotal);
+        } else {
+            disputedAmount = Number(order.total_amount);
+        }
 
         refundAmount = resolution === "refund_full"
-            ? orderTotal
+            ? disputedAmount
             : Number(refund_amount);
 
         if (!refundAmount || refundAmount <= 0) {
             throw new Error("A positive refund_amount is required for a partial refund");
         }
-        if (refundAmount > orderTotal) {
-            throw new Error("Refund amount can't exceed the order total");
+        if (refundAmount > disputedAmount + 0.01) {
+            throw new Error(
+                dispute.order_item_id
+                    ? "Refund amount can't exceed what was paid for this item"
+                    : "Refund amount can't exceed the order total"
+            );
         }
+
+        // Refund cap (P0) - reserved under a row lock against the
+        // order's (and item's) running total_refunded, shared with the
+        // return and cancellation refund paths, so this refund can't
+        // push the order's total refunded past what was actually paid
+        // even when a return or cancellation is racing it for the same
+        // order. Throws (aborting resolveDispute before anything is
+        // written) if the cap would be exceeded.
+        await refundCapService.withTransaction((connection) =>
+            refundCapService.reserveRefund(connection, {
+                orderId: dispute.order_id,
+                orderItemId: dispute.order_item_id || null,
+                amount: refundAmount
+            })
+        );
     }
 
     await disputeRepository.resolve(disputeId, {

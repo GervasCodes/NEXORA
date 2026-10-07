@@ -1,4 +1,6 @@
 const db = require("../../config/db");
+const { maskPayoutDetails } = require("../../utils/maskPayout");
+const auditRepository = require("../audit/audit.repository");
 const walletRepository = require("./wallet.repository");
 const orderRepository = require("../order/order.repository");
 const logger = require("../../utils/logger").child({ module: "wallet" });
@@ -47,85 +49,119 @@ exports.creditSellersForOrder = async (orderId) => {
         }
 
         const order = await orderRepository.findOrderById(orderId);
-        const isEscrowed = order && order.payment_method !== "cash_on_delivery";
+        const isCod = order && order.payment_method === "cash_on_delivery";
+        const isEscrowed = order && !isCod;
 
         // Revenue & Product Enhancements roadmap: commission is no longer
         // one flat platform rate for every seller - a seller on a paid
         // subscription plan may have a lower commission_rate_override
         // (see subscription.service.js#getEffectiveCommissionRate, which
         // falls back to settingsService.getCommissionRate() for anyone on
-        // the Free plan). Looked up once per distinct seller below (not
-        // once per item - see Phase RF3 note further down), since a
-        // multi-vendor order can mix sellers on different plans.
+        // the Free plan).
+        //
+        // Commission at checkout (Phase 2): order.service.js#checkout now
+        // snapshots each item's commission_rate/commission_amount/
+        // seller_net_amount at the moment the order was placed, and that
+        // stored figure is used here unchanged - a seller's plan changing
+        // (or an admin editing the commission rate) between checkout and
+        // payment confirmation must never rewrite what an already-placed
+        // order earns the seller. Only order_items rows that predate this
+        // migration (commission_rate IS NULL) still fall back to computing
+        // it fresh, once per distinct seller, exactly as before Phase 2.
         const subscriptionService = require("../subscription/subscription.service");
+        const legacySellerIds = [...new Set(
+            items.filter((item) => item.commission_rate === null).map((item) => item.seller_id)
+        )];
+        const legacyRateBySeller = new Map(
+            await Promise.all(
+                legacySellerIds.map(async (sellerId) => [
+                    sellerId, await subscriptionService.getEffectiveCommissionRate(sellerId)
+                ])
+            )
+        );
 
         // Group this order's uncredited items by seller so a multi-vendor
-        // order results in one wallet credit (and one ledger row) per seller.
+        // order results in one wallet transaction per seller.
         // rateBySeller is tracked alongside bySeller purely for the ledger
-        // description text below - all of a given seller's items share the
-        // same rate (it's the seller's own plan, not an item property).
-        //
-        // Look up each distinct seller's commission rate once,
-        // not once per item - a multi-item order from the same seller (the
-        // common case, since order_items groups items by seller already)
-        // previously repeated this lookup redundantly for every item.
-        const distinctSellerIds = [...new Set(items.map((item) => item.seller_id))];
-        const commissionRateEntries = await Promise.all(
-            distinctSellerIds.map(async (sellerId) => [
-                sellerId, await subscriptionService.getEffectiveCommissionRate(sellerId)
-            ])
-        );
-        const commissionRateBySeller = new Map(commissionRateEntries);
-
+        // description text below.
         const bySeller = new Map();
         const rateBySeller = new Map();
         // (Backend N+1 Fixes & Read Replica Adoption): this loop
-        // now only computes each item's commission figures in memory -
-        // the DB write that used to happen once per item right here
-        // (markItemCredited) has moved to a single batched call
-        // (markItemsCredited) after the loop, covering every item in one
-        // UPDATE instead of N. See wallet.repository.js#markItemsCredited
-        // for why this needs a CASE WHEN rather than a plain WHERE id IN.
+        // only computes each item's commission figures in memory - the DB
+        // write happens once, in the batched markItemsCredited call below.
         const itemsToCredit = [];
         for (const item of items) {
-            const commissionRate = commissionRateBySeller.get(item.seller_id);
+            const commissionRate = item.commission_rate !== null
+                ? Number(item.commission_rate)
+                : legacyRateBySeller.get(item.seller_id);
             const sellerSubtotal = Number(item.subtotal);
-            const commissionAmount = Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
-            const netAmount = Number((sellerSubtotal - commissionAmount).toFixed(2));
+            const commissionAmount = item.commission_amount !== null
+                ? Number(item.commission_amount)
+                : Number((sellerSubtotal * (commissionRate / 100)).toFixed(2));
+            const netAmount = item.seller_net_amount !== null
+                ? Number(item.seller_net_amount)
+                : Number((sellerSubtotal - commissionAmount).toFixed(2));
 
             itemsToCredit.push({ id: item.id, commissionRate, commissionAmount, netAmount });
 
-            const existing = bySeller.get(item.seller_id) || 0;
-            bySeller.set(item.seller_id, existing + netAmount);
+            const existing = bySeller.get(item.seller_id) || { netTotal: 0, commissionTotal: 0 };
+            existing.netTotal = Number((existing.netTotal + netAmount).toFixed(2));
+            existing.commissionTotal = Number((existing.commissionTotal + commissionAmount).toFixed(2));
+            bySeller.set(item.seller_id, existing);
             rateBySeller.set(item.seller_id, commissionRate);
         }
 
         await walletRepository.markItemsCredited(itemsToCredit, !isEscrowed, connection);
 
-        for (const [sellerId, netAmount] of bySeller.entries()) {
+        for (const [sellerId, totals] of bySeller.entries()) {
             await walletRepository.ensureWallet(sellerId, connection);
             await walletRepository.getWalletForUpdate(sellerId, connection);
             const sellerCommissionRate = rateBySeller.get(sellerId);
 
-            if (isEscrowed) {
-                const heldAfter = await walletRepository.incrementHeldBalance(sellerId, netAmount, connection);
+            if (isCod) {
+                // Cash on Delivery fix (Phase 2, P0): the seller's own
+                // agent already collected the cash in hand - there is no
+                // platform-held money to credit at all. What actually
+                // happened here is the platform earning its commission on
+                // a sale it never touched, so instead of crediting
+                // `balance` with the net amount, this debits just the
+                // commission out of it. A seller with too little balance
+                // to cover it goes negative (explicitly allowed - see
+                // requestWithdrawal's `amount > wallet.balance` check,
+                // which already blocks withdrawing while negative) and the
+                // deficit is repaid automatically out of future earnings,
+                // since every later incrementBalance call just adds to
+                // whatever balance currently is.
+                const balanceAfter = await walletRepository.incrementBalance(sellerId, -totals.commissionTotal, connection);
+
+                await walletRepository.insertTransaction({
+                    sellerId,
+                    type: "debit",
+                    amount: totals.commissionTotal,
+                    balanceAfter,
+                    referenceType: "cod_commission",
+                    referenceId: orderId,
+                    description: `Cash on Delivery order #${orderId} - platform commission (${sellerCommissionRate}%) debited (cash already collected by your delivery agent)`
+                }, connection);
+            } else if (isEscrowed) {
+                const heldAfter = await walletRepository.incrementHeldBalance(sellerId, totals.netTotal, connection);
 
                 await walletRepository.insertTransaction({
                     sellerId,
                     type: "credit",
-                    amount: netAmount,
+                    amount: totals.netTotal,
                     balanceAfter: heldAfter,
                     referenceType: "order",
                     referenceId: orderId,
                     description: `Sale earnings for order #${orderId} held pending release (${sellerCommissionRate}% platform commission deducted)`
                 }, connection);
             } else {
-                const balanceAfter = await walletRepository.incrementBalance(sellerId, netAmount, connection);
+                const balanceAfter = await walletRepository.incrementBalance(sellerId, totals.netTotal, connection);
 
                 await walletRepository.insertTransaction({
                     sellerId,
                     type: "credit",
-                    amount: netAmount,
+                    amount: totals.netTotal,
                     balanceAfter,
                     referenceType: "order",
                     referenceId: orderId,
@@ -140,8 +176,8 @@ exports.creditSellersForOrder = async (orderId) => {
             notificationService.notify({
                 userId: sellerId,
                 type: "wallet_credit",
-                titleKey: "notifications.wallet.credited.title",
-                messageKey: "notifications.wallet.credited.message",
+                titleKey: isCod ? "notifications.wallet.codCommissionDebited.title" : "notifications.wallet.credited.title",
+                messageKey: isCod ? "notifications.wallet.codCommissionDebited.message" : "notifications.wallet.credited.message",
                 messageParams: { orderId },
                 relatedOrderId: orderId,
                 withEmail: false
@@ -243,7 +279,7 @@ exports.creditProvidersForBooking = async (bookingId) => {
 // there's no dispute system for bookings yet - see migration 064's design
 // notes - so every eligible item is a plain release.
 const releaseBookingItems = async (items) => {
-    const summary = { released: 0, amountReleased: 0 };
+    const summary = { released: 0, amountReleased: 0, errored: 0 };
     if (items.length === 0) {
         return summary;
     }
@@ -251,39 +287,48 @@ const releaseBookingItems = async (items) => {
     const releasedProviderIds = new Set();
 
     for (const item of items) {
-        const connection = await db.getConnection();
+        // Same per-item isolation as releaseItems above (Phase 2, P0) - one
+        // bad booking_items row is logged and skipped, not fatal to the
+        // whole sweep.
         try {
-            await connection.beginTransaction();
+            const connection = await db.getConnection();
+            try {
+                await connection.beginTransaction();
 
-            await walletRepository.ensureWallet(item.provider_id, connection);
-            await walletRepository.getWalletForUpdate(item.provider_id, connection);
+                await walletRepository.ensureWallet(item.provider_id, connection);
+                await walletRepository.getWalletForUpdate(item.provider_id, connection);
 
-            const netAmount = Number(item.provider_net_amount);
-            await walletRepository.incrementHeldBalance(item.provider_id, -netAmount, connection);
-            const balanceAfter = await walletRepository.incrementBalance(item.provider_id, netAmount, connection);
-            await walletRepository.markBookingItemReleased(item.id, connection);
+                const netAmount = Number(item.provider_net_amount);
+                await walletRepository.incrementHeldBalance(item.provider_id, -netAmount, connection);
+                const balanceAfter = await walletRepository.incrementBalance(item.provider_id, netAmount, connection);
+                await walletRepository.markBookingItemReleased(item.id, connection);
 
-            await walletRepository.insertTransaction({
-                sellerId: item.provider_id,
-                type: "credit",
-                amount: netAmount,
-                balanceAfter,
-                referenceType: "escrow_release",
-                referenceId: item.booking_id,
-                description: `Held earnings released for booking #${item.booking_id}`
-            }, connection);
+                await walletRepository.insertTransaction({
+                    sellerId: item.provider_id,
+                    type: "credit",
+                    amount: netAmount,
+                    balanceAfter,
+                    referenceType: "escrow_release",
+                    referenceId: item.booking_id,
+                    description: `Held earnings released for booking #${item.booking_id}`
+                }, connection);
 
-            await connection.commit();
+                await connection.commit();
 
-            summary.released += 1;
-            summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
-            releasedProviderIds.add(item.provider_id);
+                summary.released += 1;
+                summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
+                releasedProviderIds.add(item.provider_id);
 
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            } finally {
+                connection.release();
+            }
         } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
+            summary.errored += 1;
+            logger.error({ err: error, bookingItemId: item.id, bookingId: item.booking_id }, "booking escrow release error for one item - skipped, will retry next sweep");
+            Sentry.captureException(error, { tags: { area: "wallet", stage: "booking-escrow-release" }, extra: { bookingItemId: item.id, bookingId: item.booking_id } });
         }
     }
 
@@ -378,6 +423,88 @@ exports.reverseProviderEarningsForBooking = async (providerId, amount, bookingId
     }
 };
 
+// Cancel a paid order (Phase 3, P0) - reverses whatever each seller was
+// actually already credited for this order's items (net of commission;
+// see creditSellersForOrder), grouped per seller so a multi-vendor split
+// order reverses each vendor's own slice independently. Mirrors
+// dispute.service.js#reverseSellerEarnings' held-then-balance strategy
+// exactly (reverse from held_balance first, spill any remainder into
+// balance - see that function's comment for why this is correct
+// order-agnostic behavior), generalized here since cancelOrder needs the
+// same shape across potentially several sellers in one call, not just one.
+// A no-op if nothing was ever credited (order cancelled before payment
+// confirmation reached creditSellersForOrder, or it raced and lost -
+// nothing to reverse either way).
+exports.reverseSellerEarningsForOrder = async (orderId) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const items = await walletRepository.findCreditedItemsForOrderTree(orderId, connection);
+
+        if (items.length === 0) {
+            await connection.commit();
+            return { reversed: [] };
+        }
+
+        const bySeller = new Map();
+        for (const item of items) {
+            const amount = Number(item.seller_net_amount || 0);
+            bySeller.set(item.seller_id, Number(((bySeller.get(item.seller_id) || 0) + amount).toFixed(2)));
+        }
+
+        const reversed = [];
+        for (const [sellerId, amount] of bySeller.entries()) {
+            if (amount <= 0) continue;
+
+            await walletRepository.ensureWallet(sellerId, connection);
+            const wallet = await walletRepository.getWalletForUpdate(sellerId, connection);
+
+            const heldReversal = Math.min(amount, Math.max(Number(wallet.held_balance), 0));
+            const balanceReversal = Number((amount - heldReversal).toFixed(2));
+
+            if (heldReversal > 0) {
+                const heldAfter = await walletRepository.incrementHeldBalance(sellerId, -heldReversal, connection);
+                await walletRepository.insertTransaction({
+                    sellerId,
+                    type: "debit",
+                    amount: heldReversal,
+                    balanceAfter: heldAfter,
+                    referenceType: "order_cancellation",
+                    referenceId: orderId,
+                    description: `Order #${orderId} cancelled - held earnings reversed`
+                }, connection);
+            }
+
+            if (balanceReversal > 0) {
+                const balanceAfter = await walletRepository.incrementBalance(sellerId, -balanceReversal, connection);
+                await walletRepository.insertTransaction({
+                    sellerId,
+                    type: "debit",
+                    amount: balanceReversal,
+                    balanceAfter,
+                    referenceType: "order_cancellation",
+                    referenceId: orderId,
+                    description: `Order #${orderId} cancelled - earnings reversed`
+                }, connection);
+            }
+
+            reversed.push({ sellerId, amount });
+        }
+
+        await walletRepository.markItemsReleased(items.map((item) => item.id), connection);
+
+        await connection.commit();
+        return { reversed };
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 exports.getWalletSummary = async (sellerId) => {
     await walletRepository.ensureWallet(sellerId);
     const wallet = await walletRepository.getWallet(sellerId);
@@ -418,7 +545,7 @@ const REFUND_RESOLUTIONS = ["refund_full", "refund_partial"];
 //    no_action) is a normal release: move the item's net amount from
 //    held_balance to balance and mark it released.
 const releaseItems = async (items) => {
-    const summary = { released: 0, closedByDispute: 0, frozen: 0, amountReleased: 0 };
+    const summary = { released: 0, closedByDispute: 0, frozen: 0, amountReleased: 0, errored: 0 };
     if (items.length === 0) {
         return summary;
     }
@@ -434,60 +561,71 @@ const releaseItems = async (items) => {
     const releasedSellerIds = new Set();
 
     for (const item of items) {
-        const disputes = await getOrderDisputes(item.order_id);
-        const relevant = disputes.filter(
-            (d) => d.order_item_id === item.id || d.order_item_id === null
-        );
-
-        if (relevant.some((d) => OPEN_DISPUTE_STATUSES.includes(d.status))) {
-            summary.frozen += 1;
-            continue;
-        }
-
-        const closedByRefund = relevant.some(
-            (d) => d.status === "resolved" && REFUND_RESOLUTIONS.includes(d.resolution)
-        );
-
-        const connection = await db.getConnection();
+        // Escrow release, per item (Phase 2, P0). One bad row (a stale
+        // dispute lookup, a transient DB error) must never block every
+        // other item in the sweep from releasing - caught, logged to
+        // Sentry, and the sweep moves on; this item is simply picked up
+        // again on the next run since it's still wallet_released = FALSE.
         try {
-            await connection.beginTransaction();
+            const disputes = await getOrderDisputes(item.order_id);
+            const relevant = disputes.filter(
+                (d) => d.order_item_id === item.id || d.order_item_id === null
+            );
 
-            if (closedByRefund) {
-                await walletRepository.markItemReleased(item.id, connection);
-                await connection.commit();
-                summary.closedByDispute += 1;
+            if (relevant.some((d) => OPEN_DISPUTE_STATUSES.includes(d.status))) {
+                summary.frozen += 1;
                 continue;
             }
 
-            await walletRepository.ensureWallet(item.seller_id, connection);
-            await walletRepository.getWalletForUpdate(item.seller_id, connection);
+            const closedByRefund = relevant.some(
+                (d) => d.status === "resolved" && REFUND_RESOLUTIONS.includes(d.resolution)
+            );
 
-            const netAmount = Number(item.seller_net_amount);
-            await walletRepository.incrementHeldBalance(item.seller_id, -netAmount, connection);
-            const balanceAfter = await walletRepository.incrementBalance(item.seller_id, netAmount, connection);
-            await walletRepository.markItemReleased(item.id, connection);
+            const connection = await db.getConnection();
+            try {
+                await connection.beginTransaction();
 
-            await walletRepository.insertTransaction({
-                sellerId: item.seller_id,
-                type: "credit",
-                amount: netAmount,
-                balanceAfter,
-                referenceType: "escrow_release",
-                referenceId: item.order_id,
-                description: `Held earnings released for order #${item.order_id}`
-            }, connection);
+                if (closedByRefund) {
+                    await walletRepository.markItemReleased(item.id, connection);
+                    await connection.commit();
+                    summary.closedByDispute += 1;
+                    continue;
+                }
 
-            await connection.commit();
+                await walletRepository.ensureWallet(item.seller_id, connection);
+                await walletRepository.getWalletForUpdate(item.seller_id, connection);
 
-            summary.released += 1;
-            summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
-            releasedSellerIds.add(item.seller_id);
+                const netAmount = Number(item.seller_net_amount);
+                await walletRepository.incrementHeldBalance(item.seller_id, -netAmount, connection);
+                const balanceAfter = await walletRepository.incrementBalance(item.seller_id, netAmount, connection);
+                await walletRepository.markItemReleased(item.id, connection);
 
+                await walletRepository.insertTransaction({
+                    sellerId: item.seller_id,
+                    type: "credit",
+                    amount: netAmount,
+                    balanceAfter,
+                    referenceType: "escrow_release",
+                    referenceId: item.order_id,
+                    description: `Held earnings released for order #${item.order_id}`
+                }, connection);
+
+                await connection.commit();
+
+                summary.released += 1;
+                summary.amountReleased = Number((summary.amountReleased + netAmount).toFixed(2));
+                releasedSellerIds.add(item.seller_id);
+
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            } finally {
+                connection.release();
+            }
         } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
+            summary.errored += 1;
+            logger.error({ err: error, orderItemId: item.id, orderId: item.order_id }, "escrow release error for one item - skipped, will retry next sweep");
+            Sentry.captureException(error, { tags: { area: "wallet", stage: "escrow-release" }, extra: { orderItemId: item.id, orderId: item.order_id } });
         }
     }
 
@@ -509,8 +647,12 @@ const releaseItems = async (items) => {
 // settings.escrow_hold_days, and releases whatever the dispute rule
 // above allows.
 exports.releaseEligibleEarnings = async () => {
-    const holdDays = await settingsService.getEscrowHoldDays();
-    const items = await walletRepository.findReleasableItems(holdDays);
+    const [holdDays, returnWindowDays, returnWindowInsuredDays] = await Promise.all([
+        settingsService.getEscrowHoldDays(),
+        settingsService.getReturnWindowDays(),
+        settingsService.getReturnWindowInsuredDays()
+    ]);
+    const items = await walletRepository.findReleasableItems(holdDays, returnWindowDays, returnWindowInsuredDays);
     return releaseItems(items);
 };
 
@@ -533,12 +675,79 @@ exports.releaseOrderEarnings = async (orderId) => {
 // in which case the withdrawal is still debited from the wallet in TZS
 // (the wallet itself stays TZS-denominated - order/booking commission
 // math elsewhere is untouched) but the *payout* amount is converted
+// Payout detail validation (Phase 2, P1). payout_method/payout_details are
+// still free-text fields (not yet split into structured network+phone /
+// bank+account+name columns - see the "Flagged, not changed" note this
+// phase ships with), so this is a best-effort heuristic on top of them
+// rather than real structured validation: classify the method by keyword,
+// then check the details string plausibly contains what that method needs.
+// A real fix means giving withdrawal_requests separate structured columns
+// and updating the request-withdrawal form to collect them - out of scope
+// for this phase's wallet/escrow/COD focus.
+const MOBILE_MONEY_KEYWORDS = ["mpesa", "m-pesa", "tigo", "airtel", "halopesa", "halotel", "mobile"];
+const BANK_KEYWORDS = ["bank", "crdb", "nmb", "nbc", "exim", "stanbic", "absa", "equity"];
+
+const validatePayoutDetails = (payoutMethod, payoutDetails) => {
+    const method = String(payoutMethod || "").toLowerCase();
+    const details = String(payoutDetails || "");
+    const digitRun = (details.match(/\d+/g) || []).join("");
+
+    if (MOBILE_MONEY_KEYWORDS.some((kw) => method.includes(kw))) {
+        if (digitRun.length < 9) {
+            throw new Error("Please include the mobile money network and a valid phone number in your payout details");
+        }
+        return;
+    }
+
+    if (BANK_KEYWORDS.some((kw) => method.includes(kw))) {
+        const hasLetters = /[a-zA-Z]/.test(details);
+        if (!hasLetters || digitRun.length < 6) {
+            throw new Error("Please include the bank name, account number and account holder name in your payout details");
+        }
+    }
+};
+
+// requestWithdrawal (Phase 2 additions):
+//  - min/max amount, from platform settings.
+//  - a daily cap that scales with the seller's users.verification_tier.
+//  - per-method payout detail validation (see validatePayoutDetails above).
+//  - a 24-hour hold, enforced at approval time, on the FIRST withdrawal
+//    ever requested to a given payout method+details combination - see
+//    wallet.repository.js#hasPriorPayoutUsage.
+//
 // using the same admin-editable usd_exchange_rate setting
 // paypal.provider.js already uses, and both the converted amount and
 // the rate actually used are snapshotted onto the withdrawal row so a
 // later admin change to the rate never rewrites what this seller was
 // quoted.
 exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, payoutCurrency = "TZS") => {
+    validatePayoutDetails(payoutMethod, payoutDetails);
+
+    const limits = await settingsService.getWithdrawalLimits();
+    if (Number(amount) < limits.minAmount) {
+        throw new Error(`The minimum withdrawal amount is ${limits.minAmount}`);
+    }
+    if (Number(amount) > limits.maxAmount) {
+        throw new Error(`The maximum withdrawal amount is ${limits.maxAmount}`);
+    }
+
+    const openDisputes = await disputeRepository.countOpenBySeller(sellerId);
+    if (openDisputes >= limits.openDisputeBlockThreshold) {
+        throw new Error(`You have ${openDisputes} open dispute(s) - please resolve them before requesting a withdrawal`);
+    }
+
+    const verificationTier = await walletRepository.getSellerVerificationTier(sellerId);
+    const dailyCap = limits.dailyCapByTier[verificationTier] ?? limits.dailyCapByTier.none;
+    const requestedToday = await walletRepository.sumWithdrawalsRequestedToday(sellerId);
+    if (requestedToday + Number(amount) > dailyCap) {
+        throw new Error(`This would take today's withdrawals over your account's daily limit of ${dailyCap}. Verify your identity to raise your limit.`);
+    }
+
+    const isNewPayoutDetails = !(await walletRepository.hasPriorPayoutUsage(sellerId, payoutMethod, payoutDetails));
+    const holdUntil = isNewPayoutDetails
+        ? new Date(Date.now() + limits.newPayoutHoldHours * 60 * 60 * 1000)
+        : null;
+
     const connection = await db.getConnection();
 
     try {
@@ -565,7 +774,8 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
         const balanceAfter = await walletRepository.incrementBalance(sellerId, -Number(amount), connection);
 
         const withdrawalId = await walletRepository.createWithdrawal(
-            sellerId, amount, payoutMethod, payoutDetails, connection, payoutCurrency, payoutAmount, payoutExchangeRate
+            sellerId, amount, payoutMethod, payoutDetails, connection, payoutCurrency, payoutAmount, payoutExchangeRate,
+            holdUntil, isNewPayoutDetails
         );
 
         await walletRepository.insertTransaction({
@@ -590,7 +800,7 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
                 Sentry.captureException(err, { tags: { area: "wallet", stage: "fraud-evaluation" }, extra: { sellerId } });
             });
 
-        return { withdrawalId, balance: balanceAfter };
+        return { withdrawalId, balance: balanceAfter, isNewPayoutDetails, holdUntil };
 
     } catch (error) {
         await connection.rollback();
@@ -607,14 +817,53 @@ exports.getMyWithdrawals = async (sellerId) => {
 
 // ---- Admin ------------------------------------------------------------------
 
+// payout_details is masked here; the full value comes from
+// getWithdrawalPayoutDetails, which writes an audit entry.
 exports.listAllWithdrawals = async () => {
-    return walletRepository.findAllWithdrawals();
+    const rows = await walletRepository.findAllWithdrawals();
+    return rows.map((row) => ({
+        ...row,
+        payout_details: maskPayoutDetails(row.payout_details),
+        payout_details_masked: true
+    }));
+};
+
+exports.getWithdrawalPayoutDetails = async (withdrawalId, { adminId, req } = {}) => {
+    const rows = await walletRepository.findAllWithdrawals();
+    const withdrawal = rows.find((row) => Number(row.id) === Number(withdrawalId));
+    if (!withdrawal) {
+        const error = new Error("Withdrawal not found.");
+        error.status = 404;
+        throw error;
+    }
+
+    // Awaited: no audit entry, no reveal.
+    await auditRepository.insertLog({
+        userId: adminId,
+        eventType: "payout_details_revealed",
+        description: `Admin revealed payout details of withdrawal #${withdrawal.id} (seller #${withdrawal.seller_id})`,
+        ipAddress: req?.ip || null,
+        metadata: { withdrawal_id: withdrawal.id, seller_id: withdrawal.seller_id }
+    });
+
+    return {
+        payout_method: withdrawal.payout_method,
+        payout_details: withdrawal.payout_details
+    };
+};
+
+exports.listNegativeBalanceSellers = async () => {
+    return walletRepository.findNegativeBalanceSellers();
 };
 
 // Approving/rejecting/marking-paid doesn't move money by itself - the debit
 // already happened when the request was created (see requestWithdrawal), so
 // a rejection has to refund the seller's wallet.
-exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
+//
+// Phase 2 additions: "approve" is blocked while the request is still
+// inside its first-time-payout-details hold window; "paid" now requires a
+// payout reference/receipt from the admin, recorded on the row.
+exports.processWithdrawal = async (withdrawalId, action, adminNote, payoutReference = null) => {
     const connection = await db.getConnection();
 
     try {
@@ -639,6 +888,14 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
             throw new Error(`This request is already "${withdrawal.status}"`);
         }
 
+        if (action === "approve" && withdrawal.hold_until && new Date(withdrawal.hold_until) > new Date()) {
+            throw new Error(`This is the seller's first withdrawal to these payout details - it can't be approved until ${new Date(withdrawal.hold_until).toISOString()}`);
+        }
+
+        if (action === "paid" && !payoutReference) {
+            throw new Error("A payout reference/receipt is required to mark a withdrawal as paid");
+        }
+
         if (action === "reject") {
             // Refund the seller's wallet since the amount was deducted upfront.
             const balanceAfter = await walletRepository.incrementBalance(
@@ -656,7 +913,7 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
             }, connection);
         }
 
-        await walletRepository.updateWithdrawalStatus(withdrawalId, nextStatus, adminNote, connection);
+        await walletRepository.updateWithdrawalStatus(withdrawalId, nextStatus, adminNote, connection, action === "paid" ? payoutReference : null);
 
         await connection.commit();
 
@@ -683,4 +940,68 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote) => {
     } finally {
         connection.release();
     }
+};
+
+// ---- Nightly wallet reconciliation (Phase 2) ------------------------------
+// Recomputes every seller AND buyer wallet's balance from its own ledger
+// and records a row in wallet_reconciliation_flags for any mismatch -
+// admins get a visible, dated list instead of drift going unnoticed until
+// a seller/buyer complains. Never touches the wallet itself: the
+// recorded balance is left exactly as-is, since deciding which side is
+// "right" (a bug vs. a legitimate direct adjustment) needs a human.
+exports.reconcileWallets = async () => {
+    const buyerWalletRepository = require("../buyerWallet/buyerWallet.repository");
+
+    const [sellerDrift, buyerDrift] = await Promise.all([
+        walletRepository.findBalanceDrift(),
+        buyerWalletRepository.findBalanceDrift()
+    ]);
+
+    for (const row of sellerDrift) {
+        await walletRepository.insertReconciliationFlag({
+            walletType: "seller",
+            ownerId: row.owner_id,
+            recordedBalance: Number(row.recorded_balance),
+            computedBalance: Number(row.computed_balance)
+        });
+    }
+    for (const row of buyerDrift) {
+        await walletRepository.insertReconciliationFlag({
+            walletType: "buyer",
+            ownerId: row.owner_id,
+            recordedBalance: Number(row.recorded_balance),
+            computedBalance: Number(row.computed_balance)
+        });
+    }
+
+    if (sellerDrift.length > 0 || buyerDrift.length > 0) {
+        logger.warn({ sellerDriftCount: sellerDrift.length, buyerDriftCount: buyerDrift.length }, "wallet reconciliation found drift");
+    }
+
+    return { sellerDriftCount: sellerDrift.length, buyerDriftCount: buyerDrift.length };
+};
+
+// Phase 8: paged admin queue. Payout details are masked exactly as in
+// listAllWithdrawals; the full value still only comes from
+// getWithdrawalPayoutDetails (audited).
+const WITHDRAWAL_STATUSES = ["pending", "approved", "rejected", "paid"];
+
+exports.listAllWithdrawalsPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const status = WITHDRAWAL_STATUSES.includes(params.status) ? params.status : null;
+
+    const [{ rows, total }, totals] = await Promise.all([
+        walletRepository.findWithdrawalsPage({ q: params.q, status, sort: query.sort, limit: params.pageSize, offset: params.offset }),
+        walletRepository.findWithdrawalTotalsByStatus()
+    ]);
+
+    return {
+        items: rows.map((row) => ({
+            ...row,
+            payout_details: maskPayoutDetails(row.payout_details),
+            payout_details_masked: true
+        })),
+        meta: { ...buildMeta(total, params), totals }
+    };
 };

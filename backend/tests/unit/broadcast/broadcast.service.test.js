@@ -160,8 +160,10 @@ describe("broadcast.service.sendBroadcast", () => {
 
         // recipient 1: email + sms + whatsapp; recipient 2: sms only; recipient 3: email only
         expect(sendEmail).toHaveBeenCalledTimes(2);
-        expect(sendEmail).toHaveBeenCalledWith("a@x.com", "Sale", "20% off this weekend");
-        expect(sendEmail).toHaveBeenCalledWith("c@x.com", "Sale", "20% off this weekend");
+        // Marketing sends never enter the retry queue ({ retry: false }): a
+        // failed broadcast email is dropped rather than retried hours later.
+        expect(sendEmail).toHaveBeenCalledWith("a@x.com", "Sale", "20% off this weekend", undefined, { retry: false });
+        expect(sendEmail).toHaveBeenCalledWith("c@x.com", "Sale", "20% off this weekend", undefined, { retry: false });
 
         expect(smsProvider.sendText).toHaveBeenCalledTimes(2);
         expect(smsProvider.sendText).toHaveBeenCalledWith("0700000001", "20% off this weekend");

@@ -15,27 +15,41 @@
 
 const kycRepository = require("./kyc.repository");
 const notificationService = require("../notification/notification.service");
-const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { uploadPrivateDocument, toClientDocument } = require("../../utils/privateDocuments");
 
 const TIER_ORDER = ["tier0", "tier1", "tier2"];
 const NEXT_TIER = { tier0: "tier1", tier1: "tier2" };
 
 exports.getMyStatus = async (userId) => {
-    const [tier, limits, pendingRequest] = await Promise.all([
+    const [tier, limits, pendingRequest, latestRequest] = await Promise.all([
         kycRepository.getUserTier(userId),
         kycRepository.getTierLimits(),
-        kycRepository.findPendingRequestForUser(userId)
+        kycRepository.findPendingRequestForUser(userId),
+        kycRepository.findLatestRequestForUser(userId)
     ]);
 
     if (!tier) {
         throw new Error("User not found");
     }
 
+    // (Phase 4 remediation) - previously the only request ever
+    // surfaced here was a *pending* one; a rejected request simply
+    // vanished from this response, so a buyer whose upload was
+    // rejected saw the plain "Upgrade to tierX" form again with no
+    // indication anything had been tried before, let alone why it
+    // didn't go through. Only surfaced when it's actually the latest
+    // request and actually rejected - an approved or superseded-by-a-
+    // newer-pending one shouldn't show as "rejected" here.
+    const rejectedRequest = latestRequest && latestRequest.status === "rejected" && !pendingRequest
+        ? latestRequest
+        : null;
+
     return {
         tier,
         nextTier: NEXT_TIER[tier] || null,
         limits,
-        pendingRequest: pendingRequest || null
+        pendingRequest: pendingRequest ? toClientDocument(pendingRequest) : null,
+        rejectedRequest: rejectedRequest ? toClientDocument(rejectedRequest) : null
     };
 };
 
@@ -64,20 +78,20 @@ exports.requestUpgrade = async (userId, { documentType, note }, file) => {
         throw new Error("A document type is required");
     }
 
-    const uploaded = await uploadToCloudinary(file.buffer, "nexora/kyc", "auto");
+    const stored = await uploadPrivateDocument(file.buffer, "nexora/kyc");
 
     const id = await kycRepository.createRequest({
         userId,
         targetTier,
         documentType,
-        fileUrl: uploaded.secure_url,
+        stored,
         note
     });
 
-    return kycRepository.findById(id);
+    return toClientDocument(await kycRepository.findById(id));
 };
 
-exports.listRequests = async (filter) => kycRepository.findByFilter(filter);
+exports.listRequests = async (filter) => (await kycRepository.findByFilter(filter)).map(toClientDocument);
 
 exports.approve = async (requestId, adminId) => {
     const request = await kycRepository.findById(requestId);
@@ -98,7 +112,7 @@ exports.approve = async (requestId, adminId) => {
         withEmail: true
     }).catch(() => {});
 
-    return kycRepository.findById(requestId);
+    return toClientDocument(await kycRepository.findById(requestId));
 };
 
 exports.reject = async (requestId, reason, adminId) => {
@@ -122,7 +136,7 @@ exports.reject = async (requestId, reason, adminId) => {
         withEmail: true
     }).catch(() => {});
 
-    return kycRepository.findById(requestId);
+    return toClientDocument(await kycRepository.findById(requestId));
 };
 
 // Called from order.service.js#checkout with the buyer's id and the
@@ -144,6 +158,54 @@ exports.enforceOrderLimit = async (userId, orderAmount) => {
         throw new Error(
             `This order (${orderAmount}) exceeds your account's verification limit of ${limit.max_order_amount}.${upgradeHint}`
         );
+    }
+};
+
+// ---- Cash on Delivery limits (Phase 2) ------------------------------------
+// COD carries more risk than a prepaid order (no payment confirmation until
+// the moment of delivery), so it gets its own, stricter checks on top of
+// enforceOrderLimit above - all three called from order.service.js#checkout
+// only when the buyer picked "cash_on_delivery".
+
+exports.enforceCodOrderLimit = async (userId, orderAmount) => {
+    const tier = await kycRepository.getUserTier(userId);
+    const limit = await kycRepository.getCodTierLimit(tier || "tier0");
+    if (!limit) return;
+
+    const cap = limit.max_cod_order_amount !== null
+        ? Number(limit.max_cod_order_amount)
+        : (limit.max_order_amount !== null ? Number(limit.max_order_amount) : null);
+
+    if (cap !== null && Number(orderAmount) > cap) {
+        throw new Error(
+            `This Cash on Delivery order (${orderAmount}) exceeds your account's Cash on Delivery limit of ${cap}. Pay online instead, or verify your identity to raise your limit.`
+        );
+    }
+};
+
+exports.enforceUnpaidCodLimit = async (userId) => {
+    const tier = await kycRepository.getUserTier(userId);
+    const limit = await kycRepository.getCodTierLimit(tier || "tier0");
+    const max = limit && limit.max_unpaid_cod_orders !== null ? Number(limit.max_unpaid_cod_orders) : null;
+    if (max === null) return;
+
+    const current = await kycRepository.countUnpaidCodOrders(userId);
+    if (current >= max) {
+        throw new Error(
+            `You already have ${current} Cash on Delivery order(s) awaiting delivery. Please receive or cancel one of them before placing another, or pay online instead.`
+        );
+    }
+};
+
+exports.enforceCodNotBlocked = async (userId) => {
+    const settingsService = require("../settings/settings.service");
+    const [refusedCount, blockAfter] = await Promise.all([
+        kycRepository.getRefusedCodCount(userId),
+        settingsService.getCodBlockAfterRefusedCount()
+    ]);
+
+    if (refusedCount >= blockAfter) {
+        throw new Error("Cash on Delivery is no longer available on your account due to repeated refused deliveries. Please pay online instead.");
     }
 };
 

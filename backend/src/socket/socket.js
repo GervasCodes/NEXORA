@@ -103,6 +103,14 @@ exports.emitToUser = (userId, event, payload) => {
 
 };
 
+// Every connected delivery agent (joined on connect below). Used to tell
+// agents the shared "available for pickup" pool changed, so their list
+// can refresh without polling.
+exports.emitToAgents = (event, payload) => {
+    if (!io) return;
+    io.to("agents").emit(event, payload);
+};
+
 exports.emitToAdmins = (event, payload) => {
     if (!io) return;
     io.to("admins").emit(event, payload);
@@ -241,6 +249,7 @@ exports.init = (httpServer) => {
         // for that case).
         if (socket.user.role === "delivery_agent") {
             cancelPendingOffline(socket.user.id);
+            socket.join("agents");
         }
 
 // Join shared admin room

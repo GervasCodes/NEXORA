@@ -51,7 +51,7 @@ describe("SearchBox natural-language search", () => {
         await search("running shoes under 50000");
 
         await vi.waitFor(() =>
-            expect(mockNavigate).toHaveBeenCalledWith("/?search=running%20shoes&max_price=50000&sort=price_low")
+            expect(mockNavigate).toHaveBeenCalledWith("/search?search=running%20shoes&max_price=50000&sort=price_low")
         );
     });
 
@@ -61,14 +61,14 @@ describe("SearchBox natural-language search", () => {
         renderBox();
         await search("cheap shoes");
 
-        await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/?search=cheap%20shoes"));
+        await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/search?search=cheap%20shoes"));
     });
 
     it("skips the AI call for a single-word query", async () => {
         renderBox();
         await search("sneakers");
 
-        await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/?search=sneakers"));
+        await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/search?search=sneakers"));
         expect(mockParseSearchQuery).not.toHaveBeenCalled();
     });
 });

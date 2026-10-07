@@ -26,8 +26,22 @@ const socket = () => require("../../socket/socket");
 // module's isDuplicateKeyError comment).
 const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062);
 
+// Own payout, not the order total (Phase 5, P0) - this list previously
+// showed order.total_amount on each card, which is what the *buyer*
+// paid for the whole order, not what the agent earns for delivering it;
+// an agent picking between offers had no way to actually compare them
+// by what matters to them. Each card now carries `agent_payout`,
+// computed the same way (deliveryPricing.service.js) the amount
+// actually credited to the agent on delivery is derived, so the number
+// shown here is the real one, not an estimate that could drift from it.
 exports.getAvailableForPickup = async () => {
-    return deliveryRepository.findAvailableForPickup();
+    const orders = await deliveryRepository.findAvailableForPickup();
+
+    return Promise.all(orders.map(async (row) => {
+        const order = await orderRepository.findOrderById(row.order_id);
+        const pricing = order ? await deliveryPricingService.calculateDeliveryFee(order) : null;
+        return { ...row, agent_payout: pricing?.fee ?? null, agent_payout_distance_km: pricing?.distanceKm ?? null };
+    }));
 };
 
 exports.claimDelivery = async (orderId, agentId) => {
@@ -70,6 +84,8 @@ exports.claimDelivery = async (orderId, agentId) => {
     // let the admin dispatch dashboard know a new delivery just
     // entered the active pool, without waiting for its next poll/refresh.
     socket().emitToAdmins("dispatch:delivery_assigned", { orderId, deliveryId, agentId });
+    // The order left the shared pool - other agents' lists drop it.
+    socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "claimed" });
 
     return { deliveryId, orderId };
 };
@@ -282,7 +298,15 @@ const buildTrackingSummary = async (delivery, order) => {
     };
 };
 
-exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
+// Proof-of-delivery distance threshold (Phase 5, P0) - a dropoff photo
+// taken more than this far from the order's own delivery pin is flagged
+// for review rather than silently accepted; it doesn't block the
+// delivery from completing (a rider might legitimately be a bit off a
+// building's exact pin), just surfaces it to admins as a signal worth a
+// second look.
+const DROPOFF_FLAG_DISTANCE_M = 300;
+
+exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes, proofInput = {}) => {
     const delivery = await deliveryRepository.findByOrderId(orderId);
 
     if (!delivery || delivery.agent_id !== agentId) {
@@ -297,7 +321,56 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
         );
     }
 
-    await deliveryRepository.updateStatus(delivery.id, newStatus, notes);
+    let proof = {};
+
+    // Delivery proof (Phase 5, P0) - a rider can no longer just tap
+    // "delivered" with nothing backing it up. Two ways to prove it:
+    // 1) the buyer's handover code (the normal case - told to the buyer
+    //    by SMS/WhatsApp at order time, see order.service.js), or
+    // 2) a dropoff photo + the rider's GPS position, when the buyer
+    //    can't/won't give the code (phone off, code lost, etc.) - this
+    //    doesn't block completion but is flagged for review if the
+    //    photo's GPS position is far from the order's delivery pin.
+    if (newStatus === "delivered") {
+        const order = await orderRepository.findOrderById(orderId);
+        const { handoverCode, deliveryLat, deliveryLng, dropoffPhotoFile } = proofInput;
+
+        if (handoverCode && order?.delivery_handover_code && handoverCode === order.delivery_handover_code) {
+            proof = { handoverVerified: true, handoverMethod: "code" };
+        } else if (dropoffPhotoFile) {
+            const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+            const uploaded = await uploadToCloudinary(dropoffPhotoFile.buffer, "nexora/delivery-proof", "image");
+
+            let distanceM = null;
+            let flagged = false;
+            if (deliveryLat && deliveryLng && order?.delivery_lat && order?.delivery_lng) {
+                distanceM = Math.round(haversineKm(deliveryLat, deliveryLng, order.delivery_lat, order.delivery_lng) * 1000);
+                flagged = distanceM > DROPOFF_FLAG_DISTANCE_M;
+            }
+
+            proof = {
+                handoverVerified: true,
+                handoverMethod: "photo_gps",
+                dropoffPhotoUrl: uploaded.secure_url,
+                dropoffDistanceM: distanceM,
+                dropoffFlagged: flagged
+            };
+
+            if (flagged) {
+                Sentry.captureMessage("Delivery dropoff photo far from delivery pin", {
+                    level: "warning",
+                    tags: { area: "delivery", stage: "dropoff-proof" },
+                    extra: { orderId, distanceM }
+                });
+            }
+        } else if (handoverCode) {
+            throw new Error("That handover code doesn't match this order - ask the buyer to check it, or use a photo instead");
+        } else {
+            throw new Error("A handover code or a dropoff photo is required to complete this delivery");
+        }
+    }
+
+    await deliveryRepository.updateStatus(delivery.id, newStatus, notes, proof);
 
     // Keep the order's own status in sync with the delivery outcome
     if (newStatus === "delivered") {
@@ -307,6 +380,24 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             logger.error({ err, orderId }, "rider earnings credit error");
             Sentry.captureException(err, { tags: { area: "delivery", stage: "earnings-credit" }, extra: { orderId } });
         });
+    }
+
+    // Refused-delivery strikes (Phase 2, P1) - a Cash on Delivery order the
+    // agent could not deliver (refused, buyer unreachable, wrong address,
+    // etc.) counts against the buyer's account. Past
+    // settings.cod_block_after_refused_count, kyc.service.js#enforceCodNotBlocked
+    // switches Cash on Delivery off for that buyer at checkout. Only counted
+    // for Cash on Delivery - a failed prepaid delivery is a logistics
+    // problem, not a payment-risk signal about the buyer.
+    if (newStatus === "failed") {
+        const failedOrder = await orderRepository.findOrderById(orderId);
+        if (failedOrder && failedOrder.payment_method === "cash_on_delivery") {
+            const kycRepository = require("../kyc/kyc.repository");
+            kycRepository.incrementRefusedCodCount(failedOrder.buyer_id).catch((err) => {
+                logger.error({ err, orderId }, "refused Cash on Delivery strike increment error");
+                Sentry.captureException(err, { tags: { area: "delivery", stage: "cod-strike" }, extra: { orderId } });
+            });
+        }
     }
 
     const order = await orderRepository.findOrderById(orderId);
@@ -353,6 +444,18 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             status: newStatus
         });
     }
+};
+
+// Pickup confirmation photo (Phase 5, P1).
+exports.confirmPickupPhoto = async (orderId, agentId, photoFile) => {
+    const delivery = await deliveryRepository.findByOrderId(orderId);
+    if (!delivery || delivery.agent_id !== agentId) {
+        throw new Error("Delivery not found");
+    }
+
+    const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+    const uploaded = await uploadToCloudinary(photoFile.buffer, "nexora/delivery-proof", "image");
+    await deliveryRepository.recordPickupPhoto(delivery.id, uploaded.secure_url);
 };
 
 // ---- Agent presence & location -------------------------------------------
@@ -498,7 +601,10 @@ exports.startMatching = async (orderId) => {
     // No seller pickup pin yet (seller hasn't set one in Store settings) —
     // fall back to the manual "available for pickup" pool instead of
     // matching.
-    if (!pickup) return;
+    if (!pickup) {
+        socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "added" });
+        return;
+    }
 
     await offerToNextCandidate(orderId, pickup, 0);
 };
@@ -674,6 +780,8 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
             phase: "exhausted",
             radiusStepsKm: radiusSteps
         });
+        // No agent could be offered the order: it now sits in the manual pool.
+        socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "added" });
         return;
     }
 

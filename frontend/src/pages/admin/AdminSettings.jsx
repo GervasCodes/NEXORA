@@ -3,6 +3,8 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import { formatDate } from "../../utils/format";
 
 // Human-readable labels for ai.service.js's internal `feature` tags -
 // see aiQuality (GET /admin/settings, ai.service.js#getQualityOverview).
@@ -34,6 +36,7 @@ export default function AdminSettings() {
     const [commissionRate, setCommissionRate] = useState("");
     const [riderFee, setRiderFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
+    const [retentionDays, setRetentionDays] = useState("0");
     const [sponsorshipRate, setSponsorshipRate] = useState("");
     const [featuredStoreRate, setFeaturedStoreRate] = useState("");
     const [departmentSponsorshipRate, setDepartmentSponsorshipRate] = useState("");
@@ -49,6 +52,9 @@ export default function AdminSettings() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
+    // { kind: "commission" | "fx", message } while a confirmation is open
+    const [confirm, setConfirm] = useState(null);
+    const [history, setHistory] = useState(null); // { key, rows }
 
     useEffect(() => {
         api.get("/admin/settings")
@@ -57,6 +63,7 @@ export default function AdminSettings() {
                 setCommissionRate(data.data.commission_rate);
                 setRiderFee(data.data.rider_delivery_fee);
                 setUsdRate(data.data.usd_exchange_rate);
+                setRetentionDays(String(data.data.approved_document_retention_days ?? "0"));
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
                 setDepartmentSponsorshipRate(data.data.department_sponsorship_daily_rate);
@@ -92,17 +99,48 @@ export default function AdminSettings() {
         setBands(bands.filter((_, i) => i !== index));
     };
 
-    const save = async (e) => {
+    const lastChanged = (key) => {
+        const meta = settings?.setting_meta?.[key];
+        return meta ? `Last changed ${formatDate(meta.changed_at)}${meta.changed_by ? ` by ${meta.changed_by}` : ""}` : null;
+    };
+
+    const openHistory = async (key) => {
+        try {
+            const { data } = await api.get(`/admin/settings/${key}/history`);
+            setHistory({ key, rows: data.data });
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        }
+    };
+
+    // Step 1: a commission change is confirmed (current -> new) before it is
+    // sent. A large exchange-rate move is confirmed after the server says so.
+    const save = (e) => {
         e.preventDefault();
+        if (Number(commissionRate) !== Number(settings.commission_rate)) {
+            setConfirm({
+                kind: "commission",
+                message: `Commission changes from ${settings.commission_rate}% to ${Number(commissionRate)}%. It applies to new sales from now on.`
+            });
+            return;
+        }
+        submit({});
+    };
+
+    const submit = async (extra) => {
+        setConfirm(null);
         setSaving(true);
         setError("");
         setSaved(false);
 
         try {
-            const { data } = await api.put("/admin/settings", {
+            await api.put("/admin/settings", {
+                ...extra,
+                expected_updated_at: settings.settings_loaded_at,
                 commission_rate: Number(commissionRate),
                 rider_delivery_fee: Number(riderFee),
                 usd_exchange_rate: Number(usdRate),
+                approved_document_retention_days: Number(retentionDays),
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
                 department_sponsorship_daily_rate: Number(departmentSponsorshipRate),
@@ -118,10 +156,18 @@ export default function AdminSettings() {
                     per_km_beyond: Number(perKmBeyond)
                 }
             });
-            setSettings(data.data);
+            const { data: fresh } = await api.get("/admin/settings");
+            setSettings(fresh.data);
             setSaved(true);
         } catch (err) {
-            setError(extractErrorMessage(err));
+            const body = err.response?.data;
+            if (body?.code === "CONFIRMATION_REQUIRED") {
+                // e.g. an exchange-rate move beyond the allowed band; `extra`
+                // keeps any confirmation already given (commission).
+                setConfirm({ kind: "fx", message: body.message, extra });
+            } else {
+                setError(extractErrorMessage(err));
+            }
         } finally {
             setSaving(false);
         }
@@ -138,12 +184,47 @@ export default function AdminSettings() {
                 Changes only apply going forward - past orders and deliveries keep whatever rate was in effect at the time.
             </p>
 
+            <ConfirmDialog
+                open={!!confirm}
+                title={confirm?.kind === "commission" ? "Change the platform commission?" : "Large exchange-rate change"}
+                description={confirm?.message}
+                confirmLabel="Yes, save"
+                danger
+                onConfirm={() => {
+                    if (confirm.kind === "commission") submit({ confirm_commission_change: true });
+                    else submit({ ...(confirm.extra || {}), confirm_large_exchange_rate_change: true });
+                }}
+                onCancel={() => setConfirm(null)}
+            />
+
+            {history && (
+                <div className="border border-line rounded-lg p-4 max-w-lg mb-4 text-sm">
+                    <div className="flex justify-between mb-2">
+                        <p className="font-medium">History: {history.key}</p>
+                        <button type="button" className="text-ash text-xs" onClick={() => setHistory(null)}>Close</button>
+                    </div>
+                    {history.rows.length === 0 ? <p className="text-ash">No changes recorded yet.</p> : (
+                        <ul className="space-y-1">
+                            {history.rows.map((r) => (
+                                <li key={r.id} className="text-xs">
+                                    {formatDate(r.changed_at)}: {r.old_value ?? "—"} → {r.new_value ?? "—"}
+                                    {r.first_name ? ` (${r.first_name} ${r.last_name || ""})` : ""}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
+
             <form onSubmit={save} className="border border-line rounded-lg p-4 sm:p-6 max-w-lg space-y-5">
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">Settings saved.</p>}
 
                 <div>
                     <label htmlFor="commissionRate" className="text-xs text-ash block mb-1">Platform commission (%)</label>
+                    {settings.commission_rate_max && (
+                        <p className="text-xs text-ash mb-1">Maximum allowed: {settings.commission_rate_max}%{lastChanged("commission_rate") ? ` · ${lastChanged("commission_rate")}` : ""} · <button type="button" className="text-teal hover:underline" onClick={() => openHistory("commission_rate")}>History</button></p>
+                    )}
                     <input
                         id="commissionRate"
                         type="number"
@@ -243,6 +324,7 @@ export default function AdminSettings() {
 
                 <div>
                     <label htmlFor="usdRate" className="text-xs text-ash block mb-1">USD exchange rate (TZS per $1)</label>
+                    <p className="text-xs text-ash mb-1">Moves of more than {settings.usd_exchange_rate_max_change_percent}% ask for a second confirmation{lastChanged("usd_exchange_rate") ? ` · ${lastChanged("usd_exchange_rate")}` : ""} · <button type="button" className="text-teal hover:underline" onClick={() => openHistory("usd_exchange_rate")}>History</button></p>
                     <input
                         id="usdRate"
                         type="number"
@@ -257,6 +339,21 @@ export default function AdminSettings() {
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
                         Snippe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
                     </p>
+                </div>
+
+                <div>
+                    <label htmlFor="retentionDays" className="text-xs text-ash block mb-1">Keep approved verification documents for (days)</label>
+                    <input
+                        id="retentionDays"
+                        type="number"
+                        min="0"
+                        max="3650"
+                        step="1"
+                        value={retentionDays}
+                        onChange={(e) => setRetentionDays(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-1.5 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">0 keeps them indefinitely. Otherwise the stored file is deleted that many days after approval; the review record stays.</p>
                 </div>
 
                 <div>

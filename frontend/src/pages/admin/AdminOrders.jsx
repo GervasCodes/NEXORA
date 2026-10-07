@@ -1,9 +1,14 @@
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import AdminPager from "../../components/admin/AdminPager";
+
+const PAGE_SIZE = 25;
+const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
 
 const statusStyles = {
     pending: "bg-line text-ash",
@@ -27,18 +32,59 @@ export default function AdminOrders() {
     const [loading, setLoading] = useState(true);
     const [releasing, setReleasing] = useState(null);
     const [releaseNotes, setReleaseNotes] = useState({});
+    const [releaseTarget, setReleaseTarget] = useState(null);
     const [sort, setSort] = useState("newest");
+    const [meta, setMeta] = useState(null);
+    const [page, setPage] = useState(1);
+    const [searchInput, setSearchInput] = useState("");
+    const [filters, setFilters] = useState({ q: "", status: "" });
 
-    useEffect(() => {
+    // Server-side paging, search and status filter. Order number, buyer
+    // name/email and payment reference are all searchable.
+    const load = (nextPage = page, nextFilters = filters, nextSort = sort) => {
         setLoading(true);
-        api.get("/admin/orders", { params: { sort } }).then(({ data }) => setOrders(data.data)).finally(() => setLoading(false));
-    }, [sort]);
+        const params = { sort: nextSort, page: nextPage, pageSize: PAGE_SIZE };
+        if (nextFilters.q) params.q = nextFilters.q;
+        if (nextFilters.status) params.status = nextFilters.status;
+        api.get("/admin/orders", { params })
+            .then(({ data }) => {
+                setOrders(data.data);
+                setMeta(data.meta);
+            })
+            .catch(() => setOrders([]))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const applyFilters = (next) => {
+        setFilters(next);
+        setPage(1);
+        load(1, next, sort);
+    };
+
+    const submitSearch = (e) => {
+        e.preventDefault();
+        applyFilters({ ...filters, q: searchInput.trim() });
+    };
+
+    const changeSort = (value) => {
+        setSort(value);
+        setPage(1);
+        load(1, filters, value);
+    };
+
+    const changePage = (next) => {
+        setPage(next);
+        load(next, filters, sort);
+    };
 
     //  manual early release - bypasses the normal delivered +
     // escrow_hold_days timing gate for one order, but the backend still
     // refuses to release anything covered by an open dispute. See
     // docs/ESCROW_ANALYSIS.md section 3.4.
     const releaseEscrow = async (orderId) => {
+        setReleaseTarget(null);
         setReleasing(orderId);
         setReleaseNotes((notes) => ({ ...notes, [orderId]: "" }));
         try {
@@ -58,16 +104,16 @@ export default function AdminOrders() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading && !meta) return <PageLoader />;
 
     return (
         <div>
             <PageMeta title="Orders" noIndex />
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h1 className="font-display text-2xl">All orders</h1>
                 <select
                     value={sort}
-                    onChange={(e) => setSort(e.target.value)}
+                    onChange={(e) => changeSort(e.target.value)}
                     className="border border-line rounded-md px-3 py-1.5 text-sm focus-ring"
                     aria-label="Sort"
                 >
@@ -77,7 +123,35 @@ export default function AdminOrders() {
                 </select>
             </div>
 
-            {orders.length === 0 && <EmptyState title="No orders yet." />}
+            <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center">
+                <form onSubmit={submitSearch} className="flex gap-2 flex-1">
+                    <input
+                        type="search"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        placeholder="Search order number, buyer, email or payment reference"
+                        aria-label="Search orders"
+                        className="flex-1 border border-line rounded-md px-3 py-1.5 text-sm"
+                    />
+                    <button type="submit" className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink">
+                        Search
+                    </button>
+                </form>
+                <select
+                    value={filters.status}
+                    onChange={(e) => applyFilters({ ...filters, status: e.target.value })}
+                    aria-label="Filter by status"
+                    className="border border-line rounded-md px-3 py-1.5 text-sm capitalize"
+                >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((st) => <option key={st} value={st}>{st}</option>)}
+                </select>
+            </div>
+
+            {loading && <p className="text-xs text-ash mb-4">Loading…</p>}
+            {!loading && orders.length === 0 && (
+                <EmptyState title={filters.q || filters.status ? "No orders match these filters." : "No orders yet."} />
+            )}
 
             <ul className="divide-y divide-line border-y border-line">
                 {orders.map((o) => (
@@ -109,7 +183,7 @@ export default function AdminOrders() {
                         {o.status === "delivered" && (
                             <div className="w-full sm:w-auto sm:text-right">
                                 <button
-                                    onClick={() => releaseEscrow(o.id)}
+                                    onClick={() => setReleaseTarget(o)}
                                     disabled={releasing === o.id}
                                     className="text-xs font-medium text-teal hover:underline disabled:opacity-50"
                                 >
@@ -123,6 +197,18 @@ export default function AdminOrders() {
                     </li>
                 ))}
             </ul>
+
+            <AdminPager meta={meta} onChange={changePage} disabled={loading} label="Order pages" />
+
+            <ConfirmDialog
+                open={!!releaseTarget}
+                title="Release held earnings early?"
+                description={releaseTarget ? `Order ${releaseTarget.order_number || `#${releaseTarget.id}`}: this skips the normal escrow hold and pays the seller now. Anything covered by an open dispute stays frozen.` : ""}
+                confirmLabel="Release now"
+                danger
+                onConfirm={() => releaseEscrow(releaseTarget.id)}
+                onCancel={() => setReleaseTarget(null)}
+            />
         </div>
     );
 }

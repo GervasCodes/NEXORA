@@ -45,32 +45,39 @@ export default function SellerSetup() {
     const [merchantType, setMerchantType] = useState("product");
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [storeTypesFailed, setStoreTypesFailed] = useState(false);
 
-    useEffect(() => {
-        api.get("/store-types").then(({ data }) => setStoreTypes(data.data)).catch(() => {});
-    }, []);
+    const loadStoreTypes = () => {
+        setStoreTypesFailed(false);
+        api.get("/store-types")
+            .then(({ data }) => setStoreTypes(data.data))
+            .catch(() => setStoreTypesFailed(true));
+    };
+
+    useEffect(loadStoreTypes, []);
 
     const selectedOption = MERCHANT_TYPE_OPTIONS.find((o) => o.value === merchantType) ?? MERCHANT_TYPE_OPTIONS[0];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError("");
-        try {
-            await api.post("/seller/profile", form);
 
-            // "product" is already the column default, so only a
-            // non-default pick needs the follow-up call - keeps skip/
-            // product behavior identical to before this phase.
-            if (merchantType !== "product") {
-                try {
-                    await api.put("/seller/merchant-type", { merchant_type: merchantType });
-                } catch {
-                    // The store itself was created successfully; merchant
-                    // type can still be changed from Settings afterward
-                    // (Phase 3), so this shouldn't block onboarding.
-                }
-            }
+        const storeName = form.store_name.trim();
+        if (storeName.length < 3) {
+            setError("Your store name needs at least 3 characters.");
+            return;
+        }
+        setSubmitting(true);
+        try {
+            // merchant_type now travels in the same request as store
+            // creation (Phase 4 remediation) - previously a non-default
+            // pick needed a second PUT /seller/merchant-type call after
+            // the store already existed, and a failure there was
+            // silently swallowed, so a seller could pick "Services" and
+            // end up with a product-only store with no visible error.
+            // One request means one place that can fail and one error
+            // to show.
+            await api.post("/seller/profile", { ...form, store_name: storeName, merchant_type: merchantType });
 
             refreshProfile();
             navigate("/seller");
@@ -111,6 +118,8 @@ export default function SellerSetup() {
                 <Input
                     label="Store name"
                     required minLength={3} maxLength={150}
+                    autoFocus
+                    autoComplete="organization"
                     value={form.store_name}
                     onChange={(e) => setForm({ ...form, store_name: e.target.value })}
                 />
@@ -128,15 +137,25 @@ export default function SellerSetup() {
                             <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                     </select>
+                    {storeTypesFailed && (
+                        <p role="alert" className="text-xs text-coral mt-1">
+                            Couldn&apos;t load store types.{" "}
+                            <button type="button" onClick={loadStoreTypes} className="underline">Try again</button>
+                            {" "}- you can also pick one later in Settings.
+                        </p>
+                    )}
                 </div>
 
-                <Input
-                    as="textarea"
-                    label="Store description (optional)"
-                    rows={4} maxLength={1000}
-                    value={form.store_description}
-                    onChange={(e) => setForm({ ...form, store_description: e.target.value })}
-                />
+                <div>
+                    <Input
+                        as="textarea"
+                        label="Store description (optional)"
+                        rows={4} maxLength={1000}
+                        value={form.store_description}
+                        onChange={(e) => setForm({ ...form, store_description: e.target.value })}
+                    />
+                    <p className="text-xs text-ash text-right mt-1" aria-live="off">{form.store_description.length}/1000</p>
+                </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 

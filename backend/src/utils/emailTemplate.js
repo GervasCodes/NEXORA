@@ -31,7 +31,7 @@ const textToHtml = (text) =>
         .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
         .join("");
 
-const appBaseUrl = () => (process.env.FRONTEND_URL || "https://nexora.co.tz").replace(/\/$/, "");
+const appBaseUrl = () => ("https://nexoramarketplace.online").replace(/\/$/, "");
 
 // Relative app paths ("/orders/12") become the absolute links an email needs.
 const absoluteUrl = (path) => {
@@ -58,7 +58,7 @@ const BRAND = {
     tealTintBorder: "#BFEFF5"
 };
 
-// Shared layout for every transactional email (Phase 9; decorative pass):
+// Shared layout for every transactional email (decorative pass):
 // a dark branded header with the NEXORA logo + wordmark and a purple ->
 // indigo -> teal accent strip (matching the logo's own gradient), an
 // optional eyebrow label, heading, message, an optional one-time
@@ -79,7 +79,7 @@ const renderEmail = ({ locale, heading, message, code, ctaLabel, ctaUrl, eyebrow
     // (frontend/public/nexora-logo.png) so every email carries it without
     // needing an env var; EMAIL_LOGO_URL can still override it (e.g. to
     // point at a CDN copy).
-    const logoUrl = process.env.EMAIL_LOGO_URL || absoluteUrl("/nexora-logo.png");
+    const logoUrl = absoluteUrl("/frontend/public/nexora-logo.png");
     const footer = t(lang, "email.footer");
     const supportLabel = t(lang, "email.supportLabel");
     const manageLabel = t(lang, "email.manageLabel");

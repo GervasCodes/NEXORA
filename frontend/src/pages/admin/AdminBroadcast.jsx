@@ -25,16 +25,25 @@ const CHANNELS = [
     { value: "in_app", label: "In-app" }
 ];
 
-// Each channel's own send limit/behaviour (shown as a short hint under
-// that channel's box) - this is *why* the sections are split rather
-// than a style choice: an SMS over ~160 chars is billed/split into
-// multiple segments by the gateway, WhatsApp has more room but is still
-// read on a phone, and an in-app notification is a single line in
-// NotificationBell.jsx. Keep these in sync with the server-side caps in
-// backend/src/modules/broadcast/broadcast.validator.js.
-const SMS_MAX = 320;
-const WHATSAPP_MAX = 1000;
-const IN_APP_MAX = 1000;
+// Templates now match how the channels actually group, instead of
+// every channel getting its own box (which made admins re-type near-
+// identical copy 3 times and - worse - made it easy to accidentally
+// send SMS/WhatsApp/in-app the full multi-paragraph email body, since
+// an untouched box silently fell back to it):
+//   - Email is the only channel with a subject/title, so it keeps its
+//     own dedicated box.
+//   - SMS, WhatsApp and in-app are all short, title-less, read-on-a-
+//     phone-or-in-a-bell copy - they now share ONE "Message" box. When
+//     email is also selected this shows as a second box (so the short
+//     copy doesn't just inherit the long email body); when email isn't
+//     selected it's the only box on the page.
+// Server-side the three still travel as independent smsMessage/
+// whatsappMessage/inAppMessage fields (see broadcast.service.js) - this
+// page just always sends the one shared value for all three, so a
+// sent/resent broadcast still shows correctly per-channel in History
+// either way.
+const SMS_MAX = 320; // SMS is billed/split into segments past ~160 chars by the gateway
+const SHARED_MAX = 1000; // WhatsApp/in-app headroom; shown as the shared box's cap whenever SMS isn't part of the send
 
 export default function AdminBroadcast() {
     const toast = useToast();
@@ -42,16 +51,11 @@ export default function AdminBroadcast() {
     const [channels, setChannels] = useState(["email"]);
     const [subject, setSubject] = useState("");
     const [message, setMessage] = useState("");
-    // Per-channel overrides - every one is optional. Left blank, the
-    // server falls back to subject/message above (see
-    // broadcast.service.js#resolveChannelContent) so ticking an extra
-    // channel without touching its box still sends something sensible;
-    // these exist so an admin CAN give SMS/WhatsApp/in-app their own
-    // shorter, channel-appropriate copy instead of the full email body.
-    const [smsMessage, setSmsMessage] = useState("");
-    const [whatsappMessage, setWhatsappMessage] = useState("");
-    const [inAppTitle, setInAppTitle] = useState("");
-    const [inAppMessage, setInAppMessage] = useState("");
+    // The one shared box for SMS/WhatsApp/in-app (see the comment above
+    // SMS_MAX/SHARED_MAX). Only used - and only shown - when email is
+    // ALSO selected, since otherwise `message` above already IS that
+    // shared content (see the rendering below and handleSend()).
+    const [sharedMessage, setSharedMessage] = useState("");
     const [audience, setAudience] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [sending, setSending] = useState(false);
@@ -59,6 +63,24 @@ export default function AdminBroadcast() {
     const [lastResult, setLastResult] = useState(null);
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
+    // Open/read a past broadcast's full content - the history list only
+    // ever showed segment/date/channels/subject, even though the server
+    // already returns the full message and every per-channel body. One
+    // open row at a time (an id, not a Set) keeps this simple and matches
+    // the accordion-style detail views elsewhere in the admin panel.
+    const [openId, setOpenId] = useState(null);
+    // Row-level "click once to arm, click again to confirm" - same
+    // two-step pattern as the compose form's own Send button above,
+    // reused here instead of a native window.confirm() popup.
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+    const [confirmResendId, setConfirmResendId] = useState(null);
+    // Separate from confirmDeleteId/confirmResendId (which track "armed,
+    // waiting for the confirm click") so the right row's button - and
+    // only that one - shows "Deleting…"/"Resending…" while its own
+    // request is in flight, without the two actions' busy states bleeding
+    // into each other on the same row.
+    const [deletingId, setDeletingId] = useState(null);
+    const [resendingId, setResendingId] = useState(null);
 
     const loadHistory = () => {
         setLoadingHistory(true);
@@ -84,6 +106,18 @@ export default function AdminBroadcast() {
         setChannels((prev) => (prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]));
     };
 
+    const emailSelected = channels.includes("email");
+    const otherChannelsSelected = channels.includes("sms") || channels.includes("whatsapp") || channels.includes("in_app");
+
+    // When email is selected, `message` is purely the email body and
+    // `sharedMessage` carries the SMS/WhatsApp/in-app copy. When email
+    // is NOT selected, there's only one box on the page (bound to
+    // `message`) and it directly IS that shared copy - so this is the
+    // one place that decides which state holds "what SMS/WhatsApp/
+    // in-app actually get", instead of that logic being duplicated
+    // between the render and the submit handler.
+    const effectiveSharedMessage = emailSelected ? sharedMessage : message;
+
     const handleSend = async () => {
         if (!confirming) {
             setConfirming(true);
@@ -93,20 +127,28 @@ export default function AdminBroadcast() {
         setSending(true);
         try {
             const { data } = await api.post("/admin/broadcasts", {
-                segment, channels, subject, message,
-                smsMessage: smsMessage.trim() || undefined,
-                whatsappMessage: whatsappMessage.trim() || undefined,
-                inAppTitle: inAppTitle.trim() || undefined,
-                inAppMessage: inAppMessage.trim() || undefined
+                segment, channels,
+                subject: emailSelected ? subject : undefined,
+                message,
+                // All three travel as the same shared copy - see the
+                // SMS_MAX/SHARED_MAX comment above for why they're no
+                // longer separately-typed boxes. Each is only sent when
+                // its own channel is actually selected (not just "some
+                // other channel is"), so a broadcast's stored history
+                // never carries an override for a channel it didn't go
+                // out on. inAppTitle is left unset on purpose: the
+                // server already falls back to the email subject, or
+                // "Announcement", which is the right default now that
+                // there's no dedicated in-app title field to fill in.
+                smsMessage: channels.includes("sms") ? effectiveSharedMessage : undefined,
+                whatsappMessage: channels.includes("whatsapp") ? effectiveSharedMessage : undefined,
+                inAppMessage: channels.includes("in_app") ? effectiveSharedMessage : undefined
             });
             setLastResult(data.data);
             toast?.success("Broadcast sent");
             setMessage("");
             setSubject("");
-            setSmsMessage("");
-            setWhatsappMessage("");
-            setInAppTitle("");
-            setInAppMessage("");
+            setSharedMessage("");
             setConfirming(false);
             loadHistory();
         } catch (err) {
@@ -116,7 +158,50 @@ export default function AdminBroadcast() {
         }
     };
 
-    const canSend = channels.length > 0 && message.trim() && (!channels.includes("email") || subject.trim());
+    const canSend = channels.length > 0
+        && (!emailSelected || (subject.trim() && message.trim()))
+        && (!otherChannelsSelected || effectiveSharedMessage.trim());
+
+    const toggleOpen = (id) => setOpenId((prev) => (prev === id ? null : id));
+
+    const handleDelete = async (id) => {
+        if (confirmDeleteId !== id) {
+            setConfirmDeleteId(id);
+            setConfirmResendId(null);
+            return;
+        }
+        setDeletingId(id);
+        try {
+            await api.delete(`/admin/broadcasts/${id}`);
+            setHistory((prev) => prev.filter((b) => b.id !== id));
+            if (openId === id) setOpenId(null);
+            toast?.success("Broadcast removed");
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setDeletingId(null);
+            setConfirmDeleteId(null);
+        }
+    };
+
+    const handleResend = async (id) => {
+        if (confirmResendId !== id) {
+            setConfirmResendId(id);
+            setConfirmDeleteId(null);
+            return;
+        }
+        setResendingId(id);
+        try {
+            const { data } = await api.post(`/admin/broadcasts/${id}/resend`);
+            toast?.success(`Resent to ${data.data.recipientCount} recipients`);
+            loadHistory();
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setResendingId(null);
+            setConfirmResendId(null);
+        }
+    };
 
     return (
         <div>
@@ -165,11 +250,12 @@ export default function AdminBroadcast() {
                     )}
                 </div>
 
-                {/* Email gets its own subject + body - the only channel that
-                    needs a subject line and the one with the most room to
-                    write, so it stays the "main" compose box and doubles as
-                    the fallback body for any other channel left blank below. */}
-                {channels.includes("email") && (
+                {/* Email is the only channel with a subject line, so it keeps
+                    its own dedicated box. When other channels are also
+                    selected, this is purely the email's content now - it no
+                    longer doubles as the fallback body for SMS/WhatsApp/
+                    in-app (see the shared "Message" box below instead). */}
+                {emailSelected && (
                     <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
                         <p className="text-xs font-medium text-ink">Email</p>
                         <Input
@@ -180,7 +266,7 @@ export default function AdminBroadcast() {
                         />
                         <Input
                             as="textarea"
-                            label={channels.length > 1 ? "Email body (also the fallback for any channel left blank below)" : "Email body"}
+                            label="Email body"
                             id="broadcast-message"
                             value={message}
                             onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
@@ -191,79 +277,60 @@ export default function AdminBroadcast() {
                     </div>
                 )}
 
-                {!channels.includes("email") && (
-                    <div>
-                        <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
-                        <textarea
-                            id="broadcast-message"
-                            value={message}
-                            onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
-                            maxLength={2000}
-                            rows={5}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
-                        />
-                        <p className="text-xs text-ash mt-1">
-                            {message.length}/2000 · used as-is for any channel left blank below
-                        </p>
-                    </div>
-                )}
+                {/* SMS, WhatsApp and in-app share one template: none of them
+                    has a subject/title, and none should be sent the full
+                    multi-paragraph email copy above by default - so they get
+                    one combined "Message" box instead of a separate one
+                    each. Selecting any combination of the three (with or
+                    without email) still sends each of them independently -
+                    this box only controls what they all say, not whether
+                    they're sent. */}
+                {otherChannelsSelected && (() => {
+                    const sharedMax = channels.includes("sms") ? SMS_MAX : SHARED_MAX;
+                    const sharedHint = `${effectiveSharedMessage.length}/${sharedMax}`
+                        + (channels.includes("sms") ? " · long messages are split into multiple SMS segments by the gateway" : "")
+                        + (channels.includes("whatsapp") && !channels.includes("sms") ? " · WhatsApp only reaches recipients who've opted into WhatsApp updates" : "");
+                    const onSharedChange = (e) => {
+                        if (emailSelected) {
+                            setSharedMessage(e.target.value);
+                        } else {
+                            setMessage(e.target.value);
+                        }
+                        setConfirming(false);
+                    };
 
-                {/* SMS, WhatsApp and in-app each read nothing like an email -
-                    an SMS is billed/split in ~160-char segments, WhatsApp
-                    tolerates more but is still read on a phone, and in-app is
-                    one line in NotificationBell.jsx - so each gets its own
-                    optional box instead of all four sharing the email copy
-                    above. Leaving one blank just reuses the shared message. */}
-                {channels.includes("sms") && (
-                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">SMS</p>
-                        <Input
-                            as="textarea"
-                            label="SMS message (optional - reuses the email/shared message above if left blank)"
-                            value={smsMessage}
-                            onChange={(e) => { setSmsMessage(e.target.value); setConfirming(false); }}
-                            maxLength={SMS_MAX}
-                            rows={2}
-                            hint={`${smsMessage.length}/${SMS_MAX} · long messages are split into multiple SMS segments by the gateway`}
-                        />
-                    </div>
-                )}
-
-                {channels.includes("whatsapp") && (
-                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">WhatsApp</p>
-                        <Input
-                            as="textarea"
-                            label="WhatsApp message (optional - reuses the email/shared message above if left blank)"
-                            value={whatsappMessage}
-                            onChange={(e) => { setWhatsappMessage(e.target.value); setConfirming(false); }}
-                            maxLength={WHATSAPP_MAX}
-                            rows={3}
-                            hint={`${whatsappMessage.length}/${WHATSAPP_MAX} · only reaches recipients who've opted into WhatsApp updates`}
-                        />
-                    </div>
-                )}
-
-                {channels.includes("in_app") && (
-                    <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">In-app notification</p>
-                        <Input
-                            label="Title (optional - reuses the email subject, or 'Announcement', if left blank)"
-                            value={inAppTitle}
-                            onChange={(e) => { setInAppTitle(e.target.value); setConfirming(false); }}
-                            maxLength={150}
-                        />
-                        <Input
-                            as="textarea"
-                            label="Message (optional - reuses the email/shared message above if left blank)"
-                            value={inAppMessage}
-                            onChange={(e) => { setInAppMessage(e.target.value); setConfirming(false); }}
-                            maxLength={IN_APP_MAX}
-                            rows={2}
-                            hint={`${inAppMessage.length}/${IN_APP_MAX} · shown in the notification bell, so keep it short`}
-                        />
-                    </div>
-                )}
+                    // Boxed, labelled sub-section when it sits alongside the
+                    // email box above; the page's single plain box (matching
+                    // the original "just a Message field" layout) when email
+                    // isn't selected at all.
+                    return emailSelected ? (
+                        <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
+                            <p className="text-xs font-medium text-ink">Message (SMS / WhatsApp / In-app)</p>
+                            <Input
+                                as="textarea"
+                                label="Message"
+                                value={sharedMessage}
+                                onChange={onSharedChange}
+                                maxLength={sharedMax}
+                                rows={3}
+                                hint={sharedHint}
+                            />
+                        </div>
+                    ) : (
+                        <div>
+                            <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
+                            <textarea
+                                id="broadcast-message"
+                                value={message}
+                                onChange={onSharedChange}
+                                maxLength={sharedMax}
+                                rows={5}
+                                className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                            />
+                            <p className="text-xs text-ash mt-1">{sharedHint}</p>
+                        </div>
+                    );
+                })()}
 
                 <Button onClick={handleSend} disabled={!canSend || sending} variant={confirming ? "primary" : "secondary"}>
                     {sending
@@ -293,18 +360,123 @@ export default function AdminBroadcast() {
                 <p className="text-sm text-ash">No broadcasts sent yet.</p>
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
-                    {history.map((b) => (
-                        <li key={b.id} className="py-3 text-sm">
-                            <div className="flex justify-between">
-                                <span className="font-medium capitalize">{b.segment.replace(/_/g, " ")}</span>
-                                <span className="text-ash text-xs">{formatDateTime(b.created_at)}</span>
-                            </div>
-                            <p className="text-ash text-xs mt-0.5">
-                                {b.channels} · {b.recipient_count} recipients · by {b.admin_first_name} {b.admin_last_name}
-                            </p>
-                            {b.subject && <p className="text-xs mt-0.5">Subject: {b.subject}</p>}
-                        </li>
-                    ))}
+                    {history.map((b) => {
+                        const isOpen = openId === b.id;
+                        const isDeleting = deletingId === b.id;
+                        const isResending = resendingId === b.id;
+                        return (
+                            <li key={b.id} className="py-3 text-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleOpen(b.id)}
+                                    aria-expanded={isOpen}
+                                    className="w-full text-left"
+                                >
+                                    <div className="flex justify-between items-start gap-3">
+                                        <span className="font-medium capitalize">{b.segment.replace(/_/g, " ")}</span>
+                                        <span className="text-ash text-xs shrink-0">{formatDateTime(b.created_at)}</span>
+                                    </div>
+                                    <p className="text-ash text-xs mt-0.5">
+                                        {b.channels} · {b.recipient_count} recipients · by {b.admin_first_name} {b.admin_last_name}
+                                    </p>
+                                    {b.subject && <p className="text-xs mt-0.5">Subject: {b.subject}</p>}
+                                    <span className="text-xs text-teal mt-1 inline-block">{isOpen ? "Hide full message ↑" : "Open full message ↓"}</span>
+                                </button>
+
+                                {/* Full stored content, shown whole - no fixed-height
+                                    scroller - since that's exactly what the admin
+                                    clicked "Open" to read. Only channels that were
+                                    actually part of this send (or got their own
+                                    override body) are shown. */}
+                                {isOpen && (
+                                    <div className="mt-2 border border-line rounded-md p-3 bg-sand/30 space-y-3">
+                                        {/* One block per channel this broadcast actually
+                                            went out on, each falling back to the shared
+                                            `message` exactly the way resolveChannelContent()
+                                            did at send time - so what's shown here always
+                                            matches what recipients actually received, even
+                                            when a channel's own box was left blank. */}
+                                        {b.channels.split(",").map((channel) => {
+                                            if (channel === "email") {
+                                                return (
+                                                    <div key={channel}>
+                                                        <p className="text-xs font-medium text-ink mb-1">Email</p>
+                                                        {b.subject && <p className="text-xs text-ash mb-1">Subject: {b.subject}</p>}
+                                                        <p className="text-sm whitespace-pre-wrap">{b.message}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            if (channel === "sms") {
+                                                return (
+                                                    <div key={channel}>
+                                                        <p className="text-xs font-medium text-ink mb-1">SMS</p>
+                                                        <p className="text-sm whitespace-pre-wrap">{b.sms_message || b.message}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            if (channel === "whatsapp") {
+                                                return (
+                                                    <div key={channel}>
+                                                        <p className="text-xs font-medium text-ink mb-1">WhatsApp</p>
+                                                        <p className="text-sm whitespace-pre-wrap">{b.whatsapp_message || b.message}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            if (channel === "in_app") {
+                                                return (
+                                                    <div key={channel}>
+                                                        <p className="text-xs font-medium text-ink mb-1">In-app notification</p>
+                                                        {b.in_app_title && <p className="text-xs text-ash mb-1">Title: {b.in_app_title}</p>}
+                                                        <p className="text-sm whitespace-pre-wrap">{b.in_app_message || b.message}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                        <p className="text-xs text-ash">
+                                            Delivered - email {b.email_sent_count}, sms {b.sms_sent_count}, whatsapp {b.whatsapp_sent_count}, in-app {b.in_app_sent_count}.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2 mt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleResend(b.id)}
+                                        disabled={isDeleting || isResending}
+                                        className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink disabled:opacity-50"
+                                    >
+                                        {isResending
+                                            ? "Resending…"
+                                            : confirmResendId === b.id
+                                                ? `Confirm - resend to today's ${b.segment.replace(/_/g, " ")}`
+                                                : "Resend"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(b.id)}
+                                        disabled={isDeleting || isResending}
+                                        className="text-xs border border-coral text-coral px-3 py-1.5 rounded-md hover:bg-coral/10 disabled:opacity-50"
+                                    >
+                                        {isDeleting
+                                            ? "Deleting…"
+                                            : confirmDeleteId === b.id
+                                                ? "Confirm delete"
+                                                : "Delete"}
+                                    </button>
+                                    {(confirmDeleteId === b.id || confirmResendId === b.id) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setConfirmDeleteId(null); setConfirmResendId(null); }}
+                                            className="text-xs text-ash underline"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                </div>
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
         </div>

@@ -80,17 +80,17 @@ export function parseGuideBlocks(markdown) {
         }
 
         // Paragraph: always consume the first line so an unmatched block
-        // marker (e.g. a lone "*") can't stall the loop. Lines within a
-        // paragraph are joined with "\n", not a space, so a single line
-        // break the author typed renders as a <br /> (see renderInline)
-        // instead of silently collapsing into one run-on line.
+        // marker (e.g. a lone "*") can't stall the loop.
         const para = [trimmed];
         i += 1;
         while (i < lines.length && lines[i].trim() && !BLOCK_START.test(lines[i].trim())) {
             para.push(lines[i].trim());
             i += 1;
         }
-        blocks.push({ type: "p", text: para.join("\n") });
+        // Lines are kept separate (not joined with a space) so a single
+        // line break inside a paragraph can render as <br /> rather than
+        // disappearing into collapsed whitespace.
+        blocks.push({ type: "p", lines: para });
     }
 
     return blocks;
@@ -102,12 +102,11 @@ export function extractGuideHeadings(markdown) {
         .map(({ id, text, level }) => ({ id, text, level }));
 }
 
-const INLINE = /(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*]+\*|\n)/g;
+const INLINE = /(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
 
 function renderInline(text, keyPrefix) {
     return text.split(INLINE).map((part, i) => {
         const key = `${keyPrefix}-${i}`;
-        if (part === "\n") return <br key={key} />;
         const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
         if (link) {
             const [, label, href] = link;
@@ -164,7 +163,16 @@ export default function GuideBody({ markdown }) {
                             </ol>
                         );
                     default:
-                        return <p key={key} className="mb-4">{renderInline(block.text, key)}</p>;
+                        return (
+                            <p key={key} className="mb-4">
+                                {block.lines.map((line, i) => (
+                                    <Fragment key={i}>
+                                        {i > 0 && <br />}
+                                        {renderInline(line, `${key}-${i}`)}
+                                    </Fragment>
+                                ))}
+                            </p>
+                        );
                 }
             })}
         </div>

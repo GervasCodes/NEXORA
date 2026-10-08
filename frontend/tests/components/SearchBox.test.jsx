@@ -21,7 +21,18 @@ vi.mock("../../src/api/ai", () => ({
 }));
 
 vi.mock("../../src/context/CurrencyContext", () => ({ useCurrency: () => ({ format: (v) => String(v) }) }));
-vi.mock("../../src/context/LanguageContext", () => ({ useLanguage: () => ({ t: (key) => key }) }));
+
+// The real LanguageContext memoizes its `t`/value object (useCallback +
+// useMemo), so its reference is stable across renders when the language
+// hasn't changed. SearchBox's suggestions effect depends on `t` in its
+// dependency array - a mock that hands back a fresh { t } object on every
+// call breaks that assumption and the effect fires on every render,
+// looping forever (setSuggestions([]) -> new state -> re-render -> new
+// `t` -> effect fires again). Hoisting both outside keeps one stable
+// reference, matching production.
+const stableT = (key) => key;
+const stableLanguageValue = { t: stableT };
+vi.mock("../../src/context/LanguageContext", () => ({ useLanguage: () => stableLanguageValue }));
 
 import SearchBox from "../../src/components/SearchBox";
 

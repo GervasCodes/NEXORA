@@ -22,6 +22,18 @@ const PAGE_SIZE = 24;
 // where it was missing rather than a new guess.
 const REQUEST_TIMEOUT_MS = 10000;
 
+// Phase 4A: remembers the shopper's grid-vs-list choice across visits
+// (and across different listing pages, since it's one shared key).
+const VIEW_STORAGE_KEY = "nexora_product_view";
+
+function readStoredView() {
+    try {
+        return localStorage.getItem(VIEW_STORAGE_KEY) === "list" ? "list" : "grid";
+    } catch {
+        return "grid";
+    }
+}
+
 export function ProductCardSkeleton() {
     return (
         <div className="animate-pulse">
@@ -34,6 +46,7 @@ export function ProductCardSkeleton() {
 }
 
 const GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
+const LIST_CLASS = "flex flex-col gap-3";
 
 // startPage (optional): first page to load, for URL-addressable listings (?page=N).
 // onResults receives (total, totalPages).
@@ -48,6 +61,13 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     const [retryCount, setRetryCount] = useState(0);
     const sentinelRef = useRef(null);
     const viewToggleRef = useRef(null);
+    const [view, setView] = useState(readStoredView);
+    const listClass = view === "list" ? LIST_CLASS : GRID_CLASS;
+
+    const chooseView = useCallback((next) => {
+        setView(next);
+        try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* storage unavailable */ }
+    }, []);
     // The swipe feed is an overlay launched from the toolbar button below.
     // forceFeedOnly (Browse All - see BrowseProducts.jsx) opens it immediately.
     const [feedOpen, setFeedOpen] = useState(forceFeedOnly);
@@ -148,6 +168,35 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         <div ref={viewToggleRef} className="flex items-center justify-end gap-2 mb-4">
             <button
                 type="button"
+                onClick={() => chooseView("grid")}
+                aria-label={t("products.viewGrid")}
+                aria-pressed={view === "grid"}
+                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${
+                    view === "grid" ? "border-ink text-ink" : "border-line text-ash hover:border-ink"
+                }`}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                onClick={() => chooseView("list")}
+                aria-label={t("products.viewList")}
+                aria-pressed={view === "list"}
+                className={`w-11 h-11 rounded-md flex items-center justify-center border transition-colors ${
+                    view === "list" ? "border-ink text-ink" : "border-line text-ash hover:border-ink"
+                }`}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <button
+                type="button"
                 onClick={() => setFeedOpen(true)}
                 disabled={loading}
                 aria-label={t("products.viewFeed")}
@@ -177,8 +226,8 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
             <>
                 {viewToggle}
                 {products.length > 0 ? (
-                    <div aria-busy="true" className={`${GRID_CLASS} opacity-50 transition-opacity`}>
-                        {products.map((product) => <ProductCard key={product.id} product={product} />)}
+                    <div aria-busy="true" className={`${listClass} opacity-50 transition-opacity`}>
+                        {products.map((product) => <ProductCard key={product.id} product={product} layout={view} />)}
                     </div>
                 ) : (
                     <div className={GRID_CLASS}>
@@ -220,9 +269,9 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         <>
             {viewToggle}
 
-            <div className={GRID_CLASS}>
+            <div className={listClass}>
                 {products.map((product, index) => (
-                    <ProductCard key={product.id} product={product} priority={index < 4} />
+                    <ProductCard key={product.id} product={product} priority={index < 4} layout={view} />
                 ))}
             </div>
 
@@ -230,7 +279,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 anyone whose browser/extensions block IntersectionObserver. */}
             <div ref={sentinelRef} />
             {loadingMore && (
-                <div className={`${GRID_CLASS} mt-4 sm:mt-5`}>
+                <div className={`${listClass} mt-4 sm:mt-5`}>
                     {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)}
                 </div>
             )}

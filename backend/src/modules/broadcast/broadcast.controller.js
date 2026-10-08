@@ -36,3 +36,21 @@ exports.getHistory = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+exports.remove = async (req, res) => {
+    try {
+        await broadcastService.deleteBroadcast(req.params.id);
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};
+
+exports.resend = async (req, res) => {
+    try {
+        const result = await broadcastService.resendBroadcast(req.params.id, req.user.id);
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};

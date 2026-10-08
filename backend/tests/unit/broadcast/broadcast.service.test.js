@@ -21,7 +21,11 @@ const recipient = (overrides = {}) => ({
 
 beforeEach(() => {
     jest.clearAllMocks();
-    sendEmail.mockResolvedValue(undefined);
+    // sendEmail now resolves `true` on an actual successful send (see
+    // utils/sendEmail.js) - broadcast.service.js only increments
+    // emailSentCount when it gets `true` back, so the default mock here
+    // has to match that "it worked" shape rather than `undefined`.
+    sendEmail.mockResolvedValue(true);
     smsProvider.sendText.mockResolvedValue(undefined);
     whatsappProvider.sendText.mockResolvedValue(undefined);
     notificationService.notify.mockResolvedValue(undefined);
@@ -243,12 +247,12 @@ describe("broadcast.service.sendBroadcast", () => {
         }));
     });
 
-    it("keeps sending to the rest of the segment when one recipient's send fails", async () => {
+    it("keeps sending to the rest of the segment when one recipient's send throws", async () => {
         broadcastRepository.findRecipientsBySegment.mockResolvedValue([
             recipient({ id: 1, email: "a@x.com" }),
             recipient({ id: 2, email: "b@x.com" })
         ]);
-        sendEmail.mockRejectedValueOnce(new Error("bounced")).mockResolvedValueOnce(undefined);
+        sendEmail.mockRejectedValueOnce(new Error("bounced")).mockResolvedValueOnce(true);
 
         const result = await broadcastService.sendBroadcast({
             adminId: 1, segment: "all_buyers", channels: ["email"], subject: "Hi", message: "Hello"
@@ -257,6 +261,26 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(sendEmail).toHaveBeenCalledTimes(2);
         expect(result.emailSentCount).toBe(1); // only the successful one counted
         expect(result.recipientCount).toBe(2); // audience size is unaffected by individual failures
+    });
+
+    // Regression test for the real bug: sendEmail({retry:false}) never
+    // actually throws (it catches the provider error itself and resolves
+    // `false` - see utils/sendEmail.js), so a broadcast could previously
+    // show "email N/N sent" while every single one had silently failed
+    // at the provider. emailSentCount must only count a `true` result.
+    it("does not count an email as sent when sendEmail resolves false (a swallowed provider failure)", async () => {
+        broadcastRepository.findRecipientsBySegment.mockResolvedValue([
+            recipient({ id: 1, email: "a@x.com" }),
+            recipient({ id: 2, email: "b@x.com" })
+        ]);
+        sendEmail.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+        const result = await broadcastService.sendBroadcast({
+            adminId: 1, segment: "all_buyers", channels: ["email"], subject: "Hi", message: "Hello"
+        });
+
+        expect(sendEmail).toHaveBeenCalledTimes(2);
+        expect(result.emailSentCount).toBe(1);
     });
 
     it("creates an in-app notification for a recipient with no email or phone on file", async () => {

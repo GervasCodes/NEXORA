@@ -103,7 +103,11 @@ exports.resolveChannelContent = ({ subject, message, smsMessage, whatsappMessage
 // of a several-thousand-row segment from being messaged.
 exports.sendBroadcast = async ({
     adminId, segment, channels, subject, message,
-    smsMessage, whatsappMessage, inAppTitle, inAppMessage
+    smsMessage, whatsappMessage, inAppTitle, inAppMessage,
+    // Set only by resendBroadcast() below - threaded through so the
+    // audit entry for a resend says so and links back to the original,
+    // instead of reading identically to a brand-new send.
+    resentFromId
 }) => {
     assertValidSegmentAndChannels(segment, channels);
 
@@ -144,8 +148,18 @@ exports.sendBroadcast = async ({
                         message: content.email.message,
                         eyebrow: "ANNOUNCEMENT"
                     });
-                    await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false });
-                    emailSentCount += 1;
+                    // sendEmail({retry:false}) never throws - it swallows a
+                    // failed send internally (see utils/sendEmail.js) so one
+                    // bad address can't abort the loop. That used to mean
+                    // this count went up unconditionally on every attempt,
+                    // so a broadcast could show "email 500/500 sent" while
+                    // every single one had actually failed at the provider.
+                    // sendEmail now reports back whether it really went out,
+                    // so only count it when it did.
+                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false });
+                    if (delivered) {
+                        emailSentCount += 1;
+                    }
                 } else if (channel === "sms") {
                     await smsProvider.sendText(recipient.phone, content.sms);
                     smsSentCount += 1;
@@ -187,8 +201,14 @@ exports.sendBroadcast = async ({
     auditService.log({
         userId: adminId,
         eventType: "broadcast_sent",
-        description: `Broadcast sent to ${segment} (${recipients.length} recipients)`,
-        metadata: { broadcastId, segment, channels, recipientCount: recipients.length, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount }
+        description: resentFromId
+            ? `Broadcast resent to ${segment} (${recipients.length} recipients, resend of #${resentFromId})`
+            : `Broadcast sent to ${segment} (${recipients.length} recipients)`,
+        metadata: {
+            broadcastId, segment, channels, recipientCount: recipients.length,
+            emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount,
+            ...(resentFromId ? { resentFromId } : {})
+        }
     });
 
     return {
@@ -198,8 +218,47 @@ exports.sendBroadcast = async ({
         emailSentCount,
         smsSentCount,
         whatsappSentCount,
-        inAppSentCount
+        inAppSentCount,
+        ...(resentFromId ? { resentFromId } : {})
     };
 };
 
 exports.getHistory = async () => broadcastRepository.findAll({ limit: 50 });
+
+// Soft delete - see broadcast.repository.js#softDelete and migration
+// 141 for why this hides rather than destroys the row.
+exports.deleteBroadcast = async (id) => {
+    const removed = await broadcastRepository.softDelete(id);
+    if (!removed) {
+        throw Object.assign(new Error("Broadcast not found"), { status: 404 });
+    }
+};
+
+// Resends a past broadcast's exact stored content (subject/message and
+// any per-channel overrides) through the normal sendBroadcast() path -
+// not a copy of its send loop - so eligibility rules, per-channel
+// fallback and history recording all stay in the one place this file
+// already tests. The audience is re-resolved from the segment fresh
+// (not the original recipient list), so anyone who joined since the
+// original send gets it and anyone deactivated since doesn't. Writes
+// its OWN new `broadcasts` row - the original is left exactly as it
+// was sent, and the resend shows up as its own entry in history.
+exports.resendBroadcast = async (id, adminId) => {
+    const original = await broadcastRepository.findById(id);
+    if (!original) {
+        throw Object.assign(new Error("Broadcast not found"), { status: 404 });
+    }
+
+    return exports.sendBroadcast({
+        adminId,
+        segment: original.segment,
+        channels: original.channels.split(","),
+        subject: original.subject,
+        message: original.message,
+        smsMessage: original.sms_message,
+        whatsappMessage: original.whatsapp_message,
+        inAppTitle: original.in_app_title,
+        inAppMessage: original.in_app_message,
+        resentFromId: original.id
+    });
+};

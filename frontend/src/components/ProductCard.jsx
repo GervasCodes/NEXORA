@@ -32,7 +32,7 @@ function HeartIcon({ filled }) {
     );
 }
 
-function ProductCard({ product, priority = false }) {
+function ProductCard({ product, priority = false, layout = "grid" }) {
     const { format } = useCurrency();
     const { t } = useLanguage();
     const { user } = useAuth();
@@ -40,6 +40,7 @@ function ProductCard({ product, priority = false }) {
     const cart = useCart();
     const toast = useToast();
     const dataSaver = useDataSaver();
+    const isList = layout === "list";
     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
     const discountPct = hasDiscount ? Math.round((1 - Number(product.discount_price) / Number(product.price)) * 100) : 0;
     const stock = Number(product.stock);
@@ -53,7 +54,11 @@ function ProductCard({ product, priority = false }) {
 
     const handleToggleSave = () => wishlist?.toggle(product.id);
 
-    const handleAddToCart = async () => {
+    const handleAddToCart = async (e) => {
+        // Save/add-to-cart sit beside the <Link>, not inside it - but the
+        // button is still painted on top of the card, so a click needs to
+        // be stopped from falling through to the Link's own navigation.
+        e.preventDefault();
         if (adding || stock === 0) return;
 
         setAdding(true);
@@ -159,26 +164,25 @@ function ProductCard({ product, priority = false }) {
         </div>
     );
 
-    // Save: buyers toggle it; guests are sent to sign in. Sellers see neither.
-    const saveButton = (user?.role === "buyer" || isGuest) && (
-        isGuest ? (
-            <Link to={loginHref("save")} aria-label={t("products.feedSignIn")} className={SAVE_BUTTON}>
-                <span className="w-7 h-7 rounded-full glass-strong flex items-center justify-center"><HeartIcon filled={false} /></span>
-            </Link>
-        ) : (
-            <button
-                type="button"
-                onClick={handleToggleSave}
-                aria-label={saved ? t("products.feedRemoveSaved") : t("products.feedSave")}
-                aria-pressed={!!saved}
-                className={SAVE_BUTTON}
-            >
-                <span className="w-7 h-7 rounded-full glass-strong flex items-center justify-center hover:scale-110 transition-transform"><HeartIcon filled={!!saved} /></span>
-            </button>
-        )
+    // Save: buyers only. Guests are sent to sign in via the add-to-cart
+    // CTA itself instead of duplicating a second sign-in affordance here.
+    // Sellers see neither.
+    const saveButton = user?.role === "buyer" && (
+        <button
+            type="button"
+            onClick={handleToggleSave}
+            aria-label={saved ? t("products.feedRemoveSaved") : t("products.feedSave")}
+            aria-pressed={!!saved}
+            className={SAVE_BUTTON}
+        >
+            <span className="w-7 h-7 rounded-full glass-strong flex items-center justify-center hover:scale-110 transition-transform"><HeartIcon filled={!!saved} /></span>
+        </button>
     );
 
-    const addToCartButton = (isGuest || user?.role === "buyer") && (
+    // List rows are dense (search results, "Browse all" list view) - the
+    // add-to-cart CTA is omitted there entirely rather than cramped into a
+    // row; shoppers add from the product page instead. Grid tiles keep it.
+    const addToCartButton = !isList && (isGuest || user?.role === "buyer") && (
         isGuest ? (
             <Link
                 to={loginHref("add-to-cart")}
@@ -194,21 +198,36 @@ function ProductCard({ product, priority = false }) {
                 size="sm"
                 className="w-full mt-2 min-h-[44px]"
             >
-                {adding ? "…" : t("products.feedAddToCart")}
+                {adding ? "…" : "Add to cart"}
             </Button>
         )
+    );
+
+    const details = (
+        <div className={isList ? "flex-1 min-w-0" : undefined}>
+            {storeLine}
+            <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
+            {priceRow}
+            {ratingAndStock}
+        </div>
     );
 
     // Save and add-to-cart sit beside the link, not inside it, so there are
     // no nested interactive elements.
     return (
-        <div className="tag-string group relative block bg-paper border border-line rounded-lg pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5 transition-all">
-            <Link to={`/products/${product.slug}`} className="block">
-                {media}
-                {storeLine}
-                <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
-                {priceRow}
-                {ratingAndStock}
+        <div className={`tag-string group relative bg-paper border border-line rounded-lg transition-all ${
+            isList ? "flex gap-3 p-3" : "block pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5"
+        }`}>
+            <Link to={`/products/${product.slug}`} className={isList ? "flex gap-3 flex-1 min-w-0" : "block"}>
+                {isList ? <div className="w-20 shrink-0">{media}</div> : media}
+                {isList ? details : (
+                    <>
+                        {storeLine}
+                        <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
+                        {priceRow}
+                        {ratingAndStock}
+                    </>
+                )}
             </Link>
             {saveButton}
             {addToCartButton}

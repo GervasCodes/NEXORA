@@ -112,7 +112,13 @@ describe("AuthContext", () => {
             success: true,
             needsOtp: true,
             preAuthToken: "pre-token",
-            maskedEmail: "b***@nexora.tz"
+            maskedEmail: "b***@nexora.tz",
+            // OTP resend/expiry UX: threaded through from the login
+            // response so Login.jsx can drive a live countdown. Not part
+            // of this mock's response, so they come back as their
+            // defaults (undefined / true).
+            expiresInSeconds: undefined,
+            codeDelivered: true
         });
         expect(hookResult.user).toBeNull();
     });
@@ -171,7 +177,10 @@ describe("AuthContext", () => {
 
         await user.click(screen.getByText("Resend OTP"));
 
-        expect(api.post).toHaveBeenCalledWith("/auth/login/resend-otp", { pre_auth_token: "pre-token" });
+        // resendLoginOtp() now takes an optional channel (OTP
+        // resend/expiry UX), defaulting to "email" when the caller
+        // (like this harness) doesn't pass one.
+        expect(api.post).toHaveBeenCalledWith("/auth/login/resend-otp", { pre_auth_token: "pre-token", channel: "email" });
     });
 
     it("resendLoginOtp() surfaces a failure message when the resend fails", async () => {

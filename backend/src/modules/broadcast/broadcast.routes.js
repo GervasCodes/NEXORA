@@ -6,12 +6,14 @@ const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
 const broadcastController = require("./broadcast.controller");
-const { previewValidation, sendBroadcastValidation } = require("./broadcast.validator");
+const { previewValidation, sendBroadcastValidation, idParamValidation } = require("./broadcast.validator");
 
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/", broadcastController.getHistory);
 router.post("/preview", previewValidation, validationMiddleware, broadcastController.preview);
 router.post("/", sendBroadcastValidation, validationMiddleware, broadcastController.send);
+router.delete("/:id", idParamValidation, validationMiddleware, broadcastController.remove);
+router.post("/:id/resend", idParamValidation, validationMiddleware, broadcastController.resend);
 
 module.exports = router;

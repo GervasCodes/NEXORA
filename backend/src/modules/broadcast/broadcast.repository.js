@@ -70,11 +70,40 @@ exports.findAll = async ({ limit = 50 } = {}) => {
         `SELECT b.*, u.first_name AS admin_first_name, u.last_name AS admin_last_name
         FROM broadcasts b
         JOIN users u ON u.id = b.admin_id
+        WHERE b.deleted_at IS NULL
         ORDER BY b.created_at DESC
         LIMIT ?`,
         [limit]
     );
     return rows;
+};
+
+// Single-row lookup backing both the delete-ownership check and resend
+// (resend needs the full stored content - subject/message/per-channel
+// bodies - not just the summary findAll's callers have historically
+// needed).
+exports.findById = async (id) => {
+    const [rows] = await db.query(
+        `SELECT b.*, u.first_name AS admin_first_name, u.last_name AS admin_last_name
+        FROM broadcasts b
+        JOIN users u ON u.id = b.admin_id
+        WHERE b.id = ? AND b.deleted_at IS NULL`,
+        [id]
+    );
+    return rows[0] || null;
+};
+
+// Soft delete only - see migration 141_broadcasts_soft_delete.sql for
+// why this table is never hard-deleted from. Scoped to
+// `deleted_at IS NULL` so calling this twice on the same id is a no-op
+// the second time (affectedRows: 0), which the service layer reads as
+// "already gone" / 404 rather than silently succeeding again.
+exports.softDelete = async (id) => {
+    const [result] = await db.query(
+        "UPDATE broadcasts SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL",
+        [id]
+    );
+    return result.affectedRows > 0;
 };
 
 // --- Brevo delivery-status webhook (Phase 5, production error fixes) ---

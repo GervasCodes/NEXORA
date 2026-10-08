@@ -1,4 +1,4 @@
-const { body } = require("express-validator");
+const { body, param } = require("express-validator");
 const { BROADCAST_SEGMENTS, BROADCAST_CHANNELS } = require("../../constants/broadcast");
 
 exports.previewValidation = [
@@ -68,4 +68,9 @@ exports.sendBroadcastValidation = [
         .trim()
         .isLength({ max: 1000 })
         .withMessage("In-app message must be under 1000 characters")
+];
+
+// Shared by DELETE /:id and POST /:id/resend.
+exports.idParamValidation = [
+    param("id").isInt({ min: 1 }).withMessage("Invalid broadcast id")
 ];

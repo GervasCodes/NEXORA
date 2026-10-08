@@ -39,13 +39,11 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "auth.otp.verifyButton": "Verify & sign in",
                 "auth.otp.verifying": "Verifying…",
                 "auth.otp.useDifferentAccount": "Use a different account",
-                "auth.otp.resendCode": "Resend code",
-                "auth.otp.resendSuccess": "A new code has been sent.",
-                "auth.otp.channelLabel": "Send the code by",
+                "auth.otp.channelLabel": "Resend via",
                 "auth.otp.channel.email": "Email",
                 "auth.otp.channel.sms": "SMS",
                 "auth.otp.channel.whatsapp": "WhatsApp",
-                "auth.otp.resendIn": "Resend code ({seconds}s)"
+                "auth.otp.resendSuccess": "A new code has been sent."
             }[key] || key);
             if (!params) return template;
             return template.replace(/\{(\w+)\}/g, (match, k) => (
@@ -148,16 +146,19 @@ describe("Login page", () => {
     });
 
     it("requests a new code via resend, showing a confirmation notice", async () => {
-        // There's no single generic "Resend code" control any more - the
-        // OTP step offers per-channel resend buttons (Email/SMS/WhatsApp,
-        // see Login.jsx's channel picker) so a buyer whose first code
-        // didn't arrive can fall back to another delivery method.
         mockLogin.mockResolvedValue({ success: true, preAuthToken: "pre-token", maskedEmail: "b***@nexora.tz" });
-        mockResendLoginOtp.mockResolvedValue({ success: true });
+        // delivered:true matches what AuthContext's real resendLoginOtp()
+        // always supplies (defaults true unless the backend says
+        // otherwise) - Login.jsx's handleResend branches on this to
+        // decide whether the chosen channel actually delivered the code.
+        mockResendLoginOtp.mockResolvedValue({ success: true, delivered: true });
         const user = userEvent.setup();
         renderLogin();
         await submitCredentials(user);
-        await waitFor(() => screen.getByText("Check your email"));
+        // Resend is now per-channel (OTP resend/expiry UX) rather than a
+        // single "Resend code" link - "Email" is one of the three channel
+        // buttons ("Email"/"SMS"/"WhatsApp") shown once the OTP step loads.
+        await waitFor(() => screen.getByText("Email"));
 
         await user.click(screen.getByText("Email"));
 

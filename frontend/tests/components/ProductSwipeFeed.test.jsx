@@ -8,6 +8,7 @@ vi.mock("../../src/api/client", () => ({
 }));
 vi.mock("../../src/context/LanguageContext", () => ({ useLanguage: () => ({ t: (key) => key }) }));
 vi.mock("../../src/context/CurrencyContext", () => ({ useCurrency: () => ({ format: (v) => `TZS ${v}` }) }));
+vi.mock("../../src/context/AuthContext", () => ({ useAuth: () => ({ user: null }) }));
 
 import ProductSwipeFeed, { LOAD_AHEAD } from "../../src/components/ProductSwipeFeed";
 
@@ -67,23 +68,24 @@ afterEach(() => {
 describe("ProductSwipeFeed media", () => {
     it("plays a product's video when it has one, and shows its image otherwise", () => {
         const products = makeProducts(2, { 1: { videos: [{ id: 9, video_url: "https://cdn.test/clip.mp4" }] } });
-        const { container } = renderFeed({ products });
+        renderFeed({ products });
 
         // Slide 0 has no video: image only.
-        expect(container.querySelector("video")).toBeNull();
-        expect(container.querySelector("img")).toHaveAttribute("src", "https://img.test/1.jpg");
+        expect(document.body.querySelector("video")).toBeNull();
+        expect(document.body.querySelector("img")).toHaveAttribute("src", "https://img.test/1.jpg");
 
         // Slide 1 has one: it becomes the active slide and plays.
         showSlide(1);
-        expect(container.querySelector("video")).toHaveAttribute("src", "https://cdn.test/clip.mp4");
+        expect(document.body.querySelector("video")).toHaveAttribute("src", "https://cdn.test/clip.mp4");
     });
 
     it("finds a video the list response didn't include by looking up the product detail", async () => {
         mockGet.mockResolvedValue({ data: { data: { videos: [{ id: 1, video_url: "https://cdn.test/detail.mp4" }] } } });
-        const { container } = renderFeed({ products: makeProducts(1) });
+        renderFeed({ products: makeProducts(1) });
 
-        await waitFor(() => expect(container.querySelector("video")).toHaveAttribute("src", "https://cdn.test/detail.mp4"));
-        expect(mockGet).toHaveBeenCalledWith("/products/product-1");
+        await waitFor(() => expect(document.body.querySelector("video")).toHaveAttribute("src", "https://cdn.test/detail.mp4"));
+        // Phase 6.1 follow-up: this lookup now has its own request timeout.
+        expect(mockGet).toHaveBeenCalledWith("/products/product-1", { timeout: 8000 });
     });
 });
 

@@ -126,7 +126,7 @@ describe("notification.service.notify", () => {
         expect(html).toContain("<h1");
         expect(html).toContain("<p>M</p>");
         expect(html).toContain("en:email.cta.view");
-        expect(html).toContain('href="https://nexora.co.tz/notifications"');
+        expect(html).toContain('href="https://nexoramarketplace.online/notifications"');
     });
 
     it("points the email's call-to-action at the order page when the notification is about an order", async () => {
@@ -139,7 +139,7 @@ describe("notification.service.notify", () => {
 
         const [, , text, html] = sendEmail.mock.calls[0];
         expect(text).toContain("/orders/5");
-        expect(html).toContain('href="https://nexora.co.tz/orders/5"');
+        expect(html).toContain('href="https://nexoramarketplace.online/orders/5"');
     });
 
     // Phase 6 (UI/UX remediation, notifications) - related_conversation_id

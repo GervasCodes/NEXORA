@@ -25,12 +25,33 @@ const CHANNELS = [
     { value: "in_app", label: "In-app" }
 ];
 
+// Each channel's own send limit/behaviour (shown as a short hint under
+// that channel's box) - this is *why* the sections are split rather
+// than a style choice: an SMS over ~160 chars is billed/split into
+// multiple segments by the gateway, WhatsApp has more room but is still
+// read on a phone, and an in-app notification is a single line in
+// NotificationBell.jsx. Keep these in sync with the server-side caps in
+// backend/src/modules/broadcast/broadcast.validator.js.
+const SMS_MAX = 320;
+const WHATSAPP_MAX = 1000;
+const IN_APP_MAX = 1000;
+
 export default function AdminBroadcast() {
     const toast = useToast();
     const [segment, setSegment] = useState("all_buyers");
     const [channels, setChannels] = useState(["email"]);
     const [subject, setSubject] = useState("");
     const [message, setMessage] = useState("");
+    // Per-channel overrides - every one is optional. Left blank, the
+    // server falls back to subject/message above (see
+    // broadcast.service.js#resolveChannelContent) so ticking an extra
+    // channel without touching its box still sends something sensible;
+    // these exist so an admin CAN give SMS/WhatsApp/in-app their own
+    // shorter, channel-appropriate copy instead of the full email body.
+    const [smsMessage, setSmsMessage] = useState("");
+    const [whatsappMessage, setWhatsappMessage] = useState("");
+    const [inAppTitle, setInAppTitle] = useState("");
+    const [inAppMessage, setInAppMessage] = useState("");
     const [audience, setAudience] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [sending, setSending] = useState(false);
@@ -71,11 +92,21 @@ export default function AdminBroadcast() {
 
         setSending(true);
         try {
-            const { data } = await api.post("/admin/broadcasts", { segment, channels, subject, message });
+            const { data } = await api.post("/admin/broadcasts", {
+                segment, channels, subject, message,
+                smsMessage: smsMessage.trim() || undefined,
+                whatsappMessage: whatsappMessage.trim() || undefined,
+                inAppTitle: inAppTitle.trim() || undefined,
+                inAppMessage: inAppMessage.trim() || undefined
+            });
             setLastResult(data.data);
             toast?.success("Broadcast sent");
             setMessage("");
             setSubject("");
+            setSmsMessage("");
+            setWhatsappMessage("");
+            setInAppTitle("");
+            setInAppMessage("");
             setConfirming(false);
             loadHistory();
         } catch (err) {
@@ -134,27 +165,105 @@ export default function AdminBroadcast() {
                     )}
                 </div>
 
+                {/* Email gets its own subject + body - the only channel that
+                    needs a subject line and the one with the most room to
+                    write, so it stays the "main" compose box and doubles as
+                    the fallback body for any other channel left blank below. */}
                 {channels.includes("email") && (
-                    <Input
-                        label="Subject"
-                        value={subject}
-                        onChange={(e) => { setSubject(e.target.value); setConfirming(false); }}
-                        maxLength={150}
-                    />
+                    <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
+                        <p className="text-xs font-medium text-ink">Email</p>
+                        <Input
+                            label="Subject"
+                            value={subject}
+                            onChange={(e) => { setSubject(e.target.value); setConfirming(false); }}
+                            maxLength={150}
+                        />
+                        <Input
+                            as="textarea"
+                            label={channels.length > 1 ? "Email body (also the fallback for any channel left blank below)" : "Email body"}
+                            id="broadcast-message"
+                            value={message}
+                            onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
+                            maxLength={2000}
+                            rows={5}
+                            hint={`${message.length}/2000`}
+                        />
+                    </div>
                 )}
 
-                <div>
-                    <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
-                    <textarea
-                        id="broadcast-message"
-                        value={message}
-                        onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
-                        maxLength={2000}
-                        rows={5}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
-                    />
-                    <p className="text-xs text-ash mt-1">{message.length}/2000</p>
-                </div>
+                {!channels.includes("email") && (
+                    <div>
+                        <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
+                        <textarea
+                            id="broadcast-message"
+                            value={message}
+                            onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
+                            maxLength={2000}
+                            rows={5}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                        />
+                        <p className="text-xs text-ash mt-1">
+                            {message.length}/2000 · used as-is for any channel left blank below
+                        </p>
+                    </div>
+                )}
+
+                {/* SMS, WhatsApp and in-app each read nothing like an email -
+                    an SMS is billed/split in ~160-char segments, WhatsApp
+                    tolerates more but is still read on a phone, and in-app is
+                    one line in NotificationBell.jsx - so each gets its own
+                    optional box instead of all four sharing the email copy
+                    above. Leaving one blank just reuses the shared message. */}
+                {channels.includes("sms") && (
+                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
+                        <p className="text-xs font-medium text-ink">SMS</p>
+                        <Input
+                            as="textarea"
+                            label="SMS message (optional - reuses the email/shared message above if left blank)"
+                            value={smsMessage}
+                            onChange={(e) => { setSmsMessage(e.target.value); setConfirming(false); }}
+                            maxLength={SMS_MAX}
+                            rows={2}
+                            hint={`${smsMessage.length}/${SMS_MAX} · long messages are split into multiple SMS segments by the gateway`}
+                        />
+                    </div>
+                )}
+
+                {channels.includes("whatsapp") && (
+                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
+                        <p className="text-xs font-medium text-ink">WhatsApp</p>
+                        <Input
+                            as="textarea"
+                            label="WhatsApp message (optional - reuses the email/shared message above if left blank)"
+                            value={whatsappMessage}
+                            onChange={(e) => { setWhatsappMessage(e.target.value); setConfirming(false); }}
+                            maxLength={WHATSAPP_MAX}
+                            rows={3}
+                            hint={`${whatsappMessage.length}/${WHATSAPP_MAX} · only reaches recipients who've opted into WhatsApp updates`}
+                        />
+                    </div>
+                )}
+
+                {channels.includes("in_app") && (
+                    <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
+                        <p className="text-xs font-medium text-ink">In-app notification</p>
+                        <Input
+                            label="Title (optional - reuses the email subject, or 'Announcement', if left blank)"
+                            value={inAppTitle}
+                            onChange={(e) => { setInAppTitle(e.target.value); setConfirming(false); }}
+                            maxLength={150}
+                        />
+                        <Input
+                            as="textarea"
+                            label="Message (optional - reuses the email/shared message above if left blank)"
+                            value={inAppMessage}
+                            onChange={(e) => { setInAppMessage(e.target.value); setConfirming(false); }}
+                            maxLength={IN_APP_MAX}
+                            rows={2}
+                            hint={`${inAppMessage.length}/${IN_APP_MAX} · shown in the notification bell, so keep it short`}
+                        />
+                    </div>
+                )}
 
                 <Button onClick={handleSend} disabled={!canSend || sending} variant={confirming ? "primary" : "secondary"}>
                     {sending

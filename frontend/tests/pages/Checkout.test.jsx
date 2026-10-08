@@ -143,7 +143,7 @@ describe("Checkout page", () => {
         renderCheckout();
         await fillRequiredFields(user);
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/orders/55", { state: { justPlaced: true } }));
         expect(api.post).toHaveBeenNthCalledWith(1, "/orders", expect.objectContaining({
@@ -169,7 +169,7 @@ describe("Checkout page", () => {
         await fillRequiredFields(user);
         await user.click(screen.getByText("Drop pin"));
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(api.post).toHaveBeenCalledWith("/orders", expect.objectContaining({
             delivery_lat: -6.8,
@@ -185,7 +185,7 @@ describe("Checkout page", () => {
         await fillRequiredFields(user);
         await user.click(screen.getByLabelText("Cash on Delivery"));
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/orders/56", { state: { justPlaced: true } }));
         expect(api.post).toHaveBeenCalledTimes(1);
@@ -201,7 +201,7 @@ describe("Checkout page", () => {
         await fillRequiredFields(user);
         await user.click(screen.getByLabelText(/Card \(Snippe\)/));
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(window.location.href).toBe("https://pay.snippe.sh/session/abc"));
         expect(api.post).toHaveBeenNthCalledWith(2, "/payments/57/snippe/checkout", {
@@ -221,7 +221,7 @@ describe("Checkout page", () => {
         await fillRequiredFields(user);
         await user.click(screen.getByLabelText(/PayPal/));
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(window.location.href).toBe("https://paypal.com/checkoutnow?token=xyz"));
         expect(api.post).toHaveBeenNthCalledWith(2, "/payments/58/paypal/create", {
@@ -238,7 +238,7 @@ describe("Checkout page", () => {
         renderCheckout();
         await fillRequiredFields(user);
 
-        const submitButton = screen.getByRole("button", { name: /Place order/ });
+        const submitButton = screen.getByRole("button", { name: "Place order" });
         await user.click(submitButton);
 
         await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("Out of stock"));
@@ -253,7 +253,7 @@ describe("Checkout page", () => {
         renderCheckout();
         await fillRequiredFields(user);
 
-        await user.click(screen.getByRole("button", { name: /Place order/ }));
+        await user.click(screen.getByRole("button", { name: "Place order" }));
 
         await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(extractErrorMessage({})));
     });

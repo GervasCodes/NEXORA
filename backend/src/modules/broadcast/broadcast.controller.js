@@ -16,7 +16,11 @@ exports.send = async (req, res) => {
             segment: req.body.segment,
             channels: req.body.channels,
             subject: req.body.subject,
-            message: req.body.message
+            message: req.body.message,
+            smsMessage: req.body.smsMessage,
+            whatsappMessage: req.body.whatsappMessage,
+            inAppTitle: req.body.inAppTitle,
+            inAppMessage: req.body.inAppMessage
         });
         return res.json({ success: true, data: result });
     } catch (error) {

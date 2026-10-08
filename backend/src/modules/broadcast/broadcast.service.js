@@ -1,5 +1,6 @@
 const broadcastRepository = require("./broadcast.repository");
 const sendEmail = require("../../utils/sendEmail");
+const { renderEmail } = require("../../utils/emailTemplate");
 const smsProvider = require("../sms/providers/sms.provider");
 const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
 // Reuses the same notification-creation + socket-emit path every other
@@ -77,11 +78,33 @@ exports.resolveChannelsForRecipient = (recipient, requestedChannels) => {
     return eligible;
 };
 
+// Each channel gets its own box in AdminBroadcast.jsx now (an SMS reads
+// nothing like an email, and a WhatsApp message can be longer/richer
+// than an SMS but shouldn't carry a full email's paragraphs either) -
+// but an admin who only fills in the shared `message`/`subject` and
+// ticks extra channels should still get something sensible sent rather
+// than an empty SMS, so every per-channel field falls back to the
+// shared one when left blank. Centralised here (rather than inlined in
+// the send loop) so previewAudience-style callers and tests can reason
+// about "what actually gets sent on channel X" in one place.
+exports.resolveChannelContent = ({ subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage }) => ({
+    email: { subject, message },
+    sms: (smsMessage && smsMessage.trim()) || message,
+    whatsapp: (whatsappMessage && whatsappMessage.trim()) || message,
+    inApp: {
+        title: (inAppTitle && inAppTitle.trim()) || subject || "Announcement",
+        message: (inAppMessage && inAppMessage.trim()) || message
+    }
+});
+
 // Every individual provider call is best-effort (mirrors notify()'s own
 // treatment of email/WhatsApp sends elsewhere in the app) - one
 // recipient's bounced email or invalid number must never stop the rest
 // of a several-thousand-row segment from being messaged.
-exports.sendBroadcast = async ({ adminId, segment, channels, subject, message }) => {
+exports.sendBroadcast = async ({
+    adminId, segment, channels, subject, message,
+    smsMessage, whatsappMessage, inAppTitle, inAppMessage
+}) => {
     assertValidSegmentAndChannels(segment, channels);
 
     if (channels.includes("email") && !subject) {
@@ -91,6 +114,8 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
     if (!message || !message.trim()) {
         throw Object.assign(new Error("Message is required"), { status: 400 });
     }
+
+    const content = exports.resolveChannelContent({ subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage });
 
     const recipients = await broadcastRepository.findRecipientsBySegment(segment);
 
@@ -105,20 +130,34 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
         for (const channel of eligibleChannels) {
             try {
                 if (channel === "email") {
-                    await sendEmail(recipient.email, subject, message, undefined, { retry: false });
+                    // Previously called sendEmail() with no `html` arg, which
+                    // falls back to utils/sendEmail.js's bare textToHtml()
+                    // wrapper - a plain paragraph with none of the branded
+                    // header, so the logo never appeared in a broadcast email
+                    // even though every other transactional email (order
+                    // updates, OTP) renders it via renderEmail(). Routed
+                    // through the same renderEmail() template here so
+                    // broadcasts match.
+                    const rendered = renderEmail({
+                        locale: recipient.language,
+                        heading: content.email.subject,
+                        message: content.email.message,
+                        eyebrow: "ANNOUNCEMENT"
+                    });
+                    await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false });
                     emailSentCount += 1;
                 } else if (channel === "sms") {
-                    await smsProvider.sendText(recipient.phone, message);
+                    await smsProvider.sendText(recipient.phone, content.sms);
                     smsSentCount += 1;
                 } else if (channel === "whatsapp") {
-                    await whatsappProvider.sendText(recipient.phone, message);
+                    await whatsappProvider.sendText(recipient.phone, content.whatsapp);
                     whatsappSentCount += 1;
                 } else if (channel === "in_app") {
                     await notificationService.notify({
                         userId: recipient.id,
                         type: "broadcast",
-                        title: subject || "Announcement",
-                        message
+                        title: content.inApp.title,
+                        message: content.inApp.message
                     });
                     inAppSentCount += 1;
                 }
@@ -134,6 +173,10 @@ exports.sendBroadcast = async ({ adminId, segment, channels, subject, message })
         channels,
         subject,
         message,
+        smsMessage: smsMessage || null,
+        whatsappMessage: whatsappMessage || null,
+        inAppTitle: inAppTitle || null,
+        inAppMessage: inAppMessage || null,
         recipientCount: recipients.length,
         emailSentCount,
         smsSentCount,

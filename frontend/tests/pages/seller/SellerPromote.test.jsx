@@ -8,6 +8,28 @@ vi.mock("../../../src/api/client", () => ({
     extractErrorMessage: () => "Something went wrong"
 }));
 
+// SellerSponsorship/SellerDepartmentSponsorship/SellerFeaturedStore each
+// read `t` off useLanguage() - without a <LanguageProvider> ancestor
+// (none of these tests wrap with one) that context value is null, so
+// destructuring `{ t }` throws. Assertions below check real translated
+// tab/copy text, so reuse the actual English dictionary rather than
+// hand-copying keys into a partial mock.
+vi.mock("../../../src/context/LanguageContext", async () => {
+    const actual = await vi.importActual("../../../src/context/LanguageContext");
+    return {
+        ...actual,
+        useLanguage: () => ({
+            t: (key, params) => {
+                const template = actual.DICTIONARY.en[key] || key;
+                if (!params) return template;
+                return template.replace(/\{(\w+)\}/g, (match, k) => (
+                    params[k] !== undefined && params[k] !== null ? String(params[k]) : ""
+                ));
+            }
+        })
+    };
+});
+
 import api from "../../../src/api/client";
 import SellerPromote from "../../../src/pages/seller/SellerPromote";
 

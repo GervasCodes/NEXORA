@@ -80,14 +80,17 @@ export function parseGuideBlocks(markdown) {
         }
 
         // Paragraph: always consume the first line so an unmatched block
-        // marker (e.g. a lone "*") can't stall the loop.
+        // marker (e.g. a lone "*") can't stall the loop. Lines within a
+        // paragraph are joined with "\n", not a space, so a single line
+        // break the author typed renders as a <br /> (see renderInline)
+        // instead of silently collapsing into one run-on line.
         const para = [trimmed];
         i += 1;
         while (i < lines.length && lines[i].trim() && !BLOCK_START.test(lines[i].trim())) {
             para.push(lines[i].trim());
             i += 1;
         }
-        blocks.push({ type: "p", text: para.join(" ") });
+        blocks.push({ type: "p", text: para.join("\n") });
     }
 
     return blocks;
@@ -99,11 +102,12 @@ export function extractGuideHeadings(markdown) {
         .map(({ id, text, level }) => ({ id, text, level }));
 }
 
-const INLINE = /(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+const INLINE = /(\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*]+\*|\n)/g;
 
 function renderInline(text, keyPrefix) {
     return text.split(INLINE).map((part, i) => {
         const key = `${keyPrefix}-${i}`;
+        if (part === "\n") return <br key={key} />;
         const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
         if (link) {
             const [, label, href] = link;

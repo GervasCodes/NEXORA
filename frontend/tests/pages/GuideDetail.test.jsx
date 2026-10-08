@@ -11,6 +11,27 @@ vi.mock("../../src/api/client", () => ({
     default: { get: vi.fn() }
 }));
 
+// GuideDetail reads `t` off useLanguage() - without a <LanguageProvider>
+// ancestor (none of these tests wrap with one) that context value is
+// null, so destructuring `{ t }` throws. Reuse the real English
+// dictionary instead of hand-copying the handful of keys this page
+// needs, so this mock doesn't silently drift from LanguageContext.jsx.
+vi.mock("../../src/context/LanguageContext", async () => {
+    const actual = await vi.importActual("../../src/context/LanguageContext");
+    return {
+        ...actual,
+        useLanguage: () => ({
+            t: (key, params) => {
+                const template = actual.DICTIONARY.en[key] || key;
+                if (!params) return template;
+                return template.replace(/\{(\w+)\}/g, (match, k) => (
+                    params[k] !== undefined && params[k] !== null ? String(params[k]) : ""
+                ));
+            }
+        })
+    };
+});
+
 import api from "../../src/api/client";
 import GuideDetail from "../../src/pages/GuideDetail";
 

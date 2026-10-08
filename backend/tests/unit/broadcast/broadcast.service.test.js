@@ -112,6 +112,38 @@ describe("broadcast.service.resolveChannelsForRecipient", () => {
     });
 });
 
+describe("broadcast.service.resolveChannelContent", () => {
+    it("falls back every per-channel field to the shared subject/message when left blank", () => {
+        expect(broadcastService.resolveChannelContent({ subject: "Sale", message: "20% off" })).toEqual({
+            email: { subject: "Sale", message: "20% off" },
+            sms: "20% off",
+            whatsapp: "20% off",
+            inApp: { title: "Sale", message: "20% off" }
+        });
+    });
+
+    it("uses each channel's own override when the admin filled it in", () => {
+        const content = broadcastService.resolveChannelContent({
+            subject: "Sale", message: "20% off everything this weekend, free delivery over 50,000 TZS",
+            smsMessage: "20% off this weekend. nexora.co.tz",
+            whatsappMessage: "Hey! 20% off everything this weekend 🎉",
+            inAppTitle: "Weekend sale",
+            inAppMessage: "20% off is live"
+        });
+
+        expect(content.sms).toBe("20% off this weekend. nexora.co.tz");
+        expect(content.whatsapp).toBe("Hey! 20% off everything this weekend 🎉");
+        expect(content.inApp).toEqual({ title: "Weekend sale", message: "20% off is live" });
+        // email is untouched by the other channels' overrides
+        expect(content.email).toEqual({ subject: "Sale", message: "20% off everything this weekend, free delivery over 50,000 TZS" });
+    });
+
+    it("falls back to 'Announcement' for the in-app title when there's no title AND no subject (non-email sends)", () => {
+        const content = broadcastService.resolveChannelContent({ message: "Hello" });
+        expect(content.inApp.title).toBe("Announcement");
+    });
+});
+
 describe("broadcast.service.sendBroadcast", () => {
     it("rejects an unknown segment before touching the repository", async () => {
         await expect(broadcastService.sendBroadcast({
@@ -162,8 +194,26 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(sendEmail).toHaveBeenCalledTimes(2);
         // Marketing sends never enter the retry queue ({ retry: false }): a
         // failed broadcast email is dropped rather than retried hours later.
-        expect(sendEmail).toHaveBeenCalledWith("a@x.com", "Sale", "20% off this weekend", undefined, { retry: false });
-        expect(sendEmail).toHaveBeenCalledWith("c@x.com", "Sale", "20% off this weekend", undefined, { retry: false });
+        // Routed through renderEmail() (same branded template as every other
+        // transactional email) rather than a bare html=undefined fallback,
+        // so the broadcast carries the logo - the html arg is now the
+        // rendered template, not undefined.
+        expect(sendEmail).toHaveBeenCalledWith(
+            "a@x.com", "Sale",
+            expect.stringContaining("20% off this weekend"),
+            expect.stringContaining("20% off this weekend"),
+            { retry: false }
+        );
+        expect(sendEmail).toHaveBeenCalledWith(
+            "c@x.com", "Sale",
+            expect.stringContaining("20% off this weekend"),
+            expect.stringContaining("20% off this weekend"),
+            { retry: false }
+        );
+        // The html body is the real branded template, not the bare
+        // paragraph fallback - this is the logo-in-broadcast-emails fix.
+        const [, , , emailHtml] = sendEmail.mock.calls[0];
+        expect(emailHtml).toContain("nexora-logo.png");
 
         expect(smsProvider.sendText).toHaveBeenCalledTimes(2);
         expect(smsProvider.sendText).toHaveBeenCalledWith("0700000001", "20% off this weekend");
@@ -228,6 +278,34 @@ describe("broadcast.service.sendBroadcast", () => {
 
         expect(result).toEqual(expect.objectContaining({ recipientCount: 1, inAppSentCount: 1 }));
         expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({ inAppSentCount: 1 }));
+    });
+
+    it("sends each channel's own override content, not the shared message, when provided", async () => {
+        broadcastRepository.findRecipientsBySegment.mockResolvedValue([
+            recipient({ id: 1, email: "a@x.com", phone: "0700000001", whatsapp_order_updates: 1 })
+        ]);
+
+        await broadcastService.sendBroadcast({
+            adminId: 1, segment: "all_buyers", channels: ["sms", "whatsapp", "in_app"],
+            message: "Shared fallback body",
+            smsMessage: "Short SMS version",
+            whatsappMessage: "Longer WhatsApp version with an emoji 🎉",
+            inAppTitle: "New in the app",
+            inAppMessage: "Short in-app line"
+        });
+
+        expect(smsProvider.sendText).toHaveBeenCalledWith("0700000001", "Short SMS version");
+        expect(whatsappProvider.sendText).toHaveBeenCalledWith("0700000001", "Longer WhatsApp version with an emoji 🎉");
+        expect(notificationService.notify).toHaveBeenCalledWith(expect.objectContaining({
+            title: "New in the app", message: "Short in-app line"
+        }));
+
+        expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+            smsMessage: "Short SMS version",
+            whatsappMessage: "Longer WhatsApp version with an emoji 🎉",
+            inAppTitle: "New in the app",
+            inAppMessage: "Short in-app line"
+        }));
     });
 
     it("resolves an empty segment (0 recipients) without error", async () => {

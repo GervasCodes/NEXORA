@@ -130,7 +130,12 @@ export default function Login() {
         setError("");
         setNotice("");
         const result = await resendLoginOtp(preAuthToken, channel);
-        if (result.success && !result.delivered) {
+        // `delivered` is only ever explicitly false (see AuthContext's
+        // resendLoginOtp, which sets it from `... !== false`) - treat a
+        // missing/undefined value as delivered rather than as a silent
+        // failure, so a successful resend doesn't get misread as needing
+        // another channel.
+        if (result.success && result.delivered === false) {
             // Not a block: the user picks another method right away (no cooldown).
             setError(result.message);
             return;

@@ -58,7 +58,7 @@ const BRAND = {
     tealTintBorder: "#BFEFF5"
 };
 
-// Shared layout for every transactional email (decorative pass):
+// Shared layout for every transactional email (Phase 9; decorative pass):
 // a dark branded header with the NEXORA logo + wordmark and a purple ->
 // indigo -> teal accent strip (matching the logo's own gradient), an
 // optional eyebrow label, heading, message, an optional one-time

@@ -20,11 +20,11 @@ const logger = require("./logger").child({ module: "sendEmail" });
 // resolved with no value on both success AND on a caught, swallowed
 // failure, so a caller awaiting it had no way to tell the two apart and
 // ended up counting every attempt as a send regardless of outcome.
-const sendEmail = async (to, subject, text, html, { retry = true, headers } = {}) => {
+const sendEmail = async (to, subject, text, html, { retry = true, headers, toName } = {}) => {
     const finalHtml = html || textToHtml(text);
 
     try {
-        await sendTransactionalEmail({ to, subject, text, html: finalHtml, headers });
+        await sendTransactionalEmail({ to, subject, text, html: finalHtml, headers, toName });
         return true;
     } catch (error) {
         if (!retry) {

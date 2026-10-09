@@ -207,7 +207,8 @@ module.exports = {
         cta: { view: "Tazama kwenye NEXORA" },
         supportLabel: "Unahitaji msaada? Wasiliana nasi",
         manageLabel: "Dhibiti barua pepe za arifa",
-        footer: "Huu ni ujumbe wa kiotomatiki kutoka NEXORA. Tafadhali usijibu moja kwa moja kwa barua pepe hii.",
-        tagline: "Soko la Tanzania"
+        footer: "Ujumbe huu umetumwa na NEXORA - jibu wakati wowote ukihitaji msaada.",
+        tagline: "Soko la Tanzania",
+        greetingPrefix: "Habari"
     }
 };

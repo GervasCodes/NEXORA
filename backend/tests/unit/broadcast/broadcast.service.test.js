@@ -281,6 +281,27 @@ describe("broadcast.service.sendBroadcast", () => {
         }
     });
 
+    // Regression/feature test: personalizing the greeting (and the Brevo
+    // `to` name) is a real deliverability lever, not decoration - a
+    // generic, identical-to-everyone email is a classic Promotions/
+    // Updates-tab signal (see broadcast.service.js's comment at the
+    // email branch), and it was previously impossible since
+    // findRecipientsBySegment never selected first_name at all.
+    it("personalizes the email with the recipient's first name when one is on file", async () => {
+        broadcastRepository.findRecipientsBySegment.mockResolvedValue([
+            recipient({ id: 1, email: "a@x.com", first_name: "Amina" })
+        ]);
+
+        await broadcastService.sendBroadcast({
+            adminId: 1, segment: "all_buyers", channels: ["email"], subject: "Hi", message: "Hello"
+        });
+
+        expect(sendEmail).toHaveBeenCalledWith(
+            "a@x.com", "Hi", expect.stringContaining("Amina"), expect.stringContaining("Amina"),
+            expect.objectContaining({ toName: "Amina" })
+        );
+    });
+
     it("keeps sending to the rest of the segment when one recipient's send throws", async () => {
         broadcastRepository.findRecipientsBySegment.mockResolvedValue([
             recipient({ id: 1, email: "a@x.com" }),

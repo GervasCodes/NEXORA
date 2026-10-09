@@ -207,7 +207,13 @@ module.exports = {
         cta: { view: "View in NEXORA" },
         supportLabel: "Need help? Contact support",
         manageLabel: "Manage notification emails",
-        footer: "This is an automated message from NEXORA. Please do not reply directly to this email.",
-        tagline: "Tanzania's marketplace"
+        // Previously told people NOT to reply, which is exactly the
+        // "no-reply bulk mail" shape that makes mail clients file a
+        // message under Promotions/Updates instead of Primary - now that
+        // config/brevo.js sets a real Reply-To, this should invite a
+        // reply instead of discouraging one.
+        footer: "This message was sent by NEXORA - reply any time if you need help.",
+        tagline: "Tanzania's marketplace",
+        greetingPrefix: "Hi"
     }
 };

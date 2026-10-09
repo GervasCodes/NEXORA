@@ -146,7 +146,12 @@ exports.sendBroadcast = async ({
                         locale: recipient.language,
                         heading: content.email.subject,
                         message: content.email.message,
-                        eyebrow: "ANNOUNCEMENT"
+                        eyebrow: "ANNOUNCEMENT",
+                        // Personalizes the greeting line when we have a
+                        // name on file - see broadcast.repository.js and
+                        // emailTemplate.js for why this matters beyond
+                        // being a nice touch.
+                        greetingName: recipient.first_name || undefined
                     });
                     // sendEmail({retry:false}) never throws - it swallows a
                     // failed send internally (see utils/sendEmail.js) so one
@@ -175,7 +180,11 @@ exports.sendBroadcast = async ({
                             "List-Unsubscribe": `<mailto:${unsubscribeMailto}?subject=Unsubscribe>, <${absoluteUrl("/account")}>`
                         }
                         : undefined;
-                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false, headers: broadcastHeaders });
+                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, {
+                        retry: false,
+                        headers: broadcastHeaders,
+                        toName: recipient.first_name || undefined
+                    });
                     if (delivered) {
                         emailSentCount += 1;
                     }

@@ -12,6 +12,12 @@ const { SEGMENT_ROLES } = require("../../constants/broadcast");
 // check for THIS channel too rather than sending WhatsApp with no
 // consent signal at all. See that file's comment for the full
 // reasoning and the follow-up this leaves open.
+//
+// first_name is pulled through so the broadcast email can greet the
+// recipient by name (see broadcast.service.js) instead of reading as
+// generic, identical-to-everyone bulk mail - one of the things mail
+// clients weigh when deciding whether to file a message under
+// Promotions/Updates (silent, no push notification) instead of Primary.
 exports.findRecipientsBySegment = async (segment) => {
     const roles = SEGMENT_ROLES[segment];
 
@@ -20,7 +26,7 @@ exports.findRecipientsBySegment = async (segment) => {
     }
 
     const [rows] = await db.query(
-        `SELECT id, email, phone, language, whatsapp_order_updates
+        `SELECT id, email, phone, language, whatsapp_order_updates, first_name
         FROM users
         WHERE role IN (?) AND is_active = TRUE`,
         [roles]

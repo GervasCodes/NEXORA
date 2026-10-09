@@ -7,7 +7,13 @@ const isConfigured = () => !!process.env.BREVO_API_KEY;
 // Best-effort send: throws on failure so callers (otp.service) can decide
 // whether that's fatal (e.g. login OTP must be sent) - unlike the generic
 // notification email helper, OTP delivery failing IS the request failing.
-const sendTransactionalEmail = async ({ to, toName, subject, html, text }) => {
+// `replyTo` defaults to SUPPORT_EMAIL (falling back to EMAIL_FROM) so a
+// recipient who hits "Reply" lands somewhere monitored instead of the
+// Brevo sending address - previously unset entirely. `headers` is an
+// optional passthrough (e.g. List-Unsubscribe on broadcast sends - see
+// broadcast.service.js) for anything a specific caller needs that isn't
+// worth a named param here.
+const sendTransactionalEmail = async ({ to, toName, subject, html, text, replyTo, headers }) => {
     if (!isConfigured()) {
         if (process.env.NODE_ENV === "production") {
             throw new Error("Email delivery is not configured (BREVO_API_KEY missing).");
@@ -15,6 +21,8 @@ const sendTransactionalEmail = async ({ to, toName, subject, html, text }) => {
         console.warn(`[Brevo not configured] Would send "${subject}" to ${to}:\n${text}`);
         return { simulated: true };
     }
+
+    const replyToEmail = replyTo || process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM;
 
     const response = await fetch(BREVO_ENDPOINT, {
         method: "POST",
@@ -29,9 +37,11 @@ const sendTransactionalEmail = async ({ to, toName, subject, html, text }) => {
                 name: process.env.BREVO_SENDER_NAME || "NEXORA"
             },
             to: [{ email: to, name: toName || undefined }],
+            ...(replyToEmail ? { replyTo: { email: replyToEmail } } : {}),
             subject,
             htmlContent: html,
-            textContent: text
+            textContent: text,
+            ...(headers ? { headers } : {})
         })
     });
 

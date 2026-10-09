@@ -201,18 +201,22 @@ describe("broadcast.service.sendBroadcast", () => {
         // Routed through renderEmail() (same branded template as every other
         // transactional email) rather than a bare html=undefined fallback,
         // so the broadcast carries the logo - the html arg is now the
-        // rendered template, not undefined.
+        // rendered template, not undefined. objectContaining (not an exact
+        // object) on the options arg since it may also carry a
+        // List-Unsubscribe `headers` entry depending on SUPPORT_EMAIL/
+        // EMAIL_FROM being set in the environment - not what this
+        // assertion is about.
         expect(sendEmail).toHaveBeenCalledWith(
             "a@x.com", "Sale",
             expect.stringContaining("20% off this weekend"),
             expect.stringContaining("20% off this weekend"),
-            { retry: false }
+            expect.objectContaining({ retry: false })
         );
         expect(sendEmail).toHaveBeenCalledWith(
             "c@x.com", "Sale",
             expect.stringContaining("20% off this weekend"),
             expect.stringContaining("20% off this weekend"),
-            { retry: false }
+            expect.objectContaining({ retry: false })
         );
         // The html body is the real branded template, not the bare
         // paragraph fallback - this is the logo-in-broadcast-emails fix.
@@ -245,6 +249,36 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({
             userId: 9, eventType: "broadcast_sent"
         }));
+    });
+
+    // Regression/feature test: a List-Unsubscribe header is the main
+    // signal Gmail/Yahoo use to tell "legitimate bulk mail" apart from
+    // mail that should be mistrusted, and its absence is part of why a
+    // broadcast could arrive filed under Promotions/Updates with no push
+    // notification (see broadcast.service.js's comment at the email
+    // branch). Only broadcast sends should carry this - never OTP/order
+    // emails, which aren't something a recipient can "unsubscribe" from.
+    it("sends a mailto List-Unsubscribe header on broadcast emails when SUPPORT_EMAIL is configured", async () => {
+        const original = process.env.SUPPORT_EMAIL;
+        process.env.SUPPORT_EMAIL = "support@nexora.example";
+        try {
+            broadcastRepository.findRecipientsBySegment.mockResolvedValue([recipient({ id: 1, email: "a@x.com" })]);
+
+            await broadcastService.sendBroadcast({
+                adminId: 1, segment: "all_buyers", channels: ["email"], subject: "Hi", message: "Hello"
+            });
+
+            expect(sendEmail).toHaveBeenCalledWith(
+                "a@x.com", "Hi", expect.any(String), expect.any(String),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        "List-Unsubscribe": expect.stringContaining("mailto:support@nexora.example")
+                    })
+                })
+            );
+        } finally {
+            process.env.SUPPORT_EMAIL = original;
+        }
     });
 
     it("keeps sending to the rest of the segment when one recipient's send throws", async () => {

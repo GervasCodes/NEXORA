@@ -1,6 +1,6 @@
 const broadcastRepository = require("./broadcast.repository");
 const sendEmail = require("../../utils/sendEmail");
-const { renderEmail } = require("../../utils/emailTemplate");
+const { renderEmail, absoluteUrl } = require("../../utils/emailTemplate");
 const smsProvider = require("../sms/providers/sms.provider");
 const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
 // Reuses the same notification-creation + socket-emit path every other
@@ -156,7 +156,26 @@ exports.sendBroadcast = async ({
                     // every single one had actually failed at the provider.
                     // sendEmail now reports back whether it really went out,
                     // so only count it when it did.
-                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false });
+                    // Bulk/marketing mail without a List-Unsubscribe header is
+                    // exactly what Gmail (and Yahoo) use as a signal to file a
+                    // message under Promotions/Updates instead of the Primary
+                    // inbox - and Gmail's mobile app only pushes a notification
+                    // for Primary by default, which is what "it sends now but
+                    // arrives silently, you only see it in All Mail" describes.
+                    // A plain mailto: unsubscribe address is a legitimate,
+                    // recognised value for this header (RFC 2369) without
+                    // needing a one-click HTTPS endpoint + suppression-list
+                    // feature - a real "unsubscribe from broadcasts" feature
+                    // (its own opt-out flag + enforcing it in
+                    // resolveChannelsForRecipient) is a bigger follow-up, not
+                    // done here.
+                    const unsubscribeMailto = process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM;
+                    const broadcastHeaders = unsubscribeMailto
+                        ? {
+                            "List-Unsubscribe": `<mailto:${unsubscribeMailto}?subject=Unsubscribe>, <${absoluteUrl("/account")}>`
+                        }
+                        : undefined;
+                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, { retry: false, headers: broadcastHeaders });
                     if (delivered) {
                         emailSentCount += 1;
                     }

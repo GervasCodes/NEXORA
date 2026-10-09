@@ -91,10 +91,18 @@ const renderEmail = ({ locale, heading, message, code, ctaLabel, ctaUrl, eyebrow
     const manageUrl = absoluteUrl("/account");
     const support = process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || "";
     // Defaults to the real logo mark shipped with the frontend
-    // (frontend/public/nexora-logo.png) so every email carries it without
-    // needing an env var; EMAIL_LOGO_URL can still override it (e.g. to
-    // point at a CDN copy).
-    const logoUrl = absoluteUrl("/frontend/public/nexora-logo.png");
+    // (frontend/public/nexora-logo.png). Vite copies everything under
+    // frontend/public/ to the ROOT of the deployed site at build time
+    // (see frontend/vite.config.js - it's a static asset, not an app
+    // route), so the live URL is "/nexora-logo.png", not
+    // "/frontend/public/nexora-logo.png" - that source-tree path doesn't
+    // exist once deployed and was 404ing in every single email, broadcasts
+    // included. A broken/missing header image is itself one more "this
+    // looks like a sloppy bulk send" signal on top of everything else
+    // driving broadcasts into Promotions (see broadcast.service.js).
+    // EMAIL_LOGO_URL still overrides it when set (e.g. to point at a CDN
+    // copy) - previously documented here but never actually read.
+    const logoUrl = process.env.EMAIL_LOGO_URL || absoluteUrl("/nexora-logo.png");
     const footer = t(lang, "email.footer");
     const supportLabel = t(lang, "email.supportLabel");
     const manageLabel = t(lang, "email.manageLabel");

@@ -89,7 +89,6 @@ export default function HomeCarousel() {
     const [slides, setSlides] = useState(null);
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
-    const [userPaused, setUserPaused] = useState(false);
     const [reduceMotion] = useState(prefersReducedMotion);
     const { t } = useLanguage();
     const dataSaver = useDataSaver();
@@ -112,11 +111,13 @@ export default function HomeCarousel() {
 
     // Autoplay - paused on hover/focus (desktop) and mid-drag (touch),
     // so a slide never gets yanked out from under a reader or a swipe.
+    // No manual pause/play control anymore (removed per request), so this
+    // is the only thing that stops it other than reduced-motion.
     useEffect(() => {
-        if (paused || userPaused || reduceMotion || count < 2) return undefined;
+        if (paused || reduceMotion || count < 2) return undefined;
         const timer = setInterval(() => goTo(index + 1), AUTOPLAY_INTERVAL_MS);
         return () => clearInterval(timer);
-    }, [paused, userPaused, reduceMotion, count, index, goTo]);
+    }, [paused, reduceMotion, count, index, goTo]);
 
     if (slides === null) {
         return (
@@ -146,7 +147,7 @@ export default function HomeCarousel() {
             role="region"
             aria-roledescription="carousel"
             aria-label={t("home.carouselLabel")}
-            aria-live={userPaused || reduceMotion ? "polite" : "off"}
+            aria-live={reduceMotion ? "polite" : "off"}
             className="relative rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] border border-frost/10 bg-azure/10 group"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
@@ -191,57 +192,20 @@ export default function HomeCarousel() {
                 </div>
             </Link>
 
+            {/* Prev/next arrows and the manual play/pause toggle were removed
+                per request - the banner just autoplays continuously now
+                (still pausable by hover, and swipeable on touch), with only
+                the slide-position dots left as a (non-navigating) indicator. */}
             {count > 1 && (
-                <>
-                    <button
-                        type="button"
-                        onClick={() => goTo(index - 1)}
-                        aria-label="Previous slide"
-                        className="flex absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="M15 19 8 12l7-7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => goTo(index + 1)}
-                        aria-label="Next slide"
-                        className="flex absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="m9 5 7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setUserPaused((p) => !p)}
-                        aria-label={userPaused ? t("home.playSlides") : t("home.pauseSlides")}
-                        className="absolute top-2 right-2 z-10 w-11 h-11 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost flex items-center justify-center"
-                    >
-                        {userPaused ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z" /></svg>
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
-                        )}
-                    </button>
-
-                    <div className="absolute bottom-1 right-3 flex items-center gap-0.5">
-                        {slides.map((s, i) => (
-                            <button
-                                key={i}
-                                type="button"
-                                onClick={() => goTo(i)}
-                                aria-label={`Go to slide ${i + 1}`}
-                                aria-current={i === index}
-                                className="w-11 h-11 flex items-center justify-center"
-                            >
-                                <span className={`block h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40 hover:bg-frost/60"}`} />
-                            </button>
-                        ))}
-                    </div>
-                </>
+                <div className="absolute bottom-1 right-3 flex items-center gap-0.5">
+                    {slides.map((_, i) => (
+                        <span
+                            key={i}
+                            aria-hidden="true"
+                            className={`block h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40"}`}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );

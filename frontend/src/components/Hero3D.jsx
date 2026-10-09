@@ -1,33 +1,14 @@
-import { lazy, Suspense } from "react";
 import HomeCarousel from "./HomeCarousel";
-import Hero3DErrorBoundary from "./Hero3DErrorBoundary";
-import { use3DHeroSupport } from "../hooks/use3DHeroSupport";
 
-// Phase 7 sub-phase 1: dependency + fallback scaffolding for the 3D landing
-// hero (see PHASE_7_NOTES.md for the full scoping). Renders in place of
-// HomeCarousel in Home.jsx - not a second hero section - per the scoping
-// note's recommendation, since HomeCarousel already owns the real
-// slide/sponsorship data and href/badge behavior that any fallback needs to
-// keep working unchanged.
-//
-// Hero3DScene (sub-phase 2's actual scene - a placeholder shape for now,
-// see hero3d/Hero3DScene.jsx) is lazy-loaded, so the three/@react-three
-// bundle is only ever fetched for a visitor whose device/preferences pass
-// use3DHeroSupport. Everyone else - reduced-motion, no WebGL, a low-end
-// device, or an explicit Save-Data request - gets HomeCarousel with zero
-// extra bytes downloaded, not a hidden Canvas paid for and never shown.
-const Hero3DScene = lazy(() => import("./hero3d/Hero3DScene"));
-
+// The 3D ring hero (hero3d/Hero3DScene.jsx, behind use3DHeroSupport) used to
+// render here for visitors whose device/preferences supported it, while
+// everyone else fell back to HomeCarousel - so the homepage banner looked
+// different (and noticeably smaller) depending on who was logged in and
+// what device they were on. Per request, every homepage - buyer, seller,
+// logged-out, all of them - now always gets the same full-size HomeCarousel
+// banner. The 3D scene files are left in place (hero3d/, Hero3DErrorBoundary,
+// use3DHeroSupport) but are no longer wired up from here; they're dead code
+// now and can be removed in a follow-up cleanup if wanted.
 export default function Hero3D() {
-    const supports3D = use3DHeroSupport();
-
-    if (!supports3D) return <HomeCarousel />;
-
-    return (
-        <Hero3DErrorBoundary fallback={<HomeCarousel />}>
-            <Suspense fallback={<HomeCarousel />}>
-                <Hero3DScene />
-            </Suspense>
-        </Hero3DErrorBoundary>
-    );
+    return <HomeCarousel />;
 }

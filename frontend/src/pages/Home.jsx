@@ -256,12 +256,14 @@ export default function Home() {
                           no live campaigns yet, so there's no empty-state
                           gap to handle here.
 
-                          Phase 7 sub-phase 1: Hero3D replaces a direct
-                          HomeCarousel render here - it renders HomeCarousel
-                          itself (unchanged) for anyone whose device/
-                          preferences don't pass use3DHeroSupport, or a
-                          placeholder 3D scene for anyone who does. See
-                          Hero3D.jsx / PHASE_7_NOTES.md.
+                          Hero3D just renders HomeCarousel directly now - it
+                          used to branch into a 3D ring scene for devices/
+                          preferences that supported it, but that meant the
+                          homepage banner looked different (and smaller)
+                          depending on who was logged in and what device they
+                          were on. Every homepage - buyer, seller, logged-out,
+                          all of them - now always gets this same full-size
+                          carousel. See Hero3D.jsx.
                         */}
                         <Hero3D />
                     </div>

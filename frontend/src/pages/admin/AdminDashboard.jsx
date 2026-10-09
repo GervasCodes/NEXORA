@@ -28,7 +28,14 @@ const RANGE_PRESETS = [
     { value: 90, label: "90 days" }
 ];
 
-const isoDay = (d) => d.toISOString().slice(0, 10);
+// Local calendar day, not toISOString()'s UTC day - in East Africa (UTC+3)
+// toISOString() still reads as "yesterday" for the first 3 hours after
+// midnight, which used to make the "7/30/90 days" presets here resolve to a
+// different date range than the matching presets on SellerOverview.jsx (same
+// fix already applied there and in SellerAvailability.jsx) - so the two
+// dashboards could show different totals for what looked like the same
+// period.
+const isoDay = (d) => d.toLocaleDateString("en-CA");
 
 export default function AdminDashboard() {
     const { socket } = useSocket();

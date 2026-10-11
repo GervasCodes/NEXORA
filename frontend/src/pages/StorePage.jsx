@@ -293,7 +293,7 @@ export default function StorePage() {
                     // Fallback banner: themed block with the store's name so
                     // stores without a banner don't show an empty grey strip.
                     <div className={`w-full h-full ${theme.bg} flex items-center justify-center px-6`}>
-                        <p className={`${theme.badgeText} font-display text-xl sm:text-2xl opacity-90 truncate`}>
+                        <p className={`${theme.badgeText} font-display text-xl sm:text-2xl opacity-90 line-clamp-2 text-center`}>
                             {t("store.fallbackBannerTagline", { name: store.store_name })}
                         </p>
                     </div>

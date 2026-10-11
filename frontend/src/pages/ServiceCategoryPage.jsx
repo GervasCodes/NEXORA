@@ -141,7 +141,7 @@ export default function ServiceCategoryPage() {
                 when the admin hasn't uploaded a cover yet, rather than a
                 flat/empty hero. */}
             <div
-                className="bg-abyss text-frost relative overflow-hidden animate-slide-up"
+                className="bg-abyss text-frost relative overflow-hidden animate-slide-up min-h-[220px] sm:min-h-[260px]"
                 style={category.cover_image_url ? undefined : { background: gradient }}
             >
                 {category.cover_image_url && (
@@ -177,7 +177,7 @@ export default function ServiceCategoryPage() {
                     <Link to="/services" className="text-frost/70 hover:text-frost text-xs">{t("services.backToAll")}</Link>
                     <h1 className="font-display text-3xl sm:text-4xl mt-2 mb-2">{category.name}</h1>
                     {category.description && (
-                        <p className="text-frost/70 text-sm max-w-lg mb-2">{category.description}</p>
+                        <p className="text-frost/70 text-sm max-w-lg mb-2 line-clamp-3">{category.description}</p>
                     )}
                     <p className="text-frost/60 text-xs">
                         {category.serviceCount === 1

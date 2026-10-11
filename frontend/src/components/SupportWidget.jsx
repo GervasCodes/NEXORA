@@ -84,11 +84,8 @@ export default function SupportWidget() {
     };
 
     return (
-        // Bottom-left, opposite corner from NexoraAIButton (bottom-right) -
-        // the two used to share the same right-side corner and stack on
-        // top of each other. Same mobile safe-area offset NexoraAIButton
-        // already uses, so this also clears MobileBottomNav on mobile
-        // instead of sitting under it.
+        // Stacked with NexoraAIButton inside the shared FloatingActions
+        // wrapper, which handles positioning and the mobile safe-area offset.
         <div className="relative">
             {open && (
                 <div className="mb-3 w-80 max-w-[90vw] max-h-[28rem] flex flex-col bg-paper border border-line rounded-lg shadow-xl overflow-hidden">

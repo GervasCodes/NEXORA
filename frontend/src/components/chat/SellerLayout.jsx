@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
-import MobileBottomNav from "./MobileBottomNav";
 import ConfirmDialog from "./ConfirmDialog";
 import SideDrawer from "./ui/SideDrawer";
-import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
+import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
 import { getVerificationTier } from "../utils/verificationTier";
 
@@ -113,7 +111,7 @@ function visibleGroups(merchantType) {
 }
 
 export default function SellerLayout() {
-    const { user, sessionReady, logout } = useAuth();
+    const { user, logout } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -126,10 +124,8 @@ export default function SellerLayout() {
     // shopper-facing icons - out of place for a seller living inside
     // their own dashboard shell. Both now live down here instead (see
     // Header.jsx for the corresponding removal for the seller role).
-    // Mobile still also has "Profile" on the bottom tab bar below
-    // (sellerBottomNavItems) - that's a different, mobile-only surface
-    // and stays as-is; this addition is specifically for the sidebar/
-    // drawer that replaces the header's old Account icon.
+    // This addition is specifically for the sidebar/drawer that
+    // replaces the header's old Account icon.
     const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
     const confirmSignOut = () => {
         setSignOutConfirmOpen(false);
@@ -167,29 +163,6 @@ export default function SellerLayout() {
     }, [isApproved, loading, profile, location.pathname, navigate]);
 
     const merchantType = profile?.merchant_type || "product";
-    const unreadMessages = useUnreadMessagesCount(sessionReady);
-
-    // Seller's mobile bottom nav (Phase 6: Mobile Navigation
-    // Unification) - the Orders/Bookings slot follows the seller's own
-    // merchant_type, same category logic the sidebar/drawer tabs above
-    // already use: a service-only seller's most-reached-for list is
-    // their bookings, not an orders page they'd immediately get
-    // redirected out of (see the direct-access guard effect below).
-    // Hybrid sellers default to Orders, matching this layout's own
-    // "Orders" group ordering.
-    const sellerBottomNavItems = [
-        { to: "/seller", label: "Home", icon: DashboardIcon, end: true },
-        merchantType === "service"
-            ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
-            : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
-        { to: "/messages", label: "Messages", icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                {unreadMessages > 9 ? "9+" : unreadMessages}
-            </span>
-        ) },
-        { to: "/seller/wallet", label: "Wallet", icon: WalletIcon },
-        { to: "/account", label: "Profile", icon: AccountIcon }
-    ];
 
     // direct-access guard: only for tabs whose page has no
     // merchant-type fallback UI of its own (selfGated tabs - Services,
@@ -254,9 +227,7 @@ export default function SellerLayout() {
                 breakpoint (previously mobile-only, with desktop instead
                 getting a permanently-visible ~200px sidebar) feeding a
                 single shared SideDrawer - same treatment as AdminLayout,
-                see that file for the fuller rationale. MobileBottomNav
-                below is untouched: that's a separate, mobile-only surface
-                (Phase 6) this phase doesn't revisit. */}
+                see that file for the fuller rationale. */}
             <div className="glass-strong border-b border-line/60 md:rounded-lg md:border px-4 py-3">
                 <div className="flex items-center gap-2">
                     <Link
@@ -353,8 +324,6 @@ export default function SellerLayout() {
                     <Outlet context={{ profile, refreshProfile: loadProfile }} />
                 </PageTransition>
             </div>
-
-            <MobileBottomNav items={sellerBottomNavItems} />
 
             <ConfirmDialog
                 open={signOutConfirmOpen}

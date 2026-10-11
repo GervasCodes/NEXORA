@@ -175,7 +175,7 @@ export default function DepartmentPage() {
                     buildBreadcrumbJsonLd(breadcrumbItems, listingPath)
                 ]}
             />
-            <div className="bg-abyss text-frost relative overflow-hidden">
+            <div className="bg-abyss text-frost relative overflow-hidden min-h-[220px] sm:min-h-[260px]">
                 {department.cover_image_url && (
                     <img
                         src={department.cover_image_url}
@@ -193,7 +193,7 @@ export default function DepartmentPage() {
                     <Link to="/" className="text-frost/70 hover:text-frost text-xs">{t("department.backToAll")}</Link>
                     <h1 className="font-display text-3xl sm:text-4xl mt-2 mb-2">{department.name}</h1>
                     {department.description && (
-                        <p className="text-frost/70 text-sm max-w-lg mb-2">{department.description}</p>
+                        <p className="text-frost/70 text-sm max-w-lg mb-2 line-clamp-3">{department.description}</p>
                     )}
                     <p className="text-frost/60 text-xs">
                         {department.productCount === 1

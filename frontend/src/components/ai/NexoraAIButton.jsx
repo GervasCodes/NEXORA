@@ -4,9 +4,10 @@ import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
 // Icon-only at every breakpoint (aria-label/title carry the accessible
 // name; the first-visit pulse is how new users learn what it does).
-// Fixed launcher button — bottom-right, sits above MobileBottomNav on
-// mobile. Buyer/guest only; admin/seller/delivery have their own entry
-// points. Shows a pulsing ring to draw attention on first visit - plays
+// Fixed launcher button — bottom-right, positioned by the shared
+// FloatingActions wrapper. Buyer/guest only; admin/seller/delivery have
+// their own entry points. Shows a pulsing ring to draw attention on
+// first visit - plays
 // automatically for a few seconds on first mount (not just on
 // group-hover) so touch devices, which have no hover state, see it too.
 const AUTO_PULSE_MS = 4000;

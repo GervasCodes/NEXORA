@@ -69,28 +69,14 @@ export default function UpdateAvailableBanner({ onVisibilityChange }) {
 
     if (!visible || dismissed) return null;
 
-    // Mobile/desktop bottom offsets bumped up from bottom-20/sm:bottom-20
-    // (80px) - that was the exact same offset NexoraAIButton and
-    // SupportWidget use for their own bottom position, so this
-    // full-width (inset-x-4) banner was rendering directly on top of
-    // both floating buttons whenever it appeared. bottom-56/md:bottom-24
-    // clears NexoraAIButton/SupportWidget (~80-140px band) and, on
-    // mobile, also clears InstallPrompt's own slot (~160-224px) in case
-    // both banners are ever visible at once.
-    //
-    // Mobile UI/UX audit: both offsets have since moved to the same
-    // calc(...+env(safe-area-inset-bottom)) pattern as NexoraAIButton/
-    // SupportWidget/InstallPrompt above, for the same reason - a plain
-    // pixel bottom-56 doesn't grow with a device's home-indicator inset
-    // the way the nav bar underneath it does. The breakpoint that drops
-    // the safe-area term also moved from sm: to md:, matching
-    // MobileBottomNav's own `md:hidden` - at sm-to-md widths this banner
-    // already uses its corner-card layout, but the nav bar is still
-    // rendered underneath it.
+    // Same calc(...+env(safe-area-inset-bottom)) pattern as the other
+    // floating surfaces, offset enough to clear NexoraAIButton/
+    // SupportWidget and, on mobile where this banner goes full-width,
+    // InstallPrompt's own slot too, in case both are visible at once.
     return (
         <div
             role="status"
-            className="fixed bottom-[calc(14rem+env(safe-area-inset-bottom))] md:bottom-24 inset-x-4 sm:inset-x-auto sm:left-4 z-[var(--z-banner-top)] sm:w-80
+            className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:left-4 z-[var(--z-banner-top)] sm:w-80
                 glass-strong border border-azure/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

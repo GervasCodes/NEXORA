@@ -203,8 +203,8 @@ export default function Cart() {
             ))}
 
             {/* Total + checkout stay in view on phones, sitting just above the
-                bottom nav; on desktop they sit at the end of the list. */}
-            <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 bg-paper/95 backdrop-blur border-t border-line z-10 flex items-center justify-between gap-4">
+                safe area; on desktop they sit at the end of the list. */}
+            <div className="sticky bottom-0 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 bg-paper/95 backdrop-blur border-t border-line z-10 flex items-center justify-between gap-4" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
                 <div>
                     <p className="text-ash text-xs">{t("common.total")}</p>
                     <p className="price text-xl font-medium">{format(total)}</p>

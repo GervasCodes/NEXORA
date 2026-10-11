@@ -195,8 +195,8 @@ is safe to use as-is.
       whichever providers you enabled
 - [ ] Regular database backups configured (`database/backups/` exists as a
       placeholder but nothing populates it automatically yet)
-- [x] Automated test coverage exists and passes: 390 backend unit tests, 15
-      backend integration tests, and 101 frontend tests as of this report
+- [x] Automated test coverage exists and passes: 1,423 backend unit tests,
+      96 backend integration tests, and 339 frontend tests as of this report
       (`cd backend && npm test`, `cd frontend && npm test`) — still
       recommended to add the DB-integration suite (`npm run test:db`)
       against a real MySQL instance in CI before each deploy

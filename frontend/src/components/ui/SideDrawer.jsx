@@ -14,9 +14,9 @@ import { useEffect, useState } from "react";
 // right (`{drawerOpen && (...)}`) - this preserves that behavior instead
 // of regressing to an always-mounted-but-hidden container.
 //
-// z-[1100]: above MobileBottomNav (z-40) and everything else in normal
-// flow, but below ConfirmDialog (z-[1200]) so a confirmation (e.g. sign
-// out) triggered from inside an open drawer still renders on top of it.
+// z-[1100]: above everything else in normal flow, but below
+// ConfirmDialog (z-[1200]) so a confirmation (e.g. sign out) triggered
+// from inside an open drawer still renders on top of it.
 const TRANSITION_MS = 250;
 
 export default function SideDrawer({

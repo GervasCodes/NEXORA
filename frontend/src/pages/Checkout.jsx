@@ -792,8 +792,9 @@ export default function Checkout() {
                 </div>
                 <p className="text-xs text-ash">{paymentNextStep}</p>
 
-                {/* Phones: total and the order button stay in view above the bottom nav. */}
-                <div className="md:hidden fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3">
+                {/* Phones: total and the order button stay pinned in view at the
+                    bottom of the screen, above the safe area. */}
+                <div className="md:hidden fixed inset-x-0 bottom-0 z-20 px-4 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3" style={{ paddingTop: "0.75rem", paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
                     <div className="shrink-0">
                         <p className="text-xs text-ash">{t("common.total")}</p>
                         <p className="price font-medium">{format(grandTotal)}</p>

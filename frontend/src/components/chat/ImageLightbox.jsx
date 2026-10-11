@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // Phase 3 (Security Hardening) — alt-text pass.
 //
@@ -13,6 +13,8 @@ import { useEffect } from "react";
 // callers that know what the image actually is now pass a real
 // description (ProductDetail.jsx, ConversationThread.jsx, Account.jsx).
 export default function ImageLightbox({ src, onClose, alt = "Expanded image" }) {
+    const closeRef = useRef(null);
+
     // Escape-to-close, matching ConfirmDialog/RescheduleModal's convention.
     // Without this the overlay was dismissible by click only, leaving
     // keyboard users with just the close button.
@@ -25,6 +27,21 @@ export default function ImageLightbox({ src, onClose, alt = "Expanded image" }) 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [src, onClose]);
+
+    // Focus handling (Phase 2: Reliability & performance groundwork — a11y
+    // fix). This dialog opens on top of whatever page triggered it without
+    // ever moving focus into it, so a keyboard/screen-reader user who
+    // opened it stayed focused on the (now covered) trigger element behind
+    // the overlay, with no indication focus had effectively gone nowhere
+    // useful. Moves focus to the close button on open (matching
+    // ProductSwipeFeed.jsx's feed-open convention) and restores it to
+    // whatever was focused before, on close.
+    useEffect(() => {
+        if (!src) return undefined;
+        const previouslyFocused = document.activeElement;
+        closeRef.current?.focus();
+        return () => previouslyFocused?.focus?.();
+    }, [src]);
 
     if (!src) return null;
 
@@ -39,6 +56,7 @@ export default function ImageLightbox({ src, onClose, alt = "Expanded image" }) 
         >
             <button
                 type="button"
+                ref={closeRef}
                 onClick={onClose}
                 className="absolute top-4 right-4 text-frost/80 hover:text-frost text-2xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-frost/10 transition-colors"
                 aria-label="Close"

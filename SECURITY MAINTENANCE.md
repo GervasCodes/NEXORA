@@ -1,6 +1,6 @@
 # Security maintenance
 
-Process documentation, not code. Added in Phase 3 (Security Hardening).
+Process documentation, not code. Added in (Security Hardening).
 
 Most of NEXORA's security posture is already implemented and reviewed —
 `docs/SECURITY_REVIEW_CHECKLIST.md` covers CSRF, rate limiting, Helmet/CSP, session
@@ -17,8 +17,15 @@ A dependency audit is not a task you complete. It's a thing you do on a schedule
 Both halves of the project ship a lockfile (`backend/package-lock.json`,
 `frontend/package-lock.json`), so builds are reproducible — which is good, and is also
 exactly why a vulnerable transitive dependency can sit pinned and unnoticed for months.
-Nothing in the repo currently checks for that. There is no `.github/workflows/`
-directory, so no CI runs an audit today.
+
+**Update: this is no longer a gap.** `.github/workflows/` now exists —
+`backend-tests.yml` and `frontend-tests.yml` run lint+test on every push/PR that
+touches their half of the repo, `ci.yml` adds an explicit lint/test/audit job on
+`main` pushes and PRs, `codeql.yml` runs CodeQL SAST weekly and on push/PR, and
+`uptime-check.yml` runs a scheduled liveness check. `.github/dependabot.yml` is
+also in place (grouped weekly minor/patch PRs per package, matching the config
+previously only recommended below) — see the "Weekly — automated" section for
+what it covers and what still needs enabling separately in repository settings.
 
 The realistic failure mode isn't a dramatic zero-day. It's a `npm audit` that hasn't been
 run since launch, producing 40 findings at once, at which point nobody triages any of
@@ -30,10 +37,7 @@ them.
 
 ### Weekly — automated
 
-Enable **Dependabot** (or Renovate) on the repository. Both are free for public and
-private repos on GitHub and need no CI minutes to open a PR.
-
-A minimal `.github/dependabot.yml` covering both halves of this project:
+Dependabot is already configured via `.github/dependabot.yml`:
 
 ```yaml
 version: 2
@@ -61,9 +65,10 @@ updates:
 Grouping matters. Ungrouped Dependabot on a project this size produces enough PRs that
 people start closing them unread, which is worse than not running it.
 
-**Security alerts should stay ungrouped and separate** — enable Dependabot security
-updates in the repository settings so an advisory-triggered bump arrives as its own PR
-and is visibly distinct from routine version churn.
+**Security alerts should stay ungrouped and separate** — this still needs enabling as
+"Dependabot security updates" in the repository settings (a setting, not a file in this
+repo) so an advisory-triggered bump arrives as its own PR and is visibly distinct from
+routine version churn. Confirm it's on; it isn't implied by the config file above.
 
 ### Monthly — manual
 

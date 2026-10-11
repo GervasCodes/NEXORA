@@ -208,7 +208,16 @@ SET @constraint_exists = (
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'refunds' AND CONSTRAINT_NAME = 'chk_refunds_one_source'
 );
 SET @sql = IF(@constraint_exists > 0,
-    'ALTER TABLE refunds DROP CHECK chk_refunds_one_source',
+    -- DROP CONSTRAINT, not DROP CHECK: both work on MySQL 8, but MariaDB
+    -- (also a supported target per docs/DEPLOYMENT.md's "MySQL 8+ (or
+    -- MariaDB 10.6+)") rejects `DROP CHECK` with a syntax error - only
+    -- `DROP CONSTRAINT` is portable across both for a CHECK constraint.
+    -- Confirmed against a real MariaDB 10.11 instance: the original
+    -- `DROP CHECK` form fails this migration outright with "error in
+    -- your SQL syntax ... near 'CHECK chk_refunds_one_source'", which
+    -- also aborts every migration after it, including the fresh-checkout
+    -- path a new MariaDB-based environment relies on.
+    'ALTER TABLE refunds DROP CONSTRAINT chk_refunds_one_source',
     'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 

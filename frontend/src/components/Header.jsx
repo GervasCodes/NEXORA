@@ -6,10 +6,9 @@ import { useLanguage } from "../context/LanguageContext";
 import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
-import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
 import ThemeToggle from "./ThemeToggle";
-import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
 import SideDrawer from "./ui/SideDrawer";
@@ -97,15 +96,6 @@ function IconNavLink({ to, label, icon: Icon, active, badge, onClick }) {
     );
 }
 
-function GuestSearchIcon({ className }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className} aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" />
-        </svg>
-    );
-}
-
 export default function Header() {
     const { user, sessionReady, logout } = useAuth();
     const { itemCount } = useCart();
@@ -172,41 +162,6 @@ export default function Header() {
         logout();
         navigate("/");
     };
-
-    // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
-    // Unification) - fixed to 5 slots, so newer buyer destinations
-    // (Wallet added in Phase Q2) live in the desktop icon row/Account
-    // page instead of competing for a bottom-nav slot; Cart keeps its
-    // slot here as the buyer's actual highest-frequency action.
-    // Guest bottom bar: Home, Search, Categories, Cart, Sign in.
-    const guestBottomNavItems = [
-        { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
-        { to: "/search", label: t("nav.search"), icon: GuestSearchIcon },
-        { to: "/products", label: t("nav.categories"), icon: BrowseIcon },
-        { to: "/cart", label: t("nav.cart"), icon: CartIcon },
-        { to: "/login", label: t("nav.signIn"), icon: SignInIcon }
-    ];
-
-    const buyerBottomNavItems = [
-        { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
-        { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
-        { to: "/messages", label: t("nav.messages"), icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-sans font-semibold tabular-nums rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                {unreadMessages > 9 ? "9+" : unreadMessages}
-            </span>
-        ) },
-        {
-            to: "/cart",
-            label: t("nav.cart"),
-            icon: CartIcon,
-            badge: itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-sans font-semibold tabular-nums rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                    {itemCount > 9 ? "9+" : itemCount}
-                </span>
-            )
-        },
-        { to: "/account", label: t("nav.account"), icon: AccountIcon }
-    ];
 
     const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
@@ -396,27 +351,8 @@ export default function Header() {
                 nav items on short viewports" bug (Bookings/Disputes/
                 Returns/Wallet/Loyalty/Affiliate landing past the
                 viewport's cut-off with no way to scroll to them) - this
-                keeps that fix, just inside the shared component now. The
-                extra bottom padding for buyers reserves room for the
-                fixed MobileBottomNav below so the last item can scroll
-                clear of it instead of ending up hidden underneath. */}
+                keeps that fix, just inside the shared component now. */}
         </header>
-
-        {/* Rendered as a sibling of <header>, not a child of it (bug fix:
-            moved out of the header - see below). <header> has
-            `glass-dark`, which sets `backdrop-filter` - a backdrop-filter
-            on an ancestor creates a new containing block for any
-            `position: fixed` descendant (same rule as `transform`/
-            `filter`/`perspective`), so a MobileBottomNav rendered inside
-            that header was pinning itself to the bottom of the (short)
-            header box instead of the viewport's bottom edge, landing
-            right under the logo row instead of as an actual bottom tab
-            bar. Moving it here, outside the glass-dark element, restores
-            the intended fixed-to-the-screen behavior - matching how
-            SellerLayout.jsx/DeliveryLayout.jsx already render their own
-            copies of this component outside any backdrop-filter wrapper. */}
-        {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
-        {!user && <MobileBottomNav items={guestBottomNavItems} />}
 
         <SideDrawer
                 open={menuOpen}
@@ -427,7 +363,7 @@ export default function Header() {
             >
                 <div
                     className="md:hidden glass-strong text-ink px-4 pt-3"
-                    style={{ paddingBottom: user?.role === "buyer" ? "calc(env(safe-area-inset-bottom) + 76px)" : "0.75rem" }}
+                    style={{ paddingBottom: "0.75rem" }}
                 >
                     <nav className="flex flex-col divide-y divide-line/60">
                         <Link

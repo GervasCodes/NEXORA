@@ -27,7 +27,7 @@ function FeedActionRail({ product, saved, isGuest, loginHref, showCart, adding, 
         </svg>
     );
     return (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-3">
+        <div className="absolute right-3 top-[40%] -translate-y-1/2 z-10 flex flex-col items-center gap-3">
             {isGuest ? (
                 <Link to={loginHref} aria-label={t("products.feedSignIn")} className={RAIL_BTN}>{icon(HEART_PATH)}</Link>
             ) : (
@@ -402,7 +402,7 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                                 onCart={() => handleCart(product)}
                             />
 
-                            <div className="absolute inset-x-0 bottom-0 z-10 px-4 pt-16 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+                            <div className="absolute inset-x-0 bottom-0 z-10 max-h-[38%] overflow-hidden px-4 pt-16 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-black/85 via-black/40 to-transparent">
                                 <div className="flex items-center gap-2 mb-1">
                                     {hasDiscount && <span className="text-[11px] font-semibold bg-coral text-frost rounded-full px-2 py-0.5">-{pct}%</span>}
                                     {hasVideo && <span className="text-[11px] bg-black/50 rounded-full px-2 py-0.5">{t("products.feedVideo")}</span>}

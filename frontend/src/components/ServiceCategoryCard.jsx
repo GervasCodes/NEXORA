@@ -55,7 +55,7 @@ export default function ServiceCategoryCard({ category, index, active, totalCoun
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center">
+                    <div aria-hidden="true" className="w-full h-full flex items-center justify-center">
                         <span className="font-display text-3xl text-frost/90">{name.charAt(0)}</span>
                     </div>
                 )}

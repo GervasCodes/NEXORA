@@ -5,8 +5,7 @@ import IncomingOfferModal from "./IncomingOfferModal";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
-import MobileBottomNav from "./MobileBottomNav";
-import { HomeIcon, DeliveryIcon, OrdersIcon, MessagesIcon, WalletIcon, AccountIcon } from "./NavIcons";
+import { HomeIcon } from "./NavIcons";
 
 const tabs = [
     { to: "/delivery", label: "Available", end: true },
@@ -20,19 +19,6 @@ function ApprovedDeliveryLayout() {
     const pool = useAvailablePool();
 
     const toggleShift = () => (online ? goOffline() : goOnline());
-
-    // Delivery agent's mobile bottom nav (Phase 6: Mobile Navigation
-    // Unification) - "My deliveries" fills the Orders/Bookings slot
-    // (it's the agent's own equivalent of an order list), and Earnings
-    // fills the Wallet slot (delivery agents don't have a separate
-    // wallet page - Earnings already is that balance/history view).
-    const deliveryBottomNavItems = [
-        { to: "/delivery", label: "Home", icon: DeliveryIcon, end: true },
-        { to: "/delivery/mine", label: "Deliveries", icon: OrdersIcon },
-        { to: "/messages", label: "Messages", icon: MessagesIcon },
-        { to: "/delivery/earnings", label: "Earnings", icon: WalletIcon },
-        { to: "/account", label: "Profile", icon: AccountIcon }
-    ];
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -88,8 +74,7 @@ function ApprovedDeliveryLayout() {
                 "Ratings" doesn't fit a narrow phone width without either
                 this or letting the whole page scroll sideways - a native
                 horizontally-scrollable tab strip is the standard mobile
-                pattern here (matches how MobileBottomNav's own icons
-                stay tap-sized rather than shrinking to fit). */}
+                pattern for that. */}
             <nav className="flex gap-1 mb-8 border-b border-line overflow-x-auto">
                 {tabs.map((tab) => (
                     <NavLink
@@ -115,8 +100,6 @@ function ApprovedDeliveryLayout() {
             <PageTransition granular>
                 <Outlet context={{ pool }} />
             </PageTransition>
-
-            <MobileBottomNav items={deliveryBottomNavItems} />
         </div>
     );
 }

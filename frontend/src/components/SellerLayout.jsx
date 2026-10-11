@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import AccountReviewNotice from "./AccountReviewNotice";
 import PageTransition from "./PageTransition";
-import MobileBottomNav from "./MobileBottomNav";
 import ConfirmDialog from "./ConfirmDialog";
 import SideDrawer from "./ui/SideDrawer";
-import { HomeIcon, DashboardIcon, OrdersIcon, BookingsIcon, MessagesIcon, WalletIcon, AccountIcon, SignOutIcon } from "./NavIcons";
+import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
 import { getVerificationTier } from "../utils/verificationTier";
 
@@ -112,16 +110,6 @@ function visibleGroups(merchantType) {
         .filter((group) => group.tabs.length > 0);
 }
 
-// Plus icon for the mobile "New listing" action in the bottom nav.
-function PlusIcon({ className }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" className={className} aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-        </svg>
-    );
-}
-
 // Dashboard-wide jump search: matches tab labels and goes to the first hit on Enter.
 function SellerSearch({ tabs, onPick }) {
     const [query, setQuery] = useState("");
@@ -197,7 +185,7 @@ function SellerNavGroups({ groups, variant }) {
 }
 
 export default function SellerLayout() {
-    const { user, sessionReady, logout } = useAuth();
+    const { user, logout } = useAuth();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -246,7 +234,6 @@ export default function SellerLayout() {
     }, [isApproved, loading, profile, location.pathname, navigate]);
 
     const merchantType = profile?.merchant_type || "product";
-    const unreadMessages = useUnreadMessagesCount(sessionReady);
     const navGroups = visibleGroups(merchantType);
     const visibleTabs = navGroups.flatMap((group) => group.tabs);
 
@@ -267,23 +254,6 @@ export default function SellerLayout() {
         }
         setTimeout(() => setShareNote(""), 2500);
     };
-
-    // Mobile bottom nav. The center "New" action opens the listing form for
-    // the seller's merchant type (hybrid sellers default to products, like Orders).
-    const newListingPath = merchantType === "service" ? "/seller/services/new" : "/seller/products/new";
-    const sellerBottomNavItems = [
-        { to: "/seller", label: "Home", icon: DashboardIcon, end: true },
-        merchantType === "service"
-            ? { to: "/seller/bookings", label: "Bookings", icon: BookingsIcon }
-            : { to: "/seller/orders", label: "Orders", icon: OrdersIcon },
-        { to: newListingPath, label: "New", icon: PlusIcon },
-        { to: "/messages", label: "Messages", icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                {unreadMessages > 9 ? "9+" : unreadMessages}
-            </span>
-        ) },
-        { to: "/seller/wallet", label: "Wallet", icon: WalletIcon }
-    ];
 
     // Direct-access guard: product-only or service-only routes that don't
     // match merchant_type go back to the overview. selfGated tabs keep their
@@ -487,8 +457,6 @@ export default function SellerLayout() {
                     </div>
                 </div>
             </div>
-
-            <MobileBottomNav items={sellerBottomNavItems} />
 
             <ConfirmDialog
                 open={signOutConfirmOpen}

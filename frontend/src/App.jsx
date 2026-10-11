@@ -175,7 +175,7 @@ export default function App() {
     const isAdminRoute = location.pathname.startsWith("/admin");
     const isFeedRoute = location.pathname === "/feed";
     // An open conversation is a full-screen view with its own top bar:
-    // no storefront header, bottom nav, footer or floating buttons.
+    // no storefront header, footer or floating buttons.
     const isThreadRoute = /^\/messages\/[^/]+\/?$/.test(location.pathname);
 
     // Banner queue: cookie notice first, then install and update banners.
@@ -207,24 +207,6 @@ export default function App() {
         navigate("/login");
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionExpired]);
-
-    // Roles that get a fixed mobile bottom nav (Header.jsx for buyer,
-    // SellerLayout.jsx for seller, DeliveryLayout.jsx for delivery_agent)
-    // need their page content to clear it, or the bar covers whatever's
-    // at the bottom of the page - matched to MobileBottomNav's own
-    // min-h-[52px] tab height plus a little breathing room.
-    //
-    // iPhone fix: MobileBottomNav adds env(safe-area-inset-bottom) as its
-    // OWN bottom padding (clearing the home-indicator bar), so its real
-    // rendered height on an iPhone with a home indicator is ~52px + ~34px,
-    // not just 52px. A flat "pb-16" (4rem/64px) content offset was short
-    // by that inset on iPhone specifically (most Android devices report a
-    // 0px inset, so 64px happened to be enough there) - the last bit of
-    // page content ended up sitting under the bar instead of above it,
-    // and since the bar is translucent (glass-strong), that trapped
-    // content stayed partly visible through it instead of being fully
-    // hidden. See PRODUCTS_BOTTOM_NAV_IOS_FIX.md.
-    const hasMobileBottomNav = !isThreadRoute && (!user || ["buyer", "seller", "delivery_agent"].includes(user?.role));
 
     // Nexora AI is buyer-facing/advisory only - a guest
     // (user is null, not yet logged in) or a signed-in buyer gets it;
@@ -308,7 +290,7 @@ export default function App() {
 
             <RouteProgressBar />
 
-            <main id="main-content" tabIndex={-1} className={`flex-1 ${hasMobileBottomNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
+            <main id="main-content" tabIndex={-1} className="flex-1">
                 <Suspense fallback={<PageLoader />}>
                     <PageTransition>
                         <Routes>

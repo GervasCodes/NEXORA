@@ -159,10 +159,8 @@ export function AccountIcon({ className }) {
     );
 }
 
-// Wallet / earnings - used by the seller Wallet tab and the delivery
-// agent Earnings tab in MobileBottomNav.jsx (Phase 6: Mobile Navigation
-// Unification). Distinct from CartIcon (a shopping cart) since these
-// represent a running balance, not items to purchase.
+// Wallet / earnings. Distinct from CartIcon (a shopping cart) since
+// these represent a running balance, not items to purchase.
 export function WalletIcon({ className }) {
     return (
         <svg {...base} className={className}>

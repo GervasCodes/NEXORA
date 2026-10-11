@@ -1,0 +1,123 @@
+# NEXORA basic load test (Phase 2: Reliability, performance groundwork).
+#
+# Covers the three flows this phase's brief calls out: product
+# listing/search, product detail, and checkout. Run with:
+#
+#   npx artillery run backend/loadtest/nexora-load-test.yml
+#
+# against a target environment via:
+#
+#   npx artillery run --target https://your-api-host backend/loadtest/nexora-load-test.yml
+#
+# See loadtest/README.md for required setup (env vars, a seeded buyer
+# session, and what each scenario actually exercises).
+config:
+  target: "{{ $processEnvironment.LOADTEST_TARGET }}"
+  phases:
+    # Short warm-up, then the real ramp. Durations/arrival rates are
+    # deliberately modest defaults for a first pass against a small/
+    # single-instance deployment (see README "Tuning" section) - bump
+    # them once this is actually run against a real environment.
+    - name: "Warm up"
+      duration: 30
+      arrivalRate: 1
+    - name: "Ramp up"
+      duration: 60
+      arrivalRate: 1
+      rampTo: 10
+    - name: "Sustained load"
+      duration: 120
+      arrivalRate: 10
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      # Opt-in bypass for apiLimiter (600 req/15min/IP) - see
+      # rateLimit.middleware.js's loadtestBypass. Harmless to send when the
+      # server doesn't have LOADTEST_BYPASS_TOKEN set (or is in
+      # production): the header is just ignored and normal rate limiting
+      # applies. See README.md's "Rate limiting" section.
+      X-Loadtest-Bypass-Token: "{{ $processEnvironment.LOADTEST_BYPASS_TOKEN }}"
+  # Fails the run (non-zero exit code) if these aren't met, so this is
+  # usable as a pass/fail gate, not just a numbers report.
+  ensure:
+    maxErrorRate: 1
+    p95: 1500
+
+scenarios:
+  # --- Scenario 1: product listing/search (anonymous, the overwhelming
+  # majority of real traffic - no auth needed, exercises
+  # product.repository.js's dbRead-backed listing query from
+  # docs/SCALABILITY_REPORT.md). ---
+  - name: "Browse and search products"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/v1/products"
+          name: "GET /products (listing, no filters)"
+      - think: 1
+      - get:
+          url: "/api/v1/products?search={{ $randomString() }}"
+          name: "GET /products (search)"
+      - think: 1
+      - get:
+          url: "/api/v1/products?page=2"
+          name: "GET /products (page 2)"
+
+  # --- Scenario 2: product detail (also anonymous). Picks a real slug
+  # off the listing response instead of hardcoding one, so this keeps
+  # working against any seeded dataset without edits. ---
+  - name: "View a product detail page"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/v1/products"
+          name: "GET /products (for a slug to open)"
+          capture:
+            - json: "$.data[0].slug"
+              as: "productSlug"
+      - think: 1
+      - get:
+          url: "/api/v1/products/{{ productSlug }}"
+          name: "GET /products/:slug"
+          ifTrue: "productSlug"
+
+  # --- Scenario 3: checkout. This is the one flow that needs an
+  # authenticated buyer. Login here is OTP + httpOnly-cookie based (see
+  # auth.middleware.js), which isn't something a load-test script should
+  # script through on every virtual user - instead this uses a
+  # pre-obtained session, supplied via LOADTEST_SESSION_COOKIE (see
+  # README "Getting a session for the checkout scenario"). If that env
+  # var isn't set, Artillery sends no cookie and every request in this
+  # scenario gets a fast, cheap 401 - it fails loudly rather than
+  # silently measuring the wrong thing.
+  - name: "Checkout (authenticated)"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/v1/products"
+          name: "GET /products (pick something to buy)"
+          capture:
+            - json: "$.data[0].id"
+              as: "productId"
+      - post:
+          url: "/api/v1/cart"
+          name: "POST /cart (add item)"
+          headers:
+            Cookie: "nexora_session={{ $processEnvironment.LOADTEST_SESSION_COOKIE }}"
+          json:
+            product_id: "{{ productId }}"
+            quantity: 1
+          ifTrue: "productId"
+      - think: 1
+      - post:
+          url: "/api/v1/orders"
+          name: "POST /orders (checkout, cash_on_delivery)"
+          headers:
+            Cookie: "nexora_session={{ $processEnvironment.LOADTEST_SESSION_COOKIE }}"
+          json:
+            payment_method: "cash_on_delivery"
+            checkout_terms_accepted: true
+            shipping_address: "{{ $processEnvironment.LOADTEST_SHIPPING_ADDRESS }}"
+            shipping_city: "{{ $processEnvironment.LOADTEST_SHIPPING_CITY }}"
+            shipping_region: "{{ $processEnvironment.LOADTEST_SHIPPING_REGION }}"
+            shipping_phone: "{{ $processEnvironment.LOADTEST_SHIPPING_PHONE }}"

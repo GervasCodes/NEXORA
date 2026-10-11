@@ -63,3 +63,77 @@
 # the site-wide rule above.
 /offline.html
   Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+
+# --- CDN cache policy (Phase 2: Reliability & performance groundwork) ---
+# Netlify fronts this site with its own CDN already - these headers just
+# tell it (and any browser/intermediate cache) how long each kind of file
+# is safe to keep, rather than relying on Netlify's defaults for every
+# path alike.
+#
+# Every JS/CSS file Vite emits under /assets/ is content-hashed in its
+# filename (see vite.config.js's manualChunks + emptyOutDir comments -
+# the hash changes whenever the content does), so a given URL's content
+# can never change under the same name. That makes it safe to cache for
+# the maximum practical duration and mark `immutable` (tells supporting
+# browsers to skip revalidation entirely, not just rely on a long
+# max-age): a new deploy ships new filenames, it never overwrites an old
+# one in place.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The PWA icon/splash set and the static brand/image assets likewise
+# never change content under the same filename in practice (a logo swap
+# ships as a new file, not an in-place overwrite) - same caching logic
+# as /assets/* above, kept as a separate rule since they live at the
+# public root rather than under /assets/.
+/favicon-16.png
+  Cache-Control: public, max-age=31536000, immutable
+/favicon-32.png
+  Cache-Control: public, max-age=31536000, immutable
+/icon-180.png
+  Cache-Control: public, max-age=31536000, immutable
+/icon-192.png
+  Cache-Control: public, max-age=31536000, immutable
+/icon-512.png
+  Cache-Control: public, max-age=31536000, immutable
+/icon-512-maskable.png
+  Cache-Control: public, max-age=31536000, immutable
+/nexora-logo.png
+  Cache-Control: public, max-age=31536000, immutable
+/og-banner.png
+  Cache-Control: public, max-age=31536000, immutable
+/brand/*
+  Cache-Control: public, max-age=31536000, immutable
+/images/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The opposite end: index.html is the SPA shell every route rewrites to
+# (see _redirects' /* -> /index.html 200) and its own filename never
+# changes, so without an explicit rule it would inherit a CDN's default
+# static-asset caching and visitors could keep loading a stale shell
+# (pointing at deleted/renamed hashed /assets/ files from a prior
+# deploy) until that cache expires. no-cache (not no-store) still lets
+# the browser/CDN keep a copy, but forces revalidation on every request
+# so a new deploy is picked up immediately.
+/index.html
+  Cache-Control: no-cache
+
+# sw.js is the service worker itself (see public/sw.js's own
+# CACHE_VERSION-bump convention) - browsers already special-case it to
+# revalidate at most every 24h regardless of headers, but a long/default
+# cache on an intermediate CDN layer could otherwise serve a stale
+# worker to a fresh visitor for a full cache lifetime. no-cache forces
+# revalidation on every fetch so a CACHE_VERSION bump rolls out as soon
+# as the browser's own daily check allows, not after a separate CDN
+# cache window.
+/sw.js
+  Cache-Control: no-cache
+
+# manifest.json and robots.txt are small, rarely-changed, and need to
+# reflect edits promptly (a robots.txt change restricting a crawler
+# should take effect quickly, not after a long CDN TTL) - no-cache for
+# the same "always revalidate" reasoning as above.
+/manifest.json
+  Cache-Control: no-cache
+/robots.txt
+  Cache-Control: no-cache

@@ -180,7 +180,7 @@ export default function HomeCarousel() {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/80 via-abyss/10 to-transparent" />
 
-                <div className="absolute bottom-4 left-4 right-16">
+                <div className="absolute bottom-4 left-4 right-16 max-h-[65%] overflow-hidden">
                     <SlideBadge badge={slide.badge} />
                     <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 line-clamp-2">
                         {slide.title}

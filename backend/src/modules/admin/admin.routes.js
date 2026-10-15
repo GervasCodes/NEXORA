@@ -205,13 +205,6 @@ router.get("/sponsorship-campaigns", adminController.listSponsorshipCampaigns);
 // category.repository.js#findFeaturedStoresByCategory).
 router.get("/featured-store-campaigns", adminController.listFeaturedStoreCampaigns);
 
-// Read-only oversight of seller-paid department-sponsorship campaigns
-// (Phase 8C). Same reasoning as Featured Stores above - a department's
-// homepage placement is derived live from the
-// department_sponsorship_campaigns table (see
-// category.repository.js#findAllActiveWithSponsorship).
-router.get("/department-sponsorship-campaigns", adminController.listDepartmentSponsorshipCampaigns);
-
 router.get("/withdrawals", adminController.listWithdrawals);
 router.get("/withdrawals/:id/context", withdrawalIdValidation, validationMiddleware, adminController.getWithdrawalContext);
 router.get("/withdrawals/:id/payout-details", withdrawalIdValidation, validationMiddleware, adminController.revealWithdrawalPayoutDetails);

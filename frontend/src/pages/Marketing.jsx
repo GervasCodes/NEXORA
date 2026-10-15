@@ -76,7 +76,7 @@ export function HowItWorks() {
     return (
         <Shell path="/how-it-works" titleKey="marketing.how.title" descriptionKey="marketing.how.description" headingKey="marketing.how.heading" introKey="marketing.how.intro" schemaType="WebPage">
             <Steps prefix="marketing.how" />
-            <Link to="/products" className="inline-block px-5 py-2.5 rounded-md bg-ink text-paper text-sm">{t("marketing.how.cta")}</Link>
+            <Link to="/feed" className="inline-block px-5 py-2.5 rounded-md bg-ink text-paper text-sm">{t("marketing.how.cta")}</Link>
         </Shell>
     );
 }

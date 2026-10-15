@@ -175,11 +175,6 @@ module.exports = {
         "featuredStore.expired.title": "Featured store campaign ended",
         "featuredStore.expired.message": "Your featured store campaign in \"{categoryName}\" has ended. Start a new one any time from your seller dashboard.",
 
-        "departmentSponsorship.started.title": "Department sponsorship started",
-        "departmentSponsorship.started.message": "Your {days}-day sponsorship of \"{categoryName}\" on the homepage is now live ({amount} charged to your wallet).",
-        "departmentSponsorship.expired.title": "Department sponsorship ended",
-        "departmentSponsorship.expired.message": "Your sponsorship of \"{categoryName}\" has ended. Start a new one any time from your seller dashboard.",
-
         "subscription.expiring.title": "Your seller plan is ending soon",
         "subscription.expiring.message": "Your {planName} plan runs until {date}. Renew from your seller dashboard to keep its benefits.",
         "subscription.renewal.title": "Renew your seller plan",

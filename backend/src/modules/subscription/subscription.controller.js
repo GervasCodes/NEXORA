@@ -30,7 +30,7 @@ const tryFreeLaunchActivation = async (req, res, planCode) => {
 
 exports.listPlans = async (req, res) => {
     try {
-        const plans = await subscriptionService.listPlans();
+        const plans = await subscriptionService.listPlans(req.query.audience);
         res.json({ success: true, data: plans });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

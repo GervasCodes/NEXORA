@@ -54,7 +54,7 @@ export default function Loyalty() {
         <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
             <PageMeta title="Loyalty & referrals" noIndex />
             <h1 className="font-display text-2xl mb-1">Loyalty & referrals</h1>
-            <p className="text-ash text-sm mb-8">Earn points on every order, and bonus points for every friend you bring to NEXORA.</p>
+            <p className="text-ash text-sm mb-8">Earn points on every order, and invite friends to NEXORA with your referral link.</p>
 
             <div className="border border-line rounded-lg p-6 mb-8">
                 <p className="text-xs uppercase tracking-widest text-ash mb-1">Points balance</p>
@@ -67,7 +67,6 @@ export default function Loyalty() {
                 <ul className="space-y-2 text-sm text-ink/80 list-disc pl-5">
                     <li>{t("loyalty.how.earn", { points: status.pointsPer1000Spent ?? 1, amount: format(1000) })}</li>
                     <li>{t("loyalty.how.redeem", { value: format(status.pointValueTzs) })}</li>
-                    <li>{t("loyalty.how.referral", { points: status.referralBonusPoints })}</li>
                 </ul>
             </div>
 
@@ -94,14 +93,7 @@ export default function Loyalty() {
                     </p>
                 </div>
 
-                {/* (Phase 4 remediation): this figure now comes from
-                    the API (`status.referralBonusPoints`, sourced from
-                    REFERRAL_BONUS_POINTS in referral.service.js)
-                    instead of being hand-typed here - a change to the
-                    bonus amount on the backend previously required
-                    remembering to also edit this unrelated string, and
-                    nothing would have caught it if someone forgot. */}
-                <p className="text-xs text-ash mt-3">{t("loyalty.referralBonusNote", { points: status.referralBonusPoints })}</p>
+                <p className="text-xs text-ash mt-3">{t("loyalty.referralNote")}</p>
             </div>
 
             <h2 className="font-display text-lg mb-3">Your referrals</h2>
@@ -113,7 +105,7 @@ export default function Loyalty() {
                         <li key={r.id} className="flex justify-between text-sm border-b border-line pb-2">
                             <span>{r.first_name} {r.last_name}</span>
                             <span className={r.bonus_awarded ? "text-teal" : "text-ash"}>
-                                {r.bonus_awarded ? "Bonus earned" : "Waiting on first order"}
+                                {r.bonus_awarded ? "Confirmed" : "Waiting on first order"}
                             </span>
                         </li>
                     ))}

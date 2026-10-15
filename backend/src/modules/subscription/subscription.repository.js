@@ -2,9 +2,12 @@ const db = require("../../config/db");
 
 // ---- Plans (public + admin) -------------------------------------------
 
-exports.listActivePlans = async () => {
+// `audience` keeps the two pricing pages apart (migration 146): marketplace
+// tiers by default, the business-tools tier only when asked for.
+exports.listActivePlans = async (audience = "marketplace") => {
     const [rows] = await db.query(
-        "SELECT * FROM subscription_plans WHERE is_active = TRUE ORDER BY sort_order ASC, id ASC"
+        "SELECT * FROM subscription_plans WHERE is_active = TRUE AND audience = ? ORDER BY sort_order ASC, id ASC",
+        [audience]
     );
     return rows;
 };
@@ -119,7 +122,21 @@ exports.findPendingForSeller = async (sellerId, planId) => {
     return rows[0];
 };
 
+// Single choke point for every payment/free-subscribe path: a plan is only
+// sold to the kind of account it is for (plan audience = account seller_mode),
+// so a marketplace seller can't buy the tools tier and a tools-only account
+// can't buy a commission tier.
 exports.createSubscription = async (sellerId, planId, connection = db) => {
+    const [[fit]] = await connection.query(
+        `SELECT p.audience, u.seller_mode
+         FROM subscription_plans p, users u
+         WHERE p.id = ? AND u.id = ?`,
+        [planId, sellerId]
+    );
+    if (!fit || fit.audience !== fit.seller_mode) {
+        throw new Error("That plan isn't available for your account type.");
+    }
+
     const [result] = await connection.query(
         `INSERT INTO seller_subscriptions (seller_id, plan_id, status, auto_renew)
         VALUES (?, ?, 'pending', TRUE)`,

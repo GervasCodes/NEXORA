@@ -39,7 +39,6 @@ export default function AdminSettings() {
     const [retentionDays, setRetentionDays] = useState("0");
     const [sponsorshipRate, setSponsorshipRate] = useState("");
     const [featuredStoreRate, setFeaturedStoreRate] = useState("");
-    const [departmentSponsorshipRate, setDepartmentSponsorshipRate] = useState("");
     const [bands, setBands] = useState([]);
     const [perKmBeyond, setPerKmBeyond] = useState("");
     const [aiEnabled, setAiEnabled] = useState(false);
@@ -66,7 +65,6 @@ export default function AdminSettings() {
                 setRetentionDays(String(data.data.approved_document_retention_days ?? "0"));
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
-                setDepartmentSponsorshipRate(data.data.department_sponsorship_daily_rate);
                 setAiEnabled(data.data.ai_enabled === "true" || data.data.ai_enabled === true);
                 setAiDailyCapUser(data.data.ai_daily_token_cap_per_user);
                 setAiMonthlyCapUser(data.data.ai_monthly_token_cap_per_user);
@@ -143,7 +141,6 @@ export default function AdminSettings() {
                 approved_document_retention_days: Number(retentionDays),
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
-                department_sponsorship_daily_rate: Number(departmentSponsorshipRate),
                 ai_enabled: aiEnabled,
                 ai_daily_token_cap_per_user: Number(aiDailyCapUser),
                 ai_monthly_token_cap_per_user: Number(aiMonthlyCapUser),
@@ -390,25 +387,6 @@ export default function AdminSettings() {
                         What a seller pays per day to rank first in a department's Featured stores row
                         (Featured stores page). A running campaign keeps the rate it was purchased at
                         even if you change this later.
-                    </p>
-                </div>
-
-                <div>
-                    <label htmlFor="departmentSponsorshipRate" className="text-xs text-ash block mb-1">Department sponsorship daily rate (TZS)</label>
-                    <input
-                        id="departmentSponsorshipRate"
-                        type="number"
-                        min="0"
-                        step="500"
-                        required
-                        value={departmentSponsorshipRate}
-                        onChange={(e) => setDepartmentSponsorshipRate(e.target.value)}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                    <p className="text-xs text-ash mt-1">
-                        What a seller pays per day to bump a department to the front of the homepage
-                        "Shop by department" grid (Department sponsorship page). A running campaign
-                        keeps the rate it was purchased at even if you change this later.
                     </p>
                 </div>
 

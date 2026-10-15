@@ -1,7 +1,11 @@
 /**
- * Settles affiliate commissions, loyalty points and referral bonuses after
- * an order is delivered and its return window has passed (Phase 6), and
- * reverses them when the order is cancelled or refunded.
+ * Settles affiliate commissions and loyalty points after an order is
+ * delivered and its return window has passed (Phase 6), and reverses them
+ * when the order is cancelled or refunded.
+ *
+ * Referral bonus points are no longer paid out (Phase 3) - a qualifying
+ * referral is still marked confirmed here (see awardReferralIfQualified
+ * below), just without crediting anything.
  *
  * Runs hourly from jobs/rewardSettlement.job.js. Every order is settled in
  * its own transaction and every step is conditional on the state it moves
@@ -14,7 +18,6 @@ const settingsService = require("../settings/settings.service");
 const affiliateService = require("../affiliate/affiliate.service");
 const referralService = require("../referral/referral.service");
 const referralRepository = require("../referral/referral.repository");
-const notificationService = require("../notification/notification.service");
 const logger = require("../../utils/logger").child({ module: "rewardSettlement" });
 const Sentry = require("../../config/sentry");
 
@@ -22,7 +25,6 @@ const MAX_ORDERS_PER_RUN = 200;
 
 const settleOrder = async (order) => {
     const connection = await db.getConnection();
-    let referralAward = null;
 
     try {
         await connection.beginTransaction();
@@ -52,7 +54,7 @@ const settleOrder = async (order) => {
         }
 
         if (order.parent_order_id === null) {
-            referralAward = await awardReferralIfQualified(connection, order);
+            await awardReferralIfQualified(connection, order);
         }
 
         await connection.commit();
@@ -62,23 +64,18 @@ const settleOrder = async (order) => {
     } finally {
         connection.release();
     }
-
-    // Notify only after the commit, so a rolled-back award never tells the referrer.
-    if (referralAward) {
-        notificationService.notify({
-            userId: referralAward.referrerId,
-            type: "referral_bonus",
-            titleKey: "notifications.referral.bonus.title",
-            messageKey: "notifications.referral.bonus.message",
-            messageParams: { points: referralAward.points },
-            withEmail: true
-        }).catch((err) => logger.warn({ err, orderId: order.id }, "referral bonus notify error"));
-    }
 };
 
-// The referrer is paid once, only when the referred buyer's FIRST top-level
-// order (ignoring cancelled ones) is this delivered order and reaches the
-// minimum amount. If that first order falls short, no bonus is paid for it.
+// Points payout for referrals is discontinued (Phase 3). The referral
+// relationship itself (who referred whom) and its pending/confirmed status
+// are still tracked and shown to users - this only decides when a referral
+// flips from pending to confirmed, via the same `bonus_awarded` column as
+// before. It no longer credits any loyalty points when it does.
+//
+// The referrer's referral is confirmed once when the referred buyer's FIRST
+// top-level order (ignoring cancelled ones) is this delivered order and
+// reaches the minimum amount. If that first order falls short, the referral
+// stays pending for it.
 const awardReferralIfQualified = async (connection, order) => {
     const [[referral]] = await connection.query(
         "SELECT id, referrer_id, bonus_awarded FROM referrals WHERE referred_user_id = ? FOR UPDATE",
@@ -101,12 +98,9 @@ const awardReferralIfQualified = async (connection, order) => {
     );
     if (update.affectedRows !== 1) return null;
 
-    const points = referralService.REFERRAL_BONUS_POINTS;
-    await referralRepository.addPoints(referral.referrer_id, points, "referral_bonus", {
-        description: "Referral bonus - your referred friend completed their first order"
-    }, connection);
-
-    return { referrerId: referral.referrer_id, points };
+    // No points credited here anymore (Phase 3) - the referral is simply
+    // marked confirmed above.
+    return null;
 };
 
 const reverseOrder = async (order) => {

@@ -175,11 +175,6 @@ module.exports = {
         "featuredStore.expired.title": "Kampeni ya kuonyeshwa duka imekamilika",
         "featuredStore.expired.message": "Kampeni yako ya kuonyeshwa duka katika \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji.",
 
-        "departmentSponsorship.started.title": "Kampeni ya udhamini wa idara imeanza",
-        "departmentSponsorship.started.message": "Kampeni yako ya udhamini ya siku {days} kwa idara \"{categoryName}\" kwenye ukurasa wa nyumbani sasa inaonekana (kiasi {amount} kimetozwa kwenye pochi yako).",
-        "departmentSponsorship.expired.title": "Kampeni ya udhamini wa idara imekamilika",
-        "departmentSponsorship.expired.message": "Kampeni yako ya udhamini wa idara \"{categoryName}\" imekamilika. Anzisha nyingine wakati wowote kutoka dashibodi yako ya muuzaji.",
-
         "subscription.expiring.title": "Mpango wako wa muuzaji unakaribia kuisha",
         "subscription.expiring.message": "Mpango wako wa {planName} unaendelea hadi {date}. Hufanya upya kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa yake.",
         "subscription.renewal.title": "Hufanya upya mpango wako wa muuzaji",

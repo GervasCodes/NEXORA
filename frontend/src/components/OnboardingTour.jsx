@@ -3,6 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const STORAGE_PREFIX = "nexora_onboarding_seen_";
+// Round 4, Phase 2: the tour used to be permanent-once-dismissed (this
+// key held the literal string "1" forever). It now holds a last-seen
+// timestamp instead, and resurfaces once this long has passed since the
+// last dismissal - same key, same per-account/per-browser scope, just no
+// longer "forever". A pre-existing "1" value parses as a very old
+// timestamp (epoch ms = 1), so anyone who dismissed it under the old
+// permanent scheme will see it once more the next time they visit before
+// settling into this cadence going forward.
+const RESURFACE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // (New UI/UX & Imagery Additions, item 18): emoji-only steps
 // replaced with real illustration/photography per step. Buyer step 2
@@ -112,7 +121,8 @@ export default function OnboardingTour() {
             return;
         }
         const key = `${STORAGE_PREFIX}${user.id}`;
-        if (localStorage.getItem(key) === "1") return;
+        const lastSeen = Number(localStorage.getItem(key));
+        if (lastSeen && Date.now() - lastSeen < RESURFACE_INTERVAL_MS) return;
         setVisible(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
@@ -129,7 +139,7 @@ export default function OnboardingTour() {
     }
 
     const finish = () => {
-        localStorage.setItem(`${STORAGE_PREFIX}${user.id}`, "1");
+        localStorage.setItem(`${STORAGE_PREFIX}${user.id}`, String(Date.now()));
         setVisible(false);
     };
 

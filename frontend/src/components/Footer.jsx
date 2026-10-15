@@ -112,7 +112,7 @@ export default function Footer() {
                     <Link to="/about" className="hover:text-frost hover:underline">
                         About NEXORA
                     </Link>
-                    <Link to="/products" className="hover:text-frost hover:underline">
+                    <Link to="/feed" className="hover:text-frost hover:underline">
                         Shop all products
                     </Link>
                     <Link to="/services" className="hover:text-frost hover:underline">

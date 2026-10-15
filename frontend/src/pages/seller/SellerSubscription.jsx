@@ -9,9 +9,14 @@ import Button from "../../components/ui/Button";
 import PhoneInput from "../../components/PhoneInput";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
 
 export default function SellerSubscription() {
     const { t } = useLanguage();
+    const { user } = useAuth();
+    // Business-tools-only accounts (migration 146) see the tools tier, not the
+    // commission tiers, and come back to their own dashboard after paying.
+    const toolsOnly = user?.seller_mode === "business_tools";
     const [plans, setPlans] = useState([]);
     const [current, setCurrent] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -27,12 +32,12 @@ export default function SellerSubscription() {
 
     const navigate = useNavigate();
     const location = useLocation();
-    const returnPath = "/seller/subscription";
+    const returnPath = toolsOnly ? "/business/plan" : "/seller/subscription";
 
     const load = () => {
         setLoading(true);
         setLoadFailed(false);
-        Promise.all([api.get("/subscriptions/plans"), api.get("/subscriptions/me")])
+        Promise.all([api.get("/subscriptions/plans", { params: toolsOnly ? { audience: "business_tools" } : undefined }), api.get("/subscriptions/me")])
             .then(([plansRes, meRes]) => {
                 setPlans(plansRes.data.data);
                 setCurrent(meRes.data.data);
@@ -252,7 +257,7 @@ export default function SellerSubscription() {
             <div>
                 <h1 className="font-display text-2xl mb-1">Subscription</h1>
                 <p className="text-sm text-ash">
-                    Choose a plan to lower your commission rate and raise your active listing limit.
+                    {toolsOnly ? t("business.planSubtitle") : "Choose a plan to lower your commission rate and unlock sponsorship credits."}
                 </p>
             </div>
 
@@ -261,14 +266,16 @@ export default function SellerSubscription() {
             {error && <p role="alert" className="text-coral text-sm">{error}</p>}
             {message && <p className="text-teal text-sm">{message}</p>}
 
-            {current && (
+            {current && !(toolsOnly && current.isFreePlan) && (
                 <div className="glass-strong rounded-lg p-4">
                     <p className="text-sm text-ash mb-1">Current plan</p>
                     <p className="font-display text-lg mb-1">{current.plan.name}</p>
-                    <p className="text-sm text-ash">
-                        {current.listingCount} active listing{current.listingCount === 1 ? "" : "s"}
-                        {current.plan.maxActiveListings ? ` of ${current.plan.maxActiveListings} allowed` : " (unlimited)"}
-                    </p>
+                    {!toolsOnly && (
+                        <p className="text-sm text-ash">
+                            {current.listingCount} active listing{current.listingCount === 1 ? "" : "s"}
+                            {current.plan.maxActiveListings ? ` of ${current.plan.maxActiveListings} allowed` : " (unlimited)"}
+                        </p>
+                    )}
                     {current.currentPeriodEnd && (
                         <p className="text-sm text-ash mt-1">
                             {current.autoRenew ? t("seller.renewal.renews") : t("seller.renewal.ends")} {formatDate(current.currentPeriodEnd)}

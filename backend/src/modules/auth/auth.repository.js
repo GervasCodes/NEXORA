@@ -100,14 +100,17 @@ exports.createUser = async (user, conn) => {
         role,
         vehicle_type,
         vehicle_plate_number,
-        terms_version
+        terms_version,
+        seller_mode
     } = user;
 
     // Seller/delivery_agent accounts start life needing verification;
     // every other role (buyer, admin) never needs it, so the gate is
     // simply never checked for them (see requireApprovedSeller /
     // requireApprovedDeliveryAgent middleware).
-    const needsVerification = role === "seller" || role === "delivery_agent";
+    // Business-tools-only sellers (migration 146) skip marketplace verification.
+    const toolsOnly = role === "seller" && seller_mode === "business_tools";
+    const needsVerification = (role === "seller" && !toolsOnly) || role === "delivery_agent";
 
     // vehicle_type/vehicle_plate_number (migration 032) only ever arrive
     // for delivery_agent registrations - auth.validator.js requires both
@@ -120,8 +123,8 @@ exports.createUser = async (user, conn) => {
     // moment of acceptance.
     const [result] = await runner(conn).query(
         `INSERT INTO users
-        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number,terms_accepted_at,terms_version)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number,terms_accepted_at,terms_version,seller_mode)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
             first_name,
             last_name,
@@ -134,7 +137,8 @@ exports.createUser = async (user, conn) => {
             role === "delivery_agent" ? vehicle_type : null,
             role === "delivery_agent" ? (vehicle_plate_number || null) : null,
             new Date(),
-            terms_version || null
+            terms_version || null,
+            toolsOnly ? "business_tools" : "marketplace"
         ]
     );
 

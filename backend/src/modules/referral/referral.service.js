@@ -2,15 +2,19 @@
  * Referral & loyalty points program .
  *
  * Referral: every user gets a referral_code at signup. Sharing it and
- * having someone register with it links a `referrals` row. The referrer's
- * one-time bonus is paid by rewardSettlement.service.js once the referred
+ * having someone register with it links a `referrals` row. The referral
+ * is marked confirmed by rewardSettlement.service.js once the referred
  * user's first qualifying order is delivered and past its return window
- * (Phase 6), never at payment.
+ * (Phase 6) - but no bonus points are credited for it (Phase 3: the points
+ * payout was discontinued; the referral relationship and its
+ * pending/confirmed status are still tracked and shown to users).
  *
  * Loyalty: points are earned on delivered orders once the return window
  * has passed (see rewardSettlement.service.js). They are redeemable at
  * checkout as a discount on a later order - see quoteRedemption and
- * commitRedemption, called from order.service.js#checkout.
+ * commitRedemption, called from order.service.js#checkout. This is
+ * unaffected by the referral change above - it's a separate earning
+ * trigger that happens to share the same points ledger.
  */
 
 const crypto = require("crypto");
@@ -18,9 +22,11 @@ const referralRepository = require("./referral.repository");
 const notificationService = require("../notification/notification.service");
 const logger = require("../../utils/logger").child({ module: "referral" });
 
+// No longer paid out (Phase 3) - kept only because rewardSettlement's
+// existing clawback test mocks it, and in case the bonus is reinstated later.
 const REFERRAL_BONUS_POINTS = 200;
 // The referred user's first top-level order must reach this amount (TZS)
-// before the referrer is paid. Below it, no bonus is paid for that referral.
+// before the referral is confirmed. Below it, the referral stays pending.
 const REFERRAL_MIN_FIRST_ORDER_TZS = 20000;
 const POINTS_PER_1000_SPENT = 1; // 1 point per 1,000 TZS charged
 const POINT_VALUE_TZS = 10; // each point is worth 10 TZS when redeemed
@@ -61,7 +67,9 @@ exports.getMyLoyaltyStatus = async (userId) => {
         referralRepository.findLedger(userId),
         referralRepository.findMyReferrals(userId)
     ]);
-    return { balance, ledger, referrals, pointValueTzs: POINT_VALUE_TZS, referralBonusPoints: REFERRAL_BONUS_POINTS, pointsPer1000Spent: POINTS_PER_1000_SPENT };
+    // referralBonusPoints is intentionally not returned here anymore (Phase 3)
+    // - there's no longer a points amount to advertise for referrals.
+    return { balance, ledger, referrals, pointValueTzs: POINT_VALUE_TZS, pointsPer1000Spent: POINTS_PER_1000_SPENT };
 };
 
 // Called from order.service.js#checkout BEFORE the order is created, to

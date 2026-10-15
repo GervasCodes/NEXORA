@@ -74,9 +74,7 @@ export default function DepartmentCard({ department, index }) {
                     title={department.name}
                     subtitle={`${department.productCount} ${department.productCount === 1 ? "product" : "products"}`}
                 />
-                {department.is_sponsored ? (
-                    <CornerBadge corner="top-right" shape="pill" tone="bg-mango text-abyss" label="Sponsored" />
-                ) : department.newCount > 0 && (
+                {department.newCount > 0 && (
                     <CornerBadge corner="top-right" shape="pill" tone="bg-teal text-frost" label={`${department.newCount} new`} />
                 )}
             </div>

@@ -16,6 +16,7 @@ const initialForm = {
     password: "",
     confirm_password: "",
     role: "buyer",
+    seller_mode: "marketplace",
     vehicle_type: "motorcycle",
     vehicle_plate_number: "",
     referral_code: "",
@@ -44,7 +45,12 @@ export default function Register() {
     const { t } = useLanguage();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const [form, setForm] = useState(() => ({ ...initialForm, referral_code: searchParams.get("ref") || "" }));
+    const [form, setForm] = useState(() => ({
+        ...initialForm,
+        referral_code: searchParams.get("ref") || "",
+        // /business-tools links here with ?mode=business_tools
+        ...(searchParams.get("mode") === "business_tools" ? { role: "seller", seller_mode: "business_tools" } : {})
+    }));
     const [countryDial, setCountryDial] = useState(DEFAULT_COUNTRY_DIAL);
     const [files, setFiles] = useState({});
     const [idDocType, setIdDocType] = useState("national_id");
@@ -56,7 +62,9 @@ export default function Register() {
     const updateCheckbox = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
     const updateFile = (field) => (e) => setFiles({ ...files, [field]: e.target.files?.[0] || null });
 
-    const needsDocuments = form.role === "seller" || form.role === "delivery_agent";
+    // A business-tools-only seller skips the marketplace identity review.
+    const toolsOnly = form.role === "seller" && form.seller_mode === "business_tools";
+    const needsDocuments = (form.role === "seller" && !toolsOnly) || form.role === "delivery_agent";
     const requiredDocs = REQUIRED_DOCS[form.role] || [];
     const passwordsMismatch = form.confirm_password.length > 0 && form.password !== form.confirm_password;
 
@@ -127,6 +135,7 @@ export default function Register() {
         const fullPhone = buildFullPhone();
         const formWithPhone = { ...form, phone: fullPhone };
         delete formWithPhone.confirm_password;
+        if (form.role !== "seller") delete formWithPhone.seller_mode;
         let payload = formWithPhone;
 
         if (needsDocuments) {
@@ -385,6 +394,18 @@ export default function Register() {
                         </p>
                     )}
                 </div>
+
+                {form.role === "seller" && (
+                    <div>
+                        <label className="block text-sm mb-1">{t("auth.sellerMode.label")}</label>
+                        <select value={form.seller_mode} onChange={update("seller_mode")}
+                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
+                            <option value="marketplace">{t("auth.sellerMode.marketplace")}</option>
+                            <option value="business_tools">{t("auth.sellerMode.tools")}</option>
+                        </select>
+                        {toolsOnly && <p className="text-xs text-ash mt-1">{t("auth.sellerMode.toolsHint")}</p>}
+                    </div>
+                )}
 
                 <div className="flex items-start gap-2">
                     <input

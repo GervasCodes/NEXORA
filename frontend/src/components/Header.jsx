@@ -217,10 +217,10 @@ export default function Header() {
                     />
 
                     <IconNavLink
-                        to="/products"
+                        to="/feed"
                         label={t("nav.browse")}
                         icon={BrowseIcon}
-                        active={isActive("/products")}
+                        active={isActive("/feed")}
                     />
 
                     {primaryLinks.map((link) => (
@@ -377,10 +377,10 @@ export default function Header() {
                         </Link>
 
                         <Link
-                            to="/products"
+                            to="/feed"
                             onClick={() => setMenuOpen(false)}
                             className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
-                                ${isActive("/products") ? "text-teal" : "hover:text-teal"}`}
+                                ${isActive("/feed") ? "text-teal" : "hover:text-teal"}`}
                         >
                             <BrowseIcon className="w-[18px] h-[18px] shrink-0" />
                             {t("nav.browse")}

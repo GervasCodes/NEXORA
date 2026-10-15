@@ -33,7 +33,7 @@ const FALLBACK_SLIDES = [
         subtitle: "Thousands of products from local vendors",
         imageUrl: "https://images.unsplash.com/photo-1533750516457-a7f992034fec?q=80&w=1200&auto=format&fit=crop",
         videoUrl: null,
-        href: "/products",
+        href: "/feed",
         badge: null
     },
     {
@@ -42,7 +42,7 @@ const FALLBACK_SLIDES = [
         subtitle: "Verified stores, ready to ship",
         imageUrl: "https://images.unsplash.com/photo-1449247666642-264389f5f5b1?q=80&w=1200&auto=format&fit=crop",
         videoUrl: null,
-        href: "/products",
+        href: "/feed",
         badge: null
     },
     {
@@ -51,7 +51,7 @@ const FALLBACK_SLIDES = [
         subtitle: "Follow every order from pickup to drop-off",
         imageUrl: "https://images.unsplash.com/photo-1587476351660-e9fa4bb8b26c?q=80&w=1200&auto=format&fit=crop",
         videoUrl: null,
-        href: "/products",
+        href: "/feed",
         badge: null
     }
 ];

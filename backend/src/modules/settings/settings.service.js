@@ -34,14 +34,6 @@ const DEFAULTS = {
     // (store_featured_campaigns.daily_rate), same reasoning as
     // sponsorship_daily_rate above.
     featured_store_daily_rate: "8000",
-    // Flat cost (TZS) a seller pays per day to sponsor an entire department
-    // on the homepage grid (migration 053, Phase 8C). Priced above
-    // featured_store_daily_rate since it's homepage-wide visibility, not a
-    // placement within a department a shopper has already opened. A
-    // running campaign snapshots the rate that applied when purchased
-    // (department_sponsorship_campaigns.daily_rate), same reasoning as the
-    // two rates above.
-    department_sponsorship_daily_rate: "12000",
     // Days after delivery, with no open dispute, before a seller's held
     // order earnings become withdrawable (migration 054, Phase 9B). Not
     // read anywhere yet - Phase 9D's release job is the first caller of
@@ -252,13 +244,6 @@ exports.getFeaturedStoreDailyRate = async () => {
     return Number(map.featured_store_daily_rate);
 };
 
-// Flat cost (TZS) a seller currently pays per day to sponsor an entire
-// department on the homepage grid.
-exports.getDepartmentSponsorshipDailyRate = async () => {
-    const map = await getCachedAll();
-    return Number(map.department_sponsorship_daily_rate);
-};
-
 // Days after delivery, with no open dispute, before a seller's held
 // order earnings become withdrawable. Unused until Phase 9D's release
 // job calls this.
@@ -345,7 +330,7 @@ exports.getCodBlockAfterRefusedCount = async () => {
 // reads before creating a payment request:
 //   - subscription.service.js#getEffectiveCommissionRate reads commission
 //   - subscription.controller.js's subscribe* actions read subscriptions
-//   - sponsorship/featuredStore/departmentSponsorship .service.js#createCampaign read sponsorship
+//   - sponsorship/featuredStore .service.js#createCampaign read sponsorship
 // All default OFF (see DEFAULTS above) so a fresh launch is free by default.
 // (The one-time seller verification fee that used to be a fourth flag
 // here was retired - the Verified Seller badge is now free and follows
@@ -510,7 +495,7 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
 
     const NUMBER_KEYS = [
         "commission_rate", "rider_delivery_fee", "usd_exchange_rate",
-        "sponsorship_daily_rate", "featured_store_daily_rate", "department_sponsorship_daily_rate",
+        "sponsorship_daily_rate", "featured_store_daily_rate",
         "escrow_hold_days",
         "withdrawal_min_amount", "withdrawal_max_amount",
         "withdrawal_daily_cap_none", "withdrawal_daily_cap_id_verified", "withdrawal_daily_cap_business_verified",

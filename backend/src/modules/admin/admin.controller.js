@@ -558,17 +558,6 @@ exports.listFeaturedStoreCampaigns = async (req, res) => {
     }
 };
 
-exports.listDepartmentSponsorshipCampaigns = async (req, res) => {
-    try {
-        const campaigns = await adminService.listDepartmentSponsorshipCampaigns();
-
-        return res.json({ success: true, data: campaigns });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
 // --- Seller withdrawal requests ---
 
 exports.listWithdrawals = async (req, res) => {

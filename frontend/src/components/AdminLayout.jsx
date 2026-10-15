@@ -42,7 +42,6 @@ const groups = [
         tabs: [
             { to: "/admin/sponsorship", label: "Sponsorship" },
             { to: "/admin/featured-stores", label: "Featured stores" },
-            { to: "/admin/department-sponsorship", label: "Department sponsorship" },
             { to: "/admin/subscriptions", label: "Subscriptions" }
         ]
     },

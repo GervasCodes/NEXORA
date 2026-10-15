@@ -53,19 +53,11 @@ exports.getServicesTile = async () => {
 // count, a trending-products preview, recent products, and a "new this
 // week" count. N+1 by design - there are only a handful of departments,
 // so a few extra queries per card is simpler and clearer than one large
-// aggregate query.
-//
-// (Department Sponsorship) is what pulls in
-// findAllActiveWithSponsorship instead of findAllActive here: a
-// currently-active department_sponsorship_campaigns row for a category
-// bumps it to the front of this list and sets `is_sponsored` on the
-// response, which DepartmentCard.jsx uses to show a "Sponsored" badge.
-// See that function's comment in category.repository.js for why this is
-// a separate query from the plain findAllActive the `GET /categories`
-// dropdown endpoint still uses.
+// aggregate query. Order is the admin-set display_order, then name
+// (findAllActive) - departments can no longer be bought into the front.
 exports.listDepartments = async () => {
     return cache.getOrSet(CACHE_NAMESPACE, "listDepartments", async () => {
-        const categories = await categoryRepository.findAllActiveWithSponsorship();
+        const categories = await categoryRepository.findAllActive();
 
         return Promise.all(
             categories.map(async (category) => {

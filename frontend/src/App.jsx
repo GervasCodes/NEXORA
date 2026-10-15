@@ -25,6 +25,7 @@ import { useAuth } from "./context/AuthContext";
 import { useToast } from "./context/ToastContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
+import BusinessToolsLayout from "./components/BusinessToolsLayout";
 import RequireAuth from "./components/RequireAuth";
 import RequireDeliveryAgent from "./components/RequireDeliveryAgent";
 import RequireAdmin from "./components/RequireAdmin";
@@ -88,6 +89,8 @@ const SellerServices = lazy(() => import("./pages/seller/SellerServices"));
 const SellerServiceForm = lazy(() => import("./pages/seller/SellerServiceForm"));
 const SellerAvailability = lazy(() => import("./pages/seller/SellerAvailability"));
 const SellerPricing = lazy(() => import("./pages/seller/SellerPricing"));
+const BusinessToolsPricing = lazy(() => import("./pages/BusinessToolsPricing"));
+const BusinessToolsUpgrade = lazy(() => import("./pages/BusinessToolsUpgrade"));
 const SellerBookings = lazy(() => import("./pages/seller/SellerBookings"));
 const SellerCollections = lazy(() => import("./pages/seller/SellerCollections"));
 const SellerOrders = lazy(() => import("./pages/seller/SellerOrders"));
@@ -96,6 +99,7 @@ const SellerServiceReviews = lazy(() => import("./pages/seller/SellerServiceRevi
 const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"));
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
+const SellerBusinessTools = lazy(() => import("./pages/seller/SellerBusinessTools"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
 const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"));
 const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
@@ -110,6 +114,7 @@ const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
 const DeliveryEarnings = lazy(() => import("./pages/delivery/DeliveryEarnings"));
 const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
+const DeliveryBusiness = lazy(() => import("./pages/delivery/DeliveryBusiness"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
@@ -132,7 +137,6 @@ const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminFeaturedStores = lazy(() => import("./pages/admin/AdminFeaturedStores"));
-const AdminDepartmentSponsorship = lazy(() => import("./pages/admin/AdminDepartmentSponsorship"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
@@ -347,6 +351,14 @@ export default function App() {
                         <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
                         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
 
+                        <Route path="/business-tools" element={<BusinessToolsPricing />} />
+
+                        <Route path="/business" element={<RequireSeller><BusinessToolsLayout /></RequireSeller>}>
+                            <Route index element={<SellerBusinessTools />} />
+                            <Route path="plan" element={<SellerSubscription />} />
+                            <Route path="upgrade" element={<BusinessToolsUpgrade />} />
+                        </Route>
+
                         <Route path="/seller" element={<RequireSeller><SellerLayout /></RequireSeller>}>
                             <Route path="setup" element={<SellerSetup />} />
                             <Route index element={<SellerOverview />} />
@@ -366,15 +378,17 @@ export default function App() {
                             <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
+                            <Route path="pos" element={<SellerBusinessTools />} />
                             <Route path="wallet" element={<SellerWallet />} />
                             <Route path="promote" element={<SellerPromote />} />
-                            {/* sponsorship/featured-store/department-sponsorship
-                                are now tabs on the "Promote" hub above - these three keep the
-                                old URLs working (bookmarks, old links) by redirecting into the
-                                matching tab instead of rendering their own separate page. */}
+                            {/* sponsorship/featured-store are now tabs on the "Promote" hub
+                                above - these keep the old URLs working (bookmarks, old links)
+                                by redirecting into the matching tab instead of rendering
+                                their own separate page. department-sponsorship was retired as
+                                a product; its old URL lands on the hub's first tab. */}
                             <Route path="sponsorship" element={<Navigate to="/seller/promote?tab=sponsorship" replace />} />
                             <Route path="featured-store" element={<Navigate to="/seller/promote?tab=featured-store" replace />} />
-                            <Route path="department-sponsorship" element={<Navigate to="/seller/promote?tab=department-sponsorship" replace />} />
+                            <Route path="department-sponsorship" element={<Navigate to="/seller/promote" replace />} />
                             <Route path="subscription" element={<SellerSubscription />} />
                             <Route path="verification" element={<SellerVerification />} />
                             <Route path="disputes" element={<SellerDisputes />} />
@@ -389,6 +403,7 @@ export default function App() {
                             <Route path="mine" element={<DeliveryMine />} />
                             <Route path="earnings" element={<DeliveryEarnings />} />
                             <Route path="ratings" element={<DeliveryRatings />} />
+                            <Route path="business" element={<DeliveryBusiness />} />
                         </Route>
 
                         <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
@@ -413,7 +428,7 @@ export default function App() {
                             <Route path="sponsorship" element={<AdminSponsorship />} />
                             <Route path="subscriptions" element={<AdminSubscriptions />} />
                             <Route path="featured-stores" element={<AdminFeaturedStores />} />
-                            <Route path="department-sponsorship" element={<AdminDepartmentSponsorship />} />
+                            <Route path="department-sponsorship" element={<Navigate to="/admin/sponsorship" replace />} />
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />

@@ -21,8 +21,8 @@ import { getVerificationTier } from "../utils/verificationTier";
 // shared and always shown. Visibility is resolved against
 // seller_profiles.merchant_type - see isTabVisible below. `hybrid`
 // sellers see every tab, per CHANGES.md's Permission Matrix.
-// Reviews/Service reviews, Collections/Promote (sponsorship, featured
-// stores, and department sponsorship are tabs within it - see
+// Reviews/Service reviews, Collections/Promote (sponsorship and featured
+// stores are tabs within it - see
 // SellerPromote.jsx) and Delivery team/Disputes (order-only dispute
 // types) follow the same product/service split as the Catalog and
 // Orders groups they sit alongside.
@@ -65,6 +65,12 @@ const groups = [
             { to: "/seller/returns", label: "Returns", category: "product" },
             { to: "/seller/group-buys", label: "Group buys", category: "product" },
             { to: "/seller/live-selling", label: "Live selling", category: "product" }
+        ]
+    },
+    {
+        label: "Business tools",
+        tabs: [
+            { to: "/seller/pos", label: "Stock & sales", category: "product" }
         ]
     },
     {
@@ -194,6 +200,12 @@ export default function SellerLayout() {
     const location = useLocation();
 
     const isApproved = user?.account_verification_status === "approved";
+    // Business-tools-only accounts (migration 146) have no store or marketplace
+    // review - they live in their own light dashboard.
+    const isToolsOnly = user?.seller_mode === "business_tools";
+    useEffect(() => {
+        if (isToolsOnly) navigate("/business", { replace: true });
+    }, [isToolsOnly, navigate]);
 
     // Account and sign-out live in the shell (not the global header) so a
     // seller has them inside their own dashboard.
@@ -267,6 +279,8 @@ export default function SellerLayout() {
             navigate("/seller", { replace: true });
         }
     }, [profile, merchantType, location.pathname, navigate]);
+
+    if (isToolsOnly) return null;
 
     if (!isApproved) {
         return (

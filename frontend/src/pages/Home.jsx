@@ -212,7 +212,7 @@ export default function Home() {
                             </p>
 
                             <div className="flex flex-wrap gap-3 mb-8">
-                                <Link to="/products" className="inline-flex items-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold">
+                                <Link to="/feed" className="inline-flex items-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold">
                                     {t("home.ctaShop")}
                                 </Link>
                                 <Link to="/sell" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
@@ -358,7 +358,7 @@ export default function Home() {
                                     <Link to="/" className="text-sm text-teal hover:underline">
                                         {t("search.browseDepartments")}
                                     </Link>
-                                    <Link to="/products" className="text-sm text-teal hover:underline">
+                                    <Link to="/feed" className="text-sm text-teal hover:underline">
                                         {t("search.browseAll")}
                                     </Link>
                                 </div>

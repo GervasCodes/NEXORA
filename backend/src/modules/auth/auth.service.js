@@ -60,7 +60,11 @@ exports.register = async (userData, files = {}) => {
         throw new Error("Phone number already exists");
     }
 
-    const needsVerification = VERIFICATION_REQUIRED_ROLES.includes(role);
+    // A business-tools-only seller never lists publicly, so it skips the
+    // marketplace identity review; it can submit documents later if it
+    // converts to a marketplace seller (businessTools.service.js).
+    const sellerMode = role === "seller" && userData.seller_mode === "business_tools" ? "business_tools" : "marketplace";
+    const needsVerification = VERIFICATION_REQUIRED_ROLES.includes(role) && sellerMode !== "business_tools";
     const documentsToUpload = [];
 
     if (needsVerification) {
@@ -116,7 +120,7 @@ exports.register = async (userData, files = {}) => {
         await connection.beginTransaction();
 
         const userId = await userRepository.createUser(
-            { ...userData, password: hashedPassword, terms_version: CURRENT_TERMS_VERSION },
+            { ...userData, seller_mode: sellerMode, password: hashedPassword, terms_version: CURRENT_TERMS_VERSION },
             connection
         );
 

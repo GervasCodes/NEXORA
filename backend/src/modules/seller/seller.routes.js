@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
+const { blockToolsOnlyAccount } = require("../businessTools/businessTools.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 const requireApprovedSeller = require("../../middleware/requireApprovedSeller.middleware");
@@ -38,6 +39,8 @@ router.post(
     "/profile",
     authMiddleware,
     authorize("seller"),
+    // A business-tools-only account has no public store (migration 146).
+    blockToolsOnlyAccount,
     createSellerValidation,
     validationMiddleware,
     createSellerProfile

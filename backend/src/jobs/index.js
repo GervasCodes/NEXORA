@@ -8,7 +8,6 @@ const paymentReconciliationJob = require("./paymentReconciliation.job");
 const otpCleanupJob = require("./otpCleanup.job");
 const sponsorshipExpiryJob = require("./sponsorshipExpiry.job");
 const featuredStoreExpiryJob = require("./featuredStoreExpiry.job");
-const departmentSponsorshipExpiryJob = require("./departmentSponsorshipExpiry.job");
 const escrowReleaseJob = require("./escrowRelease.job");
 const bookingLifecycleJob = require("./bookingLifecycle.job");
 const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
@@ -76,14 +75,6 @@ exports.startJobs = () => {
     // this just keeps campaign `status` accurate for the seller/admin
     // campaign lists.
     cron.schedule("0 * * * *", safeRun("featuredStoreExpiry", featuredStoreExpiryJob));
-
-    // Every hour, on the hour: close out department-sponsorship campaigns
-    // whose paid duration has ended - see departmentSponsorshipExpiry.job.js
-    // and departmentSponsorship.service.js#expireDueCampaigns. No display
-    // flag to clear here either (the homepage ranking query joins the
-    // campaigns table live), so this just keeps campaign `status` accurate
-    // for the seller/admin campaign lists.
-    cron.schedule("0 * * * *", safeRun("departmentSponsorshipExpiry", departmentSponsorshipExpiryJob));
 
     // Every hour, at 10 past: advance paid bookings through
     // confirmed -> active -> completed as their dates pass - see
@@ -190,6 +181,6 @@ exports.startJobs = () => {
     cron.schedule("*/5 * * * *", safeRun("emailRetry", emailRetryJob));
 
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"
+        "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"
     );
 };

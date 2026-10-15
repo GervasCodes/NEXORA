@@ -193,39 +193,6 @@ exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
     return rows;
 };
 
-// Homepage department grid, with  Department Sponsorship applied.
-// Same organic ordering findAllActive always used (display_order ASC, name
-// ASC), but any department with a currently-active, unexpired campaign in
-// department_sponsorship_campaigns is bumped to the front first.
-//
-// A department isn't owned by any one seller (several sellers active in
-// the same department could each independently sponsor it), so - like
-// findFeaturedStoresByCategory and unlike products.is_sponsored
-// there's no flag on `categories` itself to keep in sync.
-// This LEFT JOINs the campaigns table live and derives `is_sponsored` from
-// whether *any* matching row exists, so starting/cancelling/expiring a
-// campaign never needs a second write anywhere else.
-//
-// Deliberately a separate function from findAllActive rather than a
-// widening of it: findAllActive backs the plain `GET /categories` list
-// (category dropdowns on forms elsewhere in the app), where a purchased
-// reordering would be a confusing, moving-target UX. Only the homepage
-// department grid (category.service.js#listDepartments) should reflect
-// paid placement.
-exports.findAllActiveWithSponsorship = async () => {
-    const [rows] = await db.query(
-        `SELECT c.*, (COUNT(dsc.id) > 0) AS is_sponsored
-        FROM categories c
-        LEFT JOIN department_sponsorship_campaigns dsc
-            ON dsc.category_id = c.id
-            AND dsc.status = 'active' AND dsc.ends_at > NOW()
-        WHERE c.status = 'active'
-        GROUP BY c.id
-        ORDER BY is_sponsored DESC, c.display_order ASC, c.name ASC`
-    );
-    return rows;
-};
-
 // --- Homepage hero carousel (Phase 11 - Home Redesign) ---
 // Platform-wide equivalents of findPromotionsByCategory /
 // findSponsoredByCategory / findFeaturedStoresByCategory above: the

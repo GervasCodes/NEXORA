@@ -18,7 +18,7 @@ const FLAGS = [
     {
         key: "monetization_sponsorship_enabled",
         label: "Sponsorship & featured placement",
-        description: "Controls paid a la carte purchases of product sponsorship, featured-store, and department-sponsorship campaigns. When off, sellers can still start campaigns with the sponsorship credits included in their subscription plan, but cannot buy extra days from their wallet."
+        description: "Controls paid a la carte purchases of product sponsorship and featured-store campaigns. When off, sellers can still start campaigns with the sponsorship credits included in their subscription plan, but cannot buy extra days from their wallet."
     }
 ];
 

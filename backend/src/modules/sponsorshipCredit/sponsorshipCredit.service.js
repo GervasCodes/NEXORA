@@ -2,11 +2,10 @@ const sponsorshipCreditRepository = require("./sponsorshipCredit.repository");
 const settingsService = require("../settings/settings.service");
 
 // One credit = one campaign-day, usable on any campaign type (product
-// sponsorship, featured store, department sponsorship). Included credits
-// are consumed first; whatever days they don't cover fall back to the
-// existing paid a la carte flow, priced at that campaign type's own daily
-// rate. This module owns that split so the three campaign services can't
-// drift apart on it.
+// sponsorship or featured store). Included credits are consumed first;
+// whatever days they don't cover fall back to the existing paid a la
+// carte flow, priced at that campaign type's own daily rate. This module
+// owns that split so the campaign services can't drift apart on it.
 
 const MONTHS_PER_ANNUAL_PERIOD = 12;
 
@@ -111,7 +110,7 @@ exports.splitFunding = ({ days, dailyRate, creditsAvailable, paidEnabled }) => {
 // wallet against `totalCost` first and only then calls consumeCredits, so
 // a campaign that can't be paid for never touches the allotment. Must run
 // inside the caller's transaction, after it has locked the wallet (same
-// lock order in all three campaign services).
+// lock order in both campaign services).
 exports.planFunding = async (sellerId, { days, dailyRate, paidEnabled }, connection) => {
     const periodId = await sponsorshipCreditRepository.findCurrentPeriodId(sellerId, connection);
     const period = periodId

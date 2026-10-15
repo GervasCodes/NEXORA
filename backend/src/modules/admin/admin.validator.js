@@ -130,11 +130,6 @@ exports.updateSettingsValidation = [
         .isFloat({ min: 0 })
         .withMessage("Featured store daily rate must be a positive amount"),
 
-    body("department_sponsorship_daily_rate")
-        .optional()
-        .isFloat({ min: 0 })
-        .withMessage("Department sponsorship daily rate must be a positive amount"),
-
     // Unused until Phase 9D's release job reads settingsService.getEscrowHoldDays() -
     // validated here now so the admin settings endpoint accepts it as soon
     // as it's editable, same as every other setting above.

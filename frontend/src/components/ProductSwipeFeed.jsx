@@ -171,9 +171,18 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
     };
     const closeRef = useRef(null);
     const requestedLenRef = useRef(-1);
-    const requestedVideoIds = useRef(new Set());
+    const requestedMediaIds = useRef(new Set());
     const [activeIndex, setActiveIndex] = useState(initialIndex);
     const [videoUrls, setVideoUrls] = useState({});
+    // Full image gallery per product, looked up lazily (see the effect
+    // below) since the list endpoint that feeds this component only ever
+    // returns a single cover image. Keyed by product id, each value is an
+    // ordered array of image URLs once resolved (or null on a failed
+    // lookup). Which image is currently shown for a given product, so a
+    // shopper can step through its gallery without losing their place if
+    // they scroll away and back.
+    const [imageGalleries, setImageGalleries] = useState({});
+    const [imageIndexByProduct, setImageIndexByProduct] = useState({});
     const [muted, setMuted] = useState(true);
     // Bug fix: a broken/expired image URL used to just fail silently (the
     // <img> renders nothing, no fallback), which combined with a slow CDN
@@ -263,24 +272,57 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
         onLoadMore();
     }, [activeIndex, products.length, hasMore, loadingMore, onLoadMore]);
 
-    // The list endpoint doesn't return videos, so look them up for the
-    // current and next slide only (the next one so its video is ready when
-    // the shopper swipes). Each product is requested at most once.
+    // The list endpoint doesn't return a video (beyond the single
+    // first_video_url it already includes) or the product's full image
+    // gallery (just one cover image), so look both up together for the
+    // current and next slide only (the next one so its media is ready
+    // when the shopper swipes). Each product is requested at most once.
+    //
+    // Bug fix: this used to also skip the request whenever
+    // product.first_video_url was already present - but the list query
+    // always includes that key (a URL, or null when there's no video),
+    // so that condition was true for every product and the lookup never
+    // actually ran. Harmless on its own since first_video_url already
+    // covered the video case, but it meant the gallery (images) was
+    // never fetched either - a seller's other uploaded photos never
+    // appeared in the feed, which only ever showed the single cover
+    // image. Dropping that half of the guard is what fixes it.
     useEffect(() => {
         [activeIndex, activeIndex + 1].forEach((i) => {
             const product = products[i];
-            if (!product || product.videos !== undefined || product.first_video_url !== undefined) return;
-            if (requestedVideoIds.current.has(product.id)) return;
+            if (!product || product.videos !== undefined) return;
+            if (requestedMediaIds.current.has(product.id)) return;
 
-            requestedVideoIds.current.add(product.id);
+            requestedMediaIds.current.add(product.id);
             api.get(`/products/${product.slug}`, { timeout: VIDEO_LOOKUP_TIMEOUT_MS })
                 .then(({ data }) => {
                     const url = data?.data?.videos?.[0]?.video_url || null;
                     setVideoUrls((prev) => ({ ...prev, [product.id]: url }));
+
+                    const images = (data?.data?.images || [])
+                        .slice()
+                        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                        .map((img) => img.image_url)
+                        .filter(Boolean);
+                    setImageGalleries((prev) => ({ ...prev, [product.id]: images }));
                 })
-                .catch(() => setVideoUrls((prev) => ({ ...prev, [product.id]: null })));
+                .catch(() => {
+                    setVideoUrls((prev) => ({ ...prev, [product.id]: null }));
+                    setImageGalleries((prev) => ({ ...prev, [product.id]: null }));
+                });
         });
     }, [activeIndex, products]);
+
+    // Clamps (no wrap) a product's gallery position - left tap/arrow goes
+    // back, right goes forward, edges just don't move further.
+    const stepImage = (productId, delta, galleryLength) => {
+        setImageIndexByProduct((prev) => {
+            const current = prev[productId] || 0;
+            const next = Math.min(Math.max(current + delta, 0), galleryLength - 1);
+            if (next === current) return prev;
+            return { ...prev, [productId]: next };
+        });
+    };
 
     // Bug fix: every route in App.jsx is wrapped in PageTransition, which
     // renders a <div className="animate-page-in"> whose enter animation
@@ -336,7 +378,12 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
 
             <div ref={scrollerRef} className="h-full overflow-y-auto snap-y snap-mandatory overscroll-contain">
                 {products.map((product, index) => {
-                    const media = pickFeedMedia(product, product.first_video_url ?? videoUrls[product.id]);
+                    const media = pickFeedMedia(
+                        product,
+                        product.first_video_url ?? videoUrls[product.id],
+                        imageGalleries[product.id],
+                        imageIndexByProduct[product.id] || 0
+                    );
                     const isActive = index === activeIndex;
                     const isLast = index === products.length - 1;
                     const hasDiscount = product.discount_price && Number(product.discount_price) < Number(product.price);
@@ -373,6 +420,43 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
                                 />
                             ) : (
                                 <div className="absolute inset-0 flex items-center justify-center text-frost/50 text-sm">No image</div>
+                            )}
+
+                            {media.type === "image" && media.images?.length > 1 && (
+                                <>
+                                    {/* Position dots, Instagram-carousel style - purely visual, sits
+                                        above the plain image (z-auto) but below the top bar (z-20). */}
+                                    <div className="absolute top-3 inset-x-0 z-10 flex items-center justify-center gap-1 pointer-events-none">
+                                        {media.images.map((_, i) => (
+                                            <span
+                                                key={i}
+                                                className={`h-1.5 rounded-full transition-all ${i === media.index ? "w-4 bg-frost" : "w-1.5 bg-frost/40"}`}
+                                            />
+                                        ))}
+                                    </div>
+                                    {/* Tap-left/tap-right zones to step through this product's other
+                                        uploaded photos. Left at z-auto (no z-index) so they sit under
+                                        the action rail/mute button/bottom panel (all z-10+) and never
+                                        steal those clicks - only the plain image area is covered. */}
+                                    {isActive && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                aria-label={t("products.feedPrevPhoto")}
+                                                onClick={() => stepImage(product.id, -1, media.images.length)}
+                                                disabled={media.index === 0}
+                                                className="absolute left-0 top-0 bottom-[38%] w-2/5 disabled:cursor-default"
+                                            />
+                                            <button
+                                                type="button"
+                                                aria-label={t("products.feedNextPhoto")}
+                                                onClick={() => stepImage(product.id, 1, media.images.length)}
+                                                disabled={media.index === media.images.length - 1}
+                                                className="absolute right-0 top-0 bottom-[38%] w-2/5 disabled:cursor-default"
+                                            />
+                                        </>
+                                    )}
+                                </>
                             )}
 
                             {media.type === "video" && isActive && autoplay && (

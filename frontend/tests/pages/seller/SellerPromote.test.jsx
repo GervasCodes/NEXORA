@@ -8,7 +8,7 @@ vi.mock("../../../src/api/client", () => ({
     extractErrorMessage: () => "Something went wrong"
 }));
 
-// Both SellerSponsorship and SellerDepartmentSponsorship tabs call
+// Both SellerSponsorship and SellerFeaturedStore tabs call
 // useLanguage() - without a mock it returns the real context's null
 // default and crashes.
 vi.mock("../../../src/context/LanguageContext", () => ({
@@ -65,11 +65,11 @@ describe("SellerPromote hub (A3 consolidation)", () => {
         renderPage();
         await screen.findByText("Your campaigns");
 
-        await user.click(screen.getByRole("tab", { name: "Department sponsorship" }));
+        await user.click(screen.getByRole("tab", { name: "Featured stores" }));
 
-        await screen.findByText(/bump a department/i);
-        expect(api.get).toHaveBeenCalledWith("/seller/department-sponsorship/pricing");
-        expect(screen.getByRole("tab", { name: "Department sponsorship" })).toHaveAttribute("aria-selected", "true");
+        await screen.findByText("Your campaigns");
+        expect(api.get).toHaveBeenCalledWith("/seller/featured-store/pricing");
+        expect(screen.getByRole("tab", { name: "Featured stores" })).toHaveAttribute("aria-selected", "true");
         expect(screen.getByRole("tab", { name: "Sponsored products" })).toHaveAttribute("aria-selected", "false");
     });
 });

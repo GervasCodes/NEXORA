@@ -21,6 +21,16 @@ exports.registerValidation = [
         .isIn(["buyer", "seller", "delivery_agent"])
         .withMessage("Invalid role"),
 
+    // Business-tools-only sign-up: a seller-role account that uses the POS/stock
+    // tools without listing on the marketplace (see migration 146).
+    body("seller_mode")
+        .optional({ nullable: true, checkFalsy: true })
+        .isIn(["marketplace", "business_tools"])
+        .withMessage("Invalid account type")
+        .bail()
+        .custom((value, { req }) => value !== "business_tools" || req.body.role === "seller")
+        .withMessage("Business tools accounts must be seller accounts"),
+
     body("referral_code")
         .optional({ nullable: true, checkFalsy: true })
         .isLength({ max: 12 })

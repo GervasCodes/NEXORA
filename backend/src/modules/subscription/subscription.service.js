@@ -34,8 +34,8 @@ const activateAndGrantCredits = async (subscription, plan, connection) => {
 
 // ---- Public / seller-facing ---------------------------------------------
 
-exports.listPlans = async () => {
-    const plans = await subscriptionRepository.listActivePlans();
+exports.listPlans = async (audience) => {
+    const plans = await subscriptionRepository.listActivePlans(audience === "business_tools" ? "business_tools" : "marketplace");
     return plans.map(formatPlan);
 };
 

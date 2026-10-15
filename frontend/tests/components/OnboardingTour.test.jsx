@@ -32,6 +32,16 @@ const clickThroughToEnd = async (user, ctaLabel) => {
     await user.click(screen.getByRole("button", { name: ctaLabel }));
 };
 
+// Round 4, Phase 2: finishing the tour now stores a last-seen timestamp
+// (so it can resurface after a while) instead of the literal string "1"
+// forever - assert it's a real, recent timestamp rather than an exact
+// value.
+const expectRecentlySeen = (key) => {
+    const stored = Number(localStorage.getItem(key));
+    expect(stored).toBeGreaterThan(Date.now() - 5000);
+    expect(stored).toBeLessThanOrEqual(Date.now());
+};
+
 beforeEach(() => {
     localStorage.clear();
     mockNavigate.mockClear();
@@ -54,7 +64,7 @@ describe("OnboardingTour", () => {
         await clickThroughToEnd(user, "Start browsing");
 
         expect(mockNavigate).toHaveBeenCalledWith("/");
-        expect(localStorage.getItem("nexora_onboarding_seen_1")).toBe("1");
+        expectRecentlySeen("nexora_onboarding_seen_1");
     });
 
     it("shows seller-specific steps and finishes to the seller dashboard", async () => {
@@ -66,7 +76,7 @@ describe("OnboardingTour", () => {
         await clickThroughToEnd(user, "Go to dashboard");
 
         expect(mockNavigate).toHaveBeenCalledWith("/seller");
-        expect(localStorage.getItem("nexora_onboarding_seen_2")).toBe("1");
+        expectRecentlySeen("nexora_onboarding_seen_2");
     });
 
     it("shows delivery-agent-specific steps and finishes to the delivery dashboard", async () => {
@@ -78,7 +88,7 @@ describe("OnboardingTour", () => {
         await clickThroughToEnd(user, "Go to dashboard");
 
         expect(mockNavigate).toHaveBeenCalledWith("/delivery");
-        expect(localStorage.getItem("nexora_onboarding_seen_3")).toBe("1");
+        expectRecentlySeen("nexora_onboarding_seen_3");
     });
 
     it("renders nothing for an admin (no onboarding configured for that role)", () => {
@@ -87,9 +97,9 @@ describe("OnboardingTour", () => {
         expect(container).toBeEmptyDOMElement();
     });
 
-    it("does not re-show a tour already marked seen for that account", () => {
+    it("does not re-show a tour recently marked seen for that account", () => {
         mockUser = { id: 5, role: "buyer" };
-        localStorage.setItem("nexora_onboarding_seen_5", "1");
+        localStorage.setItem("nexora_onboarding_seen_5", String(Date.now()));
         const { container } = renderTour();
         expect(container).toBeEmptyDOMElement();
     });
@@ -102,7 +112,7 @@ describe("OnboardingTour", () => {
         await user.click(screen.getByRole("button", { name: "Skip" }));
 
         expect(mockNavigate).not.toHaveBeenCalled();
-        expect(localStorage.getItem("nexora_onboarding_seen_6")).toBe("1");
+        expectRecentlySeen("nexora_onboarding_seen_6");
     });
 
     it("hides the buyer tour on /seller and /delivery routes", () => {

@@ -7,7 +7,6 @@ const logger = require("../../utils/logger").child({ module: "admin" });
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
-const departmentSponsorshipService = require("../departmentSponsorship/departmentSponsorship.service");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const accountRepository = require("../account/account.repository");
@@ -90,7 +89,7 @@ exports.listDeletedUsers = async () => {
 //   - orders, order_items, payments, wallet_transactions,
 //     withdrawal_requests, agent_earnings, disputes + evidence/messages,
 //     reviews + review_photos, delivery_ratings, audit_logs, fraud_flags,
-//     sponsorship/featured-store/department-sponsorship campaigns
+//     sponsorship/featured-store campaigns
 //   - conversations (kept for the other participant); the deleted
 //     account's own messages are tombstoned via the existing "delete
 //     message" mechanism (is_deleted/deleted_at), not removed
@@ -1107,14 +1106,6 @@ exports.listSponsorshipCampaigns = async () => {
 // see category.repository.js#findFeaturedStoresByCategory) ---
 exports.listFeaturedStoreCampaigns = async () => {
     return featuredStoreService.listAllCampaigns();
-};
-
-// --- Department sponsorship campaigns (read-only oversight;
-// same reasoning as Featured Stores above - a department's homepage
-// placement is derived live from this table, see
-// category.repository.js#findAllActiveWithSponsorship) ---
-exports.listDepartmentSponsorshipCampaigns = async () => {
-    return departmentSponsorshipService.listAllCampaigns();
 };
 
 // --- Seller withdrawal requests ---

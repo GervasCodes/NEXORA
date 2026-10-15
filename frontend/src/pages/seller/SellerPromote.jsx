@@ -4,7 +4,6 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import SellerSponsorship from "./SellerSponsorship";
 import SellerFeaturedStore from "./SellerFeaturedStore";
-import SellerDepartmentSponsorship from "./SellerDepartmentSponsorship";
 import { IncludedCreditsBanner } from "../../components/SponsorshipCredits";
 import Skeleton from "../../components/Skeleton";
 
@@ -172,21 +171,17 @@ function StorePromoVideoSection() {
     );
 }
 
-// (Remediation, A3): sponsorship, featured stores, and
-// department sponsorship used to be three separate nav entries/routes
-// that did the same thing (pay from wallet balance to buy a period of
-// extra visibility somewhere on the site) with three near-identical
-// pages. This consolidates them into one "Promote" entry point with a
-// tab per campaign type. Backend modules, routes (each still calls its
-// own /seller/{sponsorship|featured-store|department-sponsorship}/*
-// endpoints), and data models are untouched - each tab renders the
-// existing page component as-is (via its new `embedded` prop, which
-// just skips that page's own <PageMeta>/<h1> since this hub supplies
-// one), so none of the three campaign types' logic changed at all.
+// (Remediation, A3): sponsorship and featured stores used to be separate
+// nav entries/routes that did the same thing (pay from wallet balance to
+// buy a period of extra visibility somewhere on the site) with
+// near-identical pages. This consolidates them into one "Promote" entry
+// point with a tab per campaign type. Each tab renders the existing page
+// component as-is (via its `embedded` prop, which just skips that page's
+// own <PageMeta>/<h1> since this hub supplies one). Department
+// sponsorship used to be a third tab and has been retired.
 const TABS = [
     { key: "sponsorship", label: "Sponsored products", Component: SellerSponsorship },
-    { key: "featured-store", label: "Featured stores", Component: SellerFeaturedStore },
-    { key: "department-sponsorship", label: "Department sponsorship", Component: SellerDepartmentSponsorship }
+    { key: "featured-store", label: "Featured stores", Component: SellerFeaturedStore }
 ];
 
 export default function SellerPromote() {
@@ -195,7 +190,7 @@ export default function SellerPromote() {
     const activeTab = TABS.find((tab) => tab.key === requestedTab) || TABS[0];
 
     // Subscription-included credits (1 credit = 1 campaign-day) are one
-    // shared balance across all three campaign types, so the hub shows
+    // shared balance across both campaign types, so the hub shows
     // them once above the tabs instead of each tab repeating them. Any
     // campaign type's /pricing endpoint returns the same
     // `included_credits`; the sponsorship one is used here. Best-effort:
@@ -213,8 +208,8 @@ export default function SellerPromote() {
             <PageMeta title="Promote" noIndex />
             <h1 className="font-display text-2xl mb-1">Promote</h1>
             <p className="text-ash text-sm mb-6">
-                Extra visibility - a sponsored product slot, top billing for your
-                store, or a boosted department on the homepage. Your plan's
+                Extra visibility - a sponsored product slot or top billing for your
+                store. Your plan's
                 included credits are used first; any extra days are paid from
                 your wallet balance.
             </p>

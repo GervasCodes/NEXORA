@@ -21,8 +21,8 @@ import { getVerificationTier } from "../utils/verificationTier";
 // shared and always shown. Visibility is resolved against
 // seller_profiles.merchant_type - see isTabVisible below. `hybrid`
 // sellers see every tab, per CHANGES.md's Permission Matrix.
-// Reviews/Service reviews, Collections/Promote (sponsorship, featured
-// stores, and department sponsorship are tabs within it - see
+// Reviews/Service reviews, Collections/Promote (sponsorship and featured
+// stores are tabs within it - see
 // SellerPromote.jsx) and Delivery team/Disputes (order-only dispute
 // types) follow the same product/service split as the Catalog and
 // Orders groups they sit alongside.

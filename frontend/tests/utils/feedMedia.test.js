@@ -6,7 +6,7 @@ describe("pickFeedMedia", () => {
         const product = { image_url: "img.jpg", videos: [{ video_url: "a.mp4" }] };
         expect(pickFeedMedia(product, "b.mp4")).toEqual({ type: "video", src: "a.mp4", poster: "img.jpg" });
         expect(pickFeedMedia({ image_url: "img.jpg" }, "b.mp4")).toEqual({ type: "video", src: "b.mp4", poster: "img.jpg" });
-        expect(pickFeedMedia({ image_url: "img.jpg" }, null)).toEqual({ type: "image", src: "img.jpg" });
+        expect(pickFeedMedia({ image_url: "img.jpg" }, null)).toEqual({ type: "image", src: "img.jpg", images: ["img.jpg"], index: 0 });
     });
 
     it("returns none when there is no media at all", () => {

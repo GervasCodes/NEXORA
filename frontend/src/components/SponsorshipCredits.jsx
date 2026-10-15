@@ -31,7 +31,7 @@ export function IncludedCreditsBanner({ credits }) {
             <p className="text-ash mt-0.5">
                 {credits.used} of {credits.granted} used this billing period
                 {credits.period_end ? ` · resets ${formatDate(credits.period_end)}` : ""}.
-                Credits work for product sponsorship, featured stores, and department sponsorship.
+                Credits work for product sponsorship and featured stores.
             </p>
         </div>
     );

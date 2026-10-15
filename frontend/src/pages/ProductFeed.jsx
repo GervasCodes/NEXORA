@@ -39,9 +39,12 @@ export default function ProductFeed() {
     }, [storageKey]);
 
     const handleClose = useCallback(() => {
-        // Came from inside the app: go back. Opened directly: go to browse.
+        // Came from inside the app: go back. Opened directly (shared link,
+        // typed URL, etc.): go home - /feed is the primary "browse"
+        // destination now (see Header/Footer/Home), so there's no separate
+        // "parent" browse page to return to.
         if (location.key !== "default") navigate(-1);
-        else navigate("/products", { replace: true });
+        else navigate("/", { replace: true });
     }, [location.key, navigate]);
 
     return (

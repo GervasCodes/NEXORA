@@ -96,7 +96,7 @@ export default function SearchResults() {
     const emptyAction = (
         <div className="flex items-center justify-center gap-4 mt-4">
             <Link to="/" className="text-sm text-teal hover:underline">{t("search.browseDepartments")}</Link>
-            <Link to="/products" className="text-sm text-teal hover:underline">{t("search.browseAll")}</Link>
+            <Link to="/feed" className="text-sm text-teal hover:underline">{t("search.browseAll")}</Link>
         </div>
     );
 

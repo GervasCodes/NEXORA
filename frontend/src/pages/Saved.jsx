@@ -145,7 +145,7 @@ export default function Saved() {
                         </svg>
                     }
                     action={
-                        <Link to={tab === "products" ? "/products" : "/services"} className="text-teal hover:underline text-sm">
+                        <Link to={tab === "products" ? "/feed" : "/services"} className="text-teal hover:underline text-sm">
                             Browse all →
                         </Link>
                     }

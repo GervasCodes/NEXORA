@@ -63,11 +63,13 @@ const referralRoutes = require("./modules/referral/referral.routes");
 const groupBuyRoutes = require("./modules/groupBuy/groupBuy.routes");
 const liveSellingRoutes = require("./modules/liveSelling/liveSelling.routes");
 const businessRoutes = require("./modules/business/business.routes");
+const posRoutes = require("./modules/pos/pos.routes");
+const deliveryBusinessRoutes = require("./modules/deliveryBusiness/deliveryBusiness.routes");
+const businessToolsRoutes = require("./modules/businessTools/businessTools.routes");
 const affiliateRoutes = require("./modules/affiliate/affiliate.routes");
 const affiliateAdminRoutes = require("./modules/affiliate/affiliate.admin.routes");
 const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
-const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const subscriptionRoutes = require("./modules/subscription/subscription.routes");
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
@@ -90,10 +92,23 @@ const app = express();
 // Without it, express-rate-limit below keys its rate limits off that one
 // shared proxy IP for EVERY user, meaning normal combined traffic from
 // real visitors could trip the limiter and lock out the whole site
-// within minutes of going live. `1` = trust exactly one hop (Render's
-// own proxy) rather than blindly trusting the whole X-Forwarded-For
-// chain, which would let a malicious client spoof their own IP.
-app.set("trust proxy", 1);
+// within minutes of going live. The number here must equal the exact
+// count of proxy hops in front of the app (Express trusts that many
+// entries from the right of X-Forwarded-For and treats the next one as
+// the real client) - trusting too few hops leaks a proxy's own IP as
+// "the client" (the original bug), but trusting too many lets a client
+// spoof its own IP by padding X-Forwarded-For with fake entries, which
+// would silently defeat both express-rate-limit above and the
+// IP-allowlist check in webhookAuth.middleware.js (SELCOM_WEBHOOK_ALLOWED_IPS).
+// Only Render's own proxy sits in front of the app by default (1 hop).
+// If/when this API's domain is also proxied through Cloudflare (orange
+// cloud), Cloudflare becomes an additional hop in front of Render's own
+// proxy, and this must become 2 - but only once that domain is
+// confirmed actually proxied end-to-end, hence the env override rather
+// than a hardcoded bump: flipping this before the DNS/Cloudflare side
+// is live would under-trust real traffic; flipping it never would
+// over-trust (and under-protect webhooks) once Cloudflare is live.
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS) || 1);
 
 // Middlewares
 // CORS_ORIGIN can be a single origin or a comma-separated list. Falls back
@@ -347,14 +362,14 @@ app.use("/api/v1/seller/sponsorship", sponsorshipRoutes);
 // in this module already requires authorize("seller") +
 // requireApprovedSeller itself (featuredStore.routes.js).
 app.use("/api/v1/seller/featured-store", featuredStoreRoutes);
-// Same reasoning as the two mounts immediately above: a more specific
-// prefix of /api/v1/seller must be mounted first. Every route in this
-// module already requires authorize("seller") + requireApprovedSeller
-// itself (departmentSponsorship.routes.js).
-app.use("/api/v1/seller/department-sponsorship", departmentSponsorshipRoutes);
 // Same more-specific-prefix-first reasoning as the mounts above. Every
 // route here already requires authorize("seller") + requireApprovedSeller.
 app.use("/api/v1/seller/business-verification", accountVerificationSellerRoutes);
+// Seller POS (stock ledger + off-platform sales): more specific prefix of
+// /api/v1/seller, so it must be mounted before sellerRoutes. Gated by
+// authorize("seller") + requireApprovedSeller + requireSubscriptionTier
+// inside pos.routes.js.
+app.use("/api/v1/seller/pos", posRoutes);
 app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
@@ -381,6 +396,11 @@ app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/delivery", deliveryRoutes);
+// Delivery business-management (roster, fleet overview, independent jobs).
+// Gated inside the router: approved delivery_agent who owns a business.
+app.use("/api/v1/delivery-business", deliveryBusinessRoutes);
+// "Business tools only" accounts: upgrade to marketplace seller.
+app.use("/api/v1/business-tools", businessToolsRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);

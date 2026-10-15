@@ -11,7 +11,8 @@ const tabs = [
     { to: "/delivery", label: "Available", end: true },
     { to: "/delivery/mine", label: "My deliveries" },
     { to: "/delivery/earnings", label: "Earnings" },
-    { to: "/delivery/ratings", label: "Ratings" }
+    { to: "/delivery/ratings", label: "Ratings" },
+    { to: "/delivery/business", label: "My business" }
 ];
 
 function ApprovedDeliveryLayout() {

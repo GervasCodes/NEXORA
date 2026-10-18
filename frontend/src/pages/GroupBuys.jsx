@@ -8,8 +8,10 @@ import StatusBadge from "../components/ui/StatusBadge";
 import { useCurrency } from "../context/CurrencyContext";
 import { formatTimeRemaining } from "../utils/format";
 import { GroupBuysIcon } from "../components/NavIcons";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function GroupBuys() {
+    const { t } = useLanguage();
     const { format } = useCurrency();
     const [groups, setGroups] = useState(null);
 
@@ -31,14 +33,14 @@ export default function GroupBuys() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-            <PageMeta title="Group buys" description="Join a group buy to unlock a lower price together." />
-            <h1 className="font-display text-2xl mb-1">Group buys</h1>
-            <p className="text-ash text-sm mb-8">Join enough people before the deadline and everyone gets the discounted price.</p>
+            <PageMeta title={t("groupBuys.title")} description={t("groupBuys.metaDescription")} />
+            <h1 className="font-display text-2xl mb-1">{t("groupBuys.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("groupBuys.intro")}</p>
 
             {groups.length === 0 ? (
                 <EmptyState
-                    title="No open group buys right now"
-                    hint="Check back soon for new deals."
+                    title={t("groupBuys.empty")}
+                    hint={t("groupBuys.emptyHint")}
                     tone="coral"
                     icon={<GroupBuysIcon className="w-7 h-7" />}
                 />
@@ -77,9 +79,9 @@ export default function GroupBuys() {
                                             <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
                                         </div>
                                         <p className="text-xs text-ash">
-                                            {g.participant_count}/{g.min_participants} joined
+                                            {t("groupBuys.joinedCount", { count: g.participant_count, min: g.min_participants })}
                                             {g.status === "open" && moreNeeded > 0 && (
-                                                <span className="text-mango-dark font-medium"> · {moreNeeded} more needed</span>
+                                                <span className="text-mango-dark font-medium"> · {t("groupBuys.moreNeeded", { count: moreNeeded })}</span>
                                             )}
                                             {timeLeft ? ` · ${timeLeft}` : ""}
                                         </p>

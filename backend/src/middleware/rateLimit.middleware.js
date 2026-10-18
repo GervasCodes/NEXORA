@@ -45,3 +45,16 @@ exports.apiLimiter = rateLimit({
     skip: loadtestBypass,
     message: { success: false, message: "Too many requests. Please slow down." }
 });
+
+// Username availability checks (registration + account settings) are public
+// and cheap, but they let a script probe which names exist, so they get a
+// tighter per-IP limit than the general API: 30 checks per minute is plenty
+// for someone typing a name (the client also debounces).
+exports.usernameCheckLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: loadtestBypass,
+    message: { success: false, message: "Too many username checks. Please wait a minute and try again." }
+});

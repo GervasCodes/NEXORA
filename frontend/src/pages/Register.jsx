@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
@@ -7,10 +7,15 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PasswordStrengthMeter from "../components/ui/PasswordStrengthMeter";
 import PageMeta from "../components/PageMeta";
+import UsernameField from "../components/UsernameField";
+import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
+import GoogleCompleteProfile from "../components/GoogleCompleteProfile";
+import { isValidUsernameFormat, randomSuggestionDigits, suggestUsername } from "../utils/username";
 
 const initialForm = {
     first_name: "",
     last_name: "",
+    username: "",
     email: "",
     phone: "",
     password: "",
@@ -41,9 +46,10 @@ const STEP_DOCUMENTS = "documents";
 const STEP_DONE = "done";
 
 export default function Register() {
-    const { register } = useAuth();
+    const { register, loginWithGoogle, prefillFromGoogle } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const [form, setForm] = useState(() => ({
         ...initialForm,
@@ -57,6 +63,25 @@ export default function Register() {
     const [step, setStep] = useState(STEP_ACCOUNT);
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [usernameStatus, setUsernameStatus] = useState("idle");
+    // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
+    // finishing phone/username/terms; it can arrive from the Login page via
+    // router state. `googleTicket` = a seller/delivery agent whose name + email
+    // were prefilled from Google (email locked, no password, documents still
+    // required).
+    const [googleComplete, setGoogleComplete] = useState(() =>
+        location.state?.googleTicket
+            ? { ticket: location.state.googleTicket, profile: location.state.googleProfile, returnTo: location.state.returnTo || null }
+            : null
+    );
+    const [googleTicket, setGoogleTicket] = useState(null);
+    const [googleBusy, setGoogleBusy] = useState(false);
+    // Suggested once per page load (digits are fixed so the suggestion doesn't
+    // flicker while the first name is typed).
+    const suggestionDigits = useMemo(() => randomSuggestionDigits(), []);
+    const usernameSuggestion = form.first_name.trim().length >= 2
+        ? suggestUsername(form.first_name, suggestionDigits)
+        : "";
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
     const updateCheckbox = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
@@ -66,12 +91,56 @@ export default function Register() {
     const toolsOnly = form.role === "seller" && form.seller_mode === "business_tools";
     const needsDocuments = (form.role === "seller" && !toolsOnly) || form.role === "delivery_agent";
     const requiredDocs = REQUIRED_DOCS[form.role] || [];
+    const googleLocked = Boolean(googleTicket) && form.role !== "buyer";
     const passwordsMismatch = form.confirm_password.length > 0 && form.password !== form.confirm_password;
 
     
+    const handleGoogleCredential = async (credential) => {
+        setError("");
+        setGoogleBusy(true);
+
+        // Buyers: the normal Google sign-in / sign-up. Sellers and delivery
+        // agents: Google only prefills name + email, nothing is created yet.
+        if (form.role === "buyer") {
+            const result = await loginWithGoogle(credential);
+            setGoogleBusy(false);
+            if (!result.success) return setError(result.message);
+            if (result.status === "signed_in") return navigate("/");
+            return setGoogleComplete({ ticket: result.ticket, profile: result.profile, returnTo: null });
+        }
+
+        const result = await prefillFromGoogle(credential);
+        setGoogleBusy(false);
+        if (!result.success) return setError(result.message);
+        setGoogleTicket(result.ticket);
+        setForm((prev) => ({
+            ...prev,
+            first_name: result.profile.first_name || prev.first_name,
+            last_name: result.profile.last_name || prev.last_name,
+            email: result.profile.email,
+            password: "",
+            confirm_password: ""
+        }));
+        return undefined;
+    };
+
     const handleAccountStepSubmit = (e) => {
         e.preventDefault();
         setError("");
+
+        const username = form.username.trim();
+        if (!username) {
+            setError(t("username.required"));
+            return;
+        }
+        if (!isValidUsernameFormat(username) || ["invalid", "reserved", "taken"].includes(usernameStatus)) {
+            setError(t("username.pickAvailable"));
+            return;
+        }
+        if (usernameStatus === "checking") {
+            setError(t("username.stillChecking"));
+            return;
+        }
 
         const digitsOnly = form.phone.trim().replace(/[^\d]/g, "");
         if (digitsOnly.length < 7) {
@@ -136,6 +205,12 @@ export default function Register() {
         const formWithPhone = { ...form, phone: fullPhone };
         delete formWithPhone.confirm_password;
         if (form.role !== "seller") delete formWithPhone.seller_mode;
+        if (googleLocked) {
+            // The server takes the email from the signed ticket, not from here,
+            // and a Google account has no password of its own.
+            formWithPhone.google_ticket = googleTicket;
+            delete formWithPhone.password;
+        }
         let payload = formWithPhone;
 
         if (needsDocuments) {
@@ -159,6 +234,17 @@ export default function Register() {
             setError(result.message);
         }
     };
+
+    if (googleComplete) {
+        return (
+            <GoogleCompleteProfile
+                ticket={googleComplete.ticket}
+                profile={googleComplete.profile}
+                referralCode={form.referral_code}
+                returnTo={googleComplete.returnTo}
+            />
+        );
+    }
 
     if (step === STEP_DONE) {
         return (
@@ -297,23 +383,37 @@ export default function Register() {
                     <Input
                         label={t("auth.firstNameLabel")}
                         required
+                        autoComplete="given-name"
                         value={form.first_name}
                         onChange={update("first_name")}
                     />
                     <Input
                         label={t("auth.lastNameLabel")}
                         required
+                        autoComplete="family-name"
                         value={form.last_name}
                         onChange={update("last_name")}
                     />
                 </div>
 
+                <UsernameField
+                    id="registerUsername"
+                    value={form.username}
+                    onChange={(username) => setForm((prev) => ({ ...prev, username }))}
+                    onStatusChange={setUsernameStatus}
+                    suggestion={usernameSuggestion}
+                />
+
                 <Input
                     label={t("auth.emailLabel")}
                     type="email"
                     required
+                    autoComplete="email"
+                    inputMode="email"
+                    readOnly={googleLocked}
                     value={form.email}
                     onChange={update("email")}
+                    hint={googleLocked ? t("auth.google.prefilledNotice") : undefined}
                 />
 
                 <div>
@@ -335,6 +435,7 @@ export default function Register() {
                             type="tel"
                             required
                             inputMode="numeric"
+                            autoComplete="tel-national"
                             placeholder="712 345 678"
                             value={form.phone}
                             onChange={update("phone")}
@@ -346,12 +447,17 @@ export default function Register() {
                     </p>
                 </div>
 
+                {googleLocked ? (
+                    <p className="text-xs text-ash">{t("auth.google.prefilledNoPassword")}</p>
+                ) : (
+                <>
                 <div>
                     <Input
                         label={t("auth.passwordLabel")}
                         type="password"
                         required
                         minLength={8}
+                        autoComplete="new-password"
                         value={form.password}
                         onChange={update("password")}
                         hint={t("auth.passwordHint")}
@@ -373,12 +479,15 @@ export default function Register() {
                     type="password"
                     required
                     minLength={8}
+                    autoComplete="new-password"
                     value={form.confirm_password}
                     onChange={update("confirm_password")}
                     error={passwordsMismatch ? t("auth.passwordMismatchError") : undefined}
                     showPasswordLabel={t("auth.showPassword")}
                     hidePasswordLabel={t("auth.hidePassword")}
                 />
+                </>
+                )}
 
                 <div>
                     <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
@@ -434,6 +543,20 @@ export default function Register() {
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </Button>
             </form>
+
+            {isGoogleSignInConfigured && (
+                <div className="mt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="flex-1 border-t border-line" />
+                        <span className="text-xs text-ash">{t("auth.google.or")}</span>
+                        <span className="flex-1 border-t border-line" />
+                    </div>
+                    <GoogleSignInButton text="signup_with" onCredential={handleGoogleCredential} disabled={googleBusy || submitting} />
+                    {form.role !== "buyer" && (
+                        <p className="text-xs text-ash mt-2 text-center">{t("auth.google.signUpHint")}</p>
+                    )}
+                </div>
+            )}
 
             <p className="text-sm text-ash mt-6">
                 {t("auth.haveAccount")} <Link to="/login" className="text-teal hover:underline">{t("auth.signInLink")}</Link>

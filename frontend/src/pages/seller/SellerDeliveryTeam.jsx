@@ -7,8 +7,10 @@ import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
 import Avatar from "../../components/ui/Avatar";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function SellerDeliveryTeam() {
+    const { t } = useLanguage();
     const [roster, setRoster] = useState([]);
     const [loading, setLoading] = useState(true);
     const [email, setEmail] = useState("");
@@ -54,12 +56,10 @@ export default function SellerDeliveryTeam() {
 
     return (
         <div className="max-w-lg">
-            <PageMeta title="Delivery Team" noIndex />
-            <h1 className="font-display text-2xl mb-2">Delivery team</h1>
+            <PageMeta title={t("seller.deliveryTeam.title")} noIndex />
+            <h1 className="font-display text-2xl mb-2">{t("seller.deliveryTeam.title")}</h1>
             <p className="text-sm text-ash mb-6">
-                Add your own hired delivery staff here. When you mark an order as shipped,
-                you can hand it straight to one of them instead of the open platform pool
-                — they still need their own NEXORA delivery agent account first.
+                {t("seller.deliveryTeam.intro")}
             </p>
 
             <form onSubmit={handleAdd} className="flex gap-2 mb-8">
@@ -68,6 +68,9 @@ export default function SellerDeliveryTeam() {
                         type="email"
                         required
                         placeholder="agent@email.com"
+                        aria-label={t("seller.deliveryTeam.emailAria")}
+                        autoComplete="email"
+                        inputMode="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />
@@ -76,13 +79,13 @@ export default function SellerDeliveryTeam() {
                     type="submit"
                     disabled={submitting}
                 >
-                    {submitting ? "Adding…" : "Add"}
+                    {submitting ? t("seller.deliveryTeam.adding") : t("seller.deliveryTeam.add")}
                 </Button>
             </form>
 
 
             {roster.length === 0 ? (
-                <EmptyState title="No agents added yet." />
+                <EmptyState title={t("seller.deliveryTeam.empty")} />
             ) : (
                 <ul className="divide-y divide-line border-y border-line">
                     {roster.map((agent) => (
@@ -97,9 +100,10 @@ export default function SellerDeliveryTeam() {
                             <button
                                 onClick={() => handleRemove(agent.agent_id)}
                                 disabled={busyId === agent.agent_id}
+                                aria-label={t("seller.deliveryTeam.removeAria", { name: `${agent.first_name} ${agent.last_name}` })}
                                 className="text-xs text-coral hover:underline disabled:opacity-50"
                             >
-                                Remove
+                                {t("seller.deliveryTeam.remove")}
                             </button>
                         </li>
                     ))}

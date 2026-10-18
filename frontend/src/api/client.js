@@ -79,6 +79,49 @@ export const registerCsrfExpiredHandler = (handler) => {
     csrfExpiredHandler = handler;
 };
 
+// ---- Retry + "server is waking up" state (Reliability phase) -------------
+// The API runs on a host that can go to sleep when idle. The first requests
+// after a sleep fail with a closed connection or a 502/503/504 until the
+// server is back (tens of seconds). Previously each failed GET stayed
+// failed, so the page sat static until a manual reload. Now an idempotent
+// GET is retried with growing delays - long enough in total to outlast a
+// typical wake-up - while the UI is told (see NetworkStatusNotice.jsx) so
+// it can show a calm "waking up" notice instead of an error.
+//
+// ONLY GET requests are ever retried. A POST/PUT/PATCH/DELETE (checkout,
+// payments, auth, cart changes ...) is never replayed automatically,
+// because a replay could double-charge or double-submit.
+const RETRY_DELAYS_MS = [1500, 3000, 6000, 10000, 15000];
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+let retryingCount = 0;
+const wakingListeners = new Set();
+const notifyWaking = () => {
+    const waking = retryingCount > 0;
+    wakingListeners.forEach((listener) => listener(waking));
+};
+
+// True while at least one request is waiting to be retried.
+export const getServerWaking = () => retryingCount > 0;
+export const subscribeServerWaking = (listener) => {
+    wakingListeners.add(listener);
+    return () => wakingListeners.delete(listener);
+};
+
+const isRetryable = (error) => {
+    const config = error?.config;
+    if (!config || config.skipRetry) return false;
+    if ((config.method || "get").toLowerCase() !== "get") return false;
+    if (axios.isCancel(error)) return false;
+    // Truly offline: retrying is pointless and NetworkStatusNotice already
+    // tells the person. The browser's "online" event brings them back.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+    // Server answered: only the "gateway/unavailable" family is worth retrying.
+    if (error.response) return RETRYABLE_STATUS.has(error.response.status);
+    // No response at all (connection closed/reset, timeout, server asleep).
+    return true;
+};
+
 api.interceptors.request.use((config) => {
     // (Testing & Session Hardening): no more reading a token out
     // of localStorage to build an Authorization header - the httpOnly
@@ -121,6 +164,21 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (isRetryable(error)) {
+            const attempt = error.config._retryCount || 0;
+            if (attempt < RETRY_DELAYS_MS.length) {
+                error.config._retryCount = attempt + 1;
+                retryingCount += 1;
+                notifyWaking();
+                return new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+                    .then(() => api(error.config))
+                    .finally(() => {
+                        retryingCount -= 1;
+                        notifyWaking();
+                    });
+            }
+        }
+
         if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
             localStorage.removeItem("nexora_user");
             localStorage.removeItem("nexora_last_activity");

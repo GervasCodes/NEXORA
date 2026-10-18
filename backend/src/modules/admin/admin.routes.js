@@ -17,11 +17,8 @@ const {
     orderIdValidation,
     bookingIdValidation,
     updateSettingsValidation,
-    updateMonetizationSettingsValidation,
-    createMonetizationScheduleValidation,
     bulkProductStatusValidation,
     bulkServiceStatusValidation,
-    monetizationScheduleIdValidation,
     createAdminValidation,
     updateAdminPermissionsValidation,
     manualAssignDeliveryValidation
@@ -68,7 +65,7 @@ router.get("/analytics/advanced/export", adminController.exportAdvancedAnalytics
 // admin.controller.js so the subscription domain's logic isn't split
 // across two controllers.
 const subscriptionController = require("../subscription/subscription.controller");
-const { createPlanValidation, updatePlanValidation } = require("../subscription/subscription.validator");
+const { createPlanValidation, updatePlanValidation, extendTrialValidation } = require("../subscription/subscription.validator");
 router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
 // Only super_admin may create or modify subscription plans - regular admins
 // can read them (for the subscriptions view) but must not change pricing,
@@ -78,6 +75,8 @@ router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
 router.post("/subscription-plans", requireSuperAdmin, createPlanValidation, validationMiddleware, subscriptionController.createPlan);
 router.put("/subscription-plans/:id", requireSuperAdmin, updatePlanValidation, validationMiddleware, subscriptionController.updatePlan);
 router.get("/subscriptions", subscriptionController.listAllSubscriptions);
+// Give one seller extra free-trial days (audit-logged, seller is notified).
+router.post("/sellers/:id/extend-trial", extendTrialValidation, validationMiddleware, subscriptionController.extendSellerTrial);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 
@@ -166,31 +165,6 @@ router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddle
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);
 router.get("/settings/:key/history", param("key").matches(/^[a-z0-9_]{1,100}$/), validationMiddleware, adminController.getSettingHistory);
-
-// Monetization Master Switch (Admin Billing Control Center) - lets
-// NEXORA launch free and turn each monetization stream on later without
-// a redeploy. See settings.service.js#isXMonetizationEnabled for the
-// enforcement points.
-router.get("/monetization", adminController.getMonetizationStatus);
-router.put(
-    "/monetization",
-    updateMonetizationSettingsValidation,
-    validationMiddleware,
-    adminController.updateMonetizationSettings
-);
-router.get("/monetization/schedule", adminController.listMonetizationSchedule);
-router.post(
-    "/monetization/schedule",
-    createMonetizationScheduleValidation,
-    validationMiddleware,
-    adminController.createMonetizationSchedule
-);
-router.delete(
-    "/monetization/schedule/:id",
-    monetizationScheduleIdValidation,
-    validationMiddleware,
-    adminController.cancelMonetizationSchedule
-);
 
 // Read-only oversight of seller-paid sponsorship campaigns (Phase 8A).
 // The manual sponsor/unsponsor toggle above (/products/:id/sponsor) stays

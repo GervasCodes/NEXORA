@@ -975,3 +975,16 @@ exports.getPrimaryItemSummary = async (orderId) => {
 // an order's stored version against the current one without duplicating
 // the literal.
 exports.CURRENT_CHECKOUT_TERMS_VERSION = CURRENT_CHECKOUT_TERMS_VERSION;
+
+// Round 5, Phase 5 - stores the rider-pay quote taken when the order was
+// placed (migration 150). Only writes when no quote exists yet, so a quote is
+// never silently replaced later.
+exports.setRiderFeeQuote = async (orderId, fee, details) => {
+    const [result] = await db.query(
+        `UPDATE orders
+        SET rider_fee_quote = ?, rider_fee_quote_details = ?, rider_fee_quoted_at = NOW()
+        WHERE id = ? AND rider_fee_quote IS NULL`,
+        [fee, JSON.stringify(details), orderId]
+    );
+    return result.affectedRows > 0;
+};

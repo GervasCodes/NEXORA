@@ -124,6 +124,11 @@ export default function Home() {
     const navigate = useNavigate();
     const { t, language } = useLanguage();
     const { user } = useAuth();
+    // The 7-day-trial call to action is for people who could start selling:
+    // visitors and buyers. Sellers get a shortcut to their dashboard instead;
+    // admins and delivery agents get neither.
+    const canStartSelling = !user || user.role === "buyer";
+    const isSeller = user?.role === "seller";
     const search = searchParams.get("search") || "";
     const queryKey = searchParams.toString();
 
@@ -196,12 +201,12 @@ export default function Home() {
                     <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-10 grid lg:grid-cols-[0.85fr_1.15fr] gap-4 lg:gap-8 items-center">
                         <div>
                             <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
-                            {user?.first_name && (
+                            {(user?.username || user?.first_name) && (
                                 <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full border border-frost/20 bg-frost/5 text-frost/80 text-xs font-medium">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
                                     </svg>
-                                    {t("home.welcomeBack", { name: user.first_name })}
+                                    {t("home.welcomeBack", { name: user.username || user.first_name })}
                                 </div>
                             )}
                             <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
@@ -215,9 +220,16 @@ export default function Home() {
                                 <Link to="/feed" className="inline-flex items-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold">
                                     {t("home.ctaShop")}
                                 </Link>
-                                <Link to="/sell" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
-                                    {t("home.ctaSell")}
-                                </Link>
+                                {canStartSelling && (
+                                    <Link to="/sell" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
+                                        {t("home.ctaSell")}
+                                    </Link>
+                                )}
+                                {isSeller && (
+                                    <Link to="/seller" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
+                                        {t("home.ctaDashboard")}
+                                    </Link>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
@@ -281,6 +293,21 @@ export default function Home() {
 
                         <DepartmentDiscovery />
 
+                        {canStartSelling && (
+                            <Link
+                                to="/sell"
+                                className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-mango/50 bg-mango/10 hover:bg-mango/15 transition-colors px-5 sm:px-6 py-5"
+                            >
+                                <div>
+                                    <p className="font-display text-xl">{t("home.sellTitle")}</p>
+                                    <p className="text-ash text-sm mt-1 max-w-xl">{t("home.sellSub")}</p>
+                                </div>
+                                <span className="inline-flex items-center justify-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold shrink-0 self-start sm:self-auto">
+                                    {t("home.sellCta")} →
+                                </span>
+                            </Link>
+                        )}
+
                         <div className="mt-12">
                             <HomeRails />
                         </div>
@@ -311,16 +338,6 @@ export default function Home() {
 
                         <RecommendedProducts endpoint="/recommendations/for-me" title={t("home.recommended")} />
 
-                        <Link
-                            to="/sell"
-                            className="mt-10 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-mango/10 hover:bg-mango/15 transition-colors px-6 py-5"
-                        >
-                            <div>
-                                <p className="font-display text-lg">{t("home.sellTitle")}</p>
-                                <p className="text-ash text-sm">{t("home.sellSub")}</p>
-                            </div>
-                            <span className="text-sm text-teal shrink-0 hidden sm:inline">{t("home.sellCta")} →</span>
-                        </Link>
                     </>
                 )}
 

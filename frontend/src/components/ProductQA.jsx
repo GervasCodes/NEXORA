@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
 import { formatDate } from "../utils/format";
 import Button from "./ui/Button";
 
@@ -112,7 +113,7 @@ export default function ProductQA({ productId }) {
                 {data?.questions.map((q) => (
                     <li key={q.id} className="border-b border-line pb-4">
                         <div className="flex justify-between items-baseline gap-3">
-                            <p className="text-sm font-medium">{q.first_name} {q.last_name?.[0]}.</p>
+                            <p className="text-sm font-medium">{publicName(q, t("username.anonymous"))}</p>
                             <p className="text-xs text-ash shrink-0">{formatDate(q.created_at)}</p>
                         </div>
                         <p className="text-sm text-ink/80 mt-0.5">{q.question}</p>

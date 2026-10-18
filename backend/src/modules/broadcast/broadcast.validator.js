@@ -1,5 +1,5 @@
-const { body, param } = require("express-validator");
-const { BROADCAST_SEGMENTS, BROADCAST_CHANNELS } = require("../../constants/broadcast");
+const { body, param, query } = require("express-validator");
+const { BROADCAST_SEGMENTS, BROADCAST_CHANNELS, BROADCAST_TEMPLATE_TYPES } = require("../../constants/broadcast");
 
 exports.previewValidation = [
     body("segment")
@@ -15,6 +15,14 @@ exports.sendBroadcastValidation = [
         .withMessage("Segment is required")
         .isIn(BROADCAST_SEGMENTS)
         .withMessage(`Segment must be one of: ${BROADCAST_SEGMENTS.join(", ")}`),
+
+    // Which of the three Broadcast-page functions this is. Optional and
+    // defaults to 'all' so older callers keep working; the service then
+    // validates channels and content against the type.
+    body("templateType")
+        .optional({ nullable: true })
+        .isIn(BROADCAST_TEMPLATE_TYPES)
+        .withMessage(`Broadcast type must be one of: ${BROADCAST_TEMPLATE_TYPES.join(", ")}`),
 
     body("channels")
         .isArray({ min: 1 })
@@ -68,6 +76,14 @@ exports.sendBroadcastValidation = [
         .trim()
         .isLength({ max: 1000 })
         .withMessage("In-app message must be under 1000 characters")
+];
+
+// GET / history filter.
+exports.historyQueryValidation = [
+    query("type")
+        .optional({ values: "falsy" })
+        .isIn(BROADCAST_TEMPLATE_TYPES)
+        .withMessage(`Type must be one of: ${BROADCAST_TEMPLATE_TYPES.join(", ")}`)
 ];
 
 // Shared by DELETE /:id and POST /:id/resend.

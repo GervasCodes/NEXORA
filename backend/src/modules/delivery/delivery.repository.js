@@ -248,7 +248,7 @@ exports.findCandidateAgents = async (orderId) => {
 // rather than trusting whatever id the request sent.
 exports.findOnlineAgentById = async (agentId) => {
     const [rows] = await db.query(
-        "SELECT id, is_online FROM users WHERE id = ? AND role = 'delivery_agent'",
+        "SELECT id, is_online, vehicle_type FROM users WHERE id = ? AND role = 'delivery_agent'",
         [agentId]
     );
     return rows[0];

@@ -25,13 +25,17 @@ const queueApprovedSellerChecks = () => {
     db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1 }]]);
 };
 
-// requireSubscriptionTier: subscriptionRepository.findCurrentForSeller's
-// first (active-in-period) query. A single active, non-free-plan row
-// short-circuits the repository before its fallback "most recent plan
-// overall" query, so this queues exactly one db.query call - same
-// sequential-mock shape the old requireVerificationFeePaid's re-read
-// used to need here.
+// requireSubscriptionTier reads the seller's trial row first, then their
+// entitled plan (trial.service#getAccessState). The trial here is over, so
+// only a paid plan opens the gate.
+const queueTrialOver = () => {
+    db.query.mockResolvedValueOnce([[{
+        in_trial: 0, days_left: 0, trial_started_at: new Date("2026-10-01"), trial_ends_at: new Date("2026-10-08")
+    }]]);
+};
+
 const queueSubscriptionTierCheck = (planCode = "growth") => {
+    queueTrialOver();
     db.query.mockResolvedValueOnce([[{ id: 1, seller_id: 1, status: "active", plan_code: planCode, current_period_end: null }]]);
 };
 
@@ -107,8 +111,8 @@ describe("GET /api/v1/ai/seller/analytics/summary", () => {
     it("requires a paid subscription tier in addition to seller approval", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        // No active plan at all: requireSubscriptionTier's single
-        // findEntitledForSeller query comes back empty (implicit free plan).
+        // Trial over and no active plan at all (implicit free plan).
+        queueTrialOver();
         db.query.mockResolvedValueOnce([[]]);
 
         const res = await request(app)

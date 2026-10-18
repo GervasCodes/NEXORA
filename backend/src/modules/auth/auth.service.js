@@ -6,6 +6,8 @@ const appError = require("../../utils/appError");
 
 const userRepository = require("./auth.repository");
 const referralService = require("../referral/referral.service");
+const usernameService = require("../account/username.service");
+const googleService = require("./google.service");
 
 // Roles that must submit verification documents before an account can be
 // created at all - see requireApprovedSeller / requireApprovedDeliveryAgent
@@ -33,6 +35,16 @@ const REQUIRED_DOCS_BY_ROLE = {
 const firstFile = (files, field) => files?.[field]?.[0];
 
 exports.register = async (userData, files = {}) => {
+    // Round 5, phase 7: a seller / delivery agent can prefill name + email from
+    // Google. The verified email comes from the signed ticket (the body's email
+    // is ignored), the account is tied to that Google id, and every document
+    // upload below still applies exactly as for a normal registration.
+    let googleLink = null;
+    if (userData.google_ticket) {
+        googleLink = await googleService.resolveRegisterTicket(userData.google_ticket);
+        userData = { ...userData, email: googleLink.email };
+    }
+
     const { email, phone, password, role, terms_accepted } = userData;
 
     // Belt-and-suspenders: auth.validator.js already rejects this at the
@@ -59,6 +71,14 @@ exports.register = async (userData, files = {}) => {
     if (existingPhone) {
         throw new Error("Phone number already exists");
     }
+
+    // Username (round 5, phase 6): validate a chosen one, or generate one when
+    // the client didn't send it. Done before any document upload so a taken or
+    // reserved name costs nothing. The unique index is the final guard against
+    // two people picking the same name at the same moment (see the catch below).
+    const username = userData.username
+        ? await usernameService.assertUsable(userData.username)
+        : await usernameService.generateUnique(userData.first_name);
 
     // A business-tools-only seller never lists publicly, so it skips the
     // marketplace identity review; it can submit documents later if it
@@ -110,7 +130,9 @@ exports.register = async (userData, files = {}) => {
         }
     }
 
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = googleLink
+        ? await googleService.randomUnusablePasswordHash()
+        : await hashPassword(password);
 
     // Everything from here down happens in one transaction: the user row,
     // the verification documents, and the history entry are all created
@@ -120,7 +142,15 @@ exports.register = async (userData, files = {}) => {
         await connection.beginTransaction();
 
         const userId = await userRepository.createUser(
-            { ...userData, seller_mode: sellerMode, password: hashedPassword, terms_version: CURRENT_TERMS_VERSION },
+            {
+                ...userData,
+                username,
+                seller_mode: sellerMode,
+                password: hashedPassword,
+                terms_version: CURRENT_TERMS_VERSION,
+                google_sub: googleLink ? googleLink.sub : null,
+                auth_provider: googleLink ? "google" : "password"
+            },
             connection
         );
 
@@ -149,6 +179,9 @@ exports.register = async (userData, files = {}) => {
         };
     } catch (error) {
         await connection.rollback();
+        if (usernameService.isDuplicateUsernameError(error)) {
+            throw appError("USERNAME_TAKEN", 409);
+        }
         throw error;
     } finally {
         connection.release();

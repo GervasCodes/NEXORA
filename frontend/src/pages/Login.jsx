@@ -5,6 +5,7 @@ import { useLanguage } from "../context/LanguageContext";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 
 //  (OTP resend/expiry UX) - fallbacks only, used if a response
 // ever omits expiresInSeconds (e.g. an old cached bundle mid-deploy
@@ -34,7 +35,7 @@ const sanitizeReturnTo = (value) => {
 };
 
 export default function Login() {
-    const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
+    const { login, verifyLoginOtp, resendLoginOtp, loginWithGoogle } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
@@ -107,6 +108,26 @@ export default function Login() {
         setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
         if (result.codeDelivered === false) setError(t("auth.otp.initialSendFailed"));
         setStep("otp");
+    };
+
+    // Phase 7 (round 5): one-tap Google sign-in. A returning/linked Google user
+    // is signed in straight away (no OTP - Google already verified them); a new
+    // one continues on the register page to add phone, username and terms.
+    const handleGoogleCredential = async (credential) => {
+        setError("");
+        setSubmitting(true);
+        const result = await loginWithGoogle(credential);
+        setSubmitting(false);
+
+        if (!result.success) {
+            setError(result.message);
+            return;
+        }
+        if (result.status === "signed_in") {
+            navigate(returnTo || "/");
+            return;
+        }
+        navigate("/register", { state: { googleTicket: result.ticket, googleProfile: result.profile, returnTo } });
     };
 
     const handleOtp = async (e) => {
@@ -244,6 +265,8 @@ export default function Login() {
                     label={t("auth.emailLabel")}
                     type="email"
                     required
+                    autoComplete="email"
+                    inputMode="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
@@ -255,6 +278,7 @@ export default function Login() {
                     <Input
                         type="password"
                         required
+                        autoComplete="current-password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
                         showPasswordLabel={t("auth.showPassword")}
@@ -274,6 +298,17 @@ export default function Login() {
                     {submitting ? t("auth.signingIn") : t("auth.signInButton")}
                 </Button>
             </form>
+
+            {isGoogleSignInConfigured && (
+                <div className="mt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="flex-1 border-t border-line" />
+                        <span className="text-xs text-ash">{t("auth.google.or")}</span>
+                        <span className="flex-1 border-t border-line" />
+                    </div>
+                    <GoogleSignInButton text="signin_with" onCredential={handleGoogleCredential} disabled={submitting} />
+                </div>
+            )}
 
             <p className="text-sm text-ash mt-6">
                 {t("auth.newHere")} <Link to="/register" className="text-teal hover:underline">{t("auth.registerLink")}</Link>

@@ -12,6 +12,7 @@ import Input from "../components/ui/Input";
 import CheckoutSteps from "../components/ui/CheckoutSteps";
 import PageMeta from "../components/PageMeta";
 import { getStoredAffiliateClickToken } from "../components/AffiliateClickTracker";
+import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
 
 const initialForm = {
     shipping_address: "",
@@ -248,7 +249,7 @@ export default function Checkout() {
         let cancelled = false;
         setEstimateLoading(true);
         const timer = setTimeout(() => {
-            api.post("/orders/delivery-estimate", { delivery_lat: pin.lat, delivery_lng: pin.lng })
+            api.post("/orders/delivery-estimate", { delivery_lat: pin.lat, delivery_lng: pin.lng, region: form.shipping_region || undefined })
                 .then(({ data }) => { if (!cancelled) setDeliveryEstimate(data.data); })
                 .catch(() => { if (!cancelled) setDeliveryEstimate(null); })
                 .finally(() => { if (!cancelled) setEstimateLoading(false); });
@@ -465,6 +466,7 @@ export default function Checkout() {
             }
 
             await refresh();
+            notifyMeaningfulAction();
             navigate(`/orders/${orderId}`, { state: { justPlaced: true } });
 
         } catch (err) {
@@ -609,6 +611,7 @@ export default function Checkout() {
                                 <Input
                                     label={t("checkout.streetAddress")}
                                     required
+                                    autoComplete="street-address"
                                     value={form.shipping_address}
                                     onChange={update("shipping_address")}
                                 />
@@ -617,12 +620,14 @@ export default function Checkout() {
                                     <Input
                                         label={t("checkout.city")}
                                         required
+                                        autoComplete="address-level2"
                                         value={form.shipping_city}
                                         onChange={update("shipping_city")}
                                     />
                                     <Input
                                         label={t("checkout.region")}
                                         required
+                                        autoComplete="address-level1"
                                         value={form.shipping_region}
                                         onChange={update("shipping_region")}
                                     />

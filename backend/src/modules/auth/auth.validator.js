@@ -6,8 +6,24 @@ exports.registerValidation = [
     body("first_name").notEmpty().withMessage("First name is required"),
     body("last_name").notEmpty().withMessage("Last name is required"),
     body("email").isEmail().withMessage("Valid email is required"),
+    // Round 5, phase 6. Optional at the API so older clients keep working (the
+    // server then generates one); the register form always sends it. Format,
+    // reserved-word and availability rules run in auth.service via
+    // account/username.service.js.
+    body("username")
+        .optional({ nullable: true, checkFalsy: true })
+        .isString()
+        .withMessage("Invalid username")
+        .bail()
+        .trim()
+        .isLength({ max: 30 })
+        .withMessage("Invalid username"),
     phoneValidator("phone"),
+    // Not required when the seller/agent prefilled from Google (google_ticket):
+    // that account has no password of its own and signs in through Google.
+    body("google_ticket").optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 2000 }),
     body("password")
+        .if((value, { req }) => !req.body.google_ticket)
         .isLength({ min: 8 })
         .withMessage("Password must be at least 8 characters"),
     // Sent as a plain multipart/JSON field ("true"/"false" as a string on
@@ -54,4 +70,20 @@ exports.registerValidation = [
         .withMessage("Vehicle plate number is required")
         .isLength({ max: 20 })
         .withMessage("Plate number is too long")
+];
+
+// Round 5, phase 7 - Google sign-in.
+exports.googleSignInValidation = [
+    body("credential").isString().notEmpty().isLength({ max: 4000 }).withMessage("Missing Google credential"),
+    body("mode").optional({ nullable: true, checkFalsy: true }).isIn(["signin", "prefill"]).withMessage("Invalid mode")
+];
+
+exports.googleCompleteValidation = [
+    body("ticket").isString().notEmpty().isLength({ max: 2000 }).withMessage("Missing sign-up ticket"),
+    phoneValidator("phone"),
+    body("username").optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 30 }),
+    body("terms_accepted")
+        .custom((value) => value === true || value === "true")
+        .withMessage("You must accept the Terms of Service and Privacy Policy"),
+    body("referral_code").optional({ nullable: true, checkFalsy: true }).isLength({ max: 12 }).withMessage("Invalid referral code")
 ];

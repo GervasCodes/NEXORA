@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 
 // (UI/UX remediation) - wishlist_items now holds both saved
 // products and saved services (see migration 096's comment on why this
@@ -58,7 +59,7 @@ exports.findProductsByUser = async (userId) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -92,7 +93,7 @@ exports.findServicesByUser = async (userId) => {
     const [rows] = await db.query(
         `SELECT
             s.id, s.title, s.slug, s.base_price, s.discount_price,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT sm.media_url FROM service_media sm
                 WHERE sm.service_id = s.id AND sm.is_primary = 1

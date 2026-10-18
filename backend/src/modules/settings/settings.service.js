@@ -69,17 +69,6 @@ const DEFAULTS = {
     // just now admin-editable instead of a fixed constant.
     delivery_offer_timeout_ms: String(OFFER_TIMEOUT_MS),
 
-    // Monetization Master Switch (migration 079). Each flag lets NEXORA
-    // launch fully free and turn a specific monetization stream on later
-    // from the admin panel, with no redeploy or code change - see
-    // updateMonetizationSettings()/getMonetizationFlags() below and
-    // docs/DATABASE.md. Stored as the strings "true"/"false" (not "1"/"0")
-    // to read unambiguously in the admin UI and audit log metadata.
-    // Default OFF for every flag, matching a free launch.
-    monetization_subscriptions_enabled: "false",
-    monetization_commission_enabled: "false",
-    monetization_sponsorship_enabled: "false",
-
     // Nexora AI . ai_enabled is a master switch
     // independent of whether a provider is actually configured via env
     // (see modules/ai/providers/registry.js) - both must be true for any
@@ -125,7 +114,41 @@ const DEFAULTS = {
     // change needs a second confirmation; retention 0 = keep documents.
     commission_rate_max: "30",
     usd_exchange_rate_max_change_percent: "10",
-    approved_document_retention_days: "0"
+    approved_document_retention_days: "0",
+
+    // Phase 5 (round 5) - Tanzanian transport-rate delivery pay (migration
+    // 150). Rate cards, fuel caps and ETA windows live in their own tables
+    // (see modules/delivery/deliveryRates.service.js); only the scalar knobs
+    // sit here. fuel_baseline_cap is the litre price at which fuel factor = 1.
+    fuel_passthrough_pct: "30",
+    fuel_baseline_cap: "4057",
+    fuel_max_monthly_change_pct: "15",
+    default_delivery_vehicle: "boda",
+    delivery_handling_buffer_minutes: "10",
+    delivery_default_region: "Dar es Salaam",
+
+    // Phase 6 (round 5) - usernames (migration 151). Comma-separated words
+    // that may not be used as a whole username, on top of the reserved words
+    // hard-coded in utils/username.js. Admin-editable.
+    username_blocklist: "staff,moderator,official,customercare,helpdesk,payments,billing,security,verified"
+};
+
+const USERNAME_BLOCKLIST_MAX_LENGTH = 1000;
+
+// "Staff, Official ,staff" -> ["staff", "official"]
+const parseUsernameBlocklist = (value) => [...new Set(
+    String(value || "")
+        .split(/[,\n]/)
+        .map((word) => word.trim().toLowerCase())
+        .filter(Boolean)
+)];
+
+const normalizeUsernameBlocklist = (value) => {
+    const joined = parseUsernameBlocklist(value).join(",");
+    if (joined.length > USERNAME_BLOCKLIST_MAX_LENGTH) {
+        throw badRequest(`The username blocklist is too long (limit ${USERNAME_BLOCKLIST_MAX_LENGTH} characters).`);
+    }
+    return joined;
 };
 
 const ESCROW_HOLD_MIN_DAYS = 0;
@@ -315,6 +338,25 @@ exports.getTopUpLimits = async () => {
     };
 };
 
+// Words that may not be used as a username (admin-editable, lower-case).
+exports.getUsernameBlocklist = async () => {
+    const map = await getCachedAll();
+    return parseUsernameBlocklist(map.username_blocklist);
+};
+
+// Scalar knobs for transport-rate delivery pay and ETA (migration 150).
+exports.getDeliveryRateSettings = async () => {
+    const map = await getCachedAll();
+    return {
+        fuelPassThroughPct: Number(map.fuel_passthrough_pct),
+        fuelBaselineCap: Number(map.fuel_baseline_cap),
+        fuelMaxMonthlyChangePct: Number(map.fuel_max_monthly_change_pct),
+        defaultVehicle: String(map.default_delivery_vehicle || "boda"),
+        handlingBufferMinutes: Number(map.delivery_handling_buffer_minutes) || 0,
+        defaultRegion: String(map.delivery_default_region || "Dar es Salaam")
+    };
+};
+
 exports.getCodAutoConfirmHours = async () => {
     const map = await getCachedAll();
     return Number(map.cod_auto_confirm_hours);
@@ -323,38 +365,6 @@ exports.getCodAutoConfirmHours = async () => {
 exports.getCodBlockAfterRefusedCount = async () => {
     const map = await getCachedAll();
     return Number(map.cod_block_after_refused_count);
-};
-
-// ---- Monetization Master Switch ------------------------------------------
-// Each getter below is the single enforcement point its domain module
-// reads before creating a payment request:
-//   - subscription.service.js#getEffectiveCommissionRate reads commission
-//   - subscription.controller.js's subscribe* actions read subscriptions
-//   - sponsorship/featuredStore .service.js#createCampaign read sponsorship
-// All default OFF (see DEFAULTS above) so a fresh launch is free by default.
-// (The one-time seller verification fee that used to be a fourth flag
-// here was retired - the Verified Seller badge is now free and follows
-// account approval alone, see seller.service.js#syncBadge.)
-
-exports.isSubscriptionsMonetizationEnabled = async () => {
-    const map = await getCachedAll();
-    return isEnabled(map.monetization_subscriptions_enabled);
-};
-
-exports.isCommissionMonetizationEnabled = async () => {
-    const map = await getCachedAll();
-    return isEnabled(map.monetization_commission_enabled);
-};
-
-// Whether sellers may buy sponsorship / featured-store / department
-// campaigns a la carte from their wallet. This does NOT gate the
-// subscription-included credits (1 credit = 1 campaign-day) - those are
-// already paid for through the plan, so they work with this flag off. Off
-// therefore no longer means "campaigns are free": it means only credits
-// can fund a campaign (see sponsorshipCredit.service.js#splitFunding).
-exports.isSponsorshipMonetizationEnabled = async () => {
-    const map = await getCachedAll();
-    return isEnabled(map.monetization_sponsorship_enabled);
 };
 
 // Nexora AI master switch + the four spend-guard caps in one call - see
@@ -370,115 +380,13 @@ exports.getAiSettings = async () => {
     };
 };
 
-// All four monetization flags at once, plus each one's last-changed
-// actor/timestamp pulled from audit_logs (event_type
-// "monetization_setting_changed") - the Admin Billing Control Center
-// reads this directly rather than combining getAll() with a separate
-// audit query itself. Reuses audit_logs per the roadmap's instruction
-// instead of adding updated_by/updated_at columns to platform_settings.
-exports.getMonetizationStatus = async () => {
-    const map = await getCachedAll();
-    const auditRepository = require("../audit/audit.repository");
-
-    const flags = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled"
-    ];
-
-    // search() (not findRecent()) since it LEFT JOINs users - gives the
-    // Admin Billing Control Center a ready-to-render actor name/email,
-    // same shape AdminAuditLogs.jsx already renders for other events.
-    const { rows: recentChanges } = await auditRepository.search({
-        eventTypes: ["monetization_setting_changed"],
-        pageSize: 100
-    });
-
-    const lastChangeFor = (key) => recentChanges.find((row) => {
-        const metadata = typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata;
-        return metadata?.setting_key === key;
-    });
-
-    return flags.reduce((acc, key) => {
-        const lastChange = lastChangeFor(key);
-        acc[key] = {
-            enabled: isEnabled(map[key]),
-            lastChangedBy: lastChange
-                ? {
-                    userId: lastChange.user_id,
-                    firstName: lastChange.actor_first_name,
-                    lastName: lastChange.actor_last_name,
-                    email: lastChange.actor_email
-                }
-                : null,
-            lastChangedAt: lastChange ? lastChange.created_at : null
-        };
-        return acc;
-    }, {});
-};
-
-// Admin-only. Flips one or more of the four monetization flags and
-// writes an audit_logs entry per changed flag (old -> new value),
-// reusing the existing audit_logs table per the roadmap rather than
-// adding new tracking columns. Only writes/logs keys that actually
-// changed, so toggling one flag doesn't spam four audit rows.
-exports.updateMonetizationSettings = async (data, adminId) => {
-    const auditService = require("../audit/audit.service");
-    const map = await getCachedAll();
-
-    const flagKeys = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled"
-    ];
-
-    for (const key of flagKeys) {
-        if (data[key] === undefined) continue;
-
-        const nextValue = data[key] ? "true" : "false";
-        const previousValue = map[key];
-        if (nextValue === previousValue) continue;
-
-        await settingsRepository.upsert(key, nextValue);
-
-        auditService.log({
-            userId: adminId,
-            eventType: "monetization_setting_changed",
-            description: `Admin ${nextValue === "true" ? "enabled" : "disabled"} ${key}`,
-            metadata: { setting_key: key, previous_value: previousValue, new_value: nextValue }
-        });
-    }
-
-    invalidateCache();
-    return exports.getMonetizationStatus();
-};
-
-// Public: same 4 monetization flags the Admin Billing Control Center
-// manages (settings.service.js), but without the audit/actor detail -
-// this is what sellers/providers see on their own billing status
-// banners (Trust & Monetization Communication roadmap section), not an
-// admin-only view.
-exports.getPublicMonetizationStatus = async () => {
-    const map = await getCachedAll();
-
-    const flagKeys = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled"
-    ];
-
-    return flagKeys.reduce((acc, key) => {
-        acc[key] = { enabled: isEnabled(map[key]) };
-        return acc;
-    }, {});
-};
-
 // Writes only keys whose value actually changes, records old -> new in
 // platform_setting_history, and enforces the Phase 7 guardrails:
 //  - commission_rate is capped at commission_rate_max and a change needs
 //    confirm_commission_change: true (the UI shows current -> new first);
 //  - usd_exchange_rate moves beyond usd_exchange_rate_max_change_percent need
 //    confirm_large_exchange_rate_change: true;
+//  - username_blocklist is normalised to a clean lower-case comma list;
 //  - escrow_hold_days is bounded;
 //  - expected_updated_at (ISO time the admin loaded the page) rejects the save
 //    if any key being changed was edited by someone else since.
@@ -506,7 +414,9 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
         "delivery_offer_timeout_ms",
         "ai_daily_token_cap_per_user", "ai_monthly_token_cap_per_user",
         "ai_daily_token_cap_global", "ai_monthly_token_cap_global",
-        "approved_document_retention_days"
+        "approved_document_retention_days",
+        "fuel_passthrough_pct", "fuel_baseline_cap", "fuel_max_monthly_change_pct",
+        "delivery_handling_buffer_minutes"
     ];
 
     const changes = [];
@@ -527,6 +437,15 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
     }
     if (data.ai_enabled !== undefined) {
         queue("ai_enabled", data.ai_enabled ? "true" : "false");
+    }
+    if (data.default_delivery_vehicle !== undefined) {
+        queue("default_delivery_vehicle", String(data.default_delivery_vehicle));
+    }
+    if (data.delivery_default_region !== undefined) {
+        queue("delivery_default_region", String(data.delivery_default_region));
+    }
+    if (data.username_blocklist !== undefined) {
+        queue("username_blocklist", normalizeUsernameBlocklist(data.username_blocklist));
     }
 
     const changing = (key) => changes.find((c) => c.key === key);

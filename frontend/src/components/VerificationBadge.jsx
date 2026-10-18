@@ -5,12 +5,11 @@ import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificat
 const SHIELD_PATH = "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z";
 
 const TONES = {
-    seller: { fill: "bg-teal text-frost", text: "text-teal" },
-    business: { fill: "bg-azure text-frost", text: "text-azure" }
+    seller: { fill: "bg-teal text-frost", text: "text-teal" }
 };
 
-// Renders the right one of the two verification badges for a seller /
-// product / service / store row, or nothing if the row has neither.
+// Renders the single "Verified Seller" badge for a seller / product /
+// service / store row, or nothing if the row has not earned it.
 //
 // variant:
 //  - "corner": tag pinned to a relatively-positioned image corner

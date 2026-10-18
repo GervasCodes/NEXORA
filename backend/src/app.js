@@ -32,11 +32,11 @@ const reviewRoutes = require("./modules/review/review.routes");
 const notificationRoutes = require("./modules/notification/notification.routes");
 const chatRoutes = require("./modules/chat/chat.routes");
 const pushRoutes = require("./modules/push/push.routes");
-const settingsRoutes = require("./modules/settings/settings.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
 const adminNotificationRoutes = require("./modules/adminNotification/adminNotification.routes");
 const dataResetRoutes = require("./modules/dataReset/dataReset.routes");
-const broadcastRoutes = require("./modules/broadcast/broadcast.routes");const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
+const broadcastRoutes = require("./modules/broadcast/broadcast.routes");
+const deliveryRatesRoutes = require("./modules/delivery/deliveryRates.routes");const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
 const accountVerificationSellerRoutes = require("./modules/accountVerification/accountVerification.seller.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
@@ -159,6 +159,17 @@ app.use(helmet({
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
+// Lightweight keep-alive endpoint (Reliability phase). Unlike /health it
+// never touches MySQL, so the frontend can ping it every few minutes
+// while a tab is open - keeping a free-tier host from going to sleep
+// mid-session - without costing a database round trip each time. Mounted
+// before the request logger and the /api/ rate limiter on purpose, so
+// these pings neither flood the access log nor eat a visitor's request
+// budget. CORS above still applies.
+app.get("/ping", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.status(200).json({ ok: true });
+});
 // Structured per-request access logging (method/path/status/duration,
 // request id) - see middleware/requestLogger.middleware.js. Mounted this
 // early so the request id it generates (X-Request-Id) is available to
@@ -405,7 +416,6 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/push", pushRoutes);
-app.use("/api/v1/settings", settingsRoutes);
 // Must be mounted BEFORE /api/v1/admin: it's a more specific prefix of
 // that path, and Express falls through an unmatched router to the next
 // app.use() rather than stopping - so with the general /admin mount
@@ -421,6 +431,7 @@ app.use("/api/v1/admin/maintenance", maintenanceRoutes);
 // Same more-specific-prefix-first reasoning as the two mounts above.
 app.use("/api/v1/admin/data-reset", dataResetRoutes);
 app.use("/api/v1/admin/broadcasts", broadcastRoutes);
+app.use("/api/v1/admin/delivery-rates", deliveryRatesRoutes);
 app.use("/api/v1/admin/affiliates", affiliateAdminRoutes);
 // Brevo delivery-status webhook (Phase 5, production error fixes) -
 // intentionally NOT under the admin-authenticated broadcastRoutes above

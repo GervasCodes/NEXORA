@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 // (Backend N+1 Fixes & Read Replica Adoption): same reasoning as
 // product.repository.js - only genuinely public-browsing, single-call-site
 // reads get moved to dbRead; anything shared with a pre-write validation
@@ -140,7 +141,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, city, region,
         `SELECT
             s.id, s.title, s.slug, s.pricing_model, s.base_price, s.discount_price,
             s.city, s.region, s.created_at,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             sc.name AS category_name, sc.slug AS category_slug,
             ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
@@ -215,7 +216,7 @@ exports.findBySlug = async (slug) => {
     const [rows] = await dbRead.query(
         `SELECT
             s.*,
-            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             sp.social_whatsapp, sp.public_phone,
             sc.name AS category_name, sc.slug AS category_slug,
             (

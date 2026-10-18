@@ -37,6 +37,7 @@ export default function AdminSettings() {
     const [riderFee, setRiderFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
     const [retentionDays, setRetentionDays] = useState("0");
+    const [usernameBlocklist, setUsernameBlocklist] = useState("");
     const [sponsorshipRate, setSponsorshipRate] = useState("");
     const [featuredStoreRate, setFeaturedStoreRate] = useState("");
     const [bands, setBands] = useState([]);
@@ -63,6 +64,7 @@ export default function AdminSettings() {
                 setRiderFee(data.data.rider_delivery_fee);
                 setUsdRate(data.data.usd_exchange_rate);
                 setRetentionDays(String(data.data.approved_document_retention_days ?? "0"));
+                setUsernameBlocklist(String(data.data.username_blocklist ?? ""));
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
                 setAiEnabled(data.data.ai_enabled === "true" || data.data.ai_enabled === true);
@@ -139,6 +141,7 @@ export default function AdminSettings() {
                 rider_delivery_fee: Number(riderFee),
                 usd_exchange_rate: Number(usdRate),
                 approved_document_retention_days: Number(retentionDays),
+                username_blocklist: usernameBlocklist,
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
                 ai_enabled: aiEnabled,
@@ -351,6 +354,19 @@ export default function AdminSettings() {
                         className="w-full border border-line rounded-md px-3 py-1.5 text-sm"
                     />
                     <p className="text-xs text-ash mt-1">0 keeps them indefinitely. Otherwise the stored file is deleted that many days after approval; the review record stays.</p>
+                </div>
+
+                <div>
+                    <label htmlFor="usernameBlocklist" className="text-xs text-ash block mb-1">Blocked usernames (comma-separated)</label>
+                    <textarea
+                        id="usernameBlocklist"
+                        rows={2}
+                        maxLength={1000}
+                        value={usernameBlocklist}
+                        onChange={(e) => setUsernameBlocklist(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-1.5 text-sm"
+                    />
+                    <p className="text-xs text-ash mt-1">Words that can't be used as a username or as a dot/underscore-separated part of one. Words like admin, support and nexora are always blocked.</p>
                 </div>
 
                 <div>

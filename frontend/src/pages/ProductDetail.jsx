@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
@@ -391,7 +392,7 @@ export default function ProductDetail() {
                 review: reviews.reviews.slice(0, 5).map((r) => ({
                     "@type": "Review",
                     reviewRating: { "@type": "Rating", ratingValue: r.rating, bestRating: 5, worstRating: 1 },
-                    author: { "@type": "Person", name: [r.first_name, r.last_name?.[0] && `${r.last_name[0]}.`].filter(Boolean).join(" ") || "NEXORA buyer" },
+                    author: { "@type": "Person", name: publicName(r) },
                     ...(r.comment ? { reviewBody: r.comment } : {}),
                     ...(r.created_at ? { datePublished: new Date(r.created_at).toISOString().slice(0, 10) } : {})
                 }))
@@ -802,9 +803,9 @@ export default function ProductDetail() {
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
                             <div className="flex items-center gap-2 mb-1">
-                                <Avatar firstName={r.first_name} lastName={r.last_name} src={r.photo_url} size="sm" />
+                                <Avatar name={publicName(r, t("username.anonymous"))} src={r.photo_url} size="sm" />
                                 <div className="flex-1 flex justify-between items-baseline">
-                                    <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                    <p className="font-medium text-sm">{publicName(r, t("username.anonymous"))}</p>
                                     <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                                 </div>
                             </div>
@@ -844,7 +845,7 @@ export default function ProductDetail() {
             {user?.role !== "seller" && user?.role !== "admin" && (
                 <>
                     <div className="h-20 md:hidden" aria-hidden="true" />
-                    <div className="md:hidden fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[var(--z-float)] bg-paper/95 backdrop-blur border-t border-line px-4 py-3 flex items-center gap-3">
+                    <div className="md:hidden fixed inset-x-0 bottom-[var(--bottom-inset)] z-[var(--z-float)] bg-paper/95 backdrop-blur border-t border-line px-4 py-3 flex items-center gap-3">
                         <div className="min-w-0 flex-1">
                             <p className="text-xs text-ash">{t("product.mobileBuyPrice")}</p>
                             <p className="price font-medium">{format(product.discount_price && Number(product.discount_price) < Number(product.price) ? product.discount_price : product.price)}</p>

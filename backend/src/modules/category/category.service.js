@@ -200,7 +200,7 @@ exports.getHomeHighlights = async () => {
             ...featuredStores.map((s) => ({
                 type: "featured_store",
                 title: s.store_name,
-                subtitle: s.is_verified ? "Verified store" : "Featured store",
+                subtitle: s.show_verified_badge ? "Verified store" : "Featured store",
                 imageUrl: s.store_banner || s.store_logo,
                 videoUrl: null,
                 href: `/stores/${s.store_slug}`,

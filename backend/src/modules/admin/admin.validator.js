@@ -50,32 +50,6 @@ exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
 
-const MONETIZATION_KEYS = [
-    "monetization_subscriptions_enabled",
-    "monetization_commission_enabled",
-    "monetization_sponsorship_enabled"
-];
-
-exports.updateMonetizationSettingsValidation = MONETIZATION_KEYS.map((key) =>
-    body(key).optional().isBoolean().withMessage(`${key} must be true or false`).toBoolean()
-);
-
-exports.createMonetizationScheduleValidation = [
-    body("setting_key")
-        .notEmpty().withMessage("setting_key is required")
-        .isIn(MONETIZATION_KEYS).withMessage("Unknown monetization setting"),
-    body("enabled")
-        .isBoolean().withMessage("enabled must be true or false")
-        .toBoolean(),
-    body("scheduled_at")
-        .notEmpty().withMessage("scheduled_at is required")
-        .isISO8601().withMessage("scheduled_at must be a valid date/time")
-];
-
-exports.monetizationScheduleIdValidation = [
-    param("id").isInt({ gt: 0 }).withMessage("Invalid scheduled change")
-];
-
 exports.updateSettingsValidation = [
     body("commission_rate")
         .optional()
@@ -89,6 +63,12 @@ exports.updateSettingsValidation = [
         .optional()
         .isInt({ min: 0, max: 3650 })
         .withMessage("Retention must be 0 (keep) or a number of days up to 3650"),
+
+    body("username_blocklist")
+        .optional()
+        .isString()
+        .isLength({ max: 1000 })
+        .withMessage("Username blocklist must be text of at most 1000 characters"),
 
     body("rider_delivery_fee")
         .optional()

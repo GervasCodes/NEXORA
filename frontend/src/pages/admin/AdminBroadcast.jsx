@@ -5,11 +5,20 @@ import Input from "../../components/ui/Input";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { formatDateTime } from "../../utils/format";
+import { smsInfo } from "../../utils/smsLength";
 
-// Admin broadcast (Phase 9) - segment-targeted, multi-channel messaging
-// on top of the existing email (config/brevo.js) and SMS/WhatsApp
-// provider infra. See backend/src/modules/broadcast for the
-// segment-resolution and send logic this page drives.
+// Admin broadcast - segment-targeted messaging on top of the existing
+// email (config/brevo.js) and SMS/WhatsApp provider infra. See
+// backend/src/modules/broadcast for the segment-resolution and send logic.
+//
+// Round 5 Phase 4: three completely separate functions, one tab each, each
+// with its own state, validation, preview and send button, and with its
+// channels locked:
+//   1. All channels      - subject + one message -> email, SMS, WhatsApp, in-app
+//   2. WhatsApp + SMS    - one plain text, no subject
+//   3. Email + in-app    - subject + rich body, optional short in-app text
+// All three stay mounted (inactive ones are hidden) so a half-written draft
+// survives switching tabs.
 
 const SEGMENTS = [
     { value: "all_buyers", label: "All buyers" },
@@ -18,121 +27,154 @@ const SEGMENTS = [
     { value: "everyone", label: "Everyone (buyers + sellers + delivery agents)" }
 ];
 
-const CHANNELS = [
-    { value: "email", label: "Email" },
-    { value: "sms", label: "SMS" },
-    { value: "whatsapp", label: "WhatsApp" },
-    { value: "in_app", label: "In-app" }
+const TYPES = [
+    { value: "all", label: "All channels", channels: ["email", "sms", "whatsapp", "in_app"], hint: "Email, SMS, WhatsApp and in-app from one subject and one message." },
+    { value: "messaging", label: "WhatsApp + SMS", channels: ["whatsapp", "sms"], hint: "One plain text on WhatsApp and SMS only. Never touches email or in-app." },
+    { value: "rich", label: "Email + in-app", channels: ["email", "in_app"], hint: "A subject and a longer email body, plus a short in-app notification. Never touches SMS or WhatsApp." }
 ];
 
-// Each selected channel gets its own visible box - an SMS reads nothing
-// like an email, and a WhatsApp message can be longer/richer than an
-// SMS but shouldn't carry a full email's paragraphs either - EXCEPT SMS
-// and WhatsApp share one underlying text value: they're both short,
-// title-less copy typically meant to say the same thing, so typing in
-// either box updates both instead of making the admin write it twice.
-// In-app keeps its own independent title+message (it's read as one
-// line in NotificationBell.jsx, with its own optional title). Every
-// box is optional - left blank, the server falls back to the shared
-// `message`/`subject` above (see broadcast.service.js#resolveChannelContent).
-// Keep these in sync with the server-side caps in
+const TYPE_LABELS = Object.fromEntries(TYPES.map((t) => [t.value, t.label]));
+
+// Keep these in sync with backend/src/constants/broadcast.js and
 // backend/src/modules/broadcast/broadcast.validator.js.
-const SMS_MAX = 320;
-const WHATSAPP_MAX = 1000;
+const SUBJECT_MAX = 150;
+const MESSAGE_MAX = 2000;
+const MESSAGING_MAX = 1000;
 const IN_APP_MAX = 1000;
 
-export default function AdminBroadcast() {
-    const toast = useToast();
-    const [segment, setSegment] = useState("all_buyers");
-    const [channels, setChannels] = useState(["email"]);
-    const [subject, setSubject] = useState("");
-    const [message, setMessage] = useState("");
-    // SMS and WhatsApp are two separate boxes on screen but one shared
-    // value underneath - see the comment above SMS_MAX/WHATSAPP_MAX.
-    const [smsWhatsappMessage, setSmsWhatsappMessage] = useState("");
-    const [inAppTitle, setInAppTitle] = useState("");
-    const [inAppMessage, setInAppMessage] = useState("");
+// Same trimming the server applies when a body is reused as the in-app text.
+const trimForInApp = (text) => {
+    const value = (text || "").trim();
+    return value.length > IN_APP_MAX ? `${value.slice(0, IN_APP_MAX - 1).trimEnd()}…` : value;
+};
+
+// "~N recipients" for a segment, re-estimated whenever the segment changes.
+function useAudience(segment) {
     const [audience, setAudience] = useState(null);
-    const [previewing, setPreviewing] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        setAudience(null);
+        setLoading(true);
+        api.post("/admin/broadcasts/preview", { segment })
+            .then(({ data }) => { if (!cancelled) setAudience(data.data); })
+            .catch(() => { if (!cancelled) setAudience(null); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [segment]);
+
+    return { audience, loading };
+}
+
+function AudienceField({ id, segment, onChange, audience, loading }) {
+    return (
+        <div>
+            <label htmlFor={id} className="block text-sm mb-1">Audience</label>
+            <select
+                id={id}
+                value={segment}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+            >
+                {SEGMENTS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+            </select>
+            <p className="text-xs text-ash mt-1">
+                {loading ? "Estimating audience…" : audience ? `~${audience.recipientCount} recipients` : ""}
+            </p>
+        </div>
+    );
+}
+
+function ChannelPills({ channels }) {
+    return (
+        <p className="text-xs text-ash">
+            Channels (fixed):{" "}
+            {channels.map((c) => (
+                <span key={c} className="inline-block border border-line rounded-full px-2 py-0.5 mr-1 text-ink">
+                    {{ email: "Email", sms: "SMS", whatsapp: "WhatsApp", in_app: "In-app" }[c]}
+                </span>
+            ))}
+        </p>
+    );
+}
+
+function SmsCounter({ text }) {
+    const info = smsInfo(text);
+    const multi = info.segments > 1;
+    return (
+        <p className={`text-xs mt-1 ${multi ? "text-coral" : "text-ash"}`}>
+            SMS: {info.units} {info.encoding === "GSM-7" ? "characters" : "units (Unicode)"} · {info.segments} segment{info.segments === 1 ? "" : "s"}
+            {multi ? ` - this spans more than one SMS (${info.perSegment} per part); each part is billed separately.` : ""}
+            {info.encoding === "Unicode" && text ? " Emoji or special letters make SMS shorter (70 per segment)." : ""}
+        </p>
+    );
+}
+
+function PreviewBox({ title, children }) {
+    return (
+        <div className="border border-line rounded-md p-3 bg-sand/30">
+            <p className="text-xs font-medium text-ink mb-1">{title}</p>
+            {children}
+        </div>
+    );
+}
+
+// The two-step "click once to arm, click again to confirm" send button every
+// tab uses, with the list of what is still missing.
+function SendBar({ missing, sending, confirming, recipients, onSend, onCancel, lastResult }) {
+    return (
+        <div className="space-y-2">
+            {missing.length > 0 && (
+                <p className="text-xs text-ash">Still needed: {missing.join(", ")}.</p>
+            )}
+            <div>
+                <Button onClick={onSend} disabled={missing.length > 0 || sending} variant={confirming ? "primary" : "secondary"}>
+                    {sending
+                        ? "Sending…"
+                        : confirming
+                            ? `Confirm - send to ~${recipients ?? "?"} recipients`
+                            : "Send broadcast"}
+                </Button>
+                {confirming && (
+                    <button type="button" onClick={onCancel} className="ml-3 text-sm text-ash underline">
+                        Cancel
+                    </button>
+                )}
+            </div>
+            {lastResult && (
+                <p className="text-xs text-teal">
+                    Sent to {lastResult.recipientCount} recipients
+                    (email {lastResult.emailSentCount}, sms {lastResult.smsSentCount}, whatsapp {lastResult.whatsappSentCount}, in-app {lastResult.inAppSentCount}).
+                </p>
+            )}
+        </div>
+    );
+}
+
+// Send/confirm state machine shared by the three tabs (each tab still owns
+// its own instance, so nothing is shared between them).
+function useSender({ templateType, buildPayload, onSent, reset }) {
+    const toast = useToast();
     const [sending, setSending] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [lastResult, setLastResult] = useState(null);
-    const [history, setHistory] = useState([]);
-    const [loadingHistory, setLoadingHistory] = useState(true);
-    // Open/read a past broadcast's full content - the history list only
-    // ever showed segment/date/channels/subject, even though the server
-    // already returns the full message and every per-channel body. One
-    // open row at a time (an id, not a Set) keeps this simple and matches
-    // the accordion-style detail views elsewhere in the admin panel.
-    const [openId, setOpenId] = useState(null);
-    // Row-level "click once to arm, click again to confirm" - same
-    // two-step pattern as the compose form's own Send button above,
-    // reused here instead of a native window.confirm() popup.
-    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-    const [confirmResendId, setConfirmResendId] = useState(null);
-    // Separate from confirmDeleteId/confirmResendId (which track "armed,
-    // waiting for the confirm click") so the right row's button - and
-    // only that one - shows "Deleting…"/"Resending…" while its own
-    // request is in flight, without the two actions' busy states bleeding
-    // into each other on the same row.
-    const [deletingId, setDeletingId] = useState(null);
-    const [resendingId, setResendingId] = useState(null);
 
-    const loadHistory = () => {
-        setLoadingHistory(true);
-        api.get("/admin/broadcasts").then(({ data }) => setHistory(data.data))
-            .catch(() => {})
-            .finally(() => setLoadingHistory(false));
-    };
-
-    useEffect(loadHistory, []);
-
-    // Re-preview whenever the segment changes, so the "~N recipients"
-    // figure never goes stale silently.
-    useEffect(() => {
-        setAudience(null);
-        setPreviewing(true);
-        api.post("/admin/broadcasts/preview", { segment })
-            .then(({ data }) => setAudience(data.data))
-            .catch(() => setAudience(null))
-            .finally(() => setPreviewing(false));
-    }, [segment]);
-
-    const toggleChannel = (value) => {
-        setChannels((prev) => (prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]));
-    };
-
-    const emailSelected = channels.includes("email");
-
-    const handleSend = async () => {
+    const send = async () => {
         if (!confirming) {
             setConfirming(true);
             return;
         }
-
         setSending(true);
         try {
-            const { data } = await api.post("/admin/broadcasts", {
-                segment, channels, subject, message,
-                // SMS and WhatsApp send the same underlying value (see
-                // the smsWhatsappMessage state comment); each is still
-                // only sent when its own channel is selected, and each
-                // independently falls back to the shared message above
-                // when left blank.
-                smsMessage: smsWhatsappMessage.trim() || undefined,
-                whatsappMessage: smsWhatsappMessage.trim() || undefined,
-                inAppTitle: inAppTitle.trim() || undefined,
-                inAppMessage: inAppMessage.trim() || undefined
-            });
+            const { data } = await api.post("/admin/broadcasts", { templateType, ...buildPayload() });
             setLastResult(data.data);
             toast?.success("Broadcast sent");
-            setMessage("");
-            setSubject("");
-            setSmsWhatsappMessage("");
-            setInAppTitle("");
-            setInAppMessage("");
+            reset();
             setConfirming(false);
-            loadHistory();
+            onSent();
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -140,7 +182,233 @@ export default function AdminBroadcast() {
         }
     };
 
-    const canSend = channels.length > 0 && message.trim() && (!emailSelected || subject.trim());
+    return { sending, confirming, setConfirming, lastResult, send };
+}
+
+// ---------- 1. All channels ----------
+function AllChannelsTab({ onSent }) {
+    const type = TYPES[0];
+    const [segment, setSegment] = useState("all_buyers");
+    const [subject, setSubject] = useState("");
+    const [message, setMessage] = useState("");
+    const { audience, loading } = useAudience(segment);
+
+    const sender = useSender({
+        templateType: "all",
+        buildPayload: () => ({ segment, channels: type.channels, subject: subject.trim(), message: message.trim() }),
+        onSent,
+        reset: () => { setSubject(""); setMessage(""); }
+    });
+    const edit = (setter) => (e) => { setter(e.target.value); sender.setConfirming(false); };
+
+    const missing = [];
+    if (!subject.trim()) missing.push("a subject");
+    if (!message.trim()) missing.push("a message");
+
+    const inAppText = trimForInApp(message);
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-ash">{type.hint}</p>
+            <AudienceField id="bc-all-audience" segment={segment} onChange={(v) => { setSegment(v); sender.setConfirming(false); }} audience={audience} loading={loading} />
+            <ChannelPills channels={type.channels} />
+
+            <Input label="Subject (also the in-app title)" value={subject} onChange={edit(setSubject)} maxLength={SUBJECT_MAX} />
+            <div>
+                <Input
+                    as="textarea"
+                    label="Message (sent as-is on every channel)"
+                    id="bc-all-message"
+                    value={message}
+                    onChange={edit(setMessage)}
+                    maxLength={MESSAGE_MAX}
+                    rows={5}
+                    hint={`${message.length}/${MESSAGE_MAX} · WhatsApp only reaches people who opted into WhatsApp updates`}
+                />
+                <SmsCounter text={message} />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+                <PreviewBox title="Email">
+                    <p className="text-xs text-ash">Subject: {subject || "-"}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message || "-"}</p>
+                </PreviewBox>
+                <PreviewBox title="SMS / WhatsApp">
+                    <p className="text-sm whitespace-pre-wrap">{message || "-"}</p>
+                </PreviewBox>
+                <PreviewBox title="In-app notification">
+                    <p className="text-xs text-ash">Title: {subject || "-"}</p>
+                    <p className="text-sm whitespace-pre-wrap">{inAppText || "-"}</p>
+                    {message.trim().length > IN_APP_MAX && (
+                        <p className="text-xs text-coral mt-1">Trimmed to {IN_APP_MAX} characters for the notification bell.</p>
+                    )}
+                </PreviewBox>
+            </div>
+
+            <SendBar
+                missing={missing} sending={sender.sending} confirming={sender.confirming}
+                recipients={audience?.recipientCount} onSend={sender.send}
+                onCancel={() => sender.setConfirming(false)} lastResult={sender.lastResult}
+            />
+        </div>
+    );
+}
+
+// ---------- 2. WhatsApp + SMS only ----------
+function MessagingTab({ onSent }) {
+    const type = TYPES[1];
+    const [segment, setSegment] = useState("all_buyers");
+    const [message, setMessage] = useState("");
+    const { audience, loading } = useAudience(segment);
+
+    const sender = useSender({
+        templateType: "messaging",
+        buildPayload: () => ({ segment, channels: type.channels, message: message.trim() }),
+        onSent,
+        reset: () => setMessage("")
+    });
+
+    const missing = [];
+    if (!message.trim()) missing.push("a message");
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-ash">{type.hint}</p>
+            <AudienceField id="bc-msg-audience" segment={segment} onChange={(v) => { setSegment(v); sender.setConfirming(false); }} audience={audience} loading={loading} />
+            <ChannelPills channels={type.channels} />
+
+            <div>
+                <Input
+                    as="textarea"
+                    label="Message (plain text, no subject)"
+                    id="bc-msg-message"
+                    value={message}
+                    onChange={(e) => { setMessage(e.target.value); sender.setConfirming(false); }}
+                    maxLength={MESSAGING_MAX}
+                    rows={4}
+                    hint={`${message.length}/${MESSAGING_MAX} · WhatsApp only reaches people who opted into WhatsApp updates`}
+                />
+                <SmsCounter text={message} />
+            </div>
+
+            <PreviewBox title="WhatsApp and SMS (identical text)">
+                <p className="text-sm whitespace-pre-wrap">{message || "-"}</p>
+            </PreviewBox>
+
+            <SendBar
+                missing={missing} sending={sender.sending} confirming={sender.confirming}
+                recipients={audience?.recipientCount} onSend={sender.send}
+                onCancel={() => sender.setConfirming(false)} lastResult={sender.lastResult}
+            />
+        </div>
+    );
+}
+
+// ---------- 3. Email + in-app only ----------
+function RichTab({ onSent }) {
+    const type = TYPES[2];
+    const [segment, setSegment] = useState("all_buyers");
+    const [subject, setSubject] = useState("");
+    const [body, setBody] = useState("");
+    const [inAppText, setInAppText] = useState("");
+    const { audience, loading } = useAudience(segment);
+
+    const sender = useSender({
+        templateType: "rich",
+        buildPayload: () => ({
+            segment, channels: type.channels, subject: subject.trim(), message: body.trim(),
+            inAppMessage: inAppText.trim() || undefined
+        }),
+        onSent,
+        reset: () => { setSubject(""); setBody(""); setInAppText(""); }
+    });
+    const edit = (setter) => (e) => { setter(e.target.value); sender.setConfirming(false); };
+
+    const missing = [];
+    if (!subject.trim()) missing.push("a subject");
+    if (!body.trim()) missing.push("an email body");
+
+    const inAppPreview = inAppText.trim() ? inAppText.trim() : trimForInApp(body);
+
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-ash">{type.hint}</p>
+            <AudienceField id="bc-rich-audience" segment={segment} onChange={(v) => { setSegment(v); sender.setConfirming(false); }} audience={audience} loading={loading} />
+            <ChannelPills channels={type.channels} />
+
+            <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
+                <p className="text-xs font-medium text-ink">Email</p>
+                <Input label="Subject (also the in-app title)" value={subject} onChange={edit(setSubject)} maxLength={SUBJECT_MAX} />
+                <Input
+                    as="textarea"
+                    label="Email body (blank line starts a new paragraph)"
+                    id="bc-rich-body"
+                    value={body}
+                    onChange={edit(setBody)}
+                    maxLength={MESSAGE_MAX}
+                    rows={8}
+                    hint={`${body.length}/${MESSAGE_MAX}`}
+                />
+            </div>
+
+            <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
+                <p className="text-xs font-medium text-ink">In-app notification</p>
+                <Input
+                    as="textarea"
+                    label="Short in-app text (optional - uses a trimmed copy of the email body if left blank)"
+                    id="bc-rich-inapp"
+                    value={inAppText}
+                    onChange={edit(setInAppText)}
+                    maxLength={IN_APP_MAX}
+                    rows={2}
+                    hint={`${inAppText.length}/${IN_APP_MAX} · shown in the notification bell, so keep it short`}
+                />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+                <PreviewBox title="Email">
+                    <p className="text-xs text-ash">Subject: {subject || "-"}</p>
+                    <p className="text-sm whitespace-pre-wrap">{body || "-"}</p>
+                </PreviewBox>
+                <PreviewBox title="In-app notification">
+                    <p className="text-xs text-ash">Title: {subject || "-"}</p>
+                    <p className="text-sm whitespace-pre-wrap">{inAppPreview || "-"}</p>
+                </PreviewBox>
+            </div>
+
+            <SendBar
+                missing={missing} sending={sender.sending} confirming={sender.confirming}
+                recipients={audience?.recipientCount} onSend={sender.send}
+                onCancel={() => sender.setConfirming(false)} lastResult={sender.lastResult}
+            />
+        </div>
+    );
+}
+
+// ---------- History ----------
+function History({ refreshKey }) {
+    const toast = useToast();
+    const [type, setType] = useState("");
+    const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+    // Open/read a past broadcast's full content. One open row at a time.
+    const [openId, setOpenId] = useState(null);
+    // Row-level "click once to arm, click again to confirm".
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+    const [confirmResendId, setConfirmResendId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
+    const [resendingId, setResendingId] = useState(null);
+    const [reloadKey, setReloadKey] = useState(0);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoadingHistory(true);
+        api.get("/admin/broadcasts", { params: type ? { type } : undefined })
+            .then(({ data }) => { if (!cancelled) setHistory(data.data); })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setLoadingHistory(false); });
+        return () => { cancelled = true; };
+    }, [type, refreshKey, reloadKey]);
 
     const toggleOpen = (id) => setOpenId((prev) => (prev === id ? null : id));
 
@@ -174,7 +442,7 @@ export default function AdminBroadcast() {
         try {
             const { data } = await api.post(`/admin/broadcasts/${id}/resend`);
             toast?.success(`Resent to ${data.data.recipientCount} recipients`);
-            loadHistory();
+            setReloadKey((k) => k + 1);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -185,173 +453,24 @@ export default function AdminBroadcast() {
 
     return (
         <div>
-            <PageMeta title="Broadcast" noIndex />
-            <h1 className="font-display text-2xl mb-6">Broadcast</h1>
-
-            <div className="border border-line rounded-lg p-4 space-y-4 mb-8 max-w-2xl">
-                <div>
-                    <label htmlFor="broadcast-audience" className="block text-sm mb-1">Audience</label>
+            <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="font-display text-lg">History</h2>
+                <div className="flex items-center gap-2">
+                    <label htmlFor="bc-history-type" className="text-xs text-ash">Type</label>
                     <select
-                        id="broadcast-audience"
-                        value={segment}
-                        onChange={(e) => { setSegment(e.target.value); setConfirming(false); }}
-                        className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                        id="bc-history-type"
+                        value={type}
+                        onChange={(e) => { setType(e.target.value); setOpenId(null); }}
+                        className="border border-line rounded-md px-2 py-1 text-sm focus-ring bg-paper"
                     >
-                        {SEGMENTS.map((s) => (
-                            <option key={s.value} value={s.value}>{s.label}</option>
+                        <option value="">All types</option>
+                        {TYPES.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
                         ))}
                     </select>
-                    <p className="text-xs text-ash mt-1">
-                        {previewing ? "Estimating audience…" : audience ? `~${audience.recipientCount} recipients` : ""}
-                    </p>
                 </div>
-
-                <div>
-                    {/* Not a <label> - this heads a group of checkboxes rather
-                        than a single control, so it's exposed via
-                        aria-labelledby on the group below instead. */}
-                    <span id="broadcast-channels-label" className="block text-sm mb-1">Channels</span>
-                    <div role="group" aria-labelledby="broadcast-channels-label" className="flex gap-4">
-                        {CHANNELS.map((c) => (
-                            <label key={c.value} className="flex items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={channels.includes(c.value)}
-                                    onChange={() => { toggleChannel(c.value); setConfirming(false); }}
-                                />
-                                {c.label}
-                            </label>
-                        ))}
-                    </div>
-                    {channels.includes("whatsapp") && (
-                        <p className="text-xs text-ash mt-1">
-                            Only reaches recipients who've opted into WhatsApp updates.
-                        </p>
-                    )}
-                </div>
-
-                {/* Email gets its own subject + body - the only channel that
-                    needs a subject line and the one with the most room to
-                    write, so it stays the "main" compose box and doubles as
-                    the fallback body for any other channel left blank below. */}
-                {emailSelected && (
-                    <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">Email</p>
-                        <Input
-                            label="Subject"
-                            value={subject}
-                            onChange={(e) => { setSubject(e.target.value); setConfirming(false); }}
-                            maxLength={150}
-                        />
-                        <Input
-                            as="textarea"
-                            label={channels.length > 1 ? "Email body (also the fallback for any channel left blank below)" : "Email body"}
-                            id="broadcast-message"
-                            value={message}
-                            onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
-                            maxLength={2000}
-                            rows={5}
-                            hint={`${message.length}/2000`}
-                        />
-                    </div>
-                )}
-
-                {!emailSelected && (
-                    <div>
-                        <label htmlFor="broadcast-message" className="block text-sm mb-1">Message</label>
-                        <textarea
-                            id="broadcast-message"
-                            value={message}
-                            onChange={(e) => { setMessage(e.target.value); setConfirming(false); }}
-                            maxLength={2000}
-                            rows={5}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
-                        />
-                        <p className="text-xs text-ash mt-1">
-                            {message.length}/2000 · used as-is for any channel left blank below
-                        </p>
-                    </div>
-                )}
-
-                {/* SMS and WhatsApp are separate boxes but one shared value -
-                    typing in either updates both, since they're usually the
-                    same short copy - while in-app keeps its own independent
-                    title+message (it's a different shape: read as one line
-                    in NotificationBell.jsx, with its own optional title).
-                    Leaving any of these blank just reuses the message above. */}
-                {channels.includes("sms") && (
-                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">SMS</p>
-                        <Input
-                            as="textarea"
-                            label="SMS / WhatsApp message (optional - reuses the email/shared message above if left blank)"
-                            value={smsWhatsappMessage}
-                            onChange={(e) => { setSmsWhatsappMessage(e.target.value); setConfirming(false); }}
-                            maxLength={SMS_MAX}
-                            rows={2}
-                            hint={`${smsWhatsappMessage.length}/${SMS_MAX} · long messages are split into multiple SMS segments by the gateway`}
-                        />
-                    </div>
-                )}
-
-                {channels.includes("whatsapp") && (
-                    <div className="border border-line rounded-md p-3 space-y-1 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">WhatsApp</p>
-                        <Input
-                            as="textarea"
-                            label="SMS / WhatsApp message (optional - reuses the email/shared message above if left blank)"
-                            value={smsWhatsappMessage}
-                            onChange={(e) => { setSmsWhatsappMessage(e.target.value); setConfirming(false); }}
-                            maxLength={channels.includes("sms") ? SMS_MAX : WHATSAPP_MAX}
-                            rows={3}
-                            hint={`${smsWhatsappMessage.length}/${channels.includes("sms") ? SMS_MAX : WHATSAPP_MAX}${channels.includes("sms") ? " · shared with the SMS box above" : ""} · only reaches recipients who've opted into WhatsApp updates`}
-                        />
-                    </div>
-                )}
-
-                {channels.includes("in_app") && (
-                    <div className="border border-line rounded-md p-3 space-y-3 bg-sand/30">
-                        <p className="text-xs font-medium text-ink">In-app notification</p>
-                        <Input
-                            label="Title (optional - reuses the email subject, or 'Announcement', if left blank)"
-                            value={inAppTitle}
-                            onChange={(e) => { setInAppTitle(e.target.value); setConfirming(false); }}
-                            maxLength={150}
-                        />
-                        <Input
-                            as="textarea"
-                            label="Message (optional - reuses the email/shared message above if left blank)"
-                            value={inAppMessage}
-                            onChange={(e) => { setInAppMessage(e.target.value); setConfirming(false); }}
-                            maxLength={IN_APP_MAX}
-                            rows={2}
-                            hint={`${inAppMessage.length}/${IN_APP_MAX} · shown in the notification bell, so keep it short`}
-                        />
-                    </div>
-                )}
-
-                <Button onClick={handleSend} disabled={!canSend || sending} variant={confirming ? "primary" : "secondary"}>
-                    {sending
-                        ? "Sending…"
-                        : confirming
-                            ? `Confirm - send to ~${audience?.recipientCount ?? "?"} recipients`
-                            : "Send broadcast"}
-                </Button>
-                {confirming && (
-                    <button type="button" onClick={() => setConfirming(false)} className="ml-3 text-sm text-ash underline">
-                        Cancel
-                    </button>
-                )}
-
-                {lastResult && (
-                    <p className="text-xs text-teal">
-                        Sent to {lastResult.recipientCount} recipients
-                        (email {lastResult.emailSentCount}, sms {lastResult.smsSentCount}, whatsapp {lastResult.whatsappSentCount}, in-app {lastResult.inAppSentCount}).
-                    </p>
-                )}
             </div>
 
-            <h2 className="font-display text-lg mb-3">History</h2>
             {loadingHistory ? (
                 <p className="text-sm text-ash">Loading…</p>
             ) : history.length === 0 ? (
@@ -362,6 +481,8 @@ export default function AdminBroadcast() {
                         const isOpen = openId === b.id;
                         const isDeleting = deletingId === b.id;
                         const isResending = resendingId === b.id;
+                        // Rows from before migration 149 have no/old type: they are 'all'.
+                        const typeLabel = TYPE_LABELS[b.template_type] || TYPE_LABELS.all;
                         return (
                             <li key={b.id} className="py-3 text-sm">
                                 <button
@@ -371,7 +492,10 @@ export default function AdminBroadcast() {
                                     className="w-full text-left"
                                 >
                                     <div className="flex justify-between items-start gap-3">
-                                        <span className="font-medium capitalize">{b.segment.replace(/_/g, " ")}</span>
+                                        <span className="font-medium capitalize">
+                                            {b.segment.replace(/_/g, " ")}
+                                            <span className="ml-2 text-xs font-normal normal-case border border-line rounded-full px-2 py-0.5 text-ash">{typeLabel}</span>
+                                        </span>
                                         <span className="text-ash text-xs shrink-0">{formatDateTime(b.created_at)}</span>
                                     </div>
                                     <p className="text-ash text-xs mt-0.5">
@@ -381,19 +505,11 @@ export default function AdminBroadcast() {
                                     <span className="text-xs text-teal mt-1 inline-block">{isOpen ? "Hide full message ↑" : "Open full message ↓"}</span>
                                 </button>
 
-                                {/* Full stored content, shown whole - no fixed-height
-                                    scroller - since that's exactly what the admin
-                                    clicked "Open" to read. Only channels that were
-                                    actually part of this send (or got their own
-                                    override body) are shown. */}
+                                {/* One block per channel this broadcast actually went
+                                    out on, each falling back to the shared message the
+                                    way the server did at send time. */}
                                 {isOpen && (
                                     <div className="mt-2 border border-line rounded-md p-3 bg-sand/30 space-y-3">
-                                        {/* One block per channel this broadcast actually
-                                            went out on, each falling back to the shared
-                                            `message` exactly the way resolveChannelContent()
-                                            did at send time - so what's shown here always
-                                            matches what recipients actually received, even
-                                            when a channel's own box was left blank. */}
                                         {b.channels.split(",").map((channel) => {
                                             if (channel === "email") {
                                                 return (
@@ -424,7 +540,7 @@ export default function AdminBroadcast() {
                                                 return (
                                                     <div key={channel}>
                                                         <p className="text-xs font-medium text-ink mb-1">In-app notification</p>
-                                                        {b.in_app_title && <p className="text-xs text-ash mb-1">Title: {b.in_app_title}</p>}
+                                                        {(b.in_app_title || b.subject) && <p className="text-xs text-ash mb-1">Title: {b.in_app_title || b.subject}</p>}
                                                         <p className="text-sm whitespace-pre-wrap">{b.in_app_message || b.message}</p>
                                                     </div>
                                                 );
@@ -477,6 +593,53 @@ export default function AdminBroadcast() {
                     })}
                 </ul>
             )}
+        </div>
+    );
+}
+
+export default function AdminBroadcast() {
+    const [tab, setTab] = useState("all");
+    // Bumped by a tab after a successful send so History reloads.
+    const [refreshKey, setRefreshKey] = useState(0);
+    const onSent = () => setRefreshKey((k) => k + 1);
+
+    return (
+        <div>
+            <PageMeta title="Broadcast" noIndex />
+            <h1 className="font-display text-2xl mb-6">Broadcast</h1>
+
+            <div role="tablist" aria-label="Broadcast type" className="flex gap-1 mb-4 border-b border-line max-w-2xl">
+                {TYPES.map((t) => (
+                    <button
+                        key={t.value}
+                        type="button"
+                        role="tab"
+                        id={`bc-tab-${t.value}`}
+                        aria-selected={tab === t.value}
+                        aria-controls={`bc-panel-${t.value}`}
+                        onClick={() => setTab(t.value)}
+                        className={`px-3 py-2 text-sm -mb-px border-b-2 focus-ring ${
+                            tab === t.value ? "border-ink text-ink font-medium" : "border-transparent text-ash hover:text-ink"
+                        }`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="border border-line rounded-lg p-4 mb-8 max-w-2xl">
+                <div role="tabpanel" id="bc-panel-all" aria-labelledby="bc-tab-all" hidden={tab !== "all"}>
+                    <AllChannelsTab onSent={onSent} />
+                </div>
+                <div role="tabpanel" id="bc-panel-messaging" aria-labelledby="bc-tab-messaging" hidden={tab !== "messaging"}>
+                    <MessagingTab onSent={onSent} />
+                </div>
+                <div role="tabpanel" id="bc-panel-rich" aria-labelledby="bc-tab-rich" hidden={tab !== "rich"}>
+                    <RichTab onSent={onSent} />
+                </div>
+            </div>
+
+            <History refreshKey={refreshKey} />
         </div>
     );
 }

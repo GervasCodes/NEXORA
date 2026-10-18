@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
-import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import { IncludedCreditsBanner, FundingBreakdown } from "../../components/SponsorshipCredits";
 import { computeFunding } from "../../utils/sponsorshipCredits";
+import { useLanguage } from "../../context/LanguageContext";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -18,6 +18,7 @@ const STATUS_STYLES = {
 
 
 export default function SellerFeaturedStore({ embedded = false, onCampaignsChanged }) {
+    const { t } = useLanguage();
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -43,7 +44,7 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                 setCampaigns(c.data.data);
                 setCategories(cats.data.data);
             })
-            .catch(() => setError("Couldn't load featured store data."))
+            .catch(() => setError(t("seller.featured.loadFailed")))
             .finally(() => setLoading(false));
     };
 
@@ -96,26 +97,20 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
         <div>
             {!embedded && (
                 <>
-                    <PageMeta title="Featured Store" noIndex />
-                    <h1 className="font-display text-2xl mb-1">Featured stores</h1>
+                    <PageMeta title={t("seller.featured.metaTitle")} noIndex />
+                    <h1 className="font-display text-2xl mb-1">{t("seller.featured.title")}</h1>
                 </>
             )}
             <p className="text-ash text-sm mb-8">
-                Pay to rank first in a department's "Featured stores" row.
-                Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance once your plan's included credits are used up.
+                {t("seller.featured.intro", { rate: formatMoney(pricing.daily_rate) })}
             </p>
 
-            <BillingStatusBanner
-                flagKey="monetization_sponsorship_enabled"
-                label="Featured stores"
-                offTitle="Paid sponsorship isn't available yet — included credits still work"
-            />
             {/* Embedded in the Promote hub, which shows the balance once above the tabs. */}
             {!embedded && <IncludedCreditsBanner credits={pricing.included_credits} />}
 
             <div className="border border-line rounded-lg p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
-                    <p className="text-xs text-ash mb-1">Active campaigns</p>
+                    <p className="text-xs text-ash mb-1">{t("seller.featured.activeCampaigns")}</p>
                     <p className="text-3xl font-medium">
                         {campaigns.filter((c) => c.status === "active").length}
                     </p>
@@ -124,13 +119,13 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                     onClick={() => setShowForm((s) => !s)}
                     disabled={categories.length === 0}
                 >
-                    {showForm ? "Cancel" : "Start a campaign"}
+                    {showForm ? t("seller.featured.cancel") : t("seller.featured.startCampaign")}
                 </Button>
             </div>
 
             {categories.length === 0 && (
                 <p className="text-ash text-sm mb-8">
-                    You need at least one active, published product in a department before you can be featured there.
+                    {t("seller.featured.needProduct")}
                 </p>
             )}
 
@@ -139,7 +134,7 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
                     <div>
-                        <label htmlFor="categoryId" className="text-xs text-ash block mb-1">Department</label>
+                        <label htmlFor="categoryId" className="text-xs text-ash block mb-1">{t("seller.featured.department")}</label>
                         <select
                             id="categoryId"
                             required
@@ -147,7 +142,7 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                             onChange={(e) => setCategoryId(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
                         >
-                            <option value="" disabled>Choose a department…</option>
+                            <option value="" disabled>{t("seller.featured.chooseDepartment")}</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
@@ -155,7 +150,7 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                     </div>
 
                     <Input
-                        label={`Duration (${pricing.min_days}-${pricing.max_days} days)`}
+                        label={t("seller.featured.duration", { min: pricing.min_days, max: pricing.max_days })}
                         type="number"
                         min={pricing.min_days}
                         max={pricing.max_days}
@@ -169,17 +164,17 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
 
                     <button
                         type="submit"
-                        disabled={submitting || funding?.blocked}
+                        disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-medium disabled:opacity-50"
                     >
-                        {submitting ? "Starting…" : "Start campaign"}
+                        {submitting ? t("seller.featured.starting") : t("seller.featured.start")}
                     </button>
                 </form>
             )}
 
-            <p className="text-sm font-medium mb-3">Your campaigns</p>
+            <p className="text-sm font-medium mb-3">{t("seller.featured.yourCampaigns")}</p>
             {campaigns.length === 0 ? (
-                <EmptyState title="No featured store campaigns yet." />
+                <EmptyState title={t("seller.featured.empty")} />
             ) : (
                 <ul className="space-y-2">
                     {campaigns.map((c) => (
@@ -187,13 +182,13 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                             <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
                                 <span className="font-medium">{c.category_name}</span>
                                 <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${STATUS_STYLES[c.status] || "bg-line text-ash"}`}>
-                                    {c.status}
+                                    {STATUS_STYLES[c.status] ? t(`seller.featured.status.${c.status}`) : c.status}
                                 </span>
                             </div>
                             <p className="text-xs text-ash">
-                                {c.days} day{c.days === 1 ? "" : "s"} at {formatMoney(c.daily_rate)}/day ·
-                                {" "}total {formatMoney(c.total_cost)}
-                                {c.credits_used > 0 && ` · ${c.credits_used} day${c.credits_used === 1 ? "" : "s"} covered by included credits`}
+                                {t(c.days === 1 ? "seller.featured.daysAtRate.one" : "seller.featured.daysAtRate.other", { count: c.days, rate: formatMoney(c.daily_rate) })} ·
+                                {" "}{t("seller.featured.total", { total: formatMoney(c.total_cost) })}
+                                {c.credits_used > 0 && ` · ${t(c.credits_used === 1 ? "seller.featured.creditsCovered.one" : "seller.featured.creditsCovered.other", { count: c.credits_used })}`}
                             </p>
                             <p className="text-xs text-ash mb-2">
                                 {formatDate(c.starts_at)} → {formatDate(c.ends_at)}
@@ -205,9 +200,9 @@ export default function SellerFeaturedStore({ embedded = false, onCampaignsChang
                                         disabled={busyId === c.id}
                                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
                                     >
-                                        Cancel campaign
+                                        {t("seller.featured.cancelCampaign")}
                                     </button>
-                                    <span className="text-xs text-ash ml-2">No refund for remaining days</span>
+                                    <span className="text-xs text-ash ml-2">{t("seller.featured.noRefund")}</span>
                                 </div>
                             )}
                         </li>

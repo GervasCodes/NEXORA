@@ -373,8 +373,9 @@ function AccountReviews() {
     );
 }
 
-// Verified Business tier-upgrade requests: BRELA / TIN / business license
-// submitted by sellers who already hold the ID-based Verified Seller badge.
+// Seller KYC requests: BRELA / TIN / business license submitted by sellers
+// whose ID is already approved. Approving one earns the single public
+// "Verified Seller" badge.
 function BusinessUpgradeReviews() {
     const [status, setStatus] = useState("pending");
     const [rows, setRows] = useState([]);
@@ -538,7 +539,7 @@ function BusinessUpgradeReviews() {
 
 const MODES = [
     { value: "accounts", label: "Account verifications" },
-    { value: "business", label: "Verified Business upgrades" }
+    { value: "business", label: "Seller KYC" }
 ];
 
 export default function AdminAccountVerifications() {
@@ -551,7 +552,7 @@ export default function AdminAccountVerifications() {
             <p className="text-ash text-sm mb-6">
                 {mode === "accounts"
                     ? "Documents submitted by sellers and delivery agents at registration."
-                    : "BRELA, TIN and business license documents submitted by sellers applying for the Verified Business badge."}
+                    : "BRELA, TIN and business license documents submitted by sellers applying for the Verified Seller badge (seller KYC)."}
             </p>
 
             <div className="flex gap-1 mb-6 border-b border-line">

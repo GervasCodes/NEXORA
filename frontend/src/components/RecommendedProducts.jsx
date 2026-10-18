@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/client";
 import { explainRecommendations } from "../api/ai";
 import ProductCard from "./ProductCard";
@@ -23,31 +23,86 @@ export default function RecommendedProducts({ endpoint, title }) {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [whyById, setWhyById] = useState({});
+    // Reliability phase: nothing is requested until this block is near the
+    // viewport. Previously /recommendations/for-me and the AI "explain" call
+    // both fired the instant the home page mounted - alongside /auth/me and
+    // everything else - so a cold server was hit by a burst of unrelated
+    // requests at once, and visitors who never scrolled that far still paid
+    // for them (including an AI provider call).
+    const [shouldLoad, setShouldLoad] = useState(false);
+    const sectionRef = useRef(null);
 
     useEffect(() => {
+        setShouldLoad(false);
+        const node = sectionRef.current;
+        // No IntersectionObserver (very old browsers, some test envs):
+        // just load straight away, as before.
+        if (!node || typeof IntersectionObserver === "undefined") {
+            setShouldLoad(true);
+            return undefined;
+        }
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    setShouldLoad(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: "300px 0px" }
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [endpoint]);
+
+    useEffect(() => {
+        if (!shouldLoad) return undefined;
         let cancelled = false;
+        let idleHandle = null;
+        let idleIsTimeout = false;
         setLoading(true);
         setWhyById({});
         api.get(endpoint)
-            .then(({ data }) => { if (!cancelled) setProducts(data.data || []); })
+            .then(({ data }) => {
+                if (cancelled) return;
+                const list = data.data || [];
+                setProducts(list);
+
+                // The AI "why" line is purely additive, so it waits until the
+                // products are on screen AND the browser is idle, and is
+                // skipped entirely when there is nothing to explain.
+                const aiContext = deriveAiContext(endpoint);
+                if (!aiContext || list.length === 0) return;
+                const runExplain = () => {
+                    if (cancelled) return;
+                    explainRecommendations(aiContext)
+                        .then((result) => {
+                            if (cancelled) return;
+                            const map = {};
+                            (result.products || []).forEach((p) => { map[p.id] = p.why; });
+                            setWhyById(map);
+                        })
+                        // A failed/slow call just means no "why" line shows,
+                        // never an error the shopper sees.
+                        .catch(() => {});
+                };
+                if (typeof window.requestIdleCallback === "function") {
+                    idleHandle = window.requestIdleCallback(runExplain, { timeout: 4000 });
+                } else {
+                    idleIsTimeout = true;
+                    idleHandle = setTimeout(runExplain, 1500);
+                }
+            })
             .catch(() => { if (!cancelled) setProducts([]); })
             .finally(() => { if (!cancelled) setLoading(false); });
 
-        const aiContext = deriveAiContext(endpoint);
-        if (aiContext) {
-            explainRecommendations(aiContext)
-                .then((result) => {
-                    if (cancelled) return;
-                    const map = {};
-                    (result.products || []).forEach((p) => { map[p.id] = p.why; });
-                    setWhyById(map);
-                })
-                // AI phrasing is purely additive - a failed/slow call just
-                // means no "why" line shows, never an error the shopper sees.
-                .catch(() => {});
-        }
-        return () => { cancelled = true; };
-    }, [endpoint]);
+        return () => {
+            cancelled = true;
+            if (idleHandle != null) {
+                if (idleIsTimeout) clearTimeout(idleHandle);
+                else window.cancelIdleCallback?.(idleHandle);
+            }
+        };
+    }, [endpoint, shouldLoad]);
 
     if (!loading && products.length === 0) return null;
 

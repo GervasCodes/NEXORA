@@ -3,6 +3,8 @@ const authService = require("./auth.service");
 const { t } = require("../../i18n");
 const loginService = require("./login.service");
 const authRepository = require("./auth.repository");
+const usernameService = require("../account/username.service");
+const googleService = require("./google.service");
 const passwordResetService = require("./passwordReset.service");
 const otpService = require("../otp/otp.service");
 const auditService = require("../audit/audit.service");
@@ -49,6 +51,22 @@ exports.register = async (req, res) => {
 
     } catch (error) {
         res.status(error.status || 400).json({
+            success: false,
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+        });
+    }
+};
+
+// GET /auth/username-available?username=... - public and rate-limited (see
+// usernameCheckLimiter). Never reveals anything beyond "free or not".
+exports.usernameAvailable = async (req, res) => {
+    try {
+        const username = typeof req.query.username === "string" ? req.query.username : "";
+        const result = await usernameService.checkAvailability(username);
+        res.set("Cache-Control", "no-store");
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return res.status(error.status || 400).json({
             success: false,
             message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
         });
@@ -291,4 +309,105 @@ exports.csrfRefresh = async (req, res) => {
     res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
     res.set("Cache-Control", "no-store");
     return res.json({ success: true, data: { csrfToken } });
+};
+
+
+// ---- Google sign-in / sign-up (round 5, phase 7) ---------------------------
+
+// Sets the session exactly like verifyLoginOtp: httpOnly session cookie plus the
+// readable CSRF cookie, with the CSRF value also returned in the body (the
+// frontend can't read cross-origin cookies - see verifyLoginOtp's comment).
+const startSession = (req, res, result, endpoint) => {
+    logAuthAttempt(req, { endpoint, outcome: "success", userId: result.user?.id });
+
+    auditService.logFromRequest(req, {
+        userId: result.user?.id,
+        eventType: "login_success",
+        description: "User signed in with Google",
+        metadata: { role: result.user?.role, provider: "google", linked: Boolean(result.linked) }
+    });
+
+    res.cookie("nexora_session", result.token, sessionCookieOptions());
+    const csrfToken = generateCsrfToken();
+    res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
+
+    return csrfToken;
+};
+
+const googleError = (req, res, error, endpoint) => {
+    logAuthAttempt(req, { endpoint, outcome: "failure", reason: reasonFor(error) });
+
+    if (error.retryAfterSeconds) {
+        res.set("Retry-After", String(error.retryAfterSeconds));
+    }
+
+    res.status(error.status || 400).json({
+        success: false,
+        message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {}),
+        ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
+    });
+};
+
+// POST /auth/google { credential, mode? }
+//   mode "signin" (default): known Google user -> session; new user -> ticket.
+//   mode "prefill": seller / delivery-agent registration - name + email only.
+exports.googleSignIn = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
+
+        if (req.body.mode === "prefill") {
+            const result = await googleService.prefill(req.body.credential);
+            return res.json({ success: true, data: result });
+        }
+
+        const result = await googleService.signIn(req.body.credential);
+
+        if (result.status === "needs_profile") {
+            return res.json({ success: true, data: result });
+        }
+
+        const csrfToken = startSession(req, res, result, "google_signin");
+        return res.json({ success: true, message: "Login successful", data: { status: "signed_in", user: result.user, csrfToken } });
+    } catch (error) {
+        return googleError(req, res, error, "google_signin");
+    }
+};
+
+// POST /auth/google/complete { ticket, phone, username, terms_accepted, referral_code }
+exports.googleComplete = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
+
+        const result = await googleService.complete(req.body);
+
+        auditService.logFromRequest(req, {
+            userId: result.userId,
+            eventType: "user_registered",
+            description: "New buyer account registered with Google",
+            metadata: { role: "buyer", provider: "google" }
+        });
+
+        adminNotificationService.notify({
+            type: "user_registered",
+            category: "account",
+            severity: "info",
+            title: "New account registered",
+            message: `A new buyer account was registered with Google (${result.user?.email}).`,
+            metadata: { role: "buyer", email: result.user?.email, provider: "google" },
+            relatedUserId: result.userId
+        });
+
+        const csrfToken = startSession(req, res, result, "google_complete");
+        return res.status(201).json({ success: true, message: "User registered successfully.", data: { status: "signed_in", user: result.user, csrfToken } });
+    } catch (error) {
+        return googleError(req, res, error, "google_complete");
+    }
 };

@@ -26,6 +26,16 @@ module.exports = {
         TERMS_NOT_ACCEPTED: "Lazima ukubali Masharti ya Huduma na Sera ya Faragha ili kuunda akaunti",
         CATEGORY_UNAVAILABLE: "Kundi ulilochagua halipatikani",
         ACCOUNT_SUSPENDED: "Akaunti hii imesimamishwa.",
+        USERNAME_INVALID: "Jina hilo la mtumiaji si sahihi. Tumia herufi, namba, mstari wa chini au nukta (herufi 3 hadi 20).",
+        USERNAME_RESERVED: "Jina hilo la mtumiaji limehifadhiwa. Tafadhali chagua lingine.",
+        USERNAME_TAKEN: "Jina hilo la mtumiaji tayari limechukuliwa",
+        USERNAME_CHANGE_TOO_SOON: "Unaweza kubadilisha jina lako la mtumiaji tena baada ya siku {days}.",
+        GOOGLE_NOT_CONFIGURED: "Kuingia kwa Google hakupatikani kwa sasa.",
+        GOOGLE_TOKEN_INVALID: "Hatukuweza kuthibitisha kuingia kwako kwa Google. Tafadhali jaribu tena.",
+        GOOGLE_EMAIL_UNVERIFIED: "Barua pepe yako ya Google haijathibitishwa, kwa hivyo hatuwezi kuitumia kuingia au kufungua akaunti.",
+        GOOGLE_ACCOUNT_CONFLICT: "Akaunti hii tayari imeunganishwa na akaunti nyingine ya Google.",
+        GOOGLE_TICKET_INVALID: "Usajili wako kwa Google umeisha muda. Tafadhali ingia tena kwa Google.",
+        GOOGLE_ACCOUNT_EXISTS: "Akaunti yenye akaunti hii ya Google tayari ipo. Tafadhali ingia.",
         ACCOUNT_LOCKED: "Umejaribu kuingia mara nyingi bila mafanikio. Tafadhali jaribu tena baada ya dakika {minutes}, au weka upya nenosiri lako ili uingie sasa."
     },
 
@@ -66,10 +76,10 @@ module.exports = {
         "verification.approved.message": "Akaunti yako ya {role} imethibitishwa. Sasa una ufikiaji kamili wa vipengele vya {role}.",
         "verification.rejected.title": "Uthibitisho umekataliwa",
         "verification.rejected.message": "Uthibitisho wa akaunti yako ya {role} umekataliwa: {reason}. Tafadhali wasiliana na msaada.",
-        "verification.businessApproved.title": "Biashara Iliyothibitishwa imekubaliwa",
-        "verification.businessApproved.message": "Nyaraka za biashara yako zimekubaliwa. Duka lako sasa linaonyesha alama ya Biashara Iliyothibitishwa.",
-        "verification.businessRejected.title": "Ombi la Biashara Iliyothibitishwa limekataliwa",
-        "verification.businessRejected.message": "Ombi lako la Biashara Iliyothibitishwa limekataliwa: {reason}. Unaweza kuwasilisha ombi jipya lenye nyaraka zilizosahihishwa.",
+        "verification.businessApproved.title": "Beji ya Muuzaji Aliyethibitishwa imekubaliwa",
+        "verification.businessApproved.message": "Nyaraka za biashara yako zimekubaliwa. Duka lako sasa linaonyesha alama ya Muuzaji Aliyethibitishwa.",
+        "verification.businessRejected.title": "Ombi la Muuzaji Aliyethibitishwa limekataliwa",
+        "verification.businessRejected.message": "Ombi lako la Muuzaji Aliyethibitishwa limekataliwa: {reason}. Unaweza kuwasilisha ombi jipya lenye nyaraka zilizosahihishwa.",
 
         "account.unsuspended.title": "Akaunti imerejeshwa",
         "account.unsuspended.message": "Akaunti yako imerejeshwa. Karibu tena!",
@@ -80,8 +90,8 @@ module.exports = {
         "seller.storeVerified.message": "Hongera! \"{storeName}\" imethibitishwa.",
         "seller.storeUnverified.title": "Uthibitisho wa duka umeondolewa",
         "seller.storeUnverified.message": "Uthibitisho wa \"{storeName}\" umeondolewa.",
-        "seller.badge.title": "Sasa wewe ni Muuzaji Aliyethibitishwa!",
-        "seller.badge.message": "Beji yako ya Muuzaji Aliyethibitishwa iko hai. Uchambuzi wa kina, ripoti za mapato na zana za premium sasa zimefunguliwa.",
+        "seller.approved.title": "Akaunti yako imeidhinishwa kuuza",
+        "seller.approved.message": "NEXORA imeidhinisha kitambulisho chako, kwa hiyo unaweza kuuza sasa. Ili kupata beji ya Muuzaji Aliyethibitishwa, wasilisha nyaraka za biashara yako kupitia ukurasa wa Uthibitisho.",
 
         "product.reactivated.title": "Bidhaa imewashwa tena",
         "product.reactivated.message": "Bidhaa yako \"{productName}\" inaonekana tena.",
@@ -178,7 +188,15 @@ module.exports = {
         "subscription.expiring.title": "Mpango wako wa muuzaji unakaribia kuisha",
         "subscription.expiring.message": "Mpango wako wa {planName} unaendelea hadi {date}. Hufanya upya kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa yake.",
         "subscription.renewal.title": "Hufanya upya mpango wako wa muuzaji",
-        "subscription.renewal.message": "Mpango wako wa {planName} unafanywa upya tarehe {date}. Lipa kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa bila pengo."
+        "subscription.renewal.message": "Mpango wako wa {planName} unafanywa upya tarehe {date}. Lipa kutoka dashibodi yako ya muuzaji ili kuendelea kupata manufaa bila pengo.",
+        "trial.midway.title": "Jaribio lako la bure limebakiza siku 2",
+        "trial.midway.message": "Jaribio lako la bure la siku 7 linaisha baada ya takriban siku 2. Chagua mpango kutoka dashibodi yako ya muuzaji ili kuendelea kutumia Uchambuzi, POS na huduma nyingine za mpango.",
+        "trial.lastDay.title": "Siku ya mwisho ya jaribio lako la bure",
+        "trial.lastDay.message": "Jaribio lako la bure linaisha ndani ya saa 24. Chagua mpango sasa ili kuendelea kutumia Uchambuzi, POS na huduma nyingine za mpango bila pengo.",
+        "trial.expired.title": "Jaribio lako la bure limeisha",
+        "trial.expired.message": "Jaribio limeisha - chagua mpango ili kuendelea kutumia Uchambuzi na POS. Unaweza kuendelea kuuza kwenye mpango wa Bure.",
+        "trial.extended.title": "Jaribio lako la bure limeongezwa",
+        "trial.extended.message": "Habari njema: jaribio lako la bure sasa linaendelea siku {days} zaidi."
     },
 
     otp: {

@@ -56,14 +56,6 @@ export function FundingBreakdown({ pricing, days }) {
                     <span className="text-ash"> ({plural(funding.paidDays, "paid day")} from your wallet)</span>
                 )}
             </p>
-            {funding.blocked && (
-                <p role="alert" className="text-coral text-sm">
-                    Paid sponsorship isn't available yet.
-                    {funding.remainingCredits > 0
-                        ? ` Choose ${plural(funding.remainingCredits, "day")} or fewer to use your included credits.`
-                        : " Upgrade your subscription to get monthly included credits."}
-                </p>
-            )}
         </div>
     );
 }

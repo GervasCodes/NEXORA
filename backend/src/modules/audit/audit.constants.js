@@ -33,7 +33,14 @@ const EVENT_TYPE_GROUPS = {
         "data_reset.platform",
         "data_reset.platform_completed"
     ],
-    orders: ["order_created", "order_delivery_manually_assigned"],
+    orders: [
+        "order_created",
+        "order_delivery_manually_assigned",
+        "delivery_rate_card_created",
+        "delivery_fuel_cap_entered",
+        "delivery_rate_settings_changed",
+        "delivery_eta_adjustment_changed"
+    ],
     payments: ["payment_processed"],
     refunds: [
         "refund.completed",

@@ -26,6 +26,16 @@ module.exports = {
         TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account",
         CATEGORY_UNAVAILABLE: "Selected category is not available",
         ACCOUNT_SUSPENDED: "This account has been suspended.",
+        USERNAME_INVALID: "That username is not valid. Use 3-20 letters, numbers, underscores or dots.",
+        USERNAME_RESERVED: "That username is reserved. Please choose another one.",
+        USERNAME_TAKEN: "That username is already taken",
+        USERNAME_CHANGE_TOO_SOON: "You can change your username again in {days} day(s).",
+        GOOGLE_NOT_CONFIGURED: "Google sign-in is not available right now.",
+        GOOGLE_TOKEN_INVALID: "We could not verify your Google sign-in. Please try again.",
+        GOOGLE_EMAIL_UNVERIFIED: "Your Google email is not verified, so we cannot use it to sign in or create an account.",
+        GOOGLE_ACCOUNT_CONFLICT: "This account is already linked to a different Google account.",
+        GOOGLE_TICKET_INVALID: "Your Google sign-up expired. Please sign in with Google again.",
+        GOOGLE_ACCOUNT_EXISTS: "An account with this Google account already exists. Please sign in.",
         ACCOUNT_LOCKED: "Too many failed sign-in attempts. Please try again in {minutes} minute(s), or reset your password to sign in now."
     },
 
@@ -66,10 +76,10 @@ module.exports = {
         "verification.approved.message": "Your {role} account has been verified. You now have full access to {role} features.",
         "verification.rejected.title": "Verification rejected",
         "verification.rejected.message": "Your {role} account verification was rejected: {reason}. Please contact support.",
-        "verification.businessApproved.title": "Verified Business approved",
-        "verification.businessApproved.message": "Your business documents have been approved. Your store now shows the Verified Business badge.",
-        "verification.businessRejected.title": "Verified Business request rejected",
-        "verification.businessRejected.message": "Your Verified Business request was rejected: {reason}. You can submit a new request with corrected documents.",
+        "verification.businessApproved.title": "Verified Seller badge approved",
+        "verification.businessApproved.message": "Your business documents have been approved. Your store now shows the Verified Seller badge.",
+        "verification.businessRejected.title": "Verified Seller request rejected",
+        "verification.businessRejected.message": "Your Verified Seller request was rejected: {reason}. You can submit a new request with corrected documents.",
 
         "account.unsuspended.title": "Account reinstated",
         "account.unsuspended.message": "Your account has been reinstated. Welcome back!",
@@ -80,8 +90,8 @@ module.exports = {
         "seller.storeVerified.message": "Congratulations! \"{storeName}\" has been verified.",
         "seller.storeUnverified.title": "Store verification removed",
         "seller.storeUnverified.message": "Verification for \"{storeName}\" has been removed.",
-        "seller.badge.title": "You're now a Verified Seller!",
-        "seller.badge.message": "Your Verified Seller badge is live. Advanced analytics, revenue reports and premium tools are now unlocked.",
+        "seller.approved.title": "Your account is approved to sell",
+        "seller.approved.message": "NEXORA approved your ID, so you can sell now. To earn the Verified Seller badge, submit your business documents from the Verification page.",
 
         "product.reactivated.title": "Product reactivated",
         "product.reactivated.message": "Your product \"{productName}\" is visible again.",
@@ -178,7 +188,15 @@ module.exports = {
         "subscription.expiring.title": "Your seller plan is ending soon",
         "subscription.expiring.message": "Your {planName} plan runs until {date}. Renew from your seller dashboard to keep its benefits.",
         "subscription.renewal.title": "Renew your seller plan",
-        "subscription.renewal.message": "Your {planName} plan renews on {date}. Pay from your seller dashboard to keep its benefits without a gap."
+        "subscription.renewal.message": "Your {planName} plan renews on {date}. Pay from your seller dashboard to keep its benefits without a gap.",
+        "trial.midway.title": "Your free trial has 2 days left",
+        "trial.midway.message": "Your 7-day free trial ends in about 2 days. Choose a plan from your seller dashboard to keep Analytics, POS and the other plan features.",
+        "trial.lastDay.title": "Last day of your free trial",
+        "trial.lastDay.message": "Your free trial ends within 24 hours. Choose a plan now to keep Analytics, POS and the other plan features without a gap.",
+        "trial.expired.title": "Your free trial has ended",
+        "trial.expired.message": "Trial ended - choose a plan to keep Analytics and POS. You can keep selling on the Free plan.",
+        "trial.extended.title": "Your free trial was extended",
+        "trial.extended.message": "Good news: your free trial now runs {days} more day(s)."
     },
 
     otp: {

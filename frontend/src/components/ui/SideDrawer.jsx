@@ -46,6 +46,17 @@ export default function SideDrawer({
         return () => clearTimeout(timeout);
     }, [open]);
 
+    // While a drawer is open the phone bottom bar steps aside (index.css hides
+    // it on this flag). A drawer rendered inside a transformed page wrapper
+    // (SellerLayout) sits in that wrapper's stacking context, so z-index alone
+    // cannot lift it over the bar.
+    useEffect(() => {
+        if (!open) return undefined;
+        const root = document.documentElement;
+        root.setAttribute("data-drawer-open", "");
+        return () => root.removeAttribute("data-drawer-open");
+    }, [open]);
+
     useEffect(() => {
         if (!open) return;
         const handleKeyDown = (e) => {

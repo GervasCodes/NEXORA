@@ -45,7 +45,8 @@ exports.getDeliveryEstimate = async (req, res) => {
     try {
         const estimate = await orderService.getDeliveryEstimate(req.user.id, {
             deliveryLat: req.body.delivery_lat,
-            deliveryLng: req.body.delivery_lng
+            deliveryLng: req.body.delivery_lng,
+            region: req.body.region
         });
 
         return res.json({

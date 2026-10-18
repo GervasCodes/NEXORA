@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import PageLoader from "../../components/PageLoader";
-import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -157,11 +156,6 @@ export default function SellerSponsorship({ embedded = false, onCampaignsChanged
                 Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance once your plan's included credits are used up.
             </p>
 
-            <BillingStatusBanner
-                flagKey="monetization_sponsorship_enabled"
-                label="Sponsorship"
-                offTitle="Paid sponsorship isn't available yet — included credits still work"
-            />
             {/* Embedded in the Promote hub, which shows the balance once above the tabs. */}
             {!embedded && <IncludedCreditsBanner credits={pricing.included_credits} />}
 
@@ -221,7 +215,7 @@ export default function SellerSponsorship({ embedded = false, onCampaignsChanged
 
                     <button
                         type="submit"
-                        disabled={submitting || funding?.blocked}
+                        disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-medium disabled:opacity-50"
                     >
                         {submitting ? "Starting…" : "Start campaign"}

@@ -47,11 +47,16 @@
 #                backend and liveSellingEmbed.js refuse every other host;
 #   connect-src  Nominatim (address search) and Sentry's ingest hosts;
 #   form-action / worker-src / manifest-src / upgrade-insecure-requests.
+# Phase 7 (round 5) - Google sign-in (Google Identity Services). Per Google's
+# documented CSP: script-src https://accounts.google.com/gsi/client, frame-src
+# and connect-src https://accounts.google.com/gsi/, style-src
+# https://accounts.google.com/gsi/style. The ID token itself is verified by the
+# backend (POST /auth/google), never trusted from the browser.
 # Private verification documents open in a separate tab through a signed
 # Cloudinary link, so they need no CSP entry. If you use a Sentry region
 # other than the three listed, add its ingest host to connect-src.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://unpkg.com https://*.tile.openstreetmap.org; media-src 'self' https://res.cloudinary.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://www.facebook.com; connect-src 'self' https://api.nexoramarketplace.online wss://api.nexoramarketplace.online https://*.onrender.com wss://*.onrender.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://unpkg.com https://*.tile.openstreetmap.org; media-src 'self' https://res.cloudinary.com; frame-src https://accounts.google.com/gsi/ https://www.youtube.com https://www.youtube-nocookie.com https://www.facebook.com; connect-src 'self' https://accounts.google.com/gsi/ https://api.nexoramarketplace.online wss://api.nexoramarketplace.online https://*.onrender.com wss://*.onrender.com https://nominatim.openstreetmap.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(self), camera=(), microphone=()

@@ -434,7 +434,7 @@ export default function SellerStore() {
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">{t("seller.store.settingsSaved")}</p>}
 
-                <div className="sticky bottom-0 -mx-1 px-1 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3">
+                <div className="sticky bottom-[var(--bottom-inset)] -mx-1 px-1 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3">
                     <Button type="submit" disabled={submitting || !isDirty}>
                         {submitting ? t("seller.store.saving") : t("seller.store.saveChanges")}
                     </Button>

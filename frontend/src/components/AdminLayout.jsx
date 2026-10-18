@@ -17,7 +17,8 @@ const groups = [
         label: "Overview",
         tabs: [
             { to: "/admin", label: "Dashboard", end: true },
-            { to: "/admin/dispatch", label: "Dispatch" }
+            { to: "/admin/dispatch", label: "Dispatch" },
+            { to: "/admin/delivery-rates", label: "Delivery rates" }
         ]
     },
     {
@@ -73,7 +74,6 @@ const groups = [
             { to: "/admin/audit-logs", label: "Audit logs" },
             { to: "/admin/data-reset", label: "Data reset" },
             { to: "/admin/broadcast", label: "Broadcast" },
-            { to: "/admin/billing-control", label: "Billing control" },
             { to: "/admin/settings", label: "Settings" }
         ]
     }

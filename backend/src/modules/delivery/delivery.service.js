@@ -1,5 +1,7 @@
 const deliveryRepository = require("./delivery.repository");
 const deliveryPricingService = require("./deliveryPricing.service");
+const deliveryRatesService = require("./deliveryRates.service");
+const deliveryRatesRepository = require("./deliveryRates.repository");
 const orderRepository = require("../order/order.repository");
 const sellerRepository = require("../seller/seller.repository");
 const notificationService = require("../notification/notification.service");
@@ -61,7 +63,7 @@ exports.claimDelivery = async (orderId, agentId) => {
     }
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
-        await deliveryPricingService.calculateDeliveryFee(order);
+        await deliveryPricingService.calculateDeliveryFee(order, await deliveryRatesRepository.findAgentVehicleType(agentId));
 
     // The findByOrderId check above is check-then-act: two agents racing to
     // claim the same order can both pass it before either has inserted a
@@ -129,7 +131,7 @@ exports.adminAssignDelivery = async (orderId, agentId) => {
     }
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
-        await deliveryPricingService.calculateDeliveryFee(order);
+        await deliveryPricingService.calculateDeliveryFee(order, agent.vehicle_type);
 
     // Same check-then-act race as claimDelivery above - the UNIQUE
     // constraint on deliveries.order_id is the real guard.
@@ -232,7 +234,7 @@ exports.getDelivery = async (orderId, userId) => {
 // of `updateAgentLocation` (every live "agent:location" ping)
 // and `updateDeliveryStatus` (every status transition) - one place
 // computes the road-routing ETA, every caller gets the same shape back.
-const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType }) => {
+const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType, region }) => {
     const hasDestination = destLat != null && destLng != null;
     const hasFromPoint = fromLat != null && fromLng != null;
 
@@ -253,9 +255,18 @@ const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType
         vehicleType
     });
 
+    // Round 5, Phase 5 - tracking shows the same peak-hour-adjusted ETA the
+    // buyer saw at checkout (admin-configured windows; see
+    // deliveryRates.service.js#adjustEta). The pickup handling buffer is not
+    // added here: tracking measures from the agent's current position.
+    const etaMinutes = await deliveryRatesService.adjustEta(
+        route.durationMinutes != null ? Math.round(route.durationMinutes) : null,
+        { region }
+    );
+
     return {
         distance_remaining_km: Number(route.distanceKm.toFixed(2)),
-        eta_minutes: route.durationMinutes != null ? Math.round(route.durationMinutes) : null,
+        eta_minutes: etaMinutes,
         routing_provider: route.provider,
         degraded: route.degraded
     };
@@ -284,7 +295,8 @@ const buildTrackingSummary = async (delivery, order) => {
         fromLng,
         destLat,
         destLng,
-        vehicleType: delivery.agent_vehicle_type
+        vehicleType: delivery.agent_vehicle_type,
+        region: order.shipping_region
     });
 
     return {
@@ -913,7 +925,7 @@ exports.acceptOffer = async (offerId, agentId, responseChannel = "app") => {
     const order = await orderRepository.findOrderById(offer.order_id);
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } = order
-        ? await deliveryPricingService.calculateDeliveryFee(order)
+        ? await deliveryPricingService.calculateDeliveryFee(order, await deliveryRatesRepository.findAgentVehicleType(agentId))
         : { fee: await settingsService.getRiderDeliveryFee(), distanceKm: null, durationMinutes: null, routingProvider: null };
     await deliveryRepository.create(offer.order_id, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider);
 

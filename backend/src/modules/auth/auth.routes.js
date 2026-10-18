@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 
-const { register, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword, logout, me, csrfRefresh } = require("./auth.controller");
-const { registerValidation } = require("./auth.validator");
-const { authLimiter } = require("../../middleware/rateLimit.middleware");
+const { register, usernameAvailable, googleSignIn, googleComplete, login, verifyLoginOtp, resendLoginOtp, forgotPassword, resetPassword, logout, me, csrfRefresh } = require("./auth.controller");
+const { registerValidation, googleSignInValidation, googleCompleteValidation } = require("./auth.validator");
+const { authLimiter, usernameCheckLimiter } = require("../../middleware/rateLimit.middleware");
 const authMiddleware = require("../../middleware/auth.middleware");
 const uploadDocument = require("../../middleware/uploadDocument.middleware");
 
@@ -25,6 +25,14 @@ router.post(
     registerValidation,
     register
 );
+
+// Phase 6 (round 5): public availability check for the register form.
+router.get("/username-available", usernameCheckLimiter, usernameAvailable);
+
+// Phase 7 (round 5): Google sign-in / sign-up. No session exists yet, so these
+// are CSRF-exempt like /login (see csrf.middleware.js).
+router.post("/google", authLimiter, googleSignInValidation, googleSignIn);
+router.post("/google/complete", authLimiter, googleCompleteValidation, googleComplete);
 
 router.post("/login", authLimiter, login);
 router.post("/login/verify-otp", authLimiter, verifyLoginOtp);

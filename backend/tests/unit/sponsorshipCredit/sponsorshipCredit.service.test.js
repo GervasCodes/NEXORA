@@ -165,13 +165,12 @@ describe("sponsorshipCredit.service.getSummary / getPricingContext", () => {
         expect(summary.remaining).toBe(0);
     });
 
-    it("combines the summary with the paid-purchases flag for the seller-facing pricing response", async () => {
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
+    it("combines the summary with the paid-purchases flag (always on) for the seller-facing pricing response", async () => {
         creditRepository.findCurrentPeriodId.mockResolvedValue(3);
         creditRepository.findById.mockResolvedValue({ id: 3, credits_granted: 10, credits_used: 1, period_end: "2026-10-01" });
 
         await expect(creditService.getPricingContext(10)).resolves.toEqual({
-            paid_enabled: false,
+            paid_enabled: true,
             included_credits: { granted: 10, used: 1, remaining: 9, period_end: "2026-10-01" }
         });
     });

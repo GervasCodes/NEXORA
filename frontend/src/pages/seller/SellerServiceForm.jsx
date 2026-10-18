@@ -7,21 +7,21 @@ import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Input from "../../components/ui/Input";
 import { compressImage } from "../../utils/imageCompression";
+import { useLanguage } from "../../context/LanguageContext";
 
 const PRICING_MODELS = [
-    { value: "fixed", label: "Fixed price" },
-    { value: "per_night", label: "Per night" },
-    { value: "per_hour", label: "Per hour" },
-    { value: "per_day", label: "Per day" },
-    { value: "per_person", label: "Per person" }
+    { value: "fixed", labelKey: "seller.serviceForm.pricing.fixed" },
+    { value: "per_night", labelKey: "seller.serviceForm.pricing.per_night" },
+    { value: "per_hour", labelKey: "seller.serviceForm.pricing.per_hour" },
+    { value: "per_day", labelKey: "seller.serviceForm.pricing.per_day" },
+    { value: "per_person", labelKey: "seller.serviceForm.pricing.per_person" }
 ];
 
-const PRICE_UNIT = {
-    fixed: "",
-    per_night: " per night",
-    per_hour: " per hour",
-    per_day: " per day",
-    per_person: " per person"
+const PRICE_UNIT_KEYS = {
+    per_night: "seller.serviceForm.unit.per_night",
+    per_hour: "seller.serviceForm.unit.per_hour",
+    per_day: "seller.serviceForm.unit.per_day",
+    per_person: "seller.serviceForm.unit.per_person"
 };
 
 const emptyForm = {
@@ -50,19 +50,20 @@ const buildServicePayload = (form) => {
 };
 
 // One line showing what buyers will see, so sellers catch price-unit mistakes.
-const pricePreview = (form) => {
-    if (form.base_price === "") return "Enter a base price to see how buyers will see it.";
-    const unit = PRICE_UNIT[form.pricing_model] ?? "";
+const pricePreview = (form, t) => {
+    if (form.base_price === "") return t("seller.serviceForm.previewEmpty");
+    const unit = PRICE_UNIT_KEYS[form.pricing_model] ? ` ${t(PRICE_UNIT_KEYS[form.pricing_model])}` : "";
     const fmt = (value) => Number(value).toLocaleString();
     if (form.discount_price !== "") {
-        return `Buyers see ${fmt(form.discount_price)}${unit}, down from ${fmt(form.base_price)}.`;
+        return t("seller.serviceForm.previewDiscount", { price: `${fmt(form.discount_price)}${unit}`, base: fmt(form.base_price) });
     }
-    return `Buyers see ${fmt(form.base_price)}${unit}.`;
+    return t("seller.serviceForm.previewPlain", { price: `${fmt(form.base_price)}${unit}` });
 };
 
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
 
 export default function SellerServiceForm() {
+    const { t } = useLanguage();
     const { id } = useParams();
     const isEdit = Boolean(id);
     const navigate = useNavigate();
@@ -213,8 +214,8 @@ export default function SellerServiceForm() {
         setUploading(true);
         try {
             for (let i = 0; i < files.length; i++) {
-                const label = files.length > 1 ? `Photo ${i + 1} of ${files.length}` : "Photo";
-                setUploadProgress(`${label}: preparing…`);
+                const label = files.length > 1 ? t("seller.serviceForm.photoNofM", { n: i + 1, total: files.length }) : t("seller.serviceForm.photo");
+                setUploadProgress(t("seller.serviceForm.progressPreparing", { label }));
                 try {
                     const file = await compressImage(files[i]);
                     const body = new FormData();
@@ -222,13 +223,13 @@ export default function SellerServiceForm() {
                     const { data } = await api.post(`/services/${serviceId}/images`, body, {
                         onUploadProgress: (ev) => {
                             if (!ev.total) return;
-                            setUploadProgress(`${label}: uploading ${Math.round((ev.loaded / ev.total) * 100)}%`);
+                            setUploadProgress(t("seller.serviceForm.progressUploading", { label, pct: Math.round((ev.loaded / ev.total) * 100) }));
                         }
                     });
                     setMedia((prev) => [...prev, { media_url: data.data.mediaUrl, media_type: "image", is_primary: data.data.isPrimary }]);
                 } catch (err) {
                     // Keep going so one bad file doesn't drop the rest of the batch.
-                    setError(`${label} failed: ${extractErrorMessage(err)}`);
+                    setError(t("seller.serviceForm.photoFailed", { label, reason: extractErrorMessage(err) }));
                 }
             }
         } finally {
@@ -320,18 +321,18 @@ export default function SellerServiceForm() {
 
     return (
         <div className="max-w-lg">
-            <PageMeta title="Service Form" noIndex />
-            <h1 className="font-display text-2xl mb-6">{isEdit ? "Edit service" : "List a new service"}</h1>
+            <PageMeta title={t("seller.serviceForm.metaTitle")} noIndex />
+            <h1 className="font-display text-2xl mb-6">{isEdit ? t("seller.serviceForm.editTitle") : t("seller.serviceForm.newTitle")}</h1>
 
             {status === "suspended" && (
                 <p role="alert" className="text-coral text-sm mb-6">
-                    This listing is suspended by Nexora and can't be published. Contact support for details.
+                    {t("seller.serviceForm.suspended")}
                 </p>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                    label="Title"
+                    label={t("seller.serviceForm.titleLabel")}
                     required minLength={3} value={form.title} onChange={update("title")}
                     onBlur={handleTitleBlur}
                 />
@@ -339,7 +340,7 @@ export default function SellerServiceForm() {
                 <div>
                     <Input
                         as="textarea"
-                        label="Description"
+                        label={t("seller.serviceForm.description")}
                         rows={4} value={form.description} onChange={update("description")}
                     />
                     <NexoraCopyAssist
@@ -355,21 +356,21 @@ export default function SellerServiceForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label htmlFor="serviceCategory" className="block text-sm mb-1">Category</label>
+                        <label htmlFor="serviceCategory" className="block text-sm mb-1">{t("seller.serviceForm.category")}</label>
                         <select id="serviceCategory" value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
-                            <option value="">Select…</option>
+                            <option value="">{t("seller.serviceForm.select")}</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="servicePricingModel" className="block text-sm mb-1">Pricing model</label>
+                        <label htmlFor="servicePricingModel" className="block text-sm mb-1">{t("seller.serviceForm.pricingModel")}</label>
                         <select id="servicePricingModel" value={form.pricing_model} onChange={update("pricing_model")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             {PRICING_MODELS.map((p) => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
+                                <option key={p.value} value={p.value}>{t(p.labelKey)}</option>
                             ))}
                         </select>
                     </div>
@@ -377,50 +378,50 @@ export default function SellerServiceForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Base price"
+                        label={t("seller.serviceForm.basePrice")}
                         type="number" min="0" step="0.01" value={form.base_price} onChange={update("base_price")}
                         className="price"
                     />
                     <Input
-                        label="Discount price (optional)"
+                        label={t("seller.serviceForm.discountPrice")}
                         type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
                         className="price"
                     />
                 </div>
-                <p className="text-xs text-ash -mt-2" aria-live="polite">{pricePreview(form)}</p>
+                <p className="text-xs text-ash -mt-2" aria-live="polite">{pricePreview(form, t)}</p>
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="City"
+                        label={t("seller.serviceForm.city")}
                         value={form.city} onChange={update("city")}
                     />
                     <Input
-                        label="Region"
+                        label={t("seller.serviceForm.region")}
                         value={form.region} onChange={update("region")}
                     />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Country"
+                        label={t("seller.serviceForm.country")}
                         value={form.country} onChange={update("country")}
                     />
                     <Input
-                        label="Address (optional)"
+                        label={t("seller.serviceForm.address")}
                         value={form.address} onChange={update("address")}
                     />
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
                     <Button type="submit" disabled={submitting || uploading}>
-                        {submitting ? "Saving…" : isEdit ? "Save changes" : "Save details"}
+                        {submitting ? t("seller.serviceForm.saving") : isEdit ? t("seller.serviceForm.saveChanges") : t("seller.serviceForm.saveDetails")}
                     </Button>
                     {savedId && (
                         <span role="status" className="text-xs text-ash">
-                            {dirty && saveState !== "saving" ? "Unsaved changes"
-                                : saveState === "saving" ? "Saving draft…"
-                                : saveState === "error" ? "Couldn't save draft"
-                                : isDraft ? "Draft saved" : ""}
+                            {dirty && saveState !== "saving" ? t("seller.serviceForm.unsaved")
+                                : saveState === "saving" ? t("seller.serviceForm.savingDraft")
+                                : saveState === "error" ? t("seller.serviceForm.saveDraftFailed")
+                                : isDraft ? t("seller.serviceForm.draftSaved") : ""}
                         </span>
                     )}
                 </div>
@@ -430,7 +431,7 @@ export default function SellerServiceForm() {
 
             {!savedId && (
                 <p className="mt-10 border-t border-line pt-6 text-ash text-sm">
-                    Enter a service title to start your draft. Photos and videos unlock once it's saved.
+                    {t("seller.serviceForm.startDraft")}
                 </p>
             )}
 
@@ -438,12 +439,12 @@ export default function SellerServiceForm() {
                 <div className="mt-10 border-t border-line pt-6">
                     {isDraft && (
                         <p className="text-teal text-sm mb-6 -mt-2">
-                            Draft saved and hidden from buyers. Add photos, then publish below.
+                            {t("seller.serviceForm.draftHidden")}
                         </p>
                     )}
 
-                    <h2 className="font-display text-lg mb-1">Photos</h2>
-                    <p className="text-xs text-ash mb-3">Large photos are resized on your device before upload.</p>
+                    <h2 className="font-display text-lg mb-1">{t("seller.serviceForm.photos")}</h2>
+                    <p className="text-xs text-ash mb-3">{t("seller.serviceForm.resizeNote")}</p>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {images.map((img, i) => (
@@ -451,7 +452,7 @@ export default function SellerServiceForm() {
                                 <img src={img.media_url} alt="" className="w-full h-full object-cover" />
                                 {img.is_primary && (
                                     <span className="absolute top-1 left-1 text-[10px] font-medium bg-mango text-abyss rounded-full px-1.5 py-0.5">
-                                        Primary
+                                        {t("seller.serviceForm.primary")}
                                     </span>
                                 )}
                             </div>
@@ -460,17 +461,17 @@ export default function SellerServiceForm() {
 
                     <div className="flex flex-wrap gap-2">
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploading ? "Uploading…" : "+ Choose photos"}
+                            {uploading ? t("seller.serviceForm.uploading") : t("seller.serviceForm.choosePhotos")}
                             <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
                         </label>
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            Take photo
+                            {t("seller.serviceForm.takePhoto")}
                             <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} disabled={uploading} className="hidden" />
                         </label>
                     </div>
                     {uploadProgress && <p role="status" className="text-sm text-ash mt-2">{uploadProgress}</p>}
 
-                    <h2 className="font-display text-lg mb-3 mt-8">Videos</h2>
+                    <h2 className="font-display text-lg mb-3 mt-8">{t("seller.serviceForm.videos")}</h2>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {videos.map((vid, i) => (
@@ -482,16 +483,16 @@ export default function SellerServiceForm() {
 
                     {videoCount < MAX_VIDEOS ? (
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingVideo ? "Uploading…" : "+ Add video"}
+                            {uploadingVideo ? t("seller.serviceForm.uploading") : t("seller.serviceForm.addVideo")}
                             <input type="file" accept="video/*" onChange={handleVideoUpload} disabled={uploadingVideo} className="hidden" />
                         </label>
                     ) : (
-                        <p className="text-ash text-xs">Maximum of {MAX_VIDEOS} videos per service.</p>
+                        <p className="text-ash text-xs">{t("seller.serviceForm.maxVideos", { max: MAX_VIDEOS })}</p>
                     )}
 
                     <div className="mt-8 border-t border-line pt-6 flex items-center gap-4">
                         {status === "published" ? (
-                            <p className="text-sm text-teal font-medium">✓ Published — visible in the marketplace</p>
+                            <p className="text-sm text-teal font-medium">{t("seller.serviceForm.published")}</p>
                         ) : (
                             <button
                                 type="button"
@@ -499,19 +500,19 @@ export default function SellerServiceForm() {
                                 disabled={publishing || uploading || images.length === 0 || status === "suspended"}
                                 className="bg-teal text-frost px-6 py-2.5 rounded-md font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-50"
                             >
-                                {publishing ? "Publishing…" : "Publish service"}
+                                {publishing ? t("seller.serviceForm.publishing") : t("seller.serviceForm.publish")}
                             </button>
                         )}
                     </div>
 
                     {status !== "published" && images.length === 0 && (
-                        <p className="text-ash text-xs mt-2">Add at least one photo before publishing.</p>
+                        <p className="text-ash text-xs mt-2">{t("seller.serviceForm.needPhoto")}</p>
                     )}
 
                     {!isEdit && (
                         <p className="mt-6">
                             <Link to="/seller/services" className="text-teal text-sm hover:underline">
-                                Done — back to your services
+                                {t("seller.serviceForm.backToServices")}
                             </Link>
                         </p>
                     )}
@@ -520,9 +521,9 @@ export default function SellerServiceForm() {
 
             <ConfirmDialog
                 open={confirmNoAvailability}
-                title="Publish without availability?"
-                description="Buyers can't book dates until you add availability. You can add it later from the Availability page."
-                confirmLabel="Publish anyway"
+                title={t("seller.serviceForm.noAvailTitle")}
+                description={t("seller.serviceForm.noAvailBody")}
+                confirmLabel={t("seller.serviceForm.publishAnyway")}
                 onConfirm={doPublish}
                 onCancel={() => setConfirmNoAvailability(false)}
             />

@@ -76,7 +76,7 @@ export default function UpdateAvailableBanner({ onVisibilityChange }) {
     return (
         <div
             role="status"
-            className="fixed bottom-[calc(10rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:left-4 z-[var(--z-banner-top)] sm:w-80
+            className="fixed bottom-[calc(10rem+var(--bottom-inset))] inset-x-4 sm:inset-x-auto sm:left-4 z-[var(--z-banner-top)] sm:w-80
                 glass-strong border border-azure/30 rounded-lg px-4 py-3 shadow-lg
                 flex items-center gap-3 animate-slide-up"
         >

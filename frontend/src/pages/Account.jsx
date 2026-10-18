@@ -14,6 +14,7 @@ import Input from "../components/ui/Input";
 import AddressBook from "../components/AddressBook";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import ImageCropper from "../components/ImageCropper";
+import UsernameField from "../components/UsernameField";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -26,6 +27,10 @@ export default function Account() {
 
     const [profile, setProfile] = useState(null);
     const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+    // Phase 6 (round 5): username, saved separately from the name/email/phone
+    // form because it has its own once-per-30-days rule.
+    const [usernameValue, setUsernameValue] = useState("");
+    const [usernameStatus, setUsernameStatus] = useState("idle");
     const [deletePassword, setDeletePassword] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -43,6 +48,7 @@ export default function Account() {
     const load = () => {
         api.get("/account").then(({ data }) => {
             setProfile(data.data);
+            setUsernameValue(data.data.username || "");
             setProfileForm({
                 first_name: data.data.first_name,
                 last_name: data.data.last_name,
@@ -70,6 +76,26 @@ export default function Account() {
             toast?.success("Profile updated.");
         } catch (err) {
             toast?.error(extractErrorMessage(err));
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const usernameCooldownActive = Boolean(profile?.username_next_change_at);
+    const usernameChanged = usernameValue.trim() !== (profile?.username || "");
+
+    const saveUsername = async (e) => {
+        e.preventDefault();
+        if (!usernameChanged || usernameCooldownActive) return;
+        setBusy("username");
+        try {
+            const { data } = await api.put("/account/username", { username: usernameValue.trim() });
+            setProfile(data.data);
+            setUsernameValue(data.data.username || "");
+            updateUser(data.data);
+            toast?.success(t("account.usernameSaved"));
+        } catch (err) {
+            toast?.error(extractErrorMessage(err) || t("account.usernameSaveFailed"));
         } finally {
             setBusy("");
         }
@@ -296,20 +322,20 @@ export default function Account() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label htmlFor="profileFirstName" className="block text-sm mb-1">First name</label>
-                            <input id="profileFirstName" value={profileForm.first_name}
+                            <input id="profileFirstName" value={profileForm.first_name} autoComplete="given-name"
                                 onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                         <div>
                             <label htmlFor="profileLastName" className="block text-sm mb-1">Last name</label>
-                            <input id="profileLastName" value={profileForm.last_name}
+                            <input id="profileLastName" value={profileForm.last_name} autoComplete="family-name"
                                 onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                     </div>
                     <div>
                         <label htmlFor="profileEmail" className="block text-sm mb-1">Email</label>
-                        <input id="profileEmail" type="email" value={profileForm.email}
+                        <input id="profileEmail" type="email" value={profileForm.email} autoComplete="email" inputMode="email"
                             onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
@@ -325,6 +351,31 @@ export default function Account() {
                     <button type="submit" disabled={busy === "profile"}
                         className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
                         {busy === "profile" ? t("common.saving") : t("common.save") + " profile"}
+                    </button>
+                </form>
+
+                <form onSubmit={saveUsername} className="space-y-3 mt-6 pt-6 border-t border-line">
+                    <h3 className="font-medium text-sm">{t("account.usernameTitle")}</h3>
+                    <p className="text-ash text-sm">{t("account.usernameNote")}</p>
+                    <UsernameField
+                        id="profileUsername"
+                        value={usernameValue}
+                        onChange={setUsernameValue}
+                        onStatusChange={setUsernameStatus}
+                        currentUsername={profile?.username || ""}
+                        disabled={usernameCooldownActive}
+                    />
+                    {usernameCooldownActive && (
+                        <p className="text-xs text-ash">
+                            {t("account.usernameNextChange", {
+                                date: new Date(profile.username_next_change_at).toLocaleDateString(language === "sw" ? "sw-TZ" : "en-GB")
+                            })}
+                        </p>
+                    )}
+                    <button type="submit"
+                        disabled={busy === "username" || usernameCooldownActive || !usernameChanged || usernameStatus === "checking" || ["invalid", "reserved", "taken"].includes(usernameStatus)}
+                        className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
+                        {busy === "username" ? t("common.saving") : t("account.usernameSave")}
                     </button>
                 </form>
             </section>
@@ -507,6 +558,7 @@ export default function Account() {
                             type="password"
                             required
                             minLength={8}
+                            autoComplete="new-password"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                             showPasswordLabel="Show password"
@@ -546,6 +598,7 @@ export default function Account() {
                             label="Confirm your password"
                             type="password"
                             required
+                            autoComplete="current-password"
                             value={deletePassword}
                             onChange={(e) => setDeletePassword(e.target.value)}
                             showPasswordLabel="Show password"

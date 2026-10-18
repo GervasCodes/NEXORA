@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 
 // Only genuinely 'active' departments - a department in 'maintenance' or
 // 'deactivated' status must never appear here (this backs every public
@@ -47,7 +48,7 @@ exports.findTrendingByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -72,7 +73,7 @@ exports.findRecentByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.created_at,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -109,7 +110,7 @@ exports.findPromotionsByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -135,7 +136,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -172,7 +173,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
 exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             COUNT(DISTINCT p.id) AS product_count,
             (
                 SELECT AVG(r.rating) FROM reviews r
@@ -186,7 +187,7 @@ exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
             ON sfc.seller_id = sp.user_id AND sfc.category_id = ?
             AND sfc.status = 'active' AND sfc.ends_at > NOW()
         GROUP BY sp.id, sfc.id
-        ORDER BY is_featured DESC, sp.is_verified DESC, average_rating DESC, product_count DESC
+        ORDER BY is_featured DESC, ${VERIFIED_BADGE_ORDER}, average_rating DESC, product_count DESC
         LIMIT ?`,
         [categoryId, categoryId, categoryId, limit]
     );
@@ -249,7 +250,7 @@ exports.findGlobalSponsored = async (limit) => {
 exports.findGlobalFeaturedStores = async (limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified, sp.is_business_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             MAX(sfc.id IS NOT NULL) AS is_featured
         FROM seller_profiles sp
         JOIN products p ON p.seller_id = sp.user_id AND p.is_active = 1
@@ -257,7 +258,7 @@ exports.findGlobalFeaturedStores = async (limit) => {
             ON sfc.seller_id = sp.user_id
             AND sfc.status = 'active' AND sfc.ends_at > NOW()
         GROUP BY sp.id
-        ORDER BY is_featured DESC, sp.is_verified DESC
+        ORDER BY is_featured DESC, ${VERIFIED_BADGE_ORDER}
         LIMIT ?`,
         [limit]
     );

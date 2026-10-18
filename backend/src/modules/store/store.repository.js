@@ -10,6 +10,7 @@ const dbRead = require("../../config/dbRead");
 // top comment on why only dbRead was imported before). Reads stay on
 // dbRead; only the follow/unfollow writes below use the primary pool.
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 
 // Public store profile - basics + trust info.
 //
@@ -83,7 +84,7 @@ exports.findPublicBySlug = async (slug) => {
             sp.store_logo, sp.store_banner, sp.store_theme, sp.promo_video_url,
             sp.social_instagram, sp.social_facebook, sp.social_whatsapp, sp.public_phone,
             sp.country, sp.region, sp.city,
-            sp.is_verified, sp.is_business_verified, sp.created_at,
+            sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT}, sp.created_at,
             (sp.pickup_lat IS NOT NULL AND sp.pickup_lng IS NOT NULL) AS has_pickup_pin,
             (u.account_verification_status = 'approved') AS identity_verified,
             st.name AS store_type_name,
@@ -114,7 +115,7 @@ exports.findPublishedServicesBySlug = async (slug, limit = 12) => {
         `SELECT
             s.id, s.title, s.slug, s.pricing_model, s.base_price, s.discount_price,
             s.city, s.region, s.created_at,
-            sp.store_name, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             sc.name AS category_name, sc.slug AS category_slug,
             (
                 SELECT sm.media_url FROM service_media sm
@@ -167,7 +168,7 @@ exports.findCollectionsBySlug = async (slug) => {
         `SELECT
             sc.id AS collection_id, sc.name AS collection_name,
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified, sp.is_business_verified, sp.region,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT}, sp.region,
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -206,6 +207,7 @@ exports.findCollectionsBySlug = async (slug) => {
             store_name: row.store_name,
             is_verified: row.is_verified,
             is_business_verified: row.is_business_verified,
+            show_verified_badge: row.show_verified_badge,
             region: row.region,
             image_url: row.image_url,
             average_rating: row.average_rating,
@@ -267,11 +269,11 @@ exports.findFollowerIds = async (storeUserId) => {
 // reasoning as content.repository.js's guide search.
 exports.search = async ({ search, limit = 5 }) => {
     const [rows] = await dbRead.query(
-        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified
+        `SELECT sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT}
          FROM seller_profiles sp
          JOIN users u ON u.id = sp.user_id AND u.is_active = 1
          WHERE sp.store_name LIKE ?
-         ORDER BY sp.is_verified DESC, sp.store_name ASC
+         ORDER BY ${VERIFIED_BADGE_ORDER}, sp.store_name ASC
          LIMIT ?`,
         [`%${search}%`, limit]
     );

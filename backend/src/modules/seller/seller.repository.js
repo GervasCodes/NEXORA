@@ -260,17 +260,18 @@ exports.removeProductFromCollection = async (collectionId, productId) => {
     return result.affectedRows;
 };
 
-// --- Verified Seller badge ---
+// --- Approved-to-sell flag ---
 // (The old document-based verification_status flow was removed in
 // migration 029 - account-level verification now lives on `users`, see
-// accountVerification module. The one-time fee that used to also gate
-// this badge was retired - see seller.service.js#syncBadge.)
+// accountVerification module.)
 
-// Awards/removes the Verified Seller badge to match account approval.
+// Keeps is_verified ("ID approved, allowed to sell") in step with account
+// approval. This is NOT the public badge - see utils/verifiedBadge.js.
 //
-// is_business_verified follows it: the Verified Business badge is only
-// ever shown on top of a live Verified Seller badge, and comes back with
-// it when the account's tier is still business_verified.
+// is_business_verified (seller KYC approved, the thing that earns the
+// "Verified Seller" badge) follows it: it can only be 1 while is_verified is
+// 1, and comes back with it when the account's tier is still
+// business_verified.
 exports.setBadge = async (userId, isVerified) => {
     await db.query(
         `UPDATE seller_profiles sp

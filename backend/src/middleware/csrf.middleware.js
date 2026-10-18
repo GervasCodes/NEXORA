@@ -59,6 +59,8 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CSRF_EXEMPT_PATHS = new Set([
     "/api/v1/auth/register",
     "/api/v1/auth/login",
+    "/api/v1/auth/google",
+    "/api/v1/auth/google/complete",
     "/api/v1/auth/login/verify-otp",
     "/api/v1/auth/login/resend-otp",
     "/api/v1/auth/forgot-password",

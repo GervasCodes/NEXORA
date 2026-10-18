@@ -849,8 +849,8 @@ export default function SellerBusinessTools() {
             <div>
                 {header}
                 <div className="max-w-md glass-strong rounded-lg p-5">
-                    <h2 className="font-display text-lg mb-1">{t("seller.pos.gateTitle")}</h2>
-                    <p className="text-sm text-ash mb-4">{t("seller.pos.gateBody")}</p>
+                    <h2 className="font-display text-lg mb-1">{t("trial.gate.posTitle")}</h2>
+                    <p className="text-sm text-ash mb-4">{t("trial.gate.posBody")}</p>
                     <Link to={toolsOnly ? "/business/plan" : "/seller/subscription"}
                         className="inline-block w-full text-center bg-ink text-white px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity">
                         {t("seller.pos.gateCta")}

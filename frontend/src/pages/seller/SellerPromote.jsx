@@ -6,6 +6,7 @@ import SellerSponsorship from "./SellerSponsorship";
 import SellerFeaturedStore from "./SellerFeaturedStore";
 import { IncludedCreditsBanner } from "../../components/SponsorshipCredits";
 import Skeleton from "../../components/Skeleton";
+import { useLanguage } from "../../context/LanguageContext";
 
 const MAX_PROMO_VIDEO_BYTES = 50 * 1024 * 1024;
 
@@ -20,6 +21,7 @@ const MAX_PROMO_VIDEO_BYTES = 50 * 1024 * 1024;
 // context, since this page is also mounted standalone in tests
 // without that parent route.
 function StorePromoVideoSection() {
+    const { t } = useLanguage();
     const [promoVideoUrl, setPromoVideoUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadFailed, setLoadFailed] = useState(false);
@@ -48,12 +50,12 @@ function StorePromoVideoSection() {
         // checked here so a 200 MB clip fails instantly, not after a
         // long upload on mobile data.
         if (!file.type.startsWith("video/")) {
-            setError("Please choose a video file.");
+            setError(t("seller.promote.video.notVideo"));
             e.target.value = "";
             return;
         }
         if (file.size > MAX_PROMO_VIDEO_BYTES) {
-            setError(`That video is ${(file.size / (1024 * 1024)).toFixed(0)} MB - the limit is 50 MB. Try a shorter clip or lower quality.`);
+            setError(t("seller.promote.video.tooLarge", { size: (file.size / (1024 * 1024)).toFixed(0) }));
             e.target.value = "";
             return;
         }
@@ -104,10 +106,10 @@ function StorePromoVideoSection() {
     if (loadFailed) {
         return (
             <div className="border border-line rounded-lg p-4 mb-8">
-                <p className="text-sm font-medium mb-1">Store promo video</p>
-                <p role="alert" className="text-coral text-sm mb-2">Couldn&apos;t load your promo video.</p>
+                <p className="text-sm font-medium mb-1">{t("seller.promote.video.title")}</p>
+                <p role="alert" className="text-coral text-sm mb-2">{t("seller.promote.video.loadFailed")}</p>
                 <button type="button" onClick={loadProfile} className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors">
-                    Try again
+                    {t("seller.promote.video.tryAgain")}
                 </button>
             </div>
         );
@@ -115,10 +117,9 @@ function StorePromoVideoSection() {
 
     return (
         <div className="border border-line rounded-lg p-4 mb-8">
-            <p className="text-sm font-medium mb-1">Store promo video</p>
+            <p className="text-sm font-medium mb-1">{t("seller.promote.video.title")}</p>
             <p className="text-xs text-ash mb-3">
-                A short video shown on your store page banner - separate from
-                product videos and Live Selling. Up to 50 MB.
+                {t("seller.promote.video.hint")}
             </p>
 
             {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
@@ -140,14 +141,14 @@ function StorePromoVideoSection() {
                         <div className="h-full bg-teal transition-all" style={{ width: `${progress}%` }} />
                     </div>
                     <p className="text-xs text-ash mt-1">
-                        {progress < 100 ? `Uploading… ${progress}%` : "Processing video…"}
+                        {progress < 100 ? t("seller.promote.video.uploadingPct", { pct: progress }) : t("seller.promote.video.processing")}
                     </p>
                 </div>
             )}
 
             <div className="flex items-center gap-2">
                 <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                    {uploading ? "Uploading…" : promoVideoUrl ? "Replace video" : "Upload video"}
+                    {uploading ? t("seller.promote.video.uploading") : promoVideoUrl ? t("seller.promote.video.replace") : t("seller.promote.video.upload")}
                     <input
                         type="file"
                         accept="video/*"
@@ -163,7 +164,7 @@ function StorePromoVideoSection() {
                         disabled={uploading || removing}
                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
                     >
-                        {removing ? "Removing…" : "Remove"}
+                        {removing ? t("seller.promote.video.removing") : t("seller.promote.video.remove")}
                     </button>
                 )}
             </div>
@@ -180,11 +181,12 @@ function StorePromoVideoSection() {
 // own <PageMeta>/<h1> since this hub supplies one). Department
 // sponsorship used to be a third tab and has been retired.
 const TABS = [
-    { key: "sponsorship", label: "Sponsored products", Component: SellerSponsorship },
-    { key: "featured-store", label: "Featured stores", Component: SellerFeaturedStore }
+    { key: "sponsorship", labelKey: "seller.promote.tab.sponsorship", Component: SellerSponsorship },
+    { key: "featured-store", labelKey: "seller.promote.tab.featuredStore", Component: SellerFeaturedStore }
 ];
 
 export default function SellerPromote() {
+    const { t } = useLanguage();
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedTab = searchParams.get("tab");
     const activeTab = TABS.find((tab) => tab.key === requestedTab) || TABS[0];
@@ -205,20 +207,17 @@ export default function SellerPromote() {
 
     return (
         <div>
-            <PageMeta title="Promote" noIndex />
-            <h1 className="font-display text-2xl mb-1">Promote</h1>
+            <PageMeta title={t("seller.promote.title")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("seller.promote.title")}</h1>
             <p className="text-ash text-sm mb-6">
-                Extra visibility - a sponsored product slot or top billing for your
-                store. Your plan's
-                included credits are used first; any extra days are paid from
-                your wallet balance.
+                {t("seller.promote.intro")}
             </p>
 
             <IncludedCreditsBanner credits={includedCredits} />
 
             <StorePromoVideoSection />
 
-            <div className="flex flex-wrap gap-1 mb-8" role="tablist" aria-label="Promotion type">
+            <div className="flex flex-wrap gap-1 mb-8" role="tablist" aria-label={t("seller.promote.tabsLabel")}>
                 {TABS.map((tab) => (
                     <button
                         key={tab.key}
@@ -230,7 +229,7 @@ export default function SellerPromote() {
                             activeTab.key === tab.key ? "bg-ink text-paper" : "text-ash hover:bg-line/50"
                         }`}
                     >
-                        {tab.label}
+                        {t(tab.labelKey)}
                     </button>
                 ))}
             </div>

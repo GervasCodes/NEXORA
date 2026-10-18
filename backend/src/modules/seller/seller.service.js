@@ -260,8 +260,8 @@ exports.getAnalytics = async (sellerId) => {
 };
 
 // Phase A5 (Advanced Analytics) - period comparison + top customers for
-// this seller's product sales. Gated behind the same requireVerificationFeePaid
-// middleware as GET /seller/analytics (see seller.routes.js).
+// this seller's product sales. Gated the same way as GET /seller/analytics
+// (see seller.routes.js).
 function growthPercent(current, previous) {
     if (!previous) return current > 0 ? 100 : 0;
     return Number((((current - previous) / previous) * 100).toFixed(1));
@@ -374,22 +374,17 @@ exports.exportAnalyticsCsv = async (sellerId, type) => {
     return lines.join("\n");
 };
 
-// --- Verified Seller badge ---
-// The document-based per-seller verification_status flow this used to
-// depend on was removed in migration 029 - approval now comes from the
-// centralized users.account_verification_status gate (set at
-// registration, reviewed via accountVerification module) instead.
-//
-// The one-time verification fee that used to additionally gate this
-// badge was retired: the badge is now free and activates automatically
-// as soon as account-level verification is approved, same as it always
-// should have needed to be to actually reflect "this account is who it
-// says it is" rather than "this account paid." A higher, real-KYC-backed
-// "Verified Business" tier (BRELA/TIN/business license) sits above this
-// badge as a separate concept - see the accountVerification module for
-// that once it lands; nothing here grants it.
+// --- Seller approval vs. the Verified Seller badge ---
+// sp.is_verified means "ID approved, allowed to sell" and follows
+// users.account_verification_status. It is NOT shown to buyers as a badge.
+// The one public badge, "Verified Seller", is earned only by approved seller
+// KYC (BRELA / TIN / business licence -> sp.is_business_verified, set by the
+// accountVerification module), with a 30-day grace for sellers that had a
+// badge before this rule (sp.badge_grace_until, migration 148). The single
+// badge rule lives in utils/verifiedBadge.js.
 
-// Reconciles the badge with the account-level verification status.
+// Reconciles is_verified (approved to sell) with the account-level
+// verification status. Does not grant the public badge.
 const syncBadge = async (userId) => {
     const [seller, user] = await Promise.all([
         sellerRepository.findByUserId(userId),
@@ -404,8 +399,8 @@ const syncBadge = async (userId) => {
             notificationService.notify({
                 userId,
                 type: "seller_verification",
-                titleKey: "notifications.seller.badge.title",
-                messageKey: "notifications.seller.badge.message",
+                titleKey: "notifications.seller.approved.title",
+                messageKey: "notifications.seller.approved.message",
                 withEmail: true
             }).catch((err) => logger.warn({ err, userId }, "badge notify error"));
         }

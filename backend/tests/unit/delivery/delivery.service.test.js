@@ -1,5 +1,7 @@
 jest.mock("../../../src/modules/delivery/delivery.repository");
 jest.mock("../../../src/modules/delivery/deliveryPricing.service");
+jest.mock("../../../src/modules/delivery/deliveryRates.service");
+jest.mock("../../../src/modules/delivery/deliveryRates.repository");
 jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/seller/seller.repository");
 jest.mock("../../../src/modules/notification/notification.service");
@@ -31,6 +33,8 @@ jest.mock("../../../src/modules/sms/providers/sms.provider");
 
 const deliveryRepository = require("../../../src/modules/delivery/delivery.repository");
 const deliveryPricingService = require("../../../src/modules/delivery/deliveryPricing.service");
+const deliveryRatesService = require("../../../src/modules/delivery/deliveryRates.service");
+const deliveryRatesRepository = require("../../../src/modules/delivery/deliveryRates.repository");
 const orderRepository = require("../../../src/modules/order/order.repository");
 const sellerRepository = require("../../../src/modules/seller/seller.repository");
 const notificationService = require("../../../src/modules/notification/notification.service");
@@ -54,6 +58,10 @@ const SELLER_PICKUP_PIN = { pickup_lat: -6.8, pickup_lng: 39.2, store_name: "Tes
 
 beforeEach(() => {
     jest.useFakeTimers();
+    // Round 5 Phase 5: the peak-hour ETA adjustment is out of scope for these
+    // tests, so it passes the routed minutes straight through; no agent vehicle.
+    deliveryRatesService.adjustEta.mockImplementation(async (minutes) => minutes);
+    deliveryRatesRepository.findAgentVehicleType.mockResolvedValue(null);
     notificationService.notify.mockResolvedValue(undefined);
     pushService.sendToUser.mockResolvedValue(undefined);
     earningsService.creditForDelivery.mockResolvedValue(undefined);

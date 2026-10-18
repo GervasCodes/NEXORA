@@ -2,7 +2,6 @@ const db = require("../../config/db");
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
-const monetizationScheduleService = require("../monetizationSchedule/monetizationSchedule.service");
 const logger = require("../../utils/logger").child({ module: "admin" });
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
@@ -1071,28 +1070,6 @@ exports.getAiQualitySummary = async () => {
     return aiService.getQualityOverview();
 };
 
-// --- Monetization Master Switch (Admin Billing Control Center) ---
-
-exports.getMonetizationStatus = async () => {
-    return settingsService.getMonetizationStatus();
-};
-
-exports.updateMonetizationSettings = async (data, adminId) => {
-    return settingsService.updateMonetizationSettings(data, adminId);
-};
-
-exports.listMonetizationSchedule = async () => {
-    return monetizationScheduleService.listPending();
-};
-
-exports.createMonetizationSchedule = async (settingKey, enabled, scheduledAt, adminId) => {
-    return monetizationScheduleService.schedule(settingKey, enabled, scheduledAt, adminId);
-};
-
-exports.cancelMonetizationSchedule = async (scheduleId, adminId) => {
-    return monetizationScheduleService.cancel(scheduleId, adminId);
-};
-
 // --- Sponsorship campaigns (Phase 8A - read-only oversight; the manual
 // sponsor/unsponsor toggle above stays the separate, free lever for
 // admin curation) ---
@@ -1185,13 +1162,17 @@ exports.addAdmin = async (data, actorAdminId) => {
     const hashedPassword = await hashPassword(password);
     const resolvedLevel = admin_level === "super_admin" ? "super_admin" : "admin";
 
+    // Round 5 (phase 6): every account gets a username.
+    const username = await require("../account/username.service").generateUnique(first_name);
+
     const userId = await adminRepository.createAdmin({
         first_name,
         last_name,
         email,
         phone,
         password: hashedPassword,
-        admin_level: resolvedLevel
+        admin_level: resolvedLevel,
+        username
     });
 
     // (Audit Logs) - a new admin account is itself a permission

@@ -54,16 +54,16 @@ exports.countRecipientsBySegment = async (segment) => {
 };
 
 exports.create = async ({
-    adminId, segment, channels, subject, message,
+    adminId, segment, channels, templateType = "all", subject, message,
     smsMessage, whatsappMessage, inAppTitle, inAppMessage,
     recipientCount, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount
 }) => {
     const [result] = await db.query(
         `INSERT INTO broadcasts
-        (admin_id, segment, channels, subject, message, sms_message, whatsapp_message, in_app_title, in_app_message, recipient_count, email_sent_count, sms_sent_count, whatsapp_sent_count, in_app_sent_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (admin_id, segment, channels, template_type, subject, message, sms_message, whatsapp_message, in_app_title, in_app_message, recipient_count, email_sent_count, sms_sent_count, whatsapp_sent_count, in_app_sent_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            adminId, segment, channels.join(","), subject || null, message,
+            adminId, segment, channels.join(","), templateType, subject || null, message,
             smsMessage || null, whatsappMessage || null, inAppTitle || null, inAppMessage || null,
             recipientCount, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount || 0
         ]
@@ -71,15 +71,18 @@ exports.create = async ({
     return result.insertId;
 };
 
-exports.findAll = async ({ limit = 50 } = {}) => {
+// `type` (optional) filters history to one broadcast function: 'all',
+// 'messaging' or 'rich'. Rows from before migration 149 are 'all'.
+exports.findAll = async ({ limit = 50, type = null } = {}) => {
     const [rows] = await db.query(
         `SELECT b.*, u.first_name AS admin_first_name, u.last_name AS admin_last_name
         FROM broadcasts b
         JOIN users u ON u.id = b.admin_id
         WHERE b.deleted_at IS NULL
+          AND (? IS NULL OR b.template_type = ?)
         ORDER BY b.created_at DESC
         LIMIT ?`,
-        [limit]
+        [type, type, limit]
     );
     return rows;
 };

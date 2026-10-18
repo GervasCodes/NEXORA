@@ -7,6 +7,7 @@ import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
 import Button from "../../components/ui/Button";
+import { useLanguage } from "../../context/LanguageContext";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -40,6 +41,68 @@ const EMPTY_NEW_PLAN = {
     sortOrder: "",
     featuresText: ""
 };
+
+// Admin tool: give one seller extra free-trial days. The backend audit-logs
+// the change and notifies the seller.
+function ExtendTrialPanel() {
+    const { t } = useLanguage();
+    const toast = useToast();
+    const [sellerId, setSellerId] = useState("");
+    const [days, setDays] = useState("7");
+    const [reason, setReason] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const submit = async (e) => {
+        e.preventDefault();
+        const id = Number(sellerId);
+        const n = Number(days);
+        if (!Number.isInteger(id) || id < 1 || !Number.isInteger(n) || n < 1 || n > 90) {
+            toast?.error(t("admin.trial.invalid"));
+            return;
+        }
+        setSaving(true);
+        try {
+            const { data } = await api.post(`/admin/sellers/${id}/extend-trial`, {
+                days: n,
+                reason: reason.trim() || undefined
+            });
+            toast?.success(t("admin.trial.done", { date: formatDate(data.data?.trialEndsAt) }));
+            setReason("");
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <form onSubmit={submit} className="border border-line rounded-lg p-4 mb-6 space-y-3">
+            <div>
+                <h2 className="font-display text-lg mb-1">{t("admin.trial.title")}</h2>
+                <p className="text-ash text-xs">{t("admin.trial.help")}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                    <label htmlFor="trial-seller-id" className={LABEL_CLASS}>{t("admin.trial.sellerId")}</label>
+                    <input id="trial-seller-id" inputMode="numeric" required value={sellerId}
+                        onChange={(e) => setSellerId(e.target.value.replace(/\D/g, ""))}
+                        className={FIELD_CLASS} />
+                </div>
+                <div>
+                    <label htmlFor="trial-days" className={LABEL_CLASS}>{t("admin.trial.days")}</label>
+                    <input id="trial-days" type="number" min="1" max="90" required value={days}
+                        onChange={(e) => setDays(e.target.value)} className={FIELD_CLASS} />
+                </div>
+                <div>
+                    <label htmlFor="trial-reason" className={LABEL_CLASS}>{t("admin.trial.reason")}</label>
+                    <input id="trial-reason" maxLength={500} value={reason}
+                        onChange={(e) => setReason(e.target.value)} className={FIELD_CLASS} />
+                </div>
+            </div>
+            <Button size="sm" type="submit" disabled={saving}>{t("admin.trial.submit")}</Button>
+        </form>
+    );
+}
 
 export default function AdminSubscriptions() {
     const [plans, setPlans] = useState([]);
@@ -163,6 +226,8 @@ export default function AdminSubscriptions() {
                 <p className="text-ash text-sm mb-6">
                     Name, description, feature bullets, pricing, commission overrides, listing limits, and included sponsorship credits (1 credit = 1 campaign-day) for each tier. Pricing changes apply to new/renewing subscriptions - already-active periods keep the rate a seller was quoted.
                 </p>
+
+                <ExtendTrialPanel />
 
                 {isSuperAdmin && (
                     <div className="mb-6">

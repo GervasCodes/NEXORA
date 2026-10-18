@@ -10,6 +10,7 @@ import RatingBreakdown from "../components/RatingBreakdown";
 import { getStoreTheme } from "../utils/storeThemes";
 import { getSocialLinks } from "../utils/socialLinks";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
@@ -467,18 +468,6 @@ export default function StorePage() {
                             </div>
                         )}
 
-                        {verificationTier === "business" && (
-                            <div className="flex items-start gap-2.5 text-sm">
-                                <VerifiedIcon className={theme.text} />
-                                <div>
-                                    <p className="font-medium text-ink">{t("store.verifiedBusinessTitle")}</p>
-                                    <p className="text-xs text-ash mt-0.5">
-                                        {t("store.verifiedBusinessHint")}
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
                         {store.identity_verified && (
                             <div className="flex items-start gap-2.5 text-sm">
                                 <IdentityIcon className={theme.text} />
@@ -567,7 +556,7 @@ export default function StorePage() {
                         {reviews.map((r) => (
                             <li key={r.id} className="border-b border-line pb-4">
                                 <div className="flex justify-between items-baseline mb-1">
-                                    <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                    <p className="font-medium text-sm">{publicName(r, t("username.anonymous"))}</p>
                                     <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                                 </div>
                                 <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>

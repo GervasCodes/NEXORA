@@ -855,11 +855,11 @@ exports.countSuperAdmins = async () => {
     return row.count;
 };
 
-exports.createAdmin = async ({ first_name, last_name, email, phone, password, admin_level }) => {
+exports.createAdmin = async ({ first_name, last_name, email, phone, password, admin_level, username = null }) => {
     const [result] = await db.query(
-        `INSERT INTO users (first_name, last_name, email, phone, password, role, admin_level)
-        VALUES (?, ?, ?, ?, ?, 'admin', ?)`,
-        [first_name, last_name, email, phone, password, admin_level]
+        `INSERT INTO users (first_name, last_name, email, phone, password, role, admin_level, username)
+        VALUES (?, ?, ?, ?, ?, 'admin', ?, ?)`,
+        [first_name, last_name, email, phone, password, admin_level, username]
     );
     return result.insertId;
 };

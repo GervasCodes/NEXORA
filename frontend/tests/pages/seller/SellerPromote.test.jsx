@@ -49,15 +49,15 @@ describe("SellerPromote hub (A3 consolidation)", () => {
 
         expect(await screen.findByText("Your campaigns")).toBeInTheDocument();
         expect(api.get).toHaveBeenCalledWith("/seller/sponsorship/pricing");
-        expect(screen.getByRole("tab", { name: "Sponsored products" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.sponsorship" })).toHaveAttribute("aria-selected", "true");
     });
 
     it("respects a ?tab= deep link into the Featured stores tab", async () => {
         renderPage("/seller/promote?tab=featured-store");
 
-        await screen.findByText("Your campaigns");
+        await screen.findByText("seller.featured.yourCampaigns");
         expect(api.get).toHaveBeenCalledWith("/seller/featured-store/pricing");
-        expect(screen.getByRole("tab", { name: "Featured stores" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" })).toHaveAttribute("aria-selected", "true");
     });
 
     it("switches tabs on click, loading that tab's own data", async () => {
@@ -65,11 +65,11 @@ describe("SellerPromote hub (A3 consolidation)", () => {
         renderPage();
         await screen.findByText("Your campaigns");
 
-        await user.click(screen.getByRole("tab", { name: "Featured stores" }));
+        await user.click(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" }));
 
-        await screen.findByText("Your campaigns");
+        await screen.findByText("seller.featured.yourCampaigns");
         expect(api.get).toHaveBeenCalledWith("/seller/featured-store/pricing");
-        expect(screen.getByRole("tab", { name: "Featured stores" })).toHaveAttribute("aria-selected", "true");
-        expect(screen.getByRole("tab", { name: "Sponsored products" })).toHaveAttribute("aria-selected", "false");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.sponsorship" })).toHaveAttribute("aria-selected", "false");
     });
 });

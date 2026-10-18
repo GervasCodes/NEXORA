@@ -134,6 +134,14 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
     // Password AND OTP both passed - the only point that clears the counter.
     await loginLockoutService.clearFailures(user);
 
+    return exports.buildSession(user);
+};
+
+// Issues the session token and strips secrets from the user row. Shared by the
+// password+OTP flow above and by Google sign-in (google.service.js), so both
+// produce an identical session: same claims, same token_version (tv) so a
+// password change/permission change still invalidates it.
+exports.buildSession = (user) => {
     const token = generateToken({
         id: user.id,
         role: user.role,
@@ -144,10 +152,29 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
         tv: user.token_version || 0
     });
 
-    delete user.password;
-    delete user.failed_login_attempts;
-    delete user.last_failed_login_at;
-    delete user.login_locked_until;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    delete safeUser.failed_login_attempts;
+    delete safeUser.last_failed_login_at;
+    delete safeUser.login_locked_until;
+    delete safeUser.google_sub;
 
-    return { user, token };
+    return { user: safeUser, token };
+};
+
+// Same checks as the password flow, minus the password: deleted / suspended /
+// deactivated accounts can't sign in, and a locked account stays locked.
+exports.assertCanSignIn = (user) => {
+    if (user.is_active === 0) {
+        if (user.deleted_at) {
+            throw new Error("This account has been deleted.");
+        }
+        if (user.suspended_at) {
+            throw Object.assign(appError("ACCOUNT_SUSPENDED", 403), {
+                reason: user.suspension_reason || null
+            });
+        }
+        throw new Error("This account has been deactivated. Please contact support");
+    }
+    loginLockoutService.assertNotLocked(user);
 };

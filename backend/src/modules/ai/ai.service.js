@@ -414,7 +414,7 @@ exports.explainProductForBuyer = async ({ userId, slug }) => {
     // which always renders money through formatMoney()/toLocaleString().
     const formattedPrice = Number(price).toLocaleString("en-US");
     const formattedOriginalPrice = Number(product.price).toLocaleString("en-US");
-    const facts = `Product: ${product.name}\nCategory: ${product.category_name || "n/a"}\nBrand: ${product.brand || "n/a"}\nCondition: ${product.product_condition}\nPrice: ${formattedPrice} TZS${product.discount_price ? ` (discounted from ${formattedOriginalPrice} TZS)` : ""}\nIn stock: ${product.stock > 0 ? `yes, ${product.stock} available` : "no, currently out of stock"}\nSold by: ${product.store_name}${product.is_verified ? " (Verified Seller)" : ""}\nRating: ${product.average_rating ? `${Number(product.average_rating).toFixed(1)}/5 from ${product.review_count} review(s)` : "no reviews yet"}\nDescription: ${product.description || "n/a"}`;
+    const facts = `Product: ${product.name}\nCategory: ${product.category_name || "n/a"}\nBrand: ${product.brand || "n/a"}\nCondition: ${product.product_condition}\nPrice: ${formattedPrice} TZS${product.discount_price ? ` (discounted from ${formattedOriginalPrice} TZS)` : ""}\nIn stock: ${product.stock > 0 ? `yes, ${product.stock} available` : "no, currently out of stock"}\nSold by: ${product.store_name}${product.show_verified_badge ? " (Verified Seller)" : ""}\nRating: ${product.average_rating ? `${Number(product.average_rating).toFixed(1)}/5 from ${product.review_count} review(s)` : "no reviews yet"}\nDescription: ${product.description || "n/a"}`;
 
     const result = await callProvider({
         userId,
@@ -426,7 +426,7 @@ exports.explainProductForBuyer = async ({ userId, slug }) => {
     const reply = result?.text || null;
 
     const stockNote = product.stock > 0 ? `In stock (${product.stock} available).` : "Currently out of stock.";
-    const template = `${product.name}, sold by ${product.store_name}${product.is_verified ? " (Verified Seller)" : ""}. ${stockNote}`;
+    const template = `${product.name}, sold by ${product.store_name}${product.show_verified_badge ? " (Verified Seller)" : ""}. ${stockNote}`;
 
     return {
         product: { slug: product.slug, name: product.name, price, stock: product.stock },

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { publicName } from "../../utils/username";
 import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import LoadingState from "../../components/ui/LoadingState";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
 // (Customer Experience) - provider-side counterpart of
 // SellerReviews.jsx, same paginated-list-with-reply shape, just hitting
@@ -14,6 +17,7 @@ import Input from "../../components/ui/Input";
 // replyToReview branches on the review's target internally, so there's
 // nothing service-specific about the reply call itself.
 export default function SellerServiceReviews() {
+    const { t } = useLanguage();
     const { profile } = useOutletContext();
 
     const [reviews, setReviews] = useState([]);
@@ -58,31 +62,31 @@ export default function SellerServiceReviews() {
     };
 
     if (loading && reviews.length === 0) {
-        return <p className="text-ash">Loading reviews…</p>;
+        return <LoadingState label={t("seller.serviceReviews.loading")} />;
     }
 
     return (
         <div>
-            <PageMeta title="Service Reviews" noIndex />
-            <h1 className="font-display text-2xl mb-1">Service reviews</h1>
-            <p className="text-ash text-sm mb-8">What customers are saying about your services - reply to any of them below.</p>
+            <PageMeta title={t("seller.serviceReviews.title")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("seller.serviceReviews.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("seller.serviceReviews.intro")}</p>
 
-            {error && <p className="text-sm text-coral mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-coral mb-4">{error}</p>}
 
             {reviews.length === 0 ? (
-                <EmptyState title="No reviews yet." />
+                <EmptyState title={t("seller.serviceReviews.empty")} />
             ) : (
                 <ul className="space-y-4">
                     {reviews.map((r) => (
                         <li key={r.id} className="border border-line rounded-lg p-4">
                             <div className="flex justify-between items-baseline mb-1">
-                                <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                <p className="font-medium text-sm">{publicName(r)}</p>
                                 <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                             </div>
                             <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
                             {r.service_slug && (
                                 <Link to={`/services/${r.service_slug}`} className="text-xs text-teal hover:underline">
-                                    on {r.service_title}
+                                    {t("seller.serviceReviews.onService", { title: r.service_title })}
                                 </Link>
                             )}
                             {r.comment && <p className="text-sm text-ink/80 mt-1 mb-2">{r.comment}</p>}
@@ -94,7 +98,7 @@ export default function SellerServiceReviews() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Review attachment ${pi + 1}`}
+                                            alt={t("seller.serviceReviews.attachmentAlt", { n: pi + 1 })}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />
@@ -104,7 +108,7 @@ export default function SellerServiceReviews() {
 
                             {r.seller_reply ? (
                                 <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
-                                    <p className="text-xs font-medium text-ink mb-0.5">Your response</p>
+                                    <p className="text-xs font-medium text-ink mb-0.5">{t("seller.serviceReviews.yourResponse")}</p>
                                     <p className="text-xs text-ink/80">{r.seller_reply}</p>
                                 </div>
                             ) : (
@@ -113,7 +117,8 @@ export default function SellerServiceReviews() {
                                         as="textarea"
                                         value={drafts[r.id] || ""}
                                         onChange={(e) => setDrafts({ ...drafts, [r.id]: e.target.value })}
-                                        placeholder="Write a response to this review…"
+                                        placeholder={t("seller.serviceReviews.replyPlaceholder")}
+                                        aria-label={t("seller.serviceReviews.replyPlaceholder")}
                                         maxLength={1000}
                                         rows={2}
                                         className="mb-2"
@@ -123,7 +128,7 @@ export default function SellerServiceReviews() {
                                         disabled={submittingId === r.id || !(drafts[r.id] || "").trim()}
                                         className="text-sm bg-ink text-paper px-4 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
                                     >
-                                        {submittingId === r.id ? "Posting…" : "Post reply"}
+                                        {submittingId === r.id ? t("seller.serviceReviews.posting") : t("seller.serviceReviews.postReply")}
                                     </button>
                                 </div>
                             )}
@@ -138,7 +143,7 @@ export default function SellerServiceReviews() {
                     disabled={loading}
                     className="mt-4 text-sm text-teal hover:underline disabled:opacity-50"
                 >
-                    {loading ? "Loading…" : "Load more reviews"}
+                    {loading ? t("seller.serviceReviews.loading") : t("seller.serviceReviews.loadMore")}
                 </button>
             )}
         </div>

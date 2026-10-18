@@ -22,3 +22,28 @@ exports.SEGMENT_ROLES = {
 // so it's eligible for every recipient (see
 // resolveChannelsForRecipient in broadcast.service.js).
 exports.BROADCAST_CHANNELS = ["email", "sms", "whatsapp", "in_app"];
+
+// Round 5 Phase 4: three completely separate broadcast functions, each
+// with its own channels. 'all' = email + SMS + WhatsApp + in-app from one
+// subject + one message; 'messaging' = WhatsApp + SMS only (plain text, no
+// subject); 'rich' = email + in-app only (subject + rich body, optional
+// short in-app text). Rows created before this existed are 'all'.
+exports.BROADCAST_TEMPLATE_TYPES = ["all", "messaging", "rich"];
+
+// The channels each type may use. 'messaging' and 'rich' are fixed: the
+// request must name exactly these channels. 'all' may use any subset (kept
+// permissive so older callers and resends of older rows keep working).
+exports.TEMPLATE_CHANNELS = {
+    all: ["email", "sms", "whatsapp", "in_app"],
+    messaging: ["whatsapp", "sms"],
+    rich: ["email", "in_app"]
+};
+
+// Longest in-app notification text. Longer broadcast bodies are trimmed to
+// this (with an ellipsis) when they are reused as the in-app message. Keep
+// in sync with IN_APP_MAX in frontend/src/pages/admin/AdminBroadcast.jsx.
+exports.IN_APP_MAX = 1000;
+
+// A WhatsApp + SMS broadcast is one plain text sent on both; the cap is the
+// WhatsApp one (SMS is split into segments by the gateway).
+exports.MESSAGING_MAX = 1000;

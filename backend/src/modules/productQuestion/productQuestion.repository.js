@@ -10,7 +10,7 @@ exports.findByProduct = async (productId, { page = 1, limit = 10 } = {}) => {
     const [rows] = await db.query(
         `SELECT
             pq.id, pq.question, pq.seller_answer, pq.seller_answer_at, pq.created_at,
-            u.first_name, u.last_name
+            u.username
          FROM product_questions pq
          JOIN users u ON u.id = pq.user_id
          WHERE pq.product_id = ?

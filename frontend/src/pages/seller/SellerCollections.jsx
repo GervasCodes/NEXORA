@@ -6,10 +6,13 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import LoadingState from "../../components/ui/LoadingState";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
 
 export default function SellerCollections() {
+    const { t } = useLanguage();
     const [collections, setCollections] = useState([]);
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState("");
@@ -124,11 +127,10 @@ export default function SellerCollections() {
 
     return (
         <div>
-            <PageMeta title="Collections" noIndex />
-            <h1 className="font-display text-2xl mb-2">Collections</h1>
+            <PageMeta title={t("seller.collections.title")} noIndex />
+            <h1 className="font-display text-2xl mb-2">{t("seller.collections.title")}</h1>
             <p className="text-sm text-ash mb-6">
-                Group your products into named shelves - like "New Arrivals" or
-                "Bestsellers" - that show up as their own row on your store page.
+                {t("seller.collections.intro")}
             </p>
 
             <form onSubmit={handleCreate} className="flex gap-2 mb-8 max-w-md">
@@ -137,7 +139,9 @@ export default function SellerCollections() {
                         type="text"
                         required
                         maxLength={80}
-                        placeholder="Collection name"
+                        placeholder={t("seller.collections.namePlaceholder")}
+                        aria-label={t("seller.collections.namePlaceholder")}
+                        autoComplete="off"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                     />
@@ -146,13 +150,13 @@ export default function SellerCollections() {
                     type="submit"
                     disabled={creating}
                 >
-                    {creating ? "Creating…" : "Create"}
+                    {creating ? t("seller.collections.creating") : t("seller.collections.create")}
                 </Button>
             </form>
 
 
             {collections.length === 0 ? (
-                <EmptyState title="You haven't created any collections yet." />
+                <EmptyState title={t("seller.collections.empty")} />
             ) : (
                 <div className="grid md:grid-cols-[220px_1fr] gap-6">
                     <ul className="divide-y divide-line border-y border-line">
@@ -160,6 +164,7 @@ export default function SellerCollections() {
                             <li key={collection.id} className="py-3">
                                 <button
                                     onClick={() => handleSelect(collection.id)}
+                                    aria-current={selectedId === collection.id ? "true" : undefined}
                                     className={`text-sm font-medium text-left w-full ${
                                         selectedId === collection.id ? "text-teal" : "text-ink"
                                     }`}
@@ -169,15 +174,16 @@ export default function SellerCollections() {
                                 <div className="flex items-center justify-between mt-0.5">
                                     <p className="text-xs text-ash">
                                         {collection.product_count === 1
-                                            ? "1 product"
-                                            : `${collection.product_count} products`}
+                                            ? t("seller.collections.productCount.one")
+                                            : t("seller.collections.productCount.other", { count: collection.product_count })}
                                     </p>
                                     <button
                                         onClick={() => handleDeleteCollection(collection.id)}
                                         disabled={busyId === collection.id}
+                                        aria-label={t("seller.collections.deleteAria", { name: collection.name })}
                                         className="text-xs text-coral hover:underline disabled:opacity-50"
                                     >
-                                        Delete
+                                        {t("seller.collections.delete")}
                                     </button>
                                 </div>
                             </li>
@@ -186,7 +192,7 @@ export default function SellerCollections() {
 
                     <div className="min-w-0">
                         {!selectedId && (
-                            <p className="text-ash text-sm">Select a collection to manage its products.</p>
+                            <p className="text-ash text-sm">{t("seller.collections.selectHint")}</p>
                         )}
 
                         {selectedId && (
@@ -195,9 +201,10 @@ export default function SellerCollections() {
                                     <select
                                         value={addProductId}
                                         onChange={(e) => setAddProductId(e.target.value)}
+                                        aria-label={t("seller.collections.addProductAria")}
                                         className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
                                     >
-                                        <option value="">Add a product…</option>
+                                        <option value="">{t("seller.collections.addProductPlaceholder")}</option>
                                         {availableProducts.map((p) => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
                                         ))}
@@ -207,14 +214,14 @@ export default function SellerCollections() {
                                         disabled={addingProduct || !addProductId}
                                         className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-medium hover:bg-ink/90 transition-colors disabled:opacity-60"
                                     >
-                                        {addingProduct ? "Adding…" : "Add"}
+                                        {addingProduct ? t("seller.collections.adding") : t("seller.collections.add")}
                                     </button>
                                 </form>
 
                                 {productsLoading ? (
-                                    <p className="text-ash text-sm">Loading products…</p>
+                                    <LoadingState label={t("seller.collections.loadingProducts")} />
                                 ) : collectionProducts.length === 0 ? (
-                                    <p className="text-ash text-sm">No products in this collection yet.</p>
+                                    <p className="text-ash text-sm">{t("seller.collections.noProducts")}</p>
                                 ) : (
                                     <ul className="divide-y divide-line border-y border-line">
                                         {collectionProducts.map((p) => (
@@ -229,9 +236,10 @@ export default function SellerCollections() {
                                                 <button
                                                     onClick={() => handleRemoveProduct(p.id)}
                                                     disabled={busyProductId === p.id}
+                                                    aria-label={t("seller.collections.removeAria", { name: p.name })}
                                                     className="text-xs text-coral hover:underline disabled:opacity-50"
                                                 >
-                                                    Remove
+                                                    {t("seller.collections.remove")}
                                                 </button>
                                             </li>
                                         ))}

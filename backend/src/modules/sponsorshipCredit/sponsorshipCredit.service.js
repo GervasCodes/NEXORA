@@ -1,5 +1,4 @@
 const sponsorshipCreditRepository = require("./sponsorshipCredit.repository");
-const settingsService = require("../settings/settings.service");
 
 // One credit = one campaign-day, usable on any campaign type (product
 // sponsorship or featured store). Included credits are consumed first;
@@ -65,11 +64,8 @@ exports.getSummary = async (sellerId) => {
 // rate: the seller's remaining included credits, and whether paid a la
 // carte purchases are currently available at all.
 exports.getPricingContext = async (sellerId) => {
-    const [paidEnabled, includedCredits] = await Promise.all([
-        settingsService.isSponsorshipMonetizationEnabled(),
-        exports.getSummary(sellerId)
-    ]);
-    return { paid_enabled: paidEnabled, included_credits: includedCredits };
+    const includedCredits = await exports.getSummary(sellerId);
+    return { paid_enabled: true, included_credits: includedCredits };
 };
 
 // ---- Funding a campaign (called inside the campaign services' txn) --------
@@ -78,10 +74,10 @@ const pluralDays = (n) => `${n} day${n === 1 ? "" : "s"}`;
 
 // Pure. Included credits first, then paid for the remainder.
 //
-// paidEnabled is the Monetization Master Switch's sponsorship flag, now
-// meaning "may a seller buy sponsorship a la carte at all". Credits are
-// already paid for through the subscription, so they keep working with
-// the flag off - it only blocks the paid remainder.
+// paidEnabled says whether the paid a la carte remainder may be bought
+// from the wallet. The campaign services always pass true now; the
+// parameter stays so this function remains pure and testable. Credits are
+// already paid for through the subscription and are always spent first.
 exports.splitFunding = ({ days, dailyRate, creditsAvailable, paidEnabled }) => {
     const available = Math.max(0, Number(creditsAvailable) || 0);
     const creditDays = Math.min(days, available);

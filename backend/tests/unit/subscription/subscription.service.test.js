@@ -2,17 +2,25 @@ jest.mock("../../../src/config/db", () => require("../../helpers/mockDb"));
 jest.mock("../../../src/modules/subscription/subscription.repository");
 jest.mock("../../../src/modules/sponsorshipCredit/sponsorshipCredit.repository");
 jest.mock("../../../src/modules/settings/settings.service");
+jest.mock("../../../src/modules/subscription/trial.service");
 
 const db = require("../../../src/config/db");
 const subscriptionRepository = require("../../../src/modules/subscription/subscription.repository");
 const creditRepository = require("../../../src/modules/sponsorshipCredit/sponsorshipCredit.repository");
 const settingsService = require("../../../src/modules/settings/settings.service");
+const trialService = require("../../../src/modules/subscription/trial.service");
 
 const subscriptionService = require("../../../src/modules/subscription/subscription.service");
 
 const connection = db.__mockConnection;
 
+const ACCESS = { inTrial: true, daysLeft: 5, paymentMode: false, hasPaidPlan: false, hasGatedAccess: true };
+
 describe("subscription.service.getMySubscription", () => {
+    beforeEach(() => {
+        trialService.getAccessState.mockResolvedValue(ACCESS);
+    });
+
     it("returns the free-plan shape when the seller has no subscription row at all", async () => {
         subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
         subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(3);
@@ -23,7 +31,8 @@ describe("subscription.service.getMySubscription", () => {
             plan: { code: "free", name: "Free" },
             status: "active",
             listingCount: 3,
-            isFreePlan: true
+            isFreePlan: true,
+            access: ACCESS
         });
     });
 
@@ -66,7 +75,6 @@ describe("subscription.service.getMySubscription", () => {
 describe("subscription.service.getEffectiveCommissionRate", () => {
     it("falls back to the platform default when the seller has no active override", async () => {
         subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
-        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -79,7 +87,6 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "cancelled",
             commission_rate_override: "5.00"
         });
-        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -92,7 +99,6 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "active",
             commission_rate_override: null
         });
-        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
         settingsService.getCommissionRate.mockResolvedValue(10);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
@@ -105,7 +111,6 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
             status: "active",
             commission_rate_override: "5.00"
         });
-        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
 
         const rate = await subscriptionService.getEffectiveCommissionRate(10);
 
@@ -113,21 +118,13 @@ describe("subscription.service.getEffectiveCommissionRate", () => {
         expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
     });
 
-    // Monetization Master Switch : commission is flat 0% when
-    // commission monetization is off, ignoring plan overrides and the
-    // platform default alike - not even consulted, let alone applied.
-    it("returns flat 0% and ignores plan overrides when commission monetization is disabled", async () => {
-        subscriptionRepository.findEntitledForSeller.mockResolvedValue({
-            status: "active",
-            commission_rate_override: "5.00"
-        });
-        settingsService.isCommissionMonetizationEnabled.mockResolvedValue(false);
+    // Commission is always charged, including during the free trial: there
+    // is no switch that turns it off any more.
+    it("always applies the platform commission, even when the seller has no plan at all", async () => {
+        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
+        settingsService.getCommissionRate.mockResolvedValue(10);
 
-        const rate = await subscriptionService.getEffectiveCommissionRate(10);
-
-        expect(rate).toBe(0);
-        expect(settingsService.getCommissionRate).not.toHaveBeenCalled();
-        expect(subscriptionRepository.findEntitledForSeller).not.toHaveBeenCalled();
+        await expect(subscriptionService.getEffectiveCommissionRate(10)).resolves.toBe(10);
     });
 });
 
@@ -299,34 +296,6 @@ describe("subscription.service.activateSubscription", () => {
         await expect(subscriptionService.activateSubscription(5)).rejects.toThrow("grant failed");
         expect(connection.rollback).toHaveBeenCalled();
         expect(connection.commit).not.toHaveBeenCalled();
-    });
-});
-
-describe("subscription.service.subscribeFree (free-launch activation)", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        subscriptionRepository.activateSubscription.mockResolvedValue(true);
-        creditRepository.insertPeriodIfAbsent.mockResolvedValue(undefined);
-    });
-
-    it("creates, activates, and grants the plan's credits for the new subscription in one transaction", async () => {
-        subscriptionRepository.findPlanByCode.mockResolvedValue({
-            id: 3, code: "growth", is_active: 1, billing_cycle: "monthly", sponsorship_credits_per_month: 10
-        });
-        subscriptionRepository.createSubscription.mockResolvedValue(9);
-        subscriptionRepository.findById.mockResolvedValue({
-            id: 9, seller_id: 10, plan_id: 3,
-            current_period_start: "2026-09-20 00:00:00", current_period_end: "2026-10-20 00:00:00"
-        });
-        subscriptionRepository.findEntitledForSeller.mockResolvedValue(null);
-        subscriptionRepository.countActiveListingsForSeller.mockResolvedValue(0);
-
-        await subscriptionService.subscribeFree(10, "growth");
-
-        expect(subscriptionRepository.activateSubscription).toHaveBeenCalledWith(9, 10, "monthly", connection);
-        expect(creditRepository.insertPeriodIfAbsent).toHaveBeenCalledWith(
-            expect.objectContaining({ sellerId: 10, subscriptionId: 9, creditsGranted: 10 }), connection);
-        expect(connection.commit).toHaveBeenCalled();
     });
 });
 

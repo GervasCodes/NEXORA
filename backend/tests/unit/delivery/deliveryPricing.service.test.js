@@ -2,11 +2,13 @@ jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/seller/seller.repository");
 jest.mock("../../../src/modules/settings/settings.service");
 jest.mock("../../../src/services/routing/routing.service");
+jest.mock("../../../src/modules/delivery/deliveryRates.service");
 
 const orderRepository = require("../../../src/modules/order/order.repository");
 const sellerRepository = require("../../../src/modules/seller/seller.repository");
 const settingsService = require("../../../src/modules/settings/settings.service");
 const routingService = require("../../../src/services/routing/routing.service");
+const deliveryRatesService = require("../../../src/modules/delivery/deliveryRates.service");
 
 const deliveryPricingService = require("../../../src/modules/delivery/deliveryPricing.service");
 
@@ -21,6 +23,10 @@ const BANDS = {
 const order = { id: 1, delivery_lat: -6.80, delivery_lng: 39.20 };
 
 beforeEach(() => {
+    // These tests cover the distance-band fallback: no rate card, and the
+    // peak-hour ETA adjustment passes the routed minutes straight through.
+    deliveryRatesService.quoteRiderPay.mockResolvedValue(null);
+    deliveryRatesService.adjustEta.mockImplementation(async (minutes) => minutes);
     settingsService.getRiderDeliveryFee.mockResolvedValue(3000);
     settingsService.getDeliveryDistanceBands.mockResolvedValue(BANDS);
 });
@@ -73,7 +79,9 @@ describe("deliveryPricing.service.calculateDeliveryFee - road-routed distance (P
             fee: 4000, // 5.5km falls in the "up to 7km" band
             distanceKm: 5.5,
             durationMinutes: 14,
+            routeDurationMinutes: 14,
             method: "distance",
+            pricingMethod: "bands",
             routingProvider: "osrm",
             degraded: false
         });

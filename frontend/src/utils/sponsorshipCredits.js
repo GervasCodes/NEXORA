@@ -16,9 +16,6 @@ export function computeFunding(pricing, days) {
         creditDays,
         paidDays,
         totalCost: paidDays > 0 ? Number((dailyRate * paidDays).toFixed(2)) : 0,
-        remainingCredits: remaining,
-        // Paid a la carte purchases switched off (Monetization Master
-        // Switch): the campaign can only run if credits cover every day.
-        blocked: paidDays > 0 && !pricing?.paid_enabled
+        remainingCredits: remaining
     };
 }

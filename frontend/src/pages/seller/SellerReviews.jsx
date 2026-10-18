@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { publicName } from "../../utils/username";
 import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
@@ -7,15 +8,17 @@ import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import Skeleton from "../../components/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
+import { useLanguage } from "../../context/LanguageContext";
 
 const FILTERS = [
-    { key: "all", label: "All" },
-    { key: "needs_reply", label: "Needs reply" },
-    { key: "low", label: "3 stars & under" }
+    { key: "all", labelKey: "seller.reviews.filter.all" },
+    { key: "needs_reply", labelKey: "seller.reviews.filter.needsReply" },
+    { key: "low", labelKey: "seller.reviews.filter.low" }
 ];
 
 
 export default function SellerReviews() {
+    const { t } = useLanguage();
     const { profile } = useOutletContext();
 
     const [reviews, setReviews] = useState([]);
@@ -37,7 +40,7 @@ export default function SellerReviews() {
                 setPage(targetPage);
                 setTotalPages(data.data.totalPages || 1);
             })
-            .catch((err) => setLoadError(extractErrorMessage(err) || "Couldn't load your reviews."))
+            .catch((err) => setLoadError(extractErrorMessage(err) || t("seller.reviews.loadFailed")))
             .finally(() => setLoading(false));
     };
 
@@ -69,7 +72,7 @@ export default function SellerReviews() {
 
     if (loading && reviews.length === 0) {
         return (
-            <div className="animate-fade-in" aria-busy="true" aria-label="Loading reviews">
+            <div className="animate-fade-in" aria-busy="true" aria-label={t("seller.reviews.loading")}>
                 <Skeleton className="h-7 w-32 mb-2" />
                 <Skeleton className="h-4 w-80 mb-8" />
                 <div className="space-y-4">
@@ -87,7 +90,7 @@ export default function SellerReviews() {
     }
 
     if (loadError && reviews.length === 0) {
-        return <ErrorState title="Couldn't load reviews" hint={loadError} onRetry={() => loadPage(1)} />;
+        return <ErrorState title={t("seller.reviews.loadFailedTitle")} hint={loadError} onRetry={() => loadPage(1)} />;
     }
 
     const visibleReviews = reviews.filter((r) => {
@@ -98,20 +101,20 @@ export default function SellerReviews() {
 
     return (
         <div>
-            <PageMeta title="Reviews" noIndex />
-            <h1 className="font-display text-2xl mb-1">Reviews</h1>
-            <p className="text-ash text-sm mb-8">What buyers are saying about your products - reply to any of them below.</p>
+            <PageMeta title={t("seller.reviews.title")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("seller.reviews.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("seller.reviews.subtitle")}</p>
 
             {error && <p role="alert" className="text-sm text-coral mb-4">{error}</p>}
             {loadError && (
                 <p role="alert" className="text-sm text-coral mb-4">
                     {loadError}{" "}
-                    <button type="button" onClick={() => loadPage(page + 1)} className="underline">Try again</button>
+                    <button type="button" onClick={() => loadPage(page + 1)} className="underline">{t("seller.reviews.tryAgain")}</button>
                 </p>
             )}
 
             {reviews.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-6" role="group" aria-label="Filter reviews">
+                <div className="flex flex-wrap gap-1 mb-6" role="group" aria-label={t("seller.reviews.filterLabel")}>
                     {FILTERS.map((f) => (
                         <button
                             key={f.key}
@@ -122,28 +125,28 @@ export default function SellerReviews() {
                                 filter === f.key ? "bg-ink text-paper" : "text-ash hover:bg-line/50"
                             }`}
                         >
-                            {f.label}
+                            {t(f.labelKey)}
                         </button>
                     ))}
                 </div>
             )}
 
             {reviews.length === 0 ? (
-                <EmptyState title="No reviews yet." />
+                <EmptyState title={t("seller.reviews.empty")} />
             ) : visibleReviews.length === 0 ? (
-                <EmptyState title="No reviews match this filter." hint={page < totalPages ? "Load more reviews to see older ones." : undefined} />
+                <EmptyState title={t("seller.reviews.noMatch")} hint={page < totalPages ? t("seller.reviews.noMatchHint") : undefined} />
             ) : (
                 <ul className="space-y-4">
                     {visibleReviews.map((r) => (
                         <li key={r.id} className="border border-line rounded-lg p-4">
                             <div className="flex justify-between items-baseline mb-1">
-                                <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                <p className="font-medium text-sm">{publicName(r)}</p>
                                 <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                             </div>
                             <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
                             {r.product_slug && (
                                 <Link to={`/products/${r.product_slug}`} className="text-xs text-teal hover:underline">
-                                    on {r.product_name}
+                                    {t("seller.reviews.onProduct", { name: r.product_name })}
                                 </Link>
                             )}
                             {r.comment && <p className="text-sm text-ink/80 mt-1 mb-2">{r.comment}</p>}
@@ -155,7 +158,7 @@ export default function SellerReviews() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Review attachment ${pi + 1}`}
+                                            alt={t("seller.reviews.attachmentAlt", { n: pi + 1 })}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />
@@ -165,7 +168,7 @@ export default function SellerReviews() {
 
                             {r.seller_reply ? (
                                 <div className="mt-2 bg-line/30 rounded-md px-3 py-2">
-                                    <p className="text-xs font-medium text-ink mb-0.5">Your response</p>
+                                    <p className="text-xs font-medium text-ink mb-0.5">{t("seller.reviews.yourResponse")}</p>
                                     <p className="text-xs text-ink/80">{r.seller_reply}</p>
                                 </div>
                             ) : (
@@ -174,7 +177,7 @@ export default function SellerReviews() {
                                         as="textarea"
                                         value={drafts[r.id] || ""}
                                         onChange={(e) => setDrafts({ ...drafts, [r.id]: e.target.value })}
-                                        placeholder="Write a response to this review…"
+                                        placeholder={t("seller.reviews.replyPlaceholder")}
                                         maxLength={1000}
                                         rows={2}
                                         className="mb-1"
@@ -185,7 +188,7 @@ export default function SellerReviews() {
                                         disabled={submittingId === r.id || !(drafts[r.id] || "").trim()}
                                         className="text-sm bg-ink text-paper px-4 py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
                                     >
-                                        {submittingId === r.id ? "Posting…" : "Post reply"}
+                                        {submittingId === r.id ? t("seller.reviews.posting") : t("seller.reviews.postReply")}
                                     </button>
                                 </div>
                             )}
@@ -200,7 +203,7 @@ export default function SellerReviews() {
                     disabled={loading}
                     className="mt-4 text-sm text-teal hover:underline disabled:opacity-50"
                 >
-                    {loading ? "Loading…" : "Load more reviews"}
+                    {loading ? t("seller.reviews.loadingShort") : t("seller.reviews.loadMore")}
                 </button>
             )}
         </div>

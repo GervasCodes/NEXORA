@@ -209,16 +209,13 @@ export default function SellerAnalytics() {
                     {t("seller.analytics.feeGateDescription")}
                 </p>
                 <div className="max-w-md glass-strong rounded-lg p-5">
-                    <h2 className="font-display text-lg mb-1">Upgrade to unlock Analytics</h2>
-                    <p className="text-sm text-ash mb-4">
-                        Analytics is included in paid subscription plans - the Free plan covers
-                        selling normally, just without this feature.
-                    </p>
+                    <h2 className="font-display text-lg mb-1">{t("trial.gate.analyticsTitle")}</h2>
+                    <p className="text-sm text-ash mb-4">{t("trial.gate.analyticsBody")}</p>
                     <Link
                         to="/seller/subscription"
                         className="inline-block w-full text-center bg-ink text-white px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
-                        View subscription plans
+                        {t("seller.pos.gateCta")}
                     </Link>
                 </div>
             </div>

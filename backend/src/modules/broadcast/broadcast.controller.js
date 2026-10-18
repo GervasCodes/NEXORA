@@ -15,6 +15,7 @@ exports.send = async (req, res) => {
             adminId: req.user.id,
             segment: req.body.segment,
             channels: req.body.channels,
+            templateType: req.body.templateType || "all",
             subject: req.body.subject,
             message: req.body.message,
             smsMessage: req.body.smsMessage,
@@ -30,10 +31,10 @@ exports.send = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
     try {
-        const data = await broadcastService.getHistory();
+        const data = await broadcastService.getHistory({ type: req.query.type });
         return res.json({ success: true, data });
     } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
+        return res.status(error.status || 400).json({ success: false, message: error.message });
     }
 };
 

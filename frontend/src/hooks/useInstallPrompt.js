@@ -13,6 +13,20 @@ import { useEffect, useState } from "react";
 // accordingly rather than showing a button that can never do anything.
 export const INSTALL_DISMISSED_KEY = "nexora_install_prompt_dismissed";
 
+// Phase 8: signed-in people are offered the install prompt once, right after
+// something meaningful (item added to the cart, an item saved, an order
+// placed) rather than on arrival. Callers announce that moment with
+// notifyMeaningfulAction(); InstallPrompt.jsx listens and applies the
+// cooldown. A plain window event keeps cart/wishlist/checkout free of any
+// import on the install UI.
+export const MEANINGFUL_ACTION_EVENT = "nexora:meaningful-action";
+export const INSTALL_OFFER_COOLDOWN_DAYS = 14;
+export const INSTALL_OFFER_AT_KEY = "nexora_install_offer_at";
+
+export function notifyMeaningfulAction() {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(MEANINGFUL_ACTION_EVENT));
+}
+
 // Phase 5 (production error fixes): the browser only ever fires
 // "beforeinstallprompt" once, and the resulting event object can only
 // have .prompt() called on it once, full stop - it doesn't matter which

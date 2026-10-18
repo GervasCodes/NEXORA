@@ -1,39 +1,31 @@
-const subscriptionRepository = require("../modules/subscription/subscription.repository");
+const trialService = require("../modules/subscription/trial.service");
 
-// Benefit gate: only a plan still inside its period (or its grace window)
-// counts. A lapsed row that still says status=active does not unlock this.
-
-// Replaces the old requireVerificationFeePaid gate on Analytics/AI once
-// the one-time verification fee was retired (see syncBadge in
-// seller.service.js). Analytics and the AI seller-advisory endpoints now
-// unlock with a paid subscription tier instead of a one-time fee - the
-// Free plan can still sell with no restriction, it just doesn't include
-// these features, matching the rest of the subscription_plans-driven
-// feature model (max_active_listings, commission_rate_override, etc).
+// Gate for the plan-only features (Analytics, AI seller insights, POS /
+// business tools). Always run requireApprovedSeller (or
+// requireBusinessToolsAccess) first.
 //
-// Deliberately checks the seller's CURRENT plan directly rather than
-// going through settingsService.isSubscriptionsMonetizationEnabled(): a
-// seller who subscribed for free while that flag is off (see
-// subscription.service.js#subscribeFree) still has a real, active,
-// non-free plan row, and should be treated the same as a seller who
-// paid for one - "is subscriptions monetization on" and "does this
-// seller have a paid-tier plan" are two different questions.
+// Access comes from one place - trialService.getAccessState():
+//   - inside the 7-day seller trial: everything is unlocked, no payment;
+//   - after the trial: a paid, entitled plan is required (a lapsed row
+//     that still says status=active does not count - see
+//     subscriptionRepository.findEntitledForSeller).
+// The Free plan keeps working for basic selling either way; it just does
+// not include these features once the trial is over.
 module.exports = async (req, res, next) => {
     try {
-        const current = await subscriptionRepository.findEntitledForSeller(req.user.id);
-        const onPaidTier = !!current
-            && (current.status === "active" || current.status === "past_due")
-            && current.plan_code !== "free";
+        const access = await trialService.getAccessState(req.user.id);
 
-        if (!onPaidTier) {
+        if (!access.hasGatedAccess) {
             return res.status(403).json({
                 success: false,
                 code: "SUBSCRIPTION_REQUIRED",
-                message: "This feature is included in paid subscription plans. Upgrade your plan to unlock it.",
-                current_plan_code: current ? current.plan_code : "free"
+                message: "Your free trial has ended. Choose a plan to keep using this feature.",
+                trial_ended: access.trialUsed,
+                current_plan_code: access.currentPlanCode
             });
         }
 
+        req.sellerAccess = access;
         next();
     } catch (error) {
         return res.status(400).json({

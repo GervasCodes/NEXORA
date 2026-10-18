@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "./AuthContext";
+import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
 
 const CartContext = createContext(null);
 
@@ -45,6 +46,7 @@ export function CartProvider({ children }) {
         try {
             await api.post("/cart", { product_id: productId, quantity });
             await refresh();
+            notifyMeaningfulAction();
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };

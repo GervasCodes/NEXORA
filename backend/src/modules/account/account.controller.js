@@ -29,6 +29,21 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
+exports.changeUsername = async (req, res) => {
+    try {
+        const profile = await accountService.changeUsername(req.user.id, req.body.username);
+
+        return res.json({ success: true, message: "Username updated successfully.", data: profile });
+
+    } catch (error) {
+        return res.status(error.status || 400).json({
+            success: false,
+            code: error.code,
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message
+        });
+    }
+};
+
 exports.uploadProfilePhoto = async (req, res) => {
     try {
         const photoUrl = await accountService.uploadProfilePhoto(req.user.id, req.file);

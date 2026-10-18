@@ -3,6 +3,7 @@ const subscriptionRepository = require("./subscription.repository");
 const settingsService = require("../settings/settings.service");
 const sponsorshipCreditService = require("../sponsorshipCredit/sponsorshipCredit.service");
 const notificationService = require("../notification/notification.service");
+const trialService = require("./trial.service");
 const logger = require("../../utils/logger").child({ module: "subscription" });
 
 // Days a seller keeps plan benefits after a renewing period ends
@@ -42,17 +43,20 @@ exports.listPlans = async (audience) => {
 exports.getMySubscription = async (sellerId) => {
     const current = await subscriptionRepository.findEntitledForSeller(sellerId);
     const listingCount = await subscriptionRepository.countActiveListingsForSeller(sellerId);
+    const access = await trialService.getAccessState(sellerId);
 
     if (!current) {
         return {
             plan: { code: "free", name: "Free" },
             status: "active",
             listingCount,
-            isFreePlan: true
+            isFreePlan: true,
+            access
         };
     }
 
     return {
+        access,
         subscriptionId: current.id,
         plan: {
             code: current.plan_code,
@@ -78,17 +82,10 @@ exports.getMySubscription = async (sellerId) => {
 // same way every other rate lookup in this codebase does when nothing
 // more specific is set.
 //
-// Monetization Master Switch: when monetization_commission_enabled is
-// off, commission is flat 0% for everyone, full stop - plan overrides
-// and the platform default commission_rate setting are both ignored
-// rather than consulted, matching a genuinely free launch rather than
-// "free unless a plan says otherwise".
+// Commission is always charged - including during the seller's free
+// trial. The platform rate is admin-editable in Settings; a paid plan may
+// lower it through its commission_rate_override.
 exports.getEffectiveCommissionRate = async (sellerId) => {
-    const commissionEnabled = await settingsService.isCommissionMonetizationEnabled();
-    if (!commissionEnabled) {
-        return 0;
-    }
-
     const current = await subscriptionRepository.findEntitledForSeller(sellerId);
     if (current && (current.status === "active" || current.status === "past_due") && current.commission_rate_override !== null) {
         return Number(current.commission_rate_override);
@@ -162,39 +159,6 @@ exports.cancelMySubscription = async (sellerId) => {
     return { message: "Renewal turned off. Your plan benefits remain active until the end of the current billing period." };
 };
 
-// ---- Monetization Master Switch: free-launch activation -------------------
-
-// Called by subscription.controller.js's subscribe* actions instead of
-// initiating a payment when monetization_subscriptions_enabled is off -
-// creates the subscription row and activates it immediately, same
-// transaction shape payment.service.js's webhook handler uses via
-// activateSubscription() above, just without any payment in between.
-// Works for paid plans too (not just the free plan): "sellers can select
-// plans normally... subscription activates automatically" per the
-// monetization roadmap - a seller isn't limited to the free plan just
-// because billing hasn't started yet.
-exports.subscribeFree = async (sellerId, planCode) => {
-    const plan = await subscriptionRepository.findPlanByCode(planCode);
-    if (!plan || !plan.is_active) {
-        throw new Error("Plan not found");
-    }
-
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
-        const subscriptionId = await subscriptionRepository.createSubscription(sellerId, plan.id, connection);
-        await activateAndGrantCredits({ id: subscriptionId, seller_id: sellerId }, plan, connection);
-        await connection.commit();
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-    } finally {
-        connection.release();
-    }
-
-    return exports.getMySubscription(sellerId);
-};
-
 // ---- Lifecycle (called daily from jobs/subscriptionLifecycle.job.js) -----
 
 // Each transition is its own conditional UPDATE, so a re-run or a second
@@ -220,6 +184,8 @@ exports.runLifecycleSweep = async () => {
 
     return { movedToPastDue, movedToExpired };
 };
+
+exports.getAccess = (sellerId) => trialService.getAccessState(sellerId);
 
 exports.sendExpiryReminders = async () => {
     const expiring = await subscriptionRepository.findExpiringSoon(REMINDER_DAYS);

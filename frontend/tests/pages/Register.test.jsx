@@ -15,6 +15,11 @@ vi.mock("../../src/context/LanguageContext", () => ({
     useLanguage: () => ({ t: (key) => key })
 }));
 
+// Username availability check (phase 6): every name is free in these tests.
+vi.mock("../../src/api/client", () => ({
+    default: { get: vi.fn(() => Promise.resolve({ data: { data: { available: true } } })) }
+}));
+
 import Register from "../../src/pages/Register";
 
 // Required fields render their label as "<key> *" (see Input.jsx), so
@@ -24,6 +29,8 @@ const byLabel = (key) => screen.getByLabelText(new RegExp(`^${key}`));
 const fillAccountBasics = async (user) => {
     await user.type(byLabel("auth.firstNameLabel"), "Amina");
     await user.type(byLabel("auth.lastNameLabel"), "Mrisho");
+    await user.type(byLabel("username.label"), "amina_m");
+    await screen.findByText("username.available");
     await user.type(byLabel("auth.emailLabel"), "amina@example.com");
     await user.type(screen.getByPlaceholderText("712 345 678"), "712345678");
 };

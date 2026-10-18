@@ -98,7 +98,13 @@ exports.deliveryEstimateValidation = [
 
     body("delivery_lng")
         .isFloat({ min: -180, max: 180 })
-        .withMessage("Invalid delivery longitude")
+        .withMessage("Invalid delivery longitude"),
+
+    // Optional - only picks which region's ETA windows apply.
+    body("region")
+        .optional({ values: "falsy" })
+        .isString()
+        .isLength({ max: 60 })
 ];
 
 exports.orderIdValidation = [

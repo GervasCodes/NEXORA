@@ -132,7 +132,6 @@ const AdminServices = lazy(() => import("./pages/admin/AdminServices"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
-const AdminBillingControl = lazy(() => import("./pages/admin/AdminBillingControl"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
@@ -150,6 +149,7 @@ const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminDataReset = lazy(() => import("./pages/admin/AdminDataReset"));
 const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
+const AdminDeliveryRates = lazy(() => import("./pages/admin/AdminDeliveryRates"));
 
 export default function App() {
     const { t } = useLanguage();
@@ -280,7 +280,7 @@ export default function App() {
         <div className="min-h-screen flex flex-col">
             {cookieAcknowledged && <UpdateAvailableBanner onVisibilityChange={setUpdateVisible} />}
             <NetworkStatusNotice />
-            {cookieAcknowledged && !updateVisible && isGuestLandingRoute && <InstallPrompt />}
+            {cookieAcknowledged && !updateVisible && <InstallPrompt guestLanding={isGuestLandingRoute} />}
             {!isAdminRoute && <CookieConsentBanner onAcknowledged={() => setCookieAcknowledged(true)} />}
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
@@ -423,7 +423,6 @@ export default function App() {
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
-                            <Route path="billing-control" element={<AdminBillingControl />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="sponsorship" element={<AdminSponsorship />} />
                             <Route path="subscriptions" element={<AdminSubscriptions />} />
@@ -442,6 +441,7 @@ export default function App() {
                             <Route path="audit-logs" element={<AdminAuditLogs />} />
                             <Route path="data-reset" element={<AdminDataReset />} />
                             <Route path="broadcast" element={<AdminBroadcast />} />
+                            <Route path="delivery-rates" element={<AdminDeliveryRates />} />
                         </Route>
 
                         <Route path="*" element={<NotFound />} />

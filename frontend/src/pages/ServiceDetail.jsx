@@ -5,6 +5,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useAuth } from "../context/AuthContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import AvailabilityCalendar from "../components/AvailabilityCalendar";
 import RatingBreakdown from "../components/RatingBreakdown";
@@ -557,7 +558,7 @@ export default function ServiceDetail() {
             )}
 
             {/* Phones: keep the main action in reach while reading the page. */}
-            <div className="md:hidden fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 px-4 py-3 bg-paper/95 backdrop-blur border-t border-line">
+            <div className="md:hidden fixed inset-x-0 bottom-[var(--bottom-inset)] z-20 px-4 py-3 bg-paper/95 backdrop-blur border-t border-line">
                 <button
                     type="button"
                     onClick={() => document.getElementById("booking-widget")?.scrollIntoView({ behavior: "smooth", block: "start" })}
@@ -590,7 +591,7 @@ export default function ServiceDetail() {
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
                             <div className="flex justify-between items-baseline mb-1">
-                                <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                <p className="font-medium text-sm">{publicName(r, t("username.anonymous"))}</p>
                                 <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                             </div>
                             <p className="text-sm text-ash mb-1">★ {r.rating}/5</p>
@@ -603,7 +604,7 @@ export default function ServiceDetail() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Attachment ${pi + 1} from ${r.first_name}'s review`}
+                                            alt={`Attachment ${pi + 1} from ${publicName(r, t("username.anonymous"))}'s review`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />

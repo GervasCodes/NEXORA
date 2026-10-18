@@ -96,7 +96,7 @@ export function ToastProvider({ children }) {
             {/* Clears the iPhone home-indicator safe area, same calc()
                 pattern as the other floating surfaces (NexoraAIButton,
                 SupportWidget). */}
-            <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:right-4 z-[var(--z-banner-top)] flex flex-col gap-2 sm:w-80 pointer-events-none">
+            <div className="fixed bottom-[calc(1rem+var(--bottom-inset))] inset-x-4 sm:inset-x-auto sm:right-4 z-[var(--z-banner-top)] flex flex-col gap-2 sm:w-80 pointer-events-none">
                 {toasts.map((toast) => (
                     <ToastItem key={toast.id} toast={toast} onClose={() => dismiss(toast.id)} />
                 ))}

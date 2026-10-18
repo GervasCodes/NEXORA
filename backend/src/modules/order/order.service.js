@@ -3,6 +3,7 @@ const cartRepository = require("../cart/cart.repository");
 const sellerRepository = require("../seller/seller.repository");
 const deliveryRepository = require("../delivery/delivery.repository");
 const deliveryPricingService = require("../delivery/deliveryPricing.service");
+const deliveryRatesService = require("../delivery/deliveryRates.service");
 const deliveryService = require("../delivery/delivery.service");
 const notificationService = require("../notification/notification.service");
 const fraudService = require("../fraud/fraud.service");
@@ -469,6 +470,12 @@ exports.checkout = async (buyerId, shippingInfo) => {
         withEmail: true,
         withWhatsApp: true
     });
+
+    // Round 5, Phase 5 - freeze the rider-pay quote on each deliverable
+    // order now, so later rate/fuel changes never rewrite it. Best-effort:
+    // an order without a quote is priced live at dispatch, as before.
+    Promise.all(deliverableOrderIds.map((id) => deliveryPricingService.snapshotRiderFee(id)))
+        .catch((err) => logger.error({ err, orderId }, "rider fee quote snapshot failed"));
 
     // Delivery proof handover code (Phase 5, P0) - told to the buyer
     // right away by SMS and WhatsApp (in-app notify's withWhatsApp leg
@@ -1082,7 +1089,7 @@ exports.requestPreorderBalance = async (orderId, sellerId) => {
 // "distance" only when every vendor's leg had a real route; if even one
 // vendor has no pickup pin on file yet, the honest answer is "unknown",
 // not an average that quietly drops the missing one.
-exports.getDeliveryEstimate = async (buyerId, { deliveryLat, deliveryLng }) => {
+exports.getDeliveryEstimate = async (buyerId, { deliveryLat, deliveryLng, region }) => {
     const cart = await cartRepository.getCartByUser(buyerId);
 
     if (!cart.length) {
@@ -1097,13 +1104,20 @@ exports.getDeliveryEstimate = async (buyerId, { deliveryLat, deliveryLng }) => {
             pickupLat: seller?.pickup_lat ?? null,
             pickupLng: seller?.pickup_lng ?? null,
             deliveryLat,
-            deliveryLng
+            deliveryLng,
+            region
         });
     }));
 
     const allKnown = estimates.every((estimate) => estimate.durationMinutes != null);
-    const durationMinutes = allKnown
+    // Round 5, Phase 5 - each leg's duration already carries the peak-hour
+    // adjustment (deliveryPricing.service.js); the pickup handling buffer is
+    // added once here, on top of the slowest leg.
+    const slowestLeg = allKnown
         ? Math.max(...estimates.map((estimate) => estimate.durationMinutes))
+        : null;
+    const durationMinutes = allKnown
+        ? await deliveryRatesService.adjustEta(slowestLeg, { region, includeHandling: true, onlyHandling: true })
         : null;
     const degraded = estimates.some((estimate) => estimate.degraded);
 

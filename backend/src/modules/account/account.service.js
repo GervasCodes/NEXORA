@@ -2,6 +2,7 @@ const crypto = require("crypto");
 
 const db = require("../../config/db");
 const accountRepository = require("./account.repository");
+const usernameService = require("./username.service");
 const comparePassword = require("../../utils/comparePassword");
 const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
@@ -22,7 +23,9 @@ exports.getProfile = async (userId) => {
         throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
-    return user;
+    // Only present while the 30-day change cooldown is running (phase 6).
+    const nextUsernameChangeAt = usernameService.nextChangeAt(user.username_changed_at);
+    return nextUsernameChangeAt ? { ...user, username_next_change_at: nextUsernameChangeAt } : user;
 };
 
 exports.updateProfile = async (userId, data) => {
@@ -42,6 +45,14 @@ exports.updateProfile = async (userId, data) => {
 
     await accountRepository.updateProfile(userId, data);
 
+    return exports.getProfile(userId);
+};
+
+// Phase 6 (round 5) - username change from Account settings. The rules, the
+// availability check and the once-per-30-days guard all live in
+// username.service.js; this just hands back the refreshed profile.
+exports.changeUsername = async (userId, username) => {
+    await usernameService.changeUsername(userId, username);
     return exports.getProfile(userId);
 };
 

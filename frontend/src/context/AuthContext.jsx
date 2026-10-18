@@ -117,12 +117,23 @@ export function AuthProvider({ children }) {
                 // happened to log in again.
                 setCsrfToken(data.data.csrfToken);
             })
-            .catch(() => {
+            .catch((error) => {
                 // A 401 here already goes through api/client.js's response
                 // interceptor (clears localStorage, may fire
                 // sessionExpiredHandler) - nothing further needed on a
                 // failure beyond making sure the in-memory user doesn't
                 // keep showing as logged in while that resolves.
+                //
+                // Reliability phase: a failure with NO server verdict - a
+                // closed connection, a timeout, or a 5xx while the host
+                // wakes up (api/client.js has already retried by now) -
+                // says nothing about whether the session is valid. Logging
+                // the person out for that is what made a sleeping server
+                // look like "I got signed out". Keep the cached user; the
+                // next real request that gets an answer corrects it.
+                const status = error?.response?.status;
+                const noVerdict = !error?.response || status >= 500;
+                if (noVerdict) return;
                 setUser(null);
             })
             .finally(() => setSessionReady(true));
@@ -174,6 +185,55 @@ export function AuthProvider({ children }) {
             // (e.g. an admin deactivating something right after login)
             // would 403 with CSRF_TOKEN_INVALID.
             setCsrfToken(data.data.csrfToken);
+            return { success: true };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // ---- Google sign-in / sign-up (round 5, phase 7) -------------------------
+    // Same session handling as verifyLoginOtp: cache the (non-sensitive) user,
+    // mark the session ready and store the CSRF value from the response body.
+    const startSessionFrom = (payload) => {
+        localStorage.setItem("nexora_user", JSON.stringify(payload.user));
+        setUser(payload.user);
+        setSessionReady(true);
+        setCsrfToken(payload.csrfToken);
+    };
+
+    // -> { success, status: "signed_in" } or
+    //    { success, status: "needs_profile", ticket, profile } for a new Google user.
+    const loginWithGoogle = useCallback(async (credential) => {
+        try {
+            const { data } = await api.post("/auth/google", { credential, mode: "signin" });
+            if (data.data.status === "signed_in") {
+                startSessionFrom(data.data);
+                return { success: true, status: "signed_in" };
+            }
+            return { success: true, status: "needs_profile", ticket: data.data.ticket, profile: data.data.profile };
+        } catch (error) {
+            if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
+                setSuspension({ reason: error.response.data?.data?.reason || null });
+            }
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // Seller / delivery-agent registration: name + email only, nothing is created.
+    const prefillFromGoogle = useCallback(async (credential) => {
+        try {
+            const { data } = await api.post("/auth/google", { credential, mode: "prefill" });
+            return { success: true, ticket: data.data.ticket, profile: data.data.profile };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // Finishes a new Google signup (phone, username, terms) and signs in.
+    const completeGoogleSignup = useCallback(async (details) => {
+        try {
+            const { data } = await api.post("/auth/google/complete", details);
+            startSessionFrom(data.data);
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
@@ -243,10 +303,12 @@ export function AuthProvider({ children }) {
     const value = useMemo(
         () => ({
             user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
+            loginWithGoogle, prefillFromGoogle, completeGoogleSignup,
             suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
             csrfExpired, clearCsrfExpired
         }),
         [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
+            loginWithGoogle, prefillFromGoogle, completeGoogleSignup,
             suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
             csrfExpired, clearCsrfExpired]
     );

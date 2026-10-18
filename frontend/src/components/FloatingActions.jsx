@@ -4,7 +4,7 @@
 // --z-float token.
 export default function FloatingActions({ children }) {
     return (
-        <div className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-[var(--z-float)] flex flex-col items-end gap-3 pointer-events-none">
+        <div className="fixed right-4 bottom-[calc(1rem+var(--bottom-inset))] z-[var(--z-float)] flex flex-col items-end gap-3 pointer-events-none">
             <div className="pointer-events-auto flex flex-col items-end gap-3">
                 {children}
             </div>

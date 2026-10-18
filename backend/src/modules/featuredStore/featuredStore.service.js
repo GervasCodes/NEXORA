@@ -71,11 +71,9 @@ exports.createCampaign = async (sellerId, categoryId, days) => {
     }
 
     const dailyRate = await settingsService.getFeaturedStoreDailyRate();
-    // Monetization Master Switch: monetization_sponsorship_enabled now
-    // means "may this seller buy sponsorship a la carte at all". Included
-    // subscription credits are already paid for, so they keep working
-    // when it's off - it only blocks the paid remainder.
-    const paidEnabled = await settingsService.isSponsorshipMonetizationEnabled();
+    // Paid a la carte sponsorship (charged from the seller's wallet) is
+    // always available; included subscription credits are spent first.
+    const paidEnabled = true;
 
     const connection = await db.getConnection();
 

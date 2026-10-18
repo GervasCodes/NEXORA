@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api from "../api/client";
 import { useAuth } from "./AuthContext";
+import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
 
 const WishlistContext = createContext(null);
 
@@ -60,6 +61,7 @@ export function WishlistProvider({ children }) {
                 await api.delete(`${basePath}/${id}`);
             } else {
                 await api.post(`${basePath}/${id}`);
+                notifyMeaningfulAction();
             }
         } catch {
             refresh();

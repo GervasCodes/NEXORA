@@ -6,8 +6,10 @@ import { formatDate } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
 import { VerifiedBadgeIcon, HourglassIcon } from "../../components/Icons";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function SellerTaxInfo() {
+    const { t } = useLanguage();
     const [taxInfo, setTaxInfo] = useState(null);
     const [receipts, setReceipts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function SellerTaxInfo() {
         try {
             const { data } = await api.put("/efd/seller/tax-info", { tin, vrn: vrn || undefined });
             setTaxInfo(data.data);
-            setMessage("Tax info submitted. An admin will verify it before fiscal receipts start being issued.");
+            setMessage(t("seller.tax.submitted"));
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -52,10 +54,10 @@ export default function SellerTaxInfo() {
 
     return (
         <div>
-            <PageMeta title="Tax & fiscal receipts" noIndex />
-            <h1 className="font-display text-2xl mb-1">Tax & fiscal receipts (EFD)</h1>
+            <PageMeta title={t("seller.tax.metaTitle")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("seller.tax.title")}</h1>
             <p className="text-ash text-sm mb-8">
-                Register your TIN to have TRA-compliant fiscal receipts issued automatically for your paid orders.
+                {t("seller.tax.intro")}
             </p>
 
             {taxInfo?.tin && (
@@ -64,23 +66,23 @@ export default function SellerTaxInfo() {
                         {taxInfo.efd_registered ? (
                             <>
                                 <VerifiedBadgeIcon className="w-4 h-4 text-mango shrink-0" />
-                                Verified
+                                {t("seller.tax.verified")}
                             </>
                         ) : (
                             <>
                                 <HourglassIcon className="w-4 h-4 text-ash shrink-0" />
-                                Pending admin verification
+                                {t("seller.tax.pending")}
                             </>
                         )}
                     </p>
-                    <p className="text-ash">TIN: {taxInfo.tin}{taxInfo.vrn ? ` · VRN: ${taxInfo.vrn}` : ""}</p>
+                    <p className="text-ash">{t("seller.tax.tinLine", { tin: taxInfo.tin })}{taxInfo.vrn ? ` · ${t("seller.tax.vrnLine", { vrn: taxInfo.vrn })}` : ""}</p>
                 </div>
             )}
 
             <form onSubmit={submit} className="space-y-4 mb-10">
                 <Input
                     id="efd-tin"
-                    label="TIN (9 digits)"
+                    label={t("seller.tax.tinLabel")}
                     required
                     pattern="\d{9}"
                     value={tin}
@@ -88,7 +90,7 @@ export default function SellerTaxInfo() {
                 />
                 <Input
                     id="efd-vrn"
-                    label="VRN (optional, if VAT-registered)"
+                    label={t("seller.tax.vrnLabel")}
                     value={vrn}
                     onChange={(e) => setVrn(e.target.value)}
                 />
@@ -101,24 +103,24 @@ export default function SellerTaxInfo() {
                     disabled={submitting}
                     className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                    {submitting ? "Submitting…" : "Submit"}
+                    {submitting ? t("seller.tax.submitting") : t("seller.tax.submit")}
                 </button>
             </form>
 
-            <h2 className="font-display text-lg mb-3">Fiscal receipts</h2>
+            <h2 className="font-display text-lg mb-3">{t("seller.tax.receipts")}</h2>
             {receipts.length === 0 ? (
-                <EmptyState title="No fiscal receipts yet." />
+                <EmptyState title={t("seller.tax.noReceipts")} />
             ) : (
                 <ul className="space-y-2">
                     {receipts.filter((r) => r.status !== "not_applicable").map((r) => (
                         <li key={r.id} className="border-b border-line pb-2 text-sm">
                             <div className="flex justify-between">
-                                <span>Order {r.order_number}</span>
-                                <span className="capitalize text-ash">{r.status}</span>
+                                <span>{t("seller.tax.order", { number: r.order_number })}</span>
+                                <span className="capitalize text-ash">{["pending", "issued", "failed"].includes(r.status) ? t(`seller.tax.status.${r.status}`) : r.status}</span>
                             </div>
                             {r.fiscal_receipt_number && (
                                 <p className="text-xs text-ash mt-0.5">
-                                    Receipt {r.fiscal_receipt_number} · Verification code {r.verification_code}
+                                    {t("seller.tax.receiptLine", { number: r.fiscal_receipt_number, code: r.verification_code })}
                                 </p>
                             )}
                             <p className="text-xs text-ash">{formatDate(r.created_at)}</p>

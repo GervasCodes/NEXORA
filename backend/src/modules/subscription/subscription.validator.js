@@ -49,3 +49,9 @@ exports.updatePlanValidation = [
     body("isActive").optional().isBoolean(),
     ...planContentRules
 ];
+
+exports.extendTrialValidation = [
+    param("id").isInt({ gt: 0 }).withMessage("Invalid seller"),
+    body("days").isInt({ min: 1, max: 90 }).withMessage("Extension must be between 1 and 90 days").toInt(),
+    body("reason").optional({ nullable: true }).isString().isLength({ max: 500 }).withMessage("Reason is too long")
+];

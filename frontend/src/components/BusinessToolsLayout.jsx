@@ -2,6 +2,7 @@ import { Link, NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import PageTransition from "./PageTransition";
+import TrialBanner from "./TrialBanner";
 
 // Dashboard for "business tools only" accounts (migration 146): a seller-role
 // account that uses stock/sales tooling without a marketplace store. It has
@@ -55,6 +56,8 @@ export default function BusinessToolsLayout() {
                     </NavLink>
                 ))}
             </nav>
+
+            <TrialBanner plansPath="/business/plan" />
 
             <PageTransition granular>
                 <Outlet />

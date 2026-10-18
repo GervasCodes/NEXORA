@@ -41,7 +41,6 @@ beforeEach(() => {
 describe("sponsorship.service.getPricing", () => {
     it("returns the daily rate, the duration bounds, and a seller with no credit period as zero included credits", async () => {
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
 
         const pricing = await sponsorshipService.getPricing(10);
 
@@ -54,9 +53,8 @@ describe("sponsorship.service.getPricing", () => {
         });
     });
 
-    it("reports the seller's remaining included credits and whether paid purchases are available", async () => {
+    it("reports the seller's remaining included credits, with paid purchases always available", async () => {
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
         creditRepository.findCurrentPeriodId.mockResolvedValue(3);
         creditRepository.findById.mockResolvedValue({
             id: 3, credits_granted: 10, credits_used: 4, period_end: "2026-10-01"
@@ -64,7 +62,7 @@ describe("sponsorship.service.getPricing", () => {
 
         const pricing = await sponsorshipService.getPricing(10);
 
-        expect(pricing.paid_enabled).toBe(false);
+        expect(pricing.paid_enabled).toBe(true);
         expect(pricing.included_credits).toEqual({ granted: 10, used: 4, remaining: 6, period_end: "2026-10-01" });
     });
 });
@@ -96,7 +94,6 @@ describe("sponsorship.service.createCampaign", () => {
     it("rejects when the wallet balance can't cover the total cost, without touching the ledger", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "10000.00" });
 
         // 5 days * 5000/day = 25000, more than the 10000 balance
@@ -112,7 +109,6 @@ describe("sponsorship.service.createCampaign", () => {
     it("debits the wallet, opens the campaign, flips is_sponsored, and commits", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "100000.00" });
         sponsorshipRepository.create.mockResolvedValue(77);
         walletRepository.incrementBalance.mockResolvedValue(75000);
@@ -137,7 +133,6 @@ describe("sponsorship.service.createCampaign", () => {
     it("rolls back if the campaign insert fails mid-transaction", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "100000.00" });
         sponsorshipRepository.create.mockRejectedValue(new Error("db write failed"));
 
@@ -147,13 +142,11 @@ describe("sponsorship.service.createCampaign", () => {
         expect(connection.release).toHaveBeenCalled();
     });
 
-    // Monetization Master Switch: monetization_sponsorship_enabled now only
-    // controls whether the PAID remainder can be bought a la carte. Credits
-    // are already paid for through the subscription, so they keep working.
-    it("opens a fully credit-funded campaign with nothing charged, even when paid sponsorship is disabled", async () => {
+    // Included credits are spent first and a fully credit-funded campaign
+    // charges nothing.
+    it("opens a fully credit-funded campaign with nothing charged", async () => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "0.00" });
         givenCreditPeriod({ granted: 10, used: 2 });
         sponsorshipRepository.create.mockResolvedValue(78);
@@ -172,36 +165,6 @@ describe("sponsorship.service.createCampaign", () => {
         expect(result).toMatchObject({ campaignId: 78, totalCost: 0, creditsUsed: 5 });
     });
 
-    it("blocks a seller with no included credits when paid sponsorship is disabled", async () => {
-        productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
-        settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
-        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "999999.00" });
-
-        await expect(sponsorshipService.createCampaign(10, 1, 5)).rejects.toThrow(
-            "Paid sponsorship isn't available yet"
-        );
-
-        expect(sponsorshipRepository.create).not.toHaveBeenCalled();
-        expect(creditRepository.incrementUsed).not.toHaveBeenCalled();
-        expect(connection.rollback).toHaveBeenCalled();
-        expect(connection.commit).not.toHaveBeenCalled();
-    });
-
-    it("blocks the paid remainder when disabled, telling the seller how many credit days they do have", async () => {
-        productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
-        settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
-        walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "999999.00" });
-        givenCreditPeriod({ granted: 3, used: 1 });
-
-        await expect(sponsorshipService.createCampaign(10, 1, 5)).rejects.toThrow(
-            "you have 2 days of included credits left"
-        );
-
-        expect(creditRepository.incrementUsed).not.toHaveBeenCalled();
-        expect(sponsorshipRepository.create).not.toHaveBeenCalled();
-    });
 });
 
 // Credit consumption order: included credits first, then the paid a la
@@ -210,7 +173,6 @@ describe("sponsorship.service.createCampaign - included credits then paid", () =
     beforeEach(() => {
         productRepository.findById.mockResolvedValue({ id: 1, seller_id: 10, is_active: true, name: "Shoe" });
         settingsService.getSponsorshipDailyRate.mockResolvedValue(5000);
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "100000.00" });
         sponsorshipRepository.create.mockResolvedValue(80);
         walletRepository.incrementBalance.mockResolvedValue(90000);

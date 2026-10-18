@@ -23,7 +23,6 @@ const fixtures = require("./helpers/dbFixtures");
 beforeEach(async () => {
     await fixtures.resetTables();
     settingsService.getCommissionRate.mockResolvedValue(10); // 10%
-    settingsService.isCommissionMonetizationEnabled.mockResolvedValue(true);
     notificationService.notify.mockResolvedValue(undefined);
 });
 

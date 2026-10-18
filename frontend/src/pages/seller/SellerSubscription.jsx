@@ -4,7 +4,6 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import Skeleton from "../../components/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
-import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PhoneInput from "../../components/PhoneInput";
 import PageMeta from "../../components/PageMeta";
@@ -49,8 +48,7 @@ export default function SellerSubscription() {
     useEffect(load, []);
     useEffect(() => () => clearInterval(pollRef.current), []);
 
-    // Handles landing back here after Snippe/PayPal - mirrors
-    // VerificationFeeGate.jsx's own return-URL handling.
+    // Handles landing back here after Snippe/PayPal.
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const payment = params.get("payment");
@@ -260,8 +258,6 @@ export default function SellerSubscription() {
                     {toolsOnly ? t("business.planSubtitle") : "Choose a plan to lower your commission rate and unlock sponsorship credits."}
                 </p>
             </div>
-
-            <BillingStatusBanner flagKey="monetization_subscriptions_enabled" label="Subscriptions" />
 
             {error && <p role="alert" className="text-coral text-sm">{error}</p>}
             {message && <p className="text-teal text-sm">{message}</p>}

@@ -5,6 +5,7 @@ import PageLoader from "../components/PageLoader";
 import EmptyState from "../components/ui/EmptyState";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getEmbedUrl, isSafeLiveSellingLink } from "../utils/liveSellingEmbed";
 import { SITE_URL } from "../utils/seo";
 import { buildLiveSellingIcs, downloadIcs } from "../utils/icsCalendar";
@@ -13,7 +14,7 @@ import { BellIcon, CalendarIcon } from "../components/Icons";
 //  (UI/UX remediation) - one row's worth of UI, kept in its own
 // component since it now carries meaningfully more state (embed toggle,
 // reminder subscription) than a plain <li> did before.
-function SessionRow({ session, user, toast }) {
+function SessionRow({ session, user, toast, t }) {
     const [watching, setWatching] = useState(false);
     const [reminded, setReminded] = useState(false);
     const [remindBusy, setRemindBusy] = useState(false);
@@ -61,7 +62,7 @@ function SessionRow({ session, user, toast }) {
             <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
                 <p className="font-medium text-sm">{session.title}</p>
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${session.status === "live" ? "bg-coral text-white" : "bg-line text-ash"}`}>
-                    {session.status === "live" ? "Live now" : new Date(session.scheduled_at).toLocaleString()}
+                    {session.status === "live" ? t("liveSelling.liveNow") : new Date(session.scheduled_at).toLocaleString()}
                 </span>
             </div>
             <p className="text-xs text-ash mb-2">{session.store_name}</p>
@@ -86,7 +87,7 @@ function SessionRow({ session, user, toast }) {
                         onClick={() => setWatching((v) => !v)}
                         className="text-teal text-sm hover:underline"
                     >
-                        {watching ? "Hide player" : "▶ Watch here"}
+                        {watching ? t("liveSelling.hidePlayer") : `▶ ${t("liveSelling.watchHere")}`}
                     </button>
                 ) : null}
                 {safeLink ? (
@@ -96,7 +97,7 @@ function SessionRow({ session, user, toast }) {
                         rel="noopener noreferrer"
                         className="text-teal text-sm hover:underline"
                     >
-                        {embedUrl ? "Open on original site →" : "Watch →"}
+                        {embedUrl ? t("liveSelling.openOriginal") : t("liveSelling.watch")}
                     </a>
                 ) : null}
 
@@ -109,8 +110,8 @@ function SessionRow({ session, user, toast }) {
                                 disabled={remindBusy}
                                 className={`text-sm hover:underline disabled:opacity-60 inline-flex items-center gap-1 ${reminded ? "text-teal" : "text-ash"}`}
                             >
-                                <BellIcon className="w-3.5 h-3.5 shrink-0" />
-                                {reminded ? "We'll notify you" : "Notify me"}
+                                <BellIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                                {reminded ? t("liveSelling.willNotify") : t("liveSelling.notifyMe")}
                             </button>
                         )}
                         <button
@@ -118,8 +119,8 @@ function SessionRow({ session, user, toast }) {
                             onClick={handleAddToCalendar}
                             className="text-ash text-sm hover:underline inline-flex items-center gap-1"
                         >
-                            <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
-                            Add to calendar
+                            <CalendarIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            {t("liveSelling.addToCalendar")}
                         </button>
                     </>
                 )}
@@ -129,6 +130,7 @@ function SessionRow({ session, user, toast }) {
 }
 
 export default function LiveSelling() {
+    const { t } = useLanguage();
     const [sessions, setSessions] = useState(null);
     const { user } = useAuth();
     const toast = useToast();
@@ -159,18 +161,18 @@ export default function LiveSelling() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-            <PageMeta title="Live selling" description="Upcoming live selling sessions from NEXORA sellers." jsonLd={eventsJsonLd.length ? eventsJsonLd : undefined} />
-            <h1 className="font-display text-2xl mb-1">Live selling</h1>
+            <PageMeta title={t("liveSelling.title")} description={t("liveSelling.metaDescription")} jsonLd={eventsJsonLd.length ? eventsJsonLd : undefined} />
+            <h1 className="font-display text-2xl mb-1">{t("liveSelling.title")}</h1>
             <p className="text-ash text-sm mb-8">
-                Upcoming live sessions from sellers - watch right here when we can, or head to wherever they're streaming.
+                {t("liveSelling.intro")}
             </p>
 
             {sessions.length === 0 ? (
-                <EmptyState title="No sessions scheduled" hint="Check back soon." />
+                <EmptyState title={t("liveSelling.empty")} hint={t("liveSelling.emptyHint")} />
             ) : (
                 <ul className="space-y-3">
                     {sessions.map((s) => (
-                        <SessionRow key={s.id} session={s} user={user} toast={toast} />
+                        <SessionRow key={s.id} session={s} user={user} toast={toast} t={t} />
                     ))}
                 </ul>
             )}

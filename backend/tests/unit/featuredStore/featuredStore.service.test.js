@@ -35,7 +35,6 @@ beforeEach(() => {
     campaignRepository.hasActiveForSellerCategory.mockResolvedValue(false);
     campaignRepository.create.mockResolvedValue(90);
     settingsService.getFeaturedStoreDailyRate.mockResolvedValue(8000);
-    settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(true);
     walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "200000.00" });
     walletRepository.incrementBalance.mockResolvedValue(160000);
     creditRepository.findCurrentPeriodId.mockResolvedValue(null);
@@ -96,8 +95,7 @@ describe("featuredStore.service.createCampaign - included credits then paid", ()
         expect(result).toMatchObject({ totalCost: 40000, creditsUsed: 0 });
     });
 
-    it("opens a fully credit-funded campaign with nothing charged, even when paid sponsorship is disabled", async () => {
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
+    it("opens a fully credit-funded campaign with nothing charged", async () => {
         givenCreditPeriod({ granted: 10, used: 0 });
 
         const result = await campaignService.createCampaign(10, 2, 5);
@@ -110,20 +108,6 @@ describe("featuredStore.service.createCampaign - included credits then paid", ()
         expect(walletRepository.incrementBalance).not.toHaveBeenCalled();
         expect(walletRepository.insertTransaction).not.toHaveBeenCalled();
         expect(result).toMatchObject({ totalCost: 0, creditsUsed: 5 });
-    });
-
-    it("blocks the paid remainder when paid sponsorship is disabled, without consuming anything", async () => {
-        settingsService.isSponsorshipMonetizationEnabled.mockResolvedValue(false);
-        givenCreditPeriod({ granted: 3, used: 1 });
-
-        await expect(campaignService.createCampaign(10, 2, 5)).rejects.toThrow(
-            "you have 2 days of included credits left"
-        );
-
-        expect(creditRepository.incrementUsed).not.toHaveBeenCalled();
-        expect(campaignRepository.create).not.toHaveBeenCalled();
-        expect(connection.rollback).toHaveBeenCalled();
-        expect(connection.commit).not.toHaveBeenCalled();
     });
 
     it("leaves the allotment untouched when the wallet can't cover the paid remainder", async () => {

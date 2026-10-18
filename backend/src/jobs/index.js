@@ -13,7 +13,6 @@ const bookingLifecycleJob = require("./bookingLifecycle.job");
 const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
 const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
 const seoMetricsCleanupJob = require("./seoMetricsCleanup.job");
-const monetizationScheduleJob = require("./monetizationSchedule.job");
 const groupBuyExpiryJob = require("./groupBuyExpiry.job");
 const deliveryRematchJob = require("./deliveryRematch.job");
 const supplyNudgeJob = require("./supplyNudge.job");
@@ -26,6 +25,7 @@ const emailRetryJob = require("./emailRetry.job");
 const subscriptionLifecycleJob = require("./subscriptionLifecycle.job");
 const rewardSettlementJob = require("./rewardSettlement.job");
 const documentRetentionJob = require("./documentRetention.job");
+const fuelCapReminderJob = require("./fuelCapReminder.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -108,15 +108,12 @@ exports.startJobs = () => {
     // documents older than approved_document_retention_days (0 = keep).
     cron.schedule("30 3 * * *", safeRun("documentRetention", documentRetentionJob));
 
-    cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
+    // Once a day at 06:00: on the first Wednesday of the month (the EWURA cap
+    // effective day, Dar es Salaam time) remind admins to enter the new fuel
+    // caps - see fuelCapReminder.job.js.
+    cron.schedule("0 6 * * *", safeRun("fuelCapReminder", fuelCapReminderJob));
 
-    // Every minute: apply due monetization flag activations scheduled
-    // from the Admin Billing Control Center - see
-    // monetizationSchedule.job.js and monetizationSchedule.service.js
-    // #applyDueSchedules. Same cadence/reasoning as
-    // departmentMaintenanceSchedule above (a scheduled billing switch is
-    // similarly time-sensitive to admins).
-    cron.schedule("* * * * *", safeRun("monetizationSchedule", monetizationScheduleJob));
+    cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
 
     // Once a day at 03:10 server time (just after otpCleanup, same low-
     // traffic housekeeping slot): prune webhook_replay_guard rows older
@@ -181,6 +178,6 @@ exports.startJobs = () => {
     cron.schedule("*/5 * * * *", safeRun("emailRetry", emailRetryJob));
 
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"
+        "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"
     );
 };

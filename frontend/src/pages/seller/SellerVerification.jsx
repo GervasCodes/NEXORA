@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import Skeleton from "../../components/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
 import { formatDate } from "../../utils/format";
 import { convertImageFilesToPdf } from "../../utils/imageToPdf";
+import { useLanguage } from "../../context/LanguageContext";
 
 // Matches uploadDocument.middleware.js (8 MB). Checked after the photo
 // has been converted, since that is the file that actually gets sent.
@@ -15,12 +17,14 @@ const formatSize = (bytes) =>
 
 // Same three fields, same order, as the backend's BUSINESS_DOC_FIELDS.
 const DOCUMENTS = [
-    { field: "brela_certificate", label: "BRELA certificate", hint: "Business registration certificate issued by BRELA." },
-    { field: "tin_certificate", label: "TIN certificate", hint: "Your business's TRA Taxpayer Identification Number certificate." },
-    { field: "business_license", label: "Business license", hint: "Your current business license." }
+    { field: "brela_certificate", labelKey: "seller.verification.doc.brela.label", hintKey: "seller.verification.doc.brela.hint" },
+    { field: "tin_certificate", labelKey: "seller.verification.doc.tin.label", hintKey: "seller.verification.doc.tin.hint" },
+    { field: "business_license", labelKey: "seller.verification.doc.license.label", hintKey: "seller.verification.doc.license.hint" }
 ];
 
 export default function SellerVerification() {
+    const { t } = useLanguage();
+    const { profile } = useOutletContext() || {};
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [files, setFiles] = useState({});
@@ -59,11 +63,11 @@ export default function SellerVerification() {
         const images = picked.filter((f) => f.type.startsWith("image/"));
 
         if (pdfs.length + images.length !== picked.length) {
-            setFieldError(field, `Your ${label} must be a PDF or a photo.`);
+            setFieldError(field, t("seller.verification.mustBePdfOrPhoto", { label }));
             return;
         }
         if (pdfs.length > 0 && picked.length > 1) {
-            setFieldError(field, "Choose either one PDF, or one or more photos - not a mix.");
+            setFieldError(field, t("seller.verification.noMix"));
             return;
         }
 
@@ -75,7 +79,7 @@ export default function SellerVerification() {
                 result = await convertImageFilesToPdf(images);
                 fromPhotos = true;
             } catch {
-                setFieldError(field, "We couldn't read that photo. Try retaking it or choose a PDF.");
+                setFieldError(field, t("seller.verification.photoUnreadable"));
                 return;
             } finally {
                 setConverting((prev) => ({ ...prev, [field]: false }));
@@ -83,11 +87,11 @@ export default function SellerVerification() {
         }
 
         if (!result || result.type !== "application/pdf") {
-            setFieldError(field, `We couldn't turn your ${label} into a PDF. Try a PDF file instead.`);
+            setFieldError(field, t("seller.verification.pdfConvertFailed", { label }));
             return;
         }
         if (result.size > MAX_DOCUMENT_BYTES) {
-            setFieldError(field, `That file is ${formatSize(result.size)} - the limit is 8 MB. Try a smaller scan or fewer photos.`);
+            setFieldError(field, t("seller.verification.tooLarge", { size: formatSize(result.size) }));
             return;
         }
         setFiles((prev) => ({ ...prev, [field]: { file: result, fromPhotos, pages: images.length } }));
@@ -105,16 +109,16 @@ export default function SellerVerification() {
 
         for (const doc of DOCUMENTS) {
             if (converting[doc.field]) {
-                setError("Please wait - your photos are still being converted.");
+                setError(t("seller.verification.stillConverting"));
                 return;
             }
             const file = files[doc.field]?.file;
             if (!file) {
-                setError(`Please upload your ${doc.label}.`);
+                setError(t("seller.verification.pleaseUpload", { label: t(doc.labelKey) }));
                 return;
             }
             if (file.type !== "application/pdf") {
-                setError(`Your ${doc.label} must be a PDF.`);
+                setError(t("seller.verification.mustBePdf", { label: t(doc.labelKey) }));
                 return;
             }
         }
@@ -127,7 +131,7 @@ export default function SellerVerification() {
             const { data } = await api.post("/seller/business-verification", formData);
             setStatus(data.data);
             setFiles({});
-            setMessage("Submitted. Our team will review your documents and notify you of the outcome.");
+            setMessage(t("seller.verification.submitted"));
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -137,7 +141,7 @@ export default function SellerVerification() {
 
     if (loading) {
         return (
-            <div className="animate-fade-in" aria-busy="true" aria-label="Loading verification">
+            <div className="animate-fade-in" aria-busy="true" aria-label={t("seller.verification.loading")}>
                 <Skeleton className="h-7 w-36 mb-2" />
                 <Skeleton className="h-4 w-72 mb-8" />
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -148,80 +152,88 @@ export default function SellerVerification() {
         );
     }
 
-    if (loadError) return <ErrorState title="Couldn't load verification" hint={loadError} onRetry={load} />;
+    if (loadError) return <ErrorState title={t("seller.verification.loadFailed")} hint={loadError} onRetry={load} />;
 
     const anyConverting = Object.values(converting).some(Boolean);
     const tier = status?.verification_tier;
     const latest = status?.latest_request;
+    const idApproved = tier === "id_verified" || tier === "business_verified";
+    const kycApproved = tier === "business_verified";
+    const graceActive = Boolean(profile?.is_verified)
+        && Boolean(profile?.badge_grace_until)
+        && new Date(profile.badge_grace_until) > new Date();
 
     return (
         <div>
-            <PageMeta title="Verification" noIndex />
-            <h1 className="font-display text-2xl mb-1">Verification</h1>
-            <p className="text-ash text-sm mb-8">
-                Two badges tell buyers how much of your identity NEXORA has checked.
-            </p>
+            <PageMeta title={t("sellerBadge.page.title")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("sellerBadge.page.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t("sellerBadge.page.intro")}</p>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-10">
                 <div className="border border-line rounded-lg p-4 text-sm">
-                    <p className="font-medium mb-1">Verified Seller</p>
-                    <p className="text-ash mb-2">Your National ID or Voter ID, checked at registration. Free.</p>
-                    <p className={tier === "id_verified" || tier === "business_verified" ? "text-teal" : "text-ash"}>
-                        {tier === "id_verified" || tier === "business_verified" ? "Active" : "Awaiting ID verification"}
+                    <p className="font-medium mb-1">{t("sellerBadge.page.idTitle")}</p>
+                    <p className="text-ash mb-2">{t("sellerBadge.page.idBody")}</p>
+                    <p className={idApproved ? "text-teal" : "text-ash"}>
+                        {idApproved ? t("sellerBadge.page.idActive") : t("sellerBadge.page.idWaiting")}
                     </p>
                 </div>
 
                 <div className="border border-line rounded-lg p-4 text-sm">
-                    <p className="font-medium mb-1">Verified Business</p>
-                    <p className="text-ash mb-2">Backed by your BRELA certificate, TIN certificate and business license.</p>
-                    <p className={tier === "business_verified" ? "text-azure" : "text-ash"}>
-                        {tier === "business_verified"
-                            ? "Active"
-                            : latest?.status === "pending"
-                                ? "Under review"
-                                : "Not verified"}
+                    <p className="font-medium mb-1">{t("verification.sellerBadge")}</p>
+                    <p className="text-ash mb-2">{t("sellerBadge.page.kycBody")}</p>
+                    <p className={kycApproved || graceActive ? "text-teal" : "text-ash"}>
+                        {kycApproved
+                            ? t("sellerBadge.page.kycActive")
+                            : graceActive
+                                ? t("sellerBadge.page.kycGrace", { date: formatDate(profile.badge_grace_until) })
+                                : latest?.status === "pending"
+                                    ? t("sellerBadge.page.kycReview")
+                                    : t("sellerBadge.page.kycNone")}
                     </p>
                 </div>
             </div>
 
-            {latest?.status === "pending" && (
-                <p className="text-sm text-ash">
-                    Your request was submitted {formatDate(latest.submitted_at)} and is waiting for review.
+            {graceActive && !kycApproved && (
+                <p className="text-sm text-ash mb-4">
+                    {t("sellerBadge.page.graceNote", { date: formatDate(profile.badge_grace_until) })}
                 </p>
             )}
 
-            {tier === "business_verified" && (
-                <p className="text-sm text-ash">Your business is verified. Nothing more to do here.</p>
+            {latest?.status === "pending" && (
+                <p className="text-sm text-ash">
+                    {t("seller.verification.pendingNote", { date: formatDate(latest.submitted_at) })}
+                </p>
+            )}
+
+            {kycApproved && (
+                <p className="text-sm text-ash">{t("sellerBadge.page.done")}</p>
             )}
 
             {tier === "none" && (
-                <p className="text-sm text-ash">
-                    Verified Business becomes available once your ID verification has been approved.
-                </p>
+                <p className="text-sm text-ash">{t("sellerBadge.page.locked")}</p>
             )}
 
             {status?.can_apply && (
                 <form onSubmit={submit} className="space-y-4 max-w-lg">
-                    <h2 className="font-display text-lg">Apply for Verified Business</h2>
+                    <h2 className="font-display text-lg">{t("sellerBadge.page.applyTitle")}</h2>
 
                     {latest?.status === "rejected" && (
                         <p className="text-sm text-coral">
-                            Your last request was rejected{latest.rejection_reason ? `: ${latest.rejection_reason}` : "."} You can
-                            submit a new one below.
+                            {latest.rejection_reason
+                                ? t("seller.verification.rejectedWithReason", { reason: latest.rejection_reason })
+                                : t("seller.verification.rejected")}
                         </p>
                     )}
 
                     <p className="text-sm text-ash">
-                        Upload each document as a PDF, or take a photo - we&apos;ll turn photos into a
-                        PDF on your device before sending. For a multi-page document, select all the
-                        pages at once.
+                        {t("seller.verification.uploadHelp")}
                     </p>
 
                     {DOCUMENTS.map((doc) => {
                         const picked = files[doc.field];
                         return (
                             <div key={doc.field}>
-                                <p className="block text-sm mb-1">{doc.label}</p>
+                                <p className="block text-sm mb-1">{t(doc.labelKey)}</p>
 
                                 {picked ? (
                                     <div className="flex items-center justify-between gap-3 border border-line rounded-md px-3 py-2 bg-paper">
@@ -229,7 +241,7 @@ export default function SellerVerification() {
                                             <p className="text-sm truncate">{picked.file.name}</p>
                                             <p className="text-xs text-ash">
                                                 PDF · {formatSize(picked.file.size)}
-                                                {picked.fromPhotos && ` · made from ${picked.pages} photo${picked.pages === 1 ? "" : "s"}`}
+                                                {picked.fromPhotos && ` · ${t(picked.pages === 1 ? "seller.verification.madeFromPhotos.one" : "seller.verification.madeFromPhotos.other", { count: picked.pages })}`}
                                             </p>
                                         </div>
                                         <button
@@ -238,7 +250,7 @@ export default function SellerVerification() {
                                             disabled={submitting}
                                             className="text-xs text-ash underline hover:text-ink shrink-0"
                                         >
-                                            Remove
+                                            {t("seller.verification.remove")}
                                         </button>
                                     </div>
                                 ) : (
@@ -247,14 +259,14 @@ export default function SellerVerification() {
                                             htmlFor={`kyc-${doc.field}`}
                                             className="inline-block text-xs border border-line px-3 py-2 rounded-md cursor-pointer hover:border-ink transition-colors"
                                         >
-                                            {converting[doc.field] ? "Converting…" : "Choose PDF or photos"}
+                                            {converting[doc.field] ? t("seller.verification.converting") : t("seller.verification.choose")}
                                         </label>
                                         <input
                                             id={`kyc-${doc.field}`}
                                             type="file"
                                             accept="application/pdf,image/*"
                                             multiple
-                                            onChange={onFile(doc.field, doc.label)}
+                                            onChange={onFile(doc.field, t(doc.labelKey))}
                                             disabled={converting[doc.field] || submitting}
                                             className="sr-only"
                                         />
@@ -262,21 +274,21 @@ export default function SellerVerification() {
                                             htmlFor={`kyc-${doc.field}-camera`}
                                             className="inline-block text-xs border border-line px-3 py-2 rounded-md cursor-pointer hover:border-ink transition-colors"
                                         >
-                                            Take a photo
+                                            {t("seller.verification.takePhoto")}
                                         </label>
                                         <input
                                             id={`kyc-${doc.field}-camera`}
                                             type="file"
                                             accept="image/*"
                                             capture="environment"
-                                            onChange={onFile(doc.field, doc.label)}
+                                            onChange={onFile(doc.field, t(doc.labelKey))}
                                             disabled={converting[doc.field] || submitting}
                                             className="sr-only"
                                         />
                                     </div>
                                 )}
 
-                                <p className="text-xs text-ash mt-1">{doc.hint}</p>
+                                <p className="text-xs text-ash mt-1">{t(doc.hintKey)}</p>
                                 {fieldErrors[doc.field] && (
                                     <p role="alert" className="text-xs text-coral mt-1">{fieldErrors[doc.field]}</p>
                                 )}
@@ -289,7 +301,7 @@ export default function SellerVerification() {
                         disabled={submitting || anyConverting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                     >
-                        {submitting ? "Submitting…" : "Submit for review"}
+                        {submitting ? t("seller.verification.submitting") : t("seller.verification.submitForReview")}
                     </button>
                 </form>
             )}

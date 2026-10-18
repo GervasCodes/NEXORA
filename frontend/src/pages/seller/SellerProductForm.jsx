@@ -7,6 +7,7 @@ import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Input from "../../components/ui/Input";
 import { compressImage } from "../../utils/imageCompression";
+import { useLanguage } from "../../context/LanguageContext";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
@@ -28,12 +29,12 @@ const swapWithNeighbour = (list, index, direction) => {
 // Listing-strength checks. Weights add up to 100. Photos carry the most
 // weight because listings without them convert poorly.
 const LISTING_CHECKS = [
-    { label: "a clear product name", weight: 15, passes: (f) => f.name.trim().length >= 3 },
-    { label: "a description of 40+ characters", weight: 20, passes: (f) => (f.description || "").trim().length >= 40 },
-    { label: "a price", weight: 15, passes: (f) => f.price !== "" },
-    { label: "a category", weight: 15, passes: (f) => Boolean(f.category_id) },
-    { label: "a stock count", weight: 10, passes: (f) => f.stock !== "" },
-    { label: "at least one photo", weight: 25, passes: (_f, photoCount) => photoCount > 0 }
+    { labelKey: "seller.productForm.check.name", weight: 15, passes: (f) => f.name.trim().length >= 3 },
+    { labelKey: "seller.productForm.check.description", weight: 20, passes: (f) => (f.description || "").trim().length >= 40 },
+    { labelKey: "seller.productForm.check.price", weight: 15, passes: (f) => f.price !== "" },
+    { labelKey: "seller.productForm.check.category", weight: 15, passes: (f) => Boolean(f.category_id) },
+    { labelKey: "seller.productForm.check.stock", weight: 10, passes: (f) => f.stock !== "" },
+    { labelKey: "seller.productForm.check.photo", weight: 25, passes: (_f, photoCount) => photoCount > 0 }
 ];
 
 const computeListingStrength = (form, photoCount) => {
@@ -41,7 +42,7 @@ const computeListingStrength = (form, photoCount) => {
     const missing = [];
     for (const check of LISTING_CHECKS) {
         if (check.passes(form, photoCount)) score += check.weight;
-        else missing.push(check.label);
+        else missing.push(check.labelKey);
     }
     return { score, missing };
 };
@@ -55,17 +56,19 @@ const buildPayload = (form) => ({
 
 // Status line beside the publish button.
 function SaveStatus({ savedId, isDraft, dirty, saveState }) {
+    const { t } = useLanguage();
     if (!savedId) return null;
     let text = "";
-    if (dirty && saveState !== "saving") text = "Unsaved changes";
-    else if (saveState === "saving") text = "Saving draft…";
-    else if (saveState === "error") text = "Couldn't save draft";
-    else if (isDraft) text = "Draft saved";
+    if (dirty && saveState !== "saving") text = t("seller.productForm.unsaved");
+    else if (saveState === "saving") text = t("seller.productForm.savingDraft");
+    else if (saveState === "error") text = t("seller.productForm.saveDraftFailed");
+    else if (isDraft) text = t("seller.productForm.draftSaved");
     return text ? <span role="status" className="text-xs text-ash">{text}</span> : null;
 }
 
 // Listing-strength meter and a live card preview of how buyers will see it.
 function ListingPanel({ form, images }) {
+    const { t } = useLanguage();
     const primary = images.find((img) => img.is_primary) || images[0];
     const { score, missing } = computeListingStrength(form, images.length);
     return (
@@ -74,26 +77,26 @@ function ListingPanel({ form, images }) {
                 <div className="w-16 h-16 rounded-md overflow-hidden border border-line bg-paper flex-shrink-0 flex items-center justify-center">
                     {primary
                         ? <img src={primary.image_url} alt="" className="w-full h-full object-cover" />
-                        : <span className="text-[10px] text-ash">No photo</span>}
+                        : <span className="text-[10px] text-ash">{t("seller.productForm.noPhoto")}</span>}
                 </div>
                 <div className="min-w-0">
-                    <p className="font-medium truncate">{form.name.trim() || "Your product name"}</p>
+                    <p className="font-medium truncate">{form.name.trim() || t("seller.productForm.namePlaceholder")}</p>
                     <p className="text-sm text-ash">
-                        {form.price !== "" ? `Price ${form.price}` : "Price not set"}
-                        {form.discount_price !== "" && form.discount_price != null ? ` · Sale ${form.discount_price}` : ""}
+                        {form.price !== "" ? t("seller.productForm.priceValue", { price: form.price }) : t("seller.productForm.priceNotSet")}
+                        {form.discount_price !== "" && form.discount_price != null ? ` · ${t("seller.productForm.saleValue", { price: form.discount_price })}` : ""}
                     </p>
                 </div>
             </div>
             <div>
                 <div className="flex justify-between text-xs text-ash mb-1">
-                    <span>Listing strength</span>
+                    <span>{t("seller.productForm.strength")}</span>
                     <span>{score}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-paper border border-line overflow-hidden" role="progressbar" aria-valuenow={score} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-1.5 rounded-full bg-paper border border-line overflow-hidden" role="progressbar" aria-label={t("seller.productForm.strength")} aria-valuenow={score} aria-valuemin={0} aria-valuemax={100}>
                     <div className="h-full bg-teal transition-all" style={{ width: `${score}%` }} />
                 </div>
                 {missing.length > 0 && (
-                    <p className="text-xs text-ash mt-1">Add {missing.join(", ")} to strengthen this listing.</p>
+                    <p className="text-xs text-ash mt-1">{t("seller.productForm.strengthen", { items: missing.map((k) => t(k)).join(", ") })}</p>
                 )}
             </div>
         </div>
@@ -101,6 +104,7 @@ function ListingPanel({ form, images }) {
 }
 
 export default function SellerProductForm() {
+    const { t } = useLanguage();
     const { id } = useParams();
     const isEdit = Boolean(id);
     const navigate = useNavigate();
@@ -270,8 +274,8 @@ export default function SellerProductForm() {
         setUploading(true);
         try {
             for (let i = 0; i < files.length; i++) {
-                const label = files.length > 1 ? `Photo ${i + 1} of ${files.length}` : "Photo";
-                setUploadProgress(`${label}: preparing…`);
+                const label = files.length > 1 ? t("seller.productForm.photoNofM", { n: i + 1, total: files.length }) : t("seller.productForm.photo");
+                setUploadProgress(t("seller.productForm.progressPreparing", { label }));
                 try {
                     const file = await compressImage(files[i]);
                     const body = new FormData();
@@ -279,13 +283,13 @@ export default function SellerProductForm() {
                     const { data } = await api.post(`/products/${productId}/images`, body, {
                         onUploadProgress: (ev) => {
                             if (!ev.total) return;
-                            setUploadProgress(`${label}: uploading ${Math.round((ev.loaded / ev.total) * 100)}%`);
+                            setUploadProgress(t("seller.productForm.progressUploading", { label, pct: Math.round((ev.loaded / ev.total) * 100) }));
                         }
                     });
                     setImages((prev) => [...prev, { id: data.data.id, image_url: data.data.imageUrl, is_primary: data.data.isPrimary }]);
                 } catch (err) {
                     // Keep going so one bad file doesn't drop the rest of the batch.
-                    setError(`${label} failed: ${extractErrorMessage(err)}`);
+                    setError(t("seller.productForm.photoFailed", { label, reason: extractErrorMessage(err) }));
                 }
             }
         } finally {
@@ -462,12 +466,11 @@ export default function SellerProductForm() {
 
     return (
         <div className="max-w-lg">
-            <PageMeta title="Product Form" noIndex />
-            <h1 className={`font-display text-2xl ${isEdit ? "mb-6" : "mb-1"}`}>{isEdit ? "Edit product" : "List a new product"}</h1>
+            <PageMeta title={t("seller.productForm.metaTitle")} noIndex />
+            <h1 className={`font-display text-2xl ${isEdit ? "mb-6" : "mb-1"}`}>{isEdit ? t("seller.productForm.editTitle") : t("seller.productForm.newTitle")}</h1>
             {!isEdit && (
                 <p className="text-ash text-sm mb-6">
-                    Listing a product is two steps: save the details below first, then add photos, videos, and
-                    audio once the product exists.
+                    {t("seller.productForm.twoSteps")}
                 </p>
             )}
 
@@ -475,7 +478,7 @@ export default function SellerProductForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                    label="Product name"
+                    label={t("seller.productForm.name")}
                     required minLength={3} value={form.name} onChange={update("name")}
                     onBlur={handleNameBlur}
                 />
@@ -483,7 +486,7 @@ export default function SellerProductForm() {
                 <div>
                     <Input
                         as="textarea"
-                        label="Description"
+                        label={t("seller.productForm.descriptionLabel")}
                         rows={4} value={form.description} onChange={update("description")}
                     />
                     <NexoraCopyAssist
@@ -499,12 +502,12 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Price"
+                        label={t("seller.productForm.price")}
                         required type="number" min="0" step="0.01" value={form.price} onChange={update("price")}
                         className="price"
                     />
                     <Input
-                        label="Discount price (optional)"
+                        label={t("seller.productForm.discountPrice")}
                         type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
                         className="price"
                     />
@@ -512,11 +515,11 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Stock"
+                        label={t("seller.productForm.stock")}
                         type="number" min="0" value={form.stock} onChange={update("stock")}
                     />
                     <Input
-                        label="Brand (optional)"
+                        label={t("seller.productForm.brand")}
                         value={form.brand} onChange={update("brand")}
                     />
                 </div>
@@ -524,15 +527,16 @@ export default function SellerProductForm() {
                 <div className="border rounded-lg p-4 space-y-3">
                     <label className="flex items-center gap-2">
                         <input type="checkbox" checked={form.is_preorder} onChange={updateChecked("is_preorder")} />
-                        <span className="text-sm font-medium">Made to order / pre-order</span>
+                        <span className="text-sm font-medium">{t("seller.productForm.preorder")}</span>
                     </label>
                     <p className="text-xs text-ash">
-                        Buyers pay a deposit at checkout and the remaining balance once it's ready. Requires
-                        made-to-order to be turned on in your <Link to="/seller/store" className="underline">store settings</Link> first.
+                        {t("seller.productForm.preorderHintBefore")}{" "}
+                        <Link to="/seller/store" className="underline">{t("seller.productForm.storeSettings")}</Link>{" "}
+                        {t("seller.productForm.preorderHintAfter")}
                     </p>
                     {form.is_preorder && (
                         <Input
-                            label="Lead time for this product (days, optional - overrides your store default)"
+                            label={t("seller.productForm.leadTime")}
                             type="number" min="1" max="365" value={form.preorder_lead_time_days}
                             onChange={update("preorder_lead_time_days")}
                         />
@@ -541,26 +545,26 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label htmlFor="productCondition" className="block text-sm mb-1">Condition</label>
+                        <label htmlFor="productCondition" className="block text-sm mb-1">{t("seller.productForm.condition")}</label>
                         <select id="productCondition" value={form.product_condition} onChange={update("product_condition")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
-                            <option value="new">New</option>
-                            <option value="used">Used</option>
+                            <option value="new">{t("seller.productForm.conditionNew")}</option>
+                            <option value="used">{t("seller.productForm.conditionUsed")}</option>
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="productCategory" className="block text-sm mb-1">Category</label>
+                        <label htmlFor="productCategory" className="block text-sm mb-1">{t("seller.productForm.category")}</label>
                         <input
                             type="search"
-                            aria-label="Search categories"
-                            placeholder="Search categories"
+                            aria-label={t("seller.productForm.searchCategories")}
+                            placeholder={t("seller.productForm.searchCategories")}
                             value={categoryQuery}
                             onChange={(e) => setCategoryQuery(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-1.5 mb-1 text-sm focus-ring bg-paper"
                         />
                         <select id="productCategory" required value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
-                            <option value="">Select…</option>
+                            <option value="">{t("seller.productForm.select")}</option>
                             {categories
                                 .filter((c) => c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase()) || String(c.id) === String(form.category_id))
                                 .map((c) => (
@@ -574,7 +578,7 @@ export default function SellerProductForm() {
 
                 <div className="flex items-center justify-between gap-3">
                     <Button type="submit" disabled={submitting || uploading}>
-                        {submitting ? "Publishing…" : isEdit && !isDraft ? "Save changes" : "Publish product"}
+                        {submitting ? t("seller.productForm.publishing") : isEdit && !isDraft ? t("seller.productForm.saveChanges") : t("seller.productForm.publish")}
                     </Button>
                     <SaveStatus savedId={savedId} isDraft={isDraft} dirty={dirty} saveState={saveState} />
                 </div>
@@ -582,7 +586,7 @@ export default function SellerProductForm() {
 
             {!savedId && (
                 <p className="mt-10 border-t border-line pt-6 text-ash text-sm">
-                    Enter a product name to start your draft. Photos, videos and audio unlock once it's saved.
+                    {t("seller.productForm.startDraft")}
                 </p>
             )}
 
@@ -590,12 +594,12 @@ export default function SellerProductForm() {
                 <div className="mt-10 border-t border-line pt-6">
                     {isDraft && (
                         <p className="text-teal text-sm mb-6 -mt-2">
-                            Draft saved and hidden from buyers. Add photos, videos and audio, then publish above.
+                            {t("seller.productForm.draftHidden")}
                         </p>
                     )}
 
-                    <h2 className="font-display text-lg mb-1">Photos</h2>
-                    <p className="text-xs text-ash mb-3">Large photos are resized on your device before upload.</p>
+                    <h2 className="font-display text-lg mb-1">{t("seller.productForm.photos")}</h2>
+                    <p className="text-xs text-ash mb-3">{t("seller.productForm.resizeNote")}</p>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {images.map((img, i) => {
@@ -606,15 +610,15 @@ export default function SellerProductForm() {
                                         <img src={img.image_url} alt="" className="w-full h-full object-cover" />
                                         {img.is_primary && (
                                             <span className="absolute top-1 left-1 text-[10px] font-medium bg-mango text-abyss rounded-full px-1.5 py-0.5">
-                                                Primary
+                                                {t("seller.productForm.primary")}
                                             </span>
                                         )}
                                         <button
                                             type="button"
                                             onClick={() => setPendingDelete({ type: "image", id: img.id })}
                                             disabled={busy}
-                                            aria-label="Remove photo"
-                                            title="Remove photo"
+                                            aria-label={t("seller.productForm.removePhoto")}
+                                            title={t("seller.productForm.removePhoto")}
                                             className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-abyss/60 text-frost text-xs hover:bg-coral disabled:opacity-50 transition-colors"
                                         >
                                             ✕
@@ -625,8 +629,8 @@ export default function SellerProductForm() {
                                             type="button"
                                             onClick={() => handleMoveImage(i, "up")}
                                             disabled={busy || i === 0}
-                                            aria-label="Move photo earlier"
-                                            title="Move earlier"
+                                            aria-label={t("seller.productForm.movePhotoEarlier")}
+                                            title={t("seller.productForm.moveEarlier")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                         >
                                             ↑
@@ -635,8 +639,8 @@ export default function SellerProductForm() {
                                             type="button"
                                             onClick={() => handleSetPrimaryImage(img.id)}
                                             disabled={busy || img.is_primary}
-                                            aria-label="Set as primary photo"
-                                            title="Set as primary photo"
+                                            aria-label={t("seller.productForm.setPrimary")}
+                                            title={t("seller.productForm.setPrimary")}
                                             className="text-ash hover:text-mango-dark text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                         >
                                             {img.is_primary ? "★" : "☆"}
@@ -645,8 +649,8 @@ export default function SellerProductForm() {
                                             type="button"
                                             onClick={() => handleMoveImage(i, "down")}
                                             disabled={busy || i === images.length - 1}
-                                            aria-label="Move photo later"
-                                            title="Move later"
+                                            aria-label={t("seller.productForm.movePhotoLater")}
+                                            title={t("seller.productForm.moveLater")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                         >
                                             ↓
@@ -659,17 +663,17 @@ export default function SellerProductForm() {
 
                     <div className="flex flex-wrap gap-2">
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploading ? "Uploading…" : "+ Choose photos"}
+                            {uploading ? t("seller.productForm.uploading") : t("seller.productForm.choosePhotos")}
                             <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
                         </label>
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            Take photo
+                            {t("seller.productForm.takePhoto")}
                             <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} disabled={uploading} className="hidden" />
                         </label>
                     </div>
                     {uploadProgress && <p role="status" className="text-sm text-ash mt-2">{uploadProgress}</p>}
 
-                    <h2 className="font-display text-lg mb-3 mt-8">Videos</h2>
+                    <h2 className="font-display text-lg mb-3 mt-8">{t("seller.productForm.videos")}</h2>
 
                     <div className="flex flex-col gap-3 mb-4">
                         {videos.map((vid, i) => {
@@ -684,8 +688,8 @@ export default function SellerProductForm() {
                                             type="button"
                                             onClick={() => handleMoveVideo(i, "up")}
                                             disabled={busy || i === 0}
-                                            aria-label="Move video earlier"
-                                            title="Move earlier"
+                                            aria-label={t("seller.productForm.moveVideoEarlier")}
+                                            title={t("seller.productForm.moveEarlier")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                         >
                                             ↑
@@ -694,8 +698,8 @@ export default function SellerProductForm() {
                                             type="button"
                                             onClick={() => handleMoveVideo(i, "down")}
                                             disabled={busy || i === videos.length - 1}
-                                            aria-label="Move video later"
-                                            title="Move later"
+                                            aria-label={t("seller.productForm.moveVideoLater")}
+                                            title={t("seller.productForm.moveLater")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                         >
                                             ↓
@@ -705,8 +709,8 @@ export default function SellerProductForm() {
                                         type="button"
                                         onClick={() => setPendingDelete({ type: "video", id: vid.id })}
                                         disabled={busy}
-                                        aria-label="Remove video"
-                                        title="Remove video"
+                                        aria-label={t("seller.productForm.removeVideo")}
+                                        title={t("seller.productForm.removeVideo")}
                                         className="text-ash hover:text-coral text-xs px-1 disabled:opacity-50"
                                     >
                                         ✕
@@ -718,14 +722,14 @@ export default function SellerProductForm() {
 
                     {videos.length < MAX_VIDEOS ? (
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingVideo ? "Uploading…" : "+ Add video"}
+                            {uploadingVideo ? t("seller.productForm.uploading") : t("seller.productForm.addVideo")}
                             <input type="file" accept="video/*" onChange={handleVideoUpload} disabled={uploadingVideo} className="hidden" />
                         </label>
                     ) : (
-                        <p className="text-ash text-xs">Maximum of {MAX_VIDEOS} videos per product.</p>
+                        <p className="text-ash text-xs">{t("seller.productForm.maxVideos", { max: MAX_VIDEOS })}</p>
                     )}
 
-                    <h2 className="font-display text-lg mb-3 mt-8">Audio</h2>
+                    <h2 className="font-display text-lg mb-3 mt-8">{t("seller.productForm.audio")}</h2>
 
                     <div className="flex flex-col gap-2 mb-4">
                         {audio.map((clip, i) => {
@@ -738,8 +742,8 @@ export default function SellerProductForm() {
                                         type="button"
                                         onClick={() => handleMoveAudio(i, "up")}
                                         disabled={busy || i === 0}
-                                        aria-label="Move audio earlier"
-                                        title="Move earlier"
+                                        aria-label={t("seller.productForm.moveAudioEarlier")}
+                                        title={t("seller.productForm.moveEarlier")}
                                         className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                     >
                                         ↑
@@ -748,8 +752,8 @@ export default function SellerProductForm() {
                                         type="button"
                                         onClick={() => handleMoveAudio(i, "down")}
                                         disabled={busy || i === audio.length - 1}
-                                        aria-label="Move audio later"
-                                        title="Move later"
+                                        aria-label={t("seller.productForm.moveAudioLater")}
+                                        title={t("seller.productForm.moveLater")}
                                         className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
                                     >
                                         ↓
@@ -758,8 +762,8 @@ export default function SellerProductForm() {
                                         type="button"
                                         onClick={() => setPendingDelete({ type: "audio", id: clip.id })}
                                         disabled={busy}
-                                        aria-label="Remove audio"
-                                        title="Remove audio"
+                                        aria-label={t("seller.productForm.removeAudio")}
+                                        title={t("seller.productForm.removeAudio")}
                                         className="text-ash hover:text-coral text-xs px-1 disabled:opacity-50"
                                     >
                                         ✕
@@ -771,17 +775,17 @@ export default function SellerProductForm() {
 
                     {audio.length < MAX_AUDIO ? (
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingAudio ? "Uploading…" : "+ Add audio"}
+                            {uploadingAudio ? t("seller.productForm.uploading") : t("seller.productForm.addAudio")}
                             <input type="file" accept="audio/*" onChange={handleAudioUpload} disabled={uploadingAudio} className="hidden" />
                         </label>
                     ) : (
-                        <p className="text-ash text-xs">Maximum of {MAX_AUDIO} audio clips per product.</p>
+                        <p className="text-ash text-xs">{t("seller.productForm.maxAudio", { max: MAX_AUDIO })}</p>
                     )}
 
                     {!isEdit && (
                         <p className="mt-6">
                             <Link to="/seller/products" className="text-teal text-sm hover:underline">
-                                Done — back to your products
+                                {t("seller.productForm.backToProducts")}
                             </Link>
                         </p>
                     )}
@@ -790,10 +794,10 @@ export default function SellerProductForm() {
 
             <ConfirmDialog
                 open={Boolean(pendingDelete)}
-                title={pendingDelete?.type === "image" ? "Remove this photo?" : pendingDelete?.type === "video" ? "Remove this video?" : "Remove this audio clip?"}
-                description="This can't be undone."
-                confirmLabel="Remove"
-                cancelLabel="Cancel"
+                title={pendingDelete?.type === "image" ? t("seller.productForm.confirmPhoto") : pendingDelete?.type === "video" ? t("seller.productForm.confirmVideo") : t("seller.productForm.confirmAudio")}
+                description={t("seller.productForm.cantUndo")}
+                confirmLabel={t("seller.productForm.remove")}
+                cancelLabel={t("seller.productForm.cancel")}
                 danger
                 onConfirm={confirmPendingDelete}
                 onCancel={() => setPendingDelete(null)}

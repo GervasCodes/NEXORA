@@ -8,6 +8,7 @@ import PageMeta from "../../components/PageMeta";
 import Input from "../../components/ui/Input";
 import Skeleton from "../../components/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
+import { useLanguage } from "../../context/LanguageContext";
 
 // Local-date ISO (YYYY-MM-DD). toISOString() is UTC, which in East Africa
 // (UTC+3) shows yesterday's date for the first hours of every day.
@@ -23,11 +24,12 @@ const addDaysIso = (iso, days) => {
     return toLocalIso(new Date(y, m - 1, d + days));
 };
 
-const PRESETS = [
-    { label: "Next 7 days", range: () => [todayIso(), addDaysIso(todayIso(), 6)] },
-    { label: "Next 30 days", range: () => [todayIso(), addDaysIso(todayIso(), 29)] },
+const PRESET_KEYS = [
+    { key: "7d", labelKey: "seller.availability.preset.7d", range: () => [todayIso(), addDaysIso(todayIso(), 6)] },
+    { key: "30d", labelKey: "seller.availability.preset.30d", range: () => [todayIso(), addDaysIso(todayIso(), 29)] },
     {
-        label: "Rest of month",
+        key: "restOfMonth",
+        labelKey: "seller.availability.preset.restOfMonth",
         range: () => {
             const now = new Date();
             return [todayIso(), toLocalIso(new Date(now.getFullYear(), now.getMonth() + 1, 0))];
@@ -36,6 +38,7 @@ const PRESETS = [
 ];
 
 export default function SellerAvailability() {
+    const { t } = useLanguage();
     const { profile } = useOutletContext();
     const isProvider = profile?.merchant_type === "service" || profile?.merchant_type === "hybrid";
 
@@ -98,11 +101,11 @@ export default function SellerAvailability() {
         setError("");
 
         if (endDate < startDate) {
-            setError("The end date can't be before the start date.");
+            setError(t("seller.availability.error.endBeforeStart"));
             return;
         }
         if (Number(availableUnits) < 0 || !Number.isFinite(Number(availableUnits))) {
-            setError("Available units must be 0 or more.");
+            setError(t("seller.availability.error.unitsInvalid"));
             return;
         }
         setSaving(true);
@@ -115,7 +118,7 @@ export default function SellerAvailability() {
                 price: price === "" ? null : Number(price),
                 status
             });
-            setMessage(`Updated ${data.data.datesUpdated} date(s).`);
+            setMessage(t("seller.availability.updated", { count: data.data.datesUpdated }));
             setRefreshToken((t) => t + 1);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -127,18 +130,18 @@ export default function SellerAvailability() {
     if (!isProvider) {
         return (
             <div>
-                <h1 className="font-display text-2xl mb-2">Availability</h1>
+                <h1 className="font-display text-2xl mb-2">{t("seller.availability.title")}</h1>
                 <p className="text-ash text-sm mb-4">
-                    Availability management is for service providers. Add services to your store first.
+                    {t("seller.availability.providersOnly")}
                 </p>
-                <Link to="/seller/services" className="text-teal hover:underline text-sm">Go to Services</Link>
+                <Link to="/seller/services" className="text-teal hover:underline text-sm">{t("seller.availability.goToServices")}</Link>
             </div>
         );
     }
 
     if (loadingServices) {
         return (
-            <div className="animate-fade-in" aria-busy="true" aria-label="Loading availability">
+            <div className="animate-fade-in" aria-busy="true" aria-label={t("seller.availability.loadingAria")}>
                 <Skeleton className="h-7 w-36 mb-6" />
                 <div className="grid md:grid-cols-[1fr_320px] gap-8">
                     <div>
@@ -151,26 +154,26 @@ export default function SellerAvailability() {
         );
     }
 
-    if (servicesError) return <ErrorState title="Couldn't load your services" hint={servicesError} onRetry={loadServices} />;
+    if (servicesError) return <ErrorState title={t("seller.availability.loadError")} hint={servicesError} onRetry={loadServices} />;
 
     if (services.length === 0) {
         return (
             <div>
-                <h1 className="font-display text-2xl mb-2">Availability</h1>
-                <p className="text-ash text-sm mb-4">You need at least one service listing before you can open dates for booking.</p>
-                <Link to="/seller/services/new" className="text-teal hover:underline text-sm">Create a service</Link>
+                <h1 className="font-display text-2xl mb-2">{t("seller.availability.title")}</h1>
+                <p className="text-ash text-sm mb-4">{t("seller.availability.needService")}</p>
+                <Link to="/seller/services/new" className="text-teal hover:underline text-sm">{t("seller.availability.createService")}</Link>
             </div>
         );
     }
 
     return (
         <div>
-            <PageMeta title="Availability" noIndex />
-            <h1 className="font-display text-2xl mb-6">Availability</h1>
+            <PageMeta title={t("seller.availability.title")} noIndex />
+            <h1 className="font-display text-2xl mb-6">{t("seller.availability.title")}</h1>
 
             <div className="grid md:grid-cols-[1fr_320px] gap-8">
                 <div>
-                    <label htmlFor="availability-service" className="block text-sm text-ash mb-1">Service</label>
+                    <label htmlFor="availability-service" className="block text-sm text-ash mb-1">{t("seller.availability.serviceLabel")}</label>
                     <select
                         id="availability-service"
                         value={serviceId}
@@ -191,17 +194,17 @@ export default function SellerAvailability() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="border border-line rounded-lg p-4 h-fit">
-                    <p className="text-sm font-medium mb-3">Set availability for a date range</p>
+                    <p className="text-sm font-medium mb-3">{t("seller.availability.rangeFormTitle")}</p>
 
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                        {PRESETS.map((preset) => (
+                        {PRESET_KEYS.map((preset) => (
                             <button
-                                key={preset.label}
+                                key={preset.key}
                                 type="button"
                                 onClick={() => applyPreset(preset)}
                                 className="text-xs border border-line px-2.5 py-1 rounded-full hover:border-ink transition-colors"
                             >
-                                {preset.label}
+                                {t(preset.labelKey)}
                             </button>
                         ))}
                     </div>
@@ -211,21 +214,23 @@ export default function SellerAvailability() {
 
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                            <label htmlFor="availability-start" className="block text-xs text-ash mb-1">Start date</label>
+                            <label htmlFor="availability-start" className="block text-xs text-ash mb-1">{t("seller.availability.startDate")}</label>
                             <Input
                                 id="availability-start"
                                 type="date"
                                 required
+                                autoComplete="off"
                                 value={startDate}
                                 onChange={(e) => onStartChange(e.target.value)}
                             />
                         </div>
                         <div>
-                            <label htmlFor="availability-end" className="block text-xs text-ash mb-1">End date</label>
+                            <label htmlFor="availability-end" className="block text-xs text-ash mb-1">{t("seller.availability.endDate")}</label>
                             <Input
                                 id="availability-end"
                                 type="date"
                                 required
+                                autoComplete="off"
                                 min={startDate}
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
@@ -234,10 +239,11 @@ export default function SellerAvailability() {
                     </div>
 
                     <div className="mb-3">
-                        <label htmlFor="availability-units" className="block text-xs text-ash mb-1">Available units</label>
+                        <label htmlFor="availability-units" className="block text-xs text-ash mb-1">{t("seller.availability.units")}</label>
                         <Input
                             id="availability-units"
                             type="number"
+                            inputMode="numeric"
                             min={0}
                             required
                             value={availableUnits}
@@ -246,28 +252,29 @@ export default function SellerAvailability() {
                     </div>
 
                     <div className="mb-3">
-                        <label htmlFor="availability-price" className="block text-xs text-ash mb-1">Price override (optional)</label>
+                        <label htmlFor="availability-price" className="block text-xs text-ash mb-1">{t("seller.availability.priceOverride")}</label>
                         <Input
                             id="availability-price"
                             type="number"
+                            inputMode="decimal"
                             min={0}
                             step="0.01"
-                            placeholder="Use listing price"
+                            placeholder={t("seller.availability.priceOverridePlaceholder")}
                             value={price}
                             onChange={(e) => setPrice(e.target.value)}
                         />
                     </div>
 
                     <div className="mb-4">
-                        <label htmlFor="availability-status" className="block text-xs text-ash mb-1">Status</label>
+                        <label htmlFor="availability-status" className="block text-xs text-ash mb-1">{t("seller.availability.status")}</label>
                         <select
                             id="availability-status"
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
                             className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring bg-paper"
                         >
-                            <option value="open">Open</option>
-                            <option value="closed">Closed</option>
+                            <option value="open">{t("seller.availability.status.open")}</option>
+                            <option value="closed">{t("seller.availability.status.closed")}</option>
                         </select>
                     </div>
 
@@ -276,7 +283,7 @@ export default function SellerAvailability() {
                         disabled={saving}
                         fullWidth
                     >
-                        {saving ? "Saving…" : "Update availability"}
+                        {saving ? t("seller.availability.saving") : t("seller.availability.update")}
                     </Button>
                 </form>
             </div>

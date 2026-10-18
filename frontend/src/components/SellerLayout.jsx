@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import AccountReviewNotice from "./AccountReviewNotice";
+import TrialBanner from "./TrialBanner";
 import PageTransition from "./PageTransition";
 import ConfirmDialog from "./ConfirmDialog";
 import SideDrawer from "./ui/SideDrawer";
 import { HomeIcon, AccountIcon, SignOutIcon } from "./NavIcons";
 import { CheckIcon } from "./Icons";
 import { getVerificationTier } from "../utils/verificationTier";
+import useSellerAccess from "../hooks/useSellerAccess";
+import { useLanguage } from "../context/LanguageContext";
 
 // Grouped rather than one flat list, so the mobile drawer reads as
 // sections (like /admin's) instead of an 18-item horizontal-scroll
@@ -37,57 +40,46 @@ import { getVerificationTier } from "../utils/verificationTier";
 // and still need a redirect.
 const groups = [
     {
-        label: "Overview",
+        key: "sell",
+        label: "Sell",
         tabs: [
             { to: "/seller", label: "Overview", end: true },
-            { to: "/seller/analytics", label: "Analytics" },
-            { to: "/seller/wallet", label: "Wallet" },
-            { to: "/seller/tax-info", label: "Tax & receipts" }
-        ]
-    },
-    {
-        label: "Catalog",
-        tabs: [
             { to: "/seller/products", label: "Products", category: "product" },
             { to: "/seller/services", label: "Services", category: "service", selfGated: true },
             { to: "/seller/availability", label: "Availability", category: "service", selfGated: true },
             { to: "/seller/pricing", label: "Pricing", category: "service", selfGated: true },
-            { to: "/seller/collections", label: "Collections", category: "product" }
-        ]
-    },
-    {
-        label: "Orders",
-        tabs: [
-            { to: "/seller/bookings", label: "Bookings", category: "service", selfGated: true },
+            { to: "/seller/collections", label: "Collections", category: "product" },
             { to: "/seller/orders", label: "Orders", category: "product" },
+            { to: "/seller/bookings", label: "Bookings", category: "service", selfGated: true },
             { to: "/seller/delivery-team", label: "Delivery team", category: "product" },
-            { to: "/seller/disputes", label: "Disputes", category: "product" },
             { to: "/seller/returns", label: "Returns", category: "product" },
-            { to: "/seller/group-buys", label: "Group buys", category: "product" },
-            { to: "/seller/live-selling", label: "Live selling", category: "product" }
-        ]
-    },
-    {
-        label: "Business tools",
-        tabs: [
-            { to: "/seller/pos", label: "Stock & sales", category: "product" }
-        ]
-    },
-    {
-        label: "Reviews",
-        tabs: [
+            { to: "/seller/disputes", label: "Disputes", category: "product" },
             { to: "/seller/reviews", label: "Reviews", category: "product" },
             { to: "/seller/service-reviews", label: "Service reviews", category: "service" }
         ]
     },
     {
-        label: "Growth",
+        key: "money",
+        label: "Money",
         tabs: [
-            { to: "/seller/promote", label: "Promote", category: "product" },
+            { to: "/seller/wallet", label: "Wallet" },
+            { to: "/seller/tax-info", label: "Tax & receipts" },
+            { to: "/seller/pos", label: "Stock & sales", category: "product" },
             { to: "/seller/subscription", label: "Subscription" }
         ]
     },
     {
+        key: "growth",
+        label: "Growth",
+        tabs: [
+            { to: "/seller/analytics", label: "Analytics" },
+            { to: "/seller/promote", label: "Promote", category: "product" },
+            { to: "/seller/group-buys", label: "Group buys", category: "product" },
+            { to: "/seller/live-selling", label: "Live selling", category: "product" }
+        ]
+    },
+    {
+        key: "settings",
         label: "Settings",
         tabs: [
             { to: "/seller/store", label: "Store settings" },
@@ -160,38 +152,119 @@ function SellerSearch({ tabs, onPick }) {
     );
 }
 
-// Tab list shared by the desktop rail and the mobile drawer.
-// "rail" is a vertical list; "drawer" keeps the two-column pill layout.
-function SellerNavGroups({ groups, variant }) {
-    return groups.map((group) => (
-        <div key={group.label} className="mb-4 last:mb-0">
-            <p className="text-xs uppercase tracking-widest text-ash mb-1.5">{group.label}</p>
-            <div className={variant === "rail" ? "flex flex-col gap-0.5" : "grid grid-cols-2 gap-1.5"}>
-                {group.tabs.map((tab) => (
-                    <NavLink
-                        key={tab.to}
-                        to={tab.to}
-                        end={tab.end}
-                        className={({ isActive }) =>
-                            variant === "rail"
-                                ? `text-sm px-3 py-1.5 rounded-md transition-colors ${
-                                    isActive ? "bg-ink text-paper" : "text-ink/80 hover:bg-line/40"
-                                }`
-                                : `text-sm px-3 py-2 rounded-md transition-colors ${
-                                    isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
-                                }`
-                        }
+// Compact trial / plan status shown at the top of the seller menu. Reads the
+// same access state as TrialBanner (shared cached request). A seller on a
+// paid plan, or whose state hasn't loaded, sees nothing.
+function SellerPlanStatus({ onNavigate }) {
+    const { t } = useLanguage();
+    const access = useSellerAccess();
+    if (!access || access.hasPaidPlan) return null;
+
+    let tone;
+    let title;
+    if (access.inTrial) {
+        const days = Number(access.daysLeft) || 1;
+        tone = "border-teal/30 bg-teal/5 text-teal";
+        title = days === 1 ? t("trial.banner.daysLeftOne") : t("trial.banner.daysLeft", { days });
+    } else if (access.trialUsed) {
+        tone = "border-mango/40 bg-mango/10 text-ink";
+        title = t("seller.menu.trialEnded");
+    } else {
+        return null;
+    }
+
+    return (
+        <NavLink
+            to="/seller/subscription"
+            onClick={onNavigate}
+            className={`mb-3 flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs font-medium focus-ring ${tone}`}
+        >
+            <span className="min-w-0">{title}</span>
+            <span className="shrink-0 text-azure">{t("trial.banner.choosePlan")}</span>
+        </NavLink>
+    );
+}
+
+// Tab list shared by the desktop rail and the mobile drawer. Each group is a
+// collapsible section: only the group holding the current page starts open,
+// so the menu stays short. "rail" is a vertical list; "drawer" keeps the
+// two-column pill layout.
+function SellerNavGroups({ groups, variant, pathname }) {
+    const { t } = useLanguage();
+    const activeKey = useMemo(
+        () => groups.find((g) => g.tabs.some((tab) => tabIsActive(tab, pathname)))?.key ?? groups[0]?.key,
+        [groups, pathname]
+    );
+    const [openKeys, setOpenKeys] = useState(() => new Set([activeKey]));
+
+    // Navigating into another group (search jump, link inside a page) opens
+    // it; groups the seller opened by hand stay open.
+    useEffect(() => {
+        setOpenKeys((prev) => (prev.has(activeKey) ? prev : new Set(prev).add(activeKey)));
+    }, [activeKey]);
+
+    const toggle = (key) =>
+        setOpenKeys((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+
+    return groups.map((group) => {
+        const open = openKeys.has(group.key);
+        const panelId = `seller-nav-${variant}-${group.key}`;
+        return (
+            <div key={group.key} className="mb-2 last:mb-0">
+                <button
+                    type="button"
+                    onClick={() => toggle(group.key)}
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    className="w-full flex items-center justify-between gap-2 min-h-[40px] px-1 text-xs uppercase tracking-widest text-ash hover:text-ink focus-ring rounded-md"
+                >
+                    <span>{t(`seller.menu.${group.key}`)}</span>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                        className={`w-4 h-4 transition-transform ${open ? "" : "-rotate-90"}`}
                     >
-                        {tab.label}
-                    </NavLink>
-                ))}
+                        <path d="m6 9 6 6 6-6" />
+                    </svg>
+                </button>
+                {open && (
+                    <div id={panelId} className={`mt-1 ${variant === "rail" ? "flex flex-col gap-0.5" : "grid grid-cols-2 gap-1.5"}`}>
+                        {group.tabs.map((tab) => (
+                            <NavLink
+                                key={tab.to}
+                                to={tab.to}
+                                end={tab.end}
+                                className={({ isActive }) =>
+                                    variant === "rail"
+                                        ? `text-sm px-3 py-1.5 rounded-md transition-colors ${
+                                            isActive ? "bg-ink text-paper" : "text-ink/80 hover:bg-line/40"
+                                        }`
+                                        : `text-sm px-3 py-2 rounded-md transition-colors ${
+                                            isActive ? "bg-ink text-paper" : "bg-paper text-ink/80 border border-line/60"
+                                        }`
+                                }
+                            >
+                                {tab.label}
+                            </NavLink>
+                        ))}
+                    </div>
+                )}
             </div>
-        </div>
-    ));
+        );
+    });
 }
 
 export default function SellerLayout() {
     const { user, logout } = useAuth();
+    const { t } = useLanguage();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -320,19 +393,19 @@ export default function SellerLayout() {
     }
 
     const verificationTier = getVerificationTier(profile);
-    const verifiedBadge = verificationTier === "business" ? (
-        <span className="text-azure inline-flex items-center gap-1">
-            <CheckIcon className="w-3.5 h-3.5" /> Verified Business
-        </span>
-    ) : verificationTier === "seller" ? (
+    const verifiedBadge = verificationTier ? (
         <span className="text-teal inline-flex items-center gap-1">
-            <CheckIcon className="w-3.5 h-3.5" /> Verified Seller ·{" "}
+            <CheckIcon className="w-3.5 h-3.5" /> {t("verification.sellerBadge")}
+        </span>
+    ) : profile.is_verified ? (
+        <span className="text-ash">
+            {t("sellerBadge.none")} ·{" "}
             <NavLink to="/seller/verification" className="text-azure hover:underline">
-                get Verified Business
+                {t("sellerBadge.apply")}
             </NavLink>
         </span>
     ) : (
-        <span className="text-ash">Awaiting ID verification</span>
+        <span className="text-ash">{t("sellerBadge.awaitingId")}</span>
     );
 
     const storeActions = storeUrl && (
@@ -405,12 +478,13 @@ export default function SellerLayout() {
                 widthClassName="w-80 max-w-[85vw]"
             >
                 <nav className="p-4">
+                    <SellerPlanStatus onNavigate={() => setDrawerOpen(false)} />
                     <p className="text-xs mb-3">{verifiedBadge}</p>
                     <div className="mb-4 space-y-2">
                         <SellerSearch tabs={visibleTabs} onPick={(to) => { setDrawerOpen(false); navigate(to); }} />
                         {storeActions}
                     </div>
-                    <SellerNavGroups groups={navGroups} variant="drawer" />
+                    <SellerNavGroups groups={navGroups} variant="drawer" pathname={location.pathname} />
 
                     <div className="pt-3 border-t border-line/60 grid grid-cols-2 gap-1.5">
                         <Link
@@ -436,9 +510,10 @@ export default function SellerLayout() {
                 {/* Desktop rail: always visible at md and up. */}
                 <aside aria-label="Seller navigation" className="hidden md:block">
                     <div className="sticky top-4 border border-line rounded-lg p-3 max-h-[calc(100vh-2rem)] overflow-y-auto">
+                        <SellerPlanStatus />
                         <p className="text-xs mb-3 px-1">{verifiedBadge}</p>
                         <p className="text-xs uppercase tracking-widest text-ash px-1 mb-2 truncate">{profile.store_name}</p>
-                        <SellerNavGroups groups={navGroups} variant="rail" />
+                        <SellerNavGroups groups={navGroups} variant="rail" pathname={location.pathname} />
                         <div className="pt-3 mt-3 border-t border-line/60 space-y-0.5">
                             <Link to="/account" className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-md text-ink/80 hover:bg-line/40">
                                 <AccountIcon className="w-4 h-4 shrink-0" />
@@ -465,6 +540,7 @@ export default function SellerLayout() {
                     </div>
 
                     <div className="min-w-0 px-4 py-4 sm:px-0 sm:py-0">
+                        <TrialBanner />
                         <PageTransition granular>
                             <Outlet context={{ profile, refreshProfile: loadProfile }} />
                         </PageTransition>

@@ -16,6 +16,7 @@ router.get("/plans", subscriptionController.listPlans);
 
 // Seller
 router.get("/me", authMiddleware, authorize("seller"), subscriptionController.getMySubscription);
+router.get("/access", authMiddleware, authorize("seller"), subscriptionController.getMyAccess);
 
 router.post(
     "/subscribe",

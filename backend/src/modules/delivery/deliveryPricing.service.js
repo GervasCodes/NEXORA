@@ -2,6 +2,7 @@ const orderRepository = require("../order/order.repository");
 const sellerRepository = require("../seller/seller.repository");
 const settingsService = require("../settings/settings.service");
 const routingService = require("../../services/routing/routing.service");
+const deliveryRatesService = require("./deliveryRates.service");
 const { computeBandedFee } = require("../../utils/deliveryPricing");
 
 // Computes what a delivery agent should be paid for delivering `order`.
@@ -43,7 +44,16 @@ const { computeBandedFee } = require("../../utils/deliveryPricing");
 // whatever pickup pins they already have on file. This function's job is
 // now just resolving "which order -> which seller's pickup pin" before
 // delegating to it; same flat-fee fallback shape/reasoning as before.
-exports.estimateDeliveryForRoute = async ({ pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType }) => {
+// Round 5, Phase 5 - the fee is now priced from effective-dated per-vehicle
+// rate cards x a fuel factor (see deliveryRates.service.js). The old distance
+// bands above remain the fallback when no rate card exists, and the flat
+// rider_delivery_fee remains the fallback when a pin is missing.
+// `durationMinutes` now includes the admin-configured peak-hour adjustment
+// (`routeDurationMinutes` is the raw routing value); the checkout estimate
+// adds its own handling buffer on top (order.service.js#getDeliveryEstimate).
+// `region` only selects fuel caps and ETA windows (falls back to the default
+// region).
+exports.estimateDeliveryForRoute = async ({ pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType, region }) => {
     const flatFee = await settingsService.getRiderDeliveryFee();
 
     if (pickupLat == null || pickupLng == null || deliveryLat == null || deliveryLng == null) {
@@ -58,27 +68,50 @@ exports.estimateDeliveryForRoute = async ({ pickupLat, pickupLng, deliveryLat, d
         vehicleType
     });
 
-    const bands = await settingsService.getDeliveryDistanceBands();
-    const fee = computeBandedFee(route.distanceKm, bands, flatFee);
+    const quote = await deliveryRatesService.quoteRiderPay({ distanceKm: route.distanceKm, vehicleType, region });
+
+    let fee;
+    let pricing;
+    if (quote) {
+        fee = quote.fee;
+        pricing = {
+            pricingMethod: "rate_card",
+            vehicle: quote.vehicle,
+            rateCardId: quote.cardId,
+            fuelFactor: quote.fuel.factor,
+            fuelCap: quote.fuel.cap
+        };
+    } else {
+        const bands = await settingsService.getDeliveryDistanceBands();
+        fee = computeBandedFee(route.distanceKm, bands, flatFee);
+        pricing = { pricingMethod: "bands" };
+    }
+
+    const routeDuration = route.durationMinutes != null ? Math.round(route.durationMinutes) : null;
+    const durationMinutes = await deliveryRatesService.adjustEta(routeDuration, { region });
 
     return {
         fee,
         distanceKm: Number(route.distanceKm.toFixed(2)),
-        durationMinutes: route.durationMinutes != null ? Math.round(route.durationMinutes) : null,
+        durationMinutes,
+        routeDurationMinutes: routeDuration,
         method: "distance",
         routingProvider: route.provider,
-        degraded: route.degraded
+        degraded: route.degraded,
+        ...pricing
     };
 };
 
-exports.calculateDeliveryFee = async (order, vehicleType) => {
+const estimateForOrder = async (order, vehicleType) => {
+    const none = { pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null };
+
     if (order.delivery_lat == null || order.delivery_lng == null) {
-        return exports.estimateDeliveryForRoute({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null });
+        return exports.estimateDeliveryForRoute(none);
     }
 
     const sellerId = await orderRepository.findOrderSellerId(order.id);
     if (!sellerId) {
-        return exports.estimateDeliveryForRoute({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null });
+        return exports.estimateDeliveryForRoute(none);
     }
 
     const seller = await sellerRepository.findByUserId(sellerId);
@@ -88,6 +121,55 @@ exports.calculateDeliveryFee = async (order, vehicleType) => {
         pickupLng: seller?.pickup_lng,
         deliveryLat: order.delivery_lat,
         deliveryLng: order.delivery_lng,
-        vehicleType
+        vehicleType,
+        region: order.shipping_region
     });
+};
+
+// What the agent is paid for `order`. An order placed after migration 150
+// carries the quote taken at checkout and that quote is returned as-is, so a
+// later rate or fuel change never rewrites it. Older orders (no quote) are
+// priced live. `vehicleType` only matters for live pricing.
+exports.calculateDeliveryFee = async (order, vehicleType) => {
+    if (order.rider_fee_quote != null) {
+        const details = typeof order.rider_fee_quote_details === "string"
+            ? JSON.parse(order.rider_fee_quote_details)
+            : (order.rider_fee_quote_details || {});
+
+        return {
+            fee: Number(order.rider_fee_quote),
+            distanceKm: details.distanceKm ?? null,
+            durationMinutes: details.durationMinutes ?? null,
+            method: details.method || "flat",
+            routingProvider: details.routingProvider ?? null,
+            quoted: true
+        };
+    }
+
+    return estimateForOrder(order, vehicleType);
+};
+
+// Called once per deliverable order right after checkout creates it. Uses the
+// platform default vehicle (the agent isn't known yet) and stores the result
+// on the order. Never throws into checkout - an order without a quote is
+// simply priced live later, exactly as before this feature.
+exports.snapshotRiderFee = async (orderId) => {
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order || order.is_parent || order.rider_fee_quote != null) return null;
+
+    const estimate = await estimateForOrder(order);
+
+    await orderRepository.setRiderFeeQuote(orderId, estimate.fee, {
+        method: estimate.method,
+        distanceKm: estimate.distanceKm,
+        durationMinutes: estimate.durationMinutes,
+        routingProvider: estimate.routingProvider ?? null,
+        pricingMethod: estimate.pricingMethod ?? "flat",
+        vehicle: estimate.vehicle ?? null,
+        rateCardId: estimate.rateCardId ?? null,
+        fuelFactor: estimate.fuelFactor ?? null,
+        fuelCap: estimate.fuelCap ?? null
+    });
+
+    return estimate;
 };

@@ -10,10 +10,26 @@ const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
 // currently online, not just on next page load.
 const notificationService = require("../notification/notification.service");
 const auditService = require("../audit/audit.service");
-const { BROADCAST_SEGMENTS, BROADCAST_CHANNELS } = require("../../constants/broadcast");
+const {
+    BROADCAST_SEGMENTS, BROADCAST_CHANNELS, BROADCAST_TEMPLATE_TYPES, TEMPLATE_CHANNELS, IN_APP_MAX, MESSAGING_MAX
+} = require("../../constants/broadcast");
 const logger = require("../../utils/logger").child({ module: "broadcast" });
 
-const assertValidSegmentAndChannels = (segment, channels) => {
+// In-app text is read as a short line in the notification bell, so a long
+// shared body is trimmed to IN_APP_MAX (with an ellipsis) when reused there.
+const trimForInApp = (text) => {
+    const value = (text || "").trim();
+    return value.length > IN_APP_MAX ? `${value.slice(0, IN_APP_MAX - 1).trimEnd()}…` : value;
+};
+exports.trimForInApp = trimForInApp;
+
+const sameChannelSet = (a, b) => a.length === b.length && b.every((c) => a.includes(c));
+
+const assertValidSegmentAndChannels = (segment, channels, templateType = "all") => {
+    if (!BROADCAST_TEMPLATE_TYPES.includes(templateType)) {
+        throw Object.assign(new Error(`Unknown broadcast type: ${templateType}`), { status: 400 });
+    }
+
     if (!BROADCAST_SEGMENTS.includes(segment)) {
         throw Object.assign(new Error(`Unknown segment: ${segment}`), { status: 400 });
     }
@@ -25,6 +41,24 @@ const assertValidSegmentAndChannels = (segment, channels) => {
     const invalid = channels.filter((c) => !BROADCAST_CHANNELS.includes(c));
     if (invalid.length) {
         throw Object.assign(new Error(`Unknown channel(s): ${invalid.join(", ")}`), { status: 400 });
+    }
+
+    // Channels are validated against the type: a WhatsApp + SMS broadcast
+    // can never reach email or in-app, and an email + in-app broadcast can
+    // never reach SMS or WhatsApp. 'messaging' and 'rich' are fixed sets.
+    const allowed = TEMPLATE_CHANNELS[templateType];
+    const notAllowed = channels.filter((c) => !allowed.includes(c));
+    if (notAllowed.length) {
+        throw Object.assign(
+            new Error(`Channel(s) not allowed for this broadcast type: ${notAllowed.join(", ")}`),
+            { status: 400 }
+        );
+    }
+    if (templateType !== "all" && !sameChannelSet(channels, allowed)) {
+        throw Object.assign(
+            new Error(`This broadcast type always uses: ${allowed.join(" + ")}`),
+            { status: 400 }
+        );
     }
 };
 
@@ -87,31 +121,71 @@ exports.resolveChannelsForRecipient = (recipient, requestedChannels) => {
 // shared one when left blank. Centralised here (rather than inlined in
 // the send loop) so previewAudience-style callers and tests can reason
 // about "what actually gets sent on channel X" in one place.
-exports.resolveChannelContent = ({ subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage }) => ({
-    email: { subject, message },
-    sms: (smsMessage && smsMessage.trim()) || message,
-    whatsapp: (whatsappMessage && whatsappMessage.trim()) || message,
-    inApp: {
-        title: (inAppTitle && inAppTitle.trim()) || subject || "Announcement",
-        message: (inAppMessage && inAppMessage.trim()) || message
+//
+// Round 5 Phase 4 - per type:
+//  - 'messaging': one plain text for WhatsApp and SMS, nothing else.
+//  - 'rich': email subject + body; the in-app title is the subject and the
+//    in-app text is the optional short text (default: the body, trimmed).
+//  - 'all' (default): subject + one message everywhere; per-channel
+//    overrides are still honoured when present (older rows / API callers).
+//    The in-app message is always trimmed to IN_APP_MAX.
+exports.resolveChannelContent = ({ templateType = "all", subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage }) => {
+    if (templateType === "messaging") {
+        return { email: null, sms: message, whatsapp: message, inApp: null };
     }
-});
+
+    if (templateType === "rich") {
+        return {
+            email: { subject, message },
+            sms: null,
+            whatsapp: null,
+            inApp: {
+                title: subject,
+                message: trimForInApp((inAppMessage && inAppMessage.trim()) || message)
+            }
+        };
+    }
+
+    return {
+        email: { subject, message },
+        sms: (smsMessage && smsMessage.trim()) || message,
+        whatsapp: (whatsappMessage && whatsappMessage.trim()) || message,
+        inApp: {
+            title: (inAppTitle && inAppTitle.trim()) || subject || "Announcement",
+            message: trimForInApp((inAppMessage && inAppMessage.trim()) || message)
+        }
+    };
+};
 
 // Every individual provider call is best-effort (mirrors notify()'s own
 // treatment of email/WhatsApp sends elsewhere in the app) - one
 // recipient's bounced email or invalid number must never stop the rest
 // of a several-thousand-row segment from being messaged.
 exports.sendBroadcast = async ({
-    adminId, segment, channels, subject, message,
+    adminId, segment, channels, subject, message, templateType = "all",
     smsMessage, whatsappMessage, inAppTitle, inAppMessage,
     // Set only by resendBroadcast() below - threaded through so the
     // audit entry for a resend says so and links back to the original,
     // instead of reading identically to a brand-new send.
     resentFromId
 }) => {
-    assertValidSegmentAndChannels(segment, channels);
+    assertValidSegmentAndChannels(segment, channels, templateType);
 
-    if (channels.includes("email") && !subject) {
+    if (templateType === "messaging") {
+        // Plain text only: no subject, none of the other channels' fields.
+        subject = null;
+        inAppTitle = null;
+        inAppMessage = null;
+        smsMessage = null;
+        whatsappMessage = null;
+    } else if (templateType === "rich") {
+        smsMessage = null;
+        whatsappMessage = null;
+        inAppTitle = null;
+        if (!subject || !subject.trim()) {
+            throw Object.assign(new Error("A subject is required for an email + in-app broadcast"), { status: 400 });
+        }
+    } else if (channels.includes("email") && !subject) {
         throw Object.assign(new Error("A subject is required when sending by email"), { status: 400 });
     }
 
@@ -119,7 +193,11 @@ exports.sendBroadcast = async ({
         throw Object.assign(new Error("Message is required"), { status: 400 });
     }
 
-    const content = exports.resolveChannelContent({ subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage });
+    if (templateType === "messaging" && message.trim().length > MESSAGING_MAX) {
+        throw Object.assign(new Error(`Message must be under ${MESSAGING_MAX} characters`), { status: 400 });
+    }
+
+    const content = exports.resolveChannelContent({ templateType, subject, message, smsMessage, whatsappMessage, inAppTitle, inAppMessage });
 
     const recipients = await broadcastRepository.findRecipientsBySegment(segment);
 
@@ -213,6 +291,7 @@ exports.sendBroadcast = async ({
         adminId,
         segment,
         channels,
+        templateType,
         subject,
         message,
         smsMessage: smsMessage || null,
@@ -233,7 +312,7 @@ exports.sendBroadcast = async ({
             ? `Broadcast resent to ${segment} (${recipients.length} recipients, resend of #${resentFromId})`
             : `Broadcast sent to ${segment} (${recipients.length} recipients)`,
         metadata: {
-            broadcastId, segment, channels, recipientCount: recipients.length,
+            broadcastId, segment, channels, templateType, recipientCount: recipients.length,
             emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount,
             ...(resentFromId ? { resentFromId } : {})
         }
@@ -251,7 +330,12 @@ exports.sendBroadcast = async ({
     };
 };
 
-exports.getHistory = async () => broadcastRepository.findAll({ limit: 50 });
+exports.getHistory = async ({ type } = {}) => {
+    if (type && !BROADCAST_TEMPLATE_TYPES.includes(type)) {
+        throw Object.assign(new Error(`Unknown broadcast type: ${type}`), { status: 400 });
+    }
+    return broadcastRepository.findAll({ limit: 50, type: type || null });
+};
 
 // Soft delete - see broadcast.repository.js#softDelete and migration
 // 141 for why this hides rather than destroys the row.
@@ -281,6 +365,7 @@ exports.resendBroadcast = async (id, adminId) => {
         adminId,
         segment: original.segment,
         channels: original.channels.split(","),
+        templateType: original.template_type || "all",
         subject: original.subject,
         message: original.message,
         smsMessage: original.sms_message,

@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 // (Backend N+1 Fixes & Read Replica Adoption): read-heavy,
 // lag-tolerant browsing queries only - see the comment above each swapped
 // function below for why that specific one is safe. Everything else in
@@ -118,7 +119,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
 
     if (inStock) conditions.push("p.stock > 0");
     if (onSale) conditions.push("p.discount_price IS NOT NULL AND p.discount_price < p.price");
-    if (verifiedOnly) conditions.push("(sp.is_verified = 1 OR sp.is_business_verified = 1)");
+    if (verifiedOnly) conditions.push(VERIFIED_BADGE_SQL);
 
     // See utils/productSearch.js for why this is BOOLEAN MODE + prefix
     // wildcards rather than NATURAL LANGUAGE MODE, and why 1-2 char terms
@@ -151,7 +152,7 @@ exports.findAll = async ({ categoryId, search, minPrice, maxPrice, sellerId, reg
     const [rows] = await dbRead.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.brand, p.created_at,
-            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified, sp.region,
+            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT}, sp.region,
             ${selectExtra.length ? selectExtra.join(", ") + "," : ""}
             (
                 SELECT pi.image_url FROM product_images pi
@@ -250,7 +251,7 @@ exports.findBySlug = async (slug) => {
     const [rows] = await dbRead.query(
         `SELECT
             p.*,
-            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified,
+            sp.store_name, sp.store_slug, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             c.name AS category_name, c.slug AS category_slug,
             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS average_rating,
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count

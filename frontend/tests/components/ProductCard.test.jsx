@@ -5,8 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("../../src/context/LanguageContext", () => ({
     useLanguage: () => ({
         t: (key) => ({
-            "verification.sellerBadge": "Verified Seller",
-            "verification.businessBadge": "Verified Business"
+            "verification.sellerBadge": "Verified Seller"
         }[key] || key)
     })
 }));
@@ -48,7 +47,7 @@ const product = {
     discount_price: null,
     stock: 12,
     store_name: "Sample Store",
-    is_verified: 1,
+    show_verified_badge: 1,
     image_url: null,
     average_rating: 4.5,
     review_count: 8

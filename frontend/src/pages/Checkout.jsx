@@ -24,7 +24,7 @@ const initialForm = {
     pickup_point_id: "",
     address_id: "",
     coupon_code: "",
-    // Phase 2 (Legal & Consumer Trust): mirrors Register.jsx's
+    // (Legal & Consumer Trust): mirrors Register.jsx's
     // `terms_accepted` - an explicit, required consent, not implied by
     // submitting the form. Validated server-side in
     // order.validator.js#checkoutValidation and stamped onto the order
@@ -72,7 +72,7 @@ const PAYMENT_METHODS_AFTER_CARDS = [
     { value: "paypal", label: "PayPal", hint: "(charged in USD)" }
 ];
 
-// Phase 5 (Resilience & Growth): cash_on_delivery isn't a payment-provider
+// (Resilience & Growth): cash_on_delivery isn't a payment-provider
 // rail at all (no gateway involved), so it's never filtered by
 // GET /payments/methods below - only the provider-backed static options
 // are (card rails are filtered separately - see cardPaymentMethods).

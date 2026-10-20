@@ -250,7 +250,7 @@ export default function Home() {
                         </div>
 
                         {/*
-                          Phase 11 (Home Redesign) replaced the static
+                          replaced the static
                           three-photo collage this hero briefly shipped
                           with (a stopgap for placeholder paths under
                           /public/images/hero/ that were never filled in)

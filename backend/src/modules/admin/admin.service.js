@@ -194,6 +194,12 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         connection.release();
     }
 
+    // Round 6 Phase 3 - account is gone or anonymized either way (hard
+    // delete or scrubUserPII), so kick any socket that's still open for
+    // it right now rather than leaving it connected. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
+
     // Cloudinary cleanup happens after the transaction commits, not
     // inside it - Cloudinary isn't transactional, and the DB state (the
     // part that actually matters for correctness/re-running this safely)
@@ -285,6 +291,11 @@ exports.suspendUser = async (userId, reason, adminId) => {
     }
 
     await adminRepository.suspendUser(userId, reason.trim(), adminId);
+
+    // Round 6 Phase 3 - kick any already-open socket now, don't wait for
+    // its token's natural 7-day expiry or a reconnect. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
 
     await notificationService.notify({
         userId,
@@ -1218,6 +1229,14 @@ exports.updateAdminPermissions = async (userId, adminLevel, actorAdminId) => {
 
     await adminRepository.updateAdminLevel(userId, adminLevel);
 
+    // Round 6 Phase 3 - updateAdminLevel bumps token_version whenever
+    // the level actually changes, so any socket this admin already has
+    // open is carrying stale claims from the moment this commits. See
+    // socket.js#disconnectUser.
+    if (previousLevel !== resolvedLevel) {
+        require("../../socket/socket").disconnectUser(userId);
+    }
+
     // (Audit Logs) - permission changes weren't tracked at all
     // before this; every promotion/demotion between admin and super_admin
     // now leaves a record of who changed it and what it changed from/to.
@@ -1261,6 +1280,11 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
     }
 
     await adminRepository.revokeAdmin(userId);
+
+    // Round 6 Phase 3 - revokeAdmin bumps token_version too, same
+    // reasoning as updateAdminPermissions above. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
 
     // This revokes admin access (demotes the row back to an ordinary
     // role - see adminRepository.revokeAdmin) rather than deleting the

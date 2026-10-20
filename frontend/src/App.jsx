@@ -181,6 +181,12 @@ export default function App() {
     // An open conversation is a full-screen view with its own top bar:
     // no storefront header, footer or floating buttons.
     const isThreadRoute = /^\/messages\/[^/]+\/?$/.test(location.pathname);
+    // Checkout and the auth forms are focused, single-task flows - the
+    // footer's nav/legal/social links are a distraction there, same
+    // reasoning AppBottomNav already applied to hide itself on these
+    // routes (see its old HIDDEN_ROUTE regex, now folded in here too).
+    const isCheckoutRoute = location.pathname === "/checkout";
+    const isAuthFormRoute = location.pathname === "/login" || location.pathname === "/register";
 
     // Banner queue: cookie notice first, then install and update banners.
     const [updateVisible, setUpdateVisible] = useState(false);
@@ -450,7 +456,7 @@ export default function App() {
                 </Suspense>
             </main>
 
-            {!isAdminRoute && !isThreadRoute && <Footer />}
+            {!isAdminRoute && !isThreadRoute && !isCheckoutRoute && !isAuthFormRoute && <Footer />}
 
             {showNexoraAI && <NexoraAIDrawer />}
             {!isAdminRoute && !isFeedRoute && !isThreadRoute && (

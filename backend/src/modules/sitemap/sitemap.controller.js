@@ -1,4 +1,5 @@
 const sitemapService = require("./sitemap.service");
+const seoShellsService = require("./seoShells.service");
 
 // Phase 1 (SEO Critical). Public, unauthenticated, crawler-facing.
 // Mounted in app.js as GET /sitemap.xml (outside /api/v1 on purpose).
@@ -26,5 +27,20 @@ exports.getSitemapPart = async (req, res) => {
         res.send(xml);
     } catch (err) {
         res.status(500).type("text/plain").send("Sitemap temporarily unavailable");
+    }
+};
+
+// Round 6 Phase 2 (SEO - dynamic-route prerendering). Public,
+// unauthenticated - same trust level as /sitemap.xml above, since the
+// data returned (title/description/image per publicly-listed slug) is
+// already visible to anyone who opens the page. Consumed by
+// frontend/scripts/prerender-shells.mjs at build time, not by the
+// browser app.
+exports.getPrerenderShells = async (req, res) => {
+    try {
+        const entries = await seoShellsService.getShellEntries();
+        res.json({ entries });
+    } catch (err) {
+        res.status(500).json({ entries: [] });
     }
 };

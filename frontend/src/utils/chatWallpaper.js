@@ -1,4 +1,4 @@
-// Phase 12 (Messaging UI Modernization) - chat wallpaper/theme system.
+// (Messaging UI Modernization) - chat wallpaper/theme system.
 // Confirmed missing entirely: MessageBubble.jsx/components/chat/ had no
 // concept of a background theme, so every conversation rendered on the
 // same plain page background.

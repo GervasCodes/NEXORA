@@ -328,13 +328,18 @@ exports.markBookingItemReleased = async (itemId, executor = db) => {
 exports.createWithdrawal = async (
     sellerId, amount, payoutMethod, payoutDetails, executor = db,
     payoutCurrency = "TZS", payoutAmount = null, payoutExchangeRate = null,
-    holdUntil = null, payoutDetailsIsNew = false
+    holdUntil = null, payoutDetailsIsNew = false, payoutFields = {}
 ) => {
     const [result] = await executor.query(
         `INSERT INTO withdrawal_requests
-        (seller_id, amount, payout_method, payout_details, payout_currency, payout_amount, payout_exchange_rate, hold_until, payout_details_is_new)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [sellerId, amount, payoutMethod, payoutDetails, payoutCurrency, payoutAmount, payoutExchangeRate, holdUntil, payoutDetailsIsNew]
+        (seller_id, amount, payout_method, payout_details, payout_currency, payout_amount, payout_exchange_rate, hold_until, payout_details_is_new,
+         payout_network, payout_phone, payout_bank_name, payout_account_number, payout_account_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            sellerId, amount, payoutMethod, payoutDetails, payoutCurrency, payoutAmount, payoutExchangeRate, holdUntil, payoutDetailsIsNew,
+            payoutFields.network ?? null, payoutFields.phone ?? null, payoutFields.bankName ?? null,
+            payoutFields.accountNumber ?? null, payoutFields.accountName ?? null
+        ]
     );
     return result.insertId;
 };

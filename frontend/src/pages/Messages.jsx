@@ -39,11 +39,11 @@ export default function Messages() {
     const [view, setView] = useState("active"); // "active" | "archived"
     const [busyAction, setBusyAction] = useState(null);
 
-    // Cross-conversation message search (Phase 8).
+    // Cross-conversation message search .
     const [messageResults, setMessageResults] = useState(null);
     const [searchingMessages, setSearchingMessages] = useState(false);
 
-    // Phase 8 sub-phase 3 (empty & loading states): a failed fetch used to
+    // (empty & loading states): a failed fetch used to
     // fall through silently, leaving `conversations` at its initial `[]` -
     // indistinguishable from a person who genuinely has no conversations.
     // This tracks a real load failure separately so it gets its own

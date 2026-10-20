@@ -133,6 +133,30 @@ exports.emitToOrder = (orderId, event, payload) => {
     io.to(`order:${orderId}`).emit(event, payload);
 };
 
+// Round 6 Phase 3 (Socket.IO re-authorization gap, security checklist
+// #9). The io.use handshake middleware above already re-checks
+// is_active/token_version fresh from the DB, so it correctly rejects a
+// NEW connection attempt from a suspended/deleted account or a token
+// made stale by a password/permission change - but that check only
+// runs at handshake time. A socket that was already open when one of
+// those happens stays open and keeps its room memberships (`user:*`,
+// `conversation:*`, `order:*`, `admins`) for the rest of its 7-day
+// token life, since nothing was watching for the change mid-session.
+//
+// Call this right after any DB write that sets is_active = FALSE or
+// bumps token_version for a user (suspend, soft/permanent delete,
+// password change, admin-level change/revoke - see each call site).
+// disconnectSockets(true) both removes every room membership AND
+// closes the underlying connection, so a legitimate client reconnects
+// on its own and goes through the handshake check again - at which
+// point it's correctly rejected if the account is genuinely no longer
+// valid, or reconnects normally if this was, say, a password change on
+// the same device that's about to get a fresh token anyway.
+exports.disconnectUser = (userId) => {
+    if (!io) return;
+    io.in(`user:${userId}`).disconnectSockets(true);
+};
+
 
 
 exports.init = (httpServer) => {

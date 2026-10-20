@@ -40,23 +40,11 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
     const consentGiven = shippingInfo.checkout_terms_accepted === true
         || shippingInfo.checkout_terms_accepted === "true";
 
-    // Deliberately STAMPS rather than ENFORCES. Enforcement lives in
-    // order.validator.js#checkoutValidation, at the HTTP layer.
-    //
-    // Why no belt-and-suspenders throw here (unlike auth.service.js's
-    // re-check of signup consent): insertOrderRow is shared by a SECOND
-    // purchase path that legitimately has no consent field -
-    // groupBuy.service.js#claim calls createOrder directly with its own
-    // shippingInfo, built from GroupBuyDetail.jsx's claim form, which has
-    // no consent checkbox. Throwing here would break group-buy claims
-    // outright, and both groupBuy.service.js and order.service.js are
-    // outside Phase 2's file list, so neither can be given a consent gate
-    // in this phase.
-    //
-    // A group-buy-claimed order therefore stores NULL in both columns -
-    // honestly recording "no consent was captured on this path" rather
-    // than fabricating one. **That gap is real and is flagged as a
-    // follow-up in PHASE_2_NOTES.md.**
+    // STAMPS rather than ENFORCES: enforcement lives in the callers' own
+    // gates - order.validator.js#checkoutValidation (regular checkout) and
+    // groupBuy.validator.js#claimValidation + groupBuy.service.js#claim
+    // (group-buy claims). Both paths send checkout_terms_accepted, so every
+    // top-level order carries a real consent record.
     const checkoutTermsVersion = isTopLevel && consentGiven ? CURRENT_CHECKOUT_TERMS_VERSION : null;
 
     // Timestamped server-side rather than trusted from the client, for

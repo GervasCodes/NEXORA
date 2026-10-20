@@ -11,7 +11,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatTimeRemaining } from "../utils/format";
 
-// Status -> buyer-facing explanation (Phase 4 remediation) - a status
+// Status -> buyer-facing explanation (remediation) - a status
 // badge alone ("Failed") doesn't tell a buyer who already joined what
 // actually happened or whether they're owed anything; this fills that
 // gap next to the badge.
@@ -35,7 +35,7 @@ export default function GroupBuyDetail() {
     const [message, setMessage] = useState("");
     const [showClaimForm, setShowClaimForm] = useState(false);
     const [form, setForm] = useState({
-        shipping_address: "", shipping_city: "", shipping_region: "", shipping_phone: "", payment_method: "mobile_money"
+        shipping_address: "", shipping_city: "", shipping_region: "", shipping_phone: "", payment_method: "mobile_money", checkout_terms_accepted: false
     });
 
     const load = () => {
@@ -44,7 +44,7 @@ export default function GroupBuyDetail() {
 
     useEffect(load, [id]);
 
-    // Live countdown (Phase 4 remediation) - formatTimeRemaining()
+    // Live countdown (remediation) - formatTimeRemaining()
     // computes off Date.now() at call time, but nothing was forcing a
     // re-render as time passed, so "2 hours left" sat frozen on screen
     // until the next unrelated re-render (e.g. after join/claim). A
@@ -207,9 +207,25 @@ export default function GroupBuyDetail() {
                         <input required placeholder="Region" value={form.shipping_region} onChange={(e) => setForm({ ...form, shipping_region: e.target.value })} className="border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
                     <PhoneInput value={form.shipping_phone} onChange={(shipping_phone) => setForm({ ...form, shipping_phone })} required />
+                    <div className="flex items-start gap-2">
+                        <input
+                            type="checkbox"
+                            id="claim_terms_accepted"
+                            checked={form.checkout_terms_accepted}
+                            onChange={(e) => setForm({ ...form, checkout_terms_accepted: e.target.checked })}
+                            className="mt-1 focus-ring"
+                            required
+                        />
+                        <label htmlFor="claim_terms_accepted" className="text-xs text-ash">
+                            I agree to the{" "}
+                            <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">Terms of Service</Link>,{" "}
+                            <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">Privacy Policy</Link>, and{" "}
+                            <Link to="/legal/refund-policy" target="_blank" className="text-teal hover:underline">Refund Policy</Link>.
+                        </label>
+                    </div>
                     <button
                         type="submit"
-                        disabled={busy}
+                        disabled={busy || !form.checkout_terms_accepted}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
                     >
                         {busy ? "Creating order…" : `Pay ${format(group.group_price)}`}

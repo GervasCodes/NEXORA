@@ -56,7 +56,10 @@ exports.countRecipientsBySegment = async (segment) => {
 exports.create = async ({
     adminId, segment, channels, templateType = "all", subject, message,
     smsMessage, whatsappMessage, inAppTitle, inAppMessage,
-    recipientCount, emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount
+    // Counts default to 0: sendBroadcast creates the row BEFORE sending (so
+    // its id can tag the outgoing email) and fills the real counts in
+    // afterwards via updateSentCounts().
+    recipientCount, emailSentCount = 0, smsSentCount = 0, whatsappSentCount = 0, inAppSentCount = 0
 }) => {
     const [result] = await db.query(
         `INSERT INTO broadcasts
@@ -69,6 +72,15 @@ exports.create = async ({
         ]
     );
     return result.insertId;
+};
+
+exports.updateSentCounts = async (id, { emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount }) => {
+    await db.query(
+        `UPDATE broadcasts
+        SET email_sent_count = ?, sms_sent_count = ?, whatsapp_sent_count = ?, in_app_sent_count = ?
+        WHERE id = ?`,
+        [emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount, id]
+    );
 };
 
 // `type` (optional) filters history to one broadcast function: 'all',
@@ -115,20 +127,14 @@ exports.softDelete = async (id) => {
     return result.affectedRows > 0;
 };
 
-// --- Brevo delivery-status webhook (Phase 5, production error fixes) ---
-// Deliberately NOT attributed to a specific `broadcasts` row - see
-// database/migrations/111_broadcast_delivery_events.sql for why (real
-// per-broadcast attribution needs outgoing mail tagged with a
-// broadcast id at send time, which would require reordering
-// broadcast.service.js#sendBroadcast to create its row before sending
-// rather than after, and updating that function's existing test to
-// match - flagged in PHASE_5_NOTES.md as a follow-up rather than done
-// silently here). This just records that Brevo told us what happened
-// to a given send, system-wide.
-exports.recordDeliveryEvent = async ({ eventType, recipientEmail, brevoMessageId, rawEvent }) => {
+// --- Brevo delivery-status webhook ---
+// broadcastId is parsed from the `broadcast-<id>` tag sendBroadcast puts on
+// every outgoing email (see brevoWebhook.controller.js); NULL for
+// transactional mail and for events from before migration 153.
+exports.recordDeliveryEvent = async ({ eventType, recipientEmail, brevoMessageId, broadcastId = null, rawEvent }) => {
     await db.query(
-        `INSERT INTO email_delivery_events (event_type, recipient_email, brevo_message_id, raw_event)
-        VALUES (?, ?, ?, ?)`,
-        [eventType, recipientEmail, brevoMessageId || null, rawEvent ? JSON.stringify(rawEvent) : null]
+        `INSERT INTO email_delivery_events (event_type, recipient_email, brevo_message_id, broadcast_id, raw_event)
+        VALUES (?, ?, ?, ?, ?)`,
+        [eventType, recipientEmail, brevoMessageId || null, broadcastId, rawEvent ? JSON.stringify(rawEvent) : null]
     );
 };

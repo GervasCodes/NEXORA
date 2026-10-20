@@ -64,7 +64,7 @@ export default function Register() {
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [usernameStatus, setUsernameStatus] = useState("idle");
-    // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
+    // (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
     // finishing phone/username/terms; it can arrive from the Login page via
     // router state. `googleTicket` = a seller/delivery agent whose name + email
     // were prefilled from Google (email locked, no password, documents still

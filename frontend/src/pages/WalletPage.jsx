@@ -25,7 +25,7 @@ export default function WalletPage() {
     const { format } = useCurrency();
     const { t } = useLanguage();
 
-    // (Phase 4 remediation) - previously this was a bare
+    // (remediation) - previously this was a bare
     // `.then(setSummary).finally(...)` with no `.catch()`, so a failed
     // load left `summary` null forever: the transaction list then did
     // `summary.transactions.map(...)` with no optional chaining and

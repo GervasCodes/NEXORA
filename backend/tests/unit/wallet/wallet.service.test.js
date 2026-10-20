@@ -64,7 +64,10 @@ const snapshotItem = (overrides) => ({
     commission_rate: "10.00", commission_amount: "0", seller_net_amount: "0", ...overrides
 });
 
-const MOBILE_PAYOUT = "M-Pesa 0712345678";
+const MOBILE_PAYOUT = { payout_network: "vodacom_mpesa", payout_phone: "0712345678" };
+// What requestWithdrawal composes/stores from MOBILE_PAYOUT.
+const MOBILE_DETAILS = "Vodacom M-Pesa +255712345678";
+const MOBILE_FIELDS = { network: "vodacom_mpesa", phone: "+255712345678", bankName: null, accountNumber: null, accountName: null };
 
 describe("wallet.service.creditSellersForOrder", () => {
     it("is idempotent: commits and does nothing when there are no uncredited items", async () => {
@@ -276,30 +279,41 @@ describe("wallet.service.requestWithdrawal", () => {
 // ---- Phase 2 withdrawal guards: payout details, limits, disputes, hold ----
 
 describe("wallet.service.requestWithdrawal - payout detail validation", () => {
-    const expectRejectedBeforeAnyDbWork = async (method, details, message) => {
-        await expect(walletService.requestWithdrawal(10, 500, method, details)).rejects.toThrow(message);
+    const expectRejectedBeforeAnyDbWork = async (method, payout, message) => {
+        await expect(walletService.requestWithdrawal(10, 500, method, payout)).rejects.toThrow(message);
         expect(db.getConnection).not.toHaveBeenCalled();
         expect(walletRepository.createWithdrawal).not.toHaveBeenCalled();
     };
 
-    it("rejects a mobile-money payout without a plausible phone number", async () => {
-        await expectRejectedBeforeAnyDbWork("mobile_money", "M-Pesa", "valid phone number");
-        await expectRejectedBeforeAnyDbWork("mpesa", "0712 345", "valid phone number"); // only 7 digits
-        await expectRejectedBeforeAnyDbWork("mobile_money", {}, "valid phone number"); // not even a string of digits
+    it("rejects a mobile-money payout without a network or a valid phone number", async () => {
+        await expectRejectedBeforeAnyDbWork("mobile_money", { payout_phone: "0712345678" }, "mobile money network");
+        await expectRejectedBeforeAnyDbWork("mobile_money", { payout_network: "halopesa", payout_phone: "0712 345" }, "valid mobile money phone");
+        await expectRejectedBeforeAnyDbWork("mobile_money", { payout_network: "nope", payout_phone: "0712345678" }, "mobile money network");
     });
 
-    it("rejects a bank payout missing the bank name/holder (letters) or a long enough account number", async () => {
-        await expectRejectedBeforeAnyDbWork("bank_transfer", "0150123456789", "bank name, account number and account holder");
-        await expectRejectedBeforeAnyDbWork("CRDB bank", "CRDB John 123", "bank name, account number and account holder");
+    it("rejects a bank payout missing the bank name, a valid account number or the holder name", async () => {
+        const ok = { payout_bank_name: "CRDB", payout_account_number: "0150123456789", payout_account_name: "John Doe" };
+        await expectRejectedBeforeAnyDbWork("bank_transfer", { ...ok, payout_bank_name: "" }, "bank name");
+        await expectRejectedBeforeAnyDbWork("bank_transfer", { ...ok, payout_account_number: "123" }, "account number");
+        await expectRejectedBeforeAnyDbWork("bank_transfer", { ...ok, payout_account_name: "" }, "account holder");
+        await expectRejectedBeforeAnyDbWork("cheque", ok, "payout method");
     });
 
-    it("accepts a well-formed mobile-money and bank payout", async () => {
+    it("accepts a well-formed mobile-money and bank payout and stores the structured fields", async () => {
         walletRepository.getWalletForUpdate.mockResolvedValue({ balance: "5000.00" });
         walletRepository.incrementBalance.mockResolvedValue(4500);
         walletRepository.createWithdrawal.mockResolvedValue(77);
 
-        await expect(walletService.requestWithdrawal(10, 500, "mobile_money", "Tigo Pesa 0652 123 456")).resolves.toMatchObject({ withdrawalId: 77 });
-        await expect(walletService.requestWithdrawal(10, 500, "bank_transfer", "CRDB - John Doe - 0150123456789")).resolves.toMatchObject({ withdrawalId: 77 });
+        await expect(walletService.requestWithdrawal(10, 500, "mobile_money", { payout_network: "tigo_pesa", payout_phone: "0652 123 456" })).resolves.toMatchObject({ withdrawalId: 77 });
+        expect(walletRepository.createWithdrawal).toHaveBeenLastCalledWith(
+            10, 500, "mobile_money", expect.stringContaining("+255652123456"), expect.anything(),
+            "TZS", null, null, null, false,
+            expect.objectContaining({ network: "tigo_pesa", phone: "+255652123456" })
+        );
+
+        await expect(walletService.requestWithdrawal(10, 500, "bank_transfer", {
+            payout_bank_name: "CRDB", payout_account_number: "0150123456789", payout_account_name: "John Doe"
+        })).resolves.toMatchObject({ withdrawalId: 77 });
     });
 });
 
@@ -363,13 +377,13 @@ describe("wallet.service.requestWithdrawal - platform limits and abuse guards", 
         const result = await walletService.requestWithdrawal(10, 500, "mobile_money", MOBILE_PAYOUT);
         const after = Date.now();
 
-        expect(walletRepository.hasPriorPayoutUsage).toHaveBeenCalledWith(10, "mobile_money", MOBILE_PAYOUT);
+        expect(walletRepository.hasPriorPayoutUsage).toHaveBeenCalledWith(10, "mobile_money", MOBILE_DETAILS);
         expect(result.isNewPayoutDetails).toBe(true);
         const holdMs = result.holdUntil.getTime();
         expect(holdMs).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000);
         expect(holdMs).toBeLessThanOrEqual(after + 24 * 60 * 60 * 1000);
         expect(walletRepository.createWithdrawal).toHaveBeenCalledWith(
-            10, 500, "mobile_money", MOBILE_PAYOUT, connection, "TZS", null, null, result.holdUntil, true
+            10, 500, "mobile_money", MOBILE_DETAILS, connection, "TZS", null, null, result.holdUntil, true, MOBILE_FIELDS
         );
     });
 });
@@ -386,7 +400,7 @@ describe("wallet.service.requestWithdrawal - multi-currency payouts", () => {
 
         expect(settingsService.getUsdExchangeRate).not.toHaveBeenCalled();
         expect(walletRepository.createWithdrawal).toHaveBeenCalledWith(
-            10, 500, "mobile_money", MOBILE_PAYOUT, connection, "TZS", null, null, null, false
+            10, 500, "mobile_money", MOBILE_DETAILS, connection, "TZS", null, null, null, false, MOBILE_FIELDS
         );
     });
 
@@ -400,7 +414,7 @@ describe("wallet.service.requestWithdrawal - multi-currency payouts", () => {
 
         expect(settingsService.getUsdExchangeRate).toHaveBeenCalled();
         expect(walletRepository.createWithdrawal).toHaveBeenCalledWith(
-            10, 500000, "mobile_money", MOBILE_PAYOUT, connection, "USD", 200, 2500, null, false
+            10, 500000, "mobile_money", MOBILE_DETAILS, connection, "USD", 200, 2500, null, false, MOBILE_FIELDS
         );
         expect(result).toMatchObject({ withdrawalId: 78, balance: 4500000 });
     });

@@ -28,7 +28,11 @@ export default function SellerWallet() {
     const [showForm, setShowForm] = useState(false);
     const [amount, setAmount] = useState("");
     const [payoutMethod, setPayoutMethod] = useState("mobile_money");
-    const [payoutDetails, setPayoutDetails] = useState("");
+    const [payoutNetwork, setPayoutNetwork] = useState("vodacom_mpesa");
+    const [payoutPhone, setPayoutPhone] = useState("");
+    const [bankName, setBankName] = useState("");
+    const [accountNumber, setAccountNumber] = useState("");
+    const [accountName, setAccountName] = useState("");
     const [payoutCurrency, setPayoutCurrency] = useState("TZS");
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState("");
@@ -80,11 +84,16 @@ export default function SellerWallet() {
             await api.post("/wallet/withdrawals", {
                 amount: Number(amount),
                 payout_method: payoutMethod,
-                payout_details: payoutDetails,
+                ...(payoutMethod === "mobile_money"
+                    ? { payout_network: payoutNetwork, payout_phone: payoutPhone }
+                    : { payout_bank_name: bankName, payout_account_number: accountNumber, payout_account_name: accountName }),
                 payout_currency: payoutCurrency
             });
             setAmount("");
-            setPayoutDetails("");
+            setPayoutPhone("");
+            setBankName("");
+            setAccountNumber("");
+            setAccountName("");
             setPayoutCurrency("TZS");
             setShowForm(false);
             load(true);
@@ -201,14 +210,59 @@ export default function SellerWallet() {
                         </select>
                     </div>
 
-                    <Input
-                        label={payoutMethod === "mobile_money" ? t("seller.wallet.mobileNumber") : t("seller.wallet.bankDetails")}
-                        type="text"
-                        required
-                        value={payoutDetails}
-                        onChange={(e) => setPayoutDetails(e.target.value)}
-                        placeholder={payoutMethod === "mobile_money" ? t("seller.wallet.mobilePlaceholder") : t("seller.wallet.bankPlaceholder")}
-                    />
+                    {payoutMethod === "mobile_money" ? (
+                        <>
+                            <div>
+                                <label htmlFor="payoutNetwork" className="text-xs text-ash block mb-1">{t("seller.wallet.network")}</label>
+                                <select
+                                    id="payoutNetwork"
+                                    value={payoutNetwork}
+                                    onChange={(e) => setPayoutNetwork(e.target.value)}
+                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                                >
+                                    <option value="vodacom_mpesa">Vodacom M-Pesa</option>
+                                    <option value="tigo_pesa">Mixx by Yas (Tigo Pesa)</option>
+                                    <option value="airtel_money">Airtel Money</option>
+                                    <option value="halopesa">HaloPesa</option>
+                                </select>
+                            </div>
+                            <Input
+                                label={t("seller.wallet.mobileNumber")}
+                                type="tel"
+                                inputMode="tel"
+                                required
+                                value={payoutPhone}
+                                onChange={(e) => setPayoutPhone(e.target.value)}
+                                placeholder={t("seller.wallet.mobilePlaceholder")}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <Input
+                                label={t("seller.wallet.bankName")}
+                                type="text"
+                                required
+                                value={bankName}
+                                onChange={(e) => setBankName(e.target.value)}
+                                placeholder={t("seller.wallet.bankNamePlaceholder")}
+                            />
+                            <Input
+                                label={t("seller.wallet.accountNumber")}
+                                type="text"
+                                inputMode="numeric"
+                                required
+                                value={accountNumber}
+                                onChange={(e) => setAccountNumber(e.target.value)}
+                            />
+                            <Input
+                                label={t("seller.wallet.accountName")}
+                                type="text"
+                                required
+                                value={accountName}
+                                onChange={(e) => setAccountName(e.target.value)}
+                            />
+                        </>
+                    )}
 
                     <button
                         type="submit"

@@ -130,7 +130,19 @@ const DEFAULTS = {
     // Phase 6 (round 5) - usernames (migration 151). Comma-separated words
     // that may not be used as a whole username, on top of the reserved words
     // hard-coded in utils/username.js. Admin-editable.
-    username_blocklist: "staff,moderator,official,customercare,helpdesk,payments,billing,security,verified"
+    username_blocklist: "staff,moderator,official,customercare,helpdesk,payments,billing,security,verified",
+
+    // Round 6 Phase 5 - cart caps (migration 154). Were fixed constants in
+    // cart.service.js: most of one product a buyer can add per cart line, and
+    // most different lines a cart can hold. Admin-editable within
+    // CART_LIMIT_BOUNDS below.
+    max_quantity_per_cart_line: "500",
+    max_cart_line_items: "100"
+};
+
+const CART_LIMIT_BOUNDS = {
+    max_quantity_per_cart_line: { min: 1, max: 10000, label: "Max quantity per cart line" },
+    max_cart_line_items: { min: 1, max: 500, label: "Max different items per cart" }
 };
 
 const USERNAME_BLOCKLIST_MAX_LENGTH = 1000;
@@ -286,6 +298,20 @@ exports.getCommissionRateMax = async () => {
     return Number.isFinite(max) && max > 0 ? max : 30;
 };
 
+// Cart caps - always a usable positive integer (falls back to the default if
+// the stored value is missing/corrupt), same guarantee as the getters above.
+exports.getCartLimits = async () => {
+    const map = await getCachedAll();
+    const read = (key) => {
+        const value = Number(map[key]);
+        return Number.isInteger(value) && value > 0 ? value : Number(DEFAULTS[key]);
+    };
+    return {
+        maxQuantityPerLine: read("max_quantity_per_cart_line"),
+        maxLineItems: read("max_cart_line_items")
+    };
+};
+
 exports.getGroupBuyClaimWindowHours = async () => {
     const map = await getCachedAll();
     return Number(map.group_buy_claim_window_hours);
@@ -416,7 +442,8 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
         "ai_daily_token_cap_global", "ai_monthly_token_cap_global",
         "approved_document_retention_days",
         "fuel_passthrough_pct", "fuel_baseline_cap", "fuel_max_monthly_change_pct",
-        "delivery_handling_buffer_minutes"
+        "delivery_handling_buffer_minutes",
+        "max_quantity_per_cart_line", "max_cart_line_items"
     ];
 
     const changes = [];
@@ -474,6 +501,16 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
                 `This moves the exchange rate by ${movedPercent.toFixed(1)}% (limit without extra confirmation: ${band}%).`,
                 { code: "CONFIRMATION_REQUIRED", field: "usd_exchange_rate" }
             );
+        }
+    }
+
+    for (const [key, bounds] of Object.entries(CART_LIMIT_BOUNDS)) {
+        const change = changing(key);
+        if (change) {
+            const value = Number(change.newValue);
+            if (!Number.isInteger(value) || value < bounds.min || value > bounds.max) {
+                throw badRequest(`${bounds.label} must be a whole number from ${bounds.min} to ${bounds.max}.`);
+            }
         }
     }
 

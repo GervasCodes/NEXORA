@@ -119,6 +119,14 @@ exports.sweepExpired = async () => {
 // buyer to pay through the normal payment initiation endpoints, exactly
 // like any other freshly-created order.
 exports.claim = async (groupBuyId, buyerId, shippingInfo) => {
+    // Consent is recorded by orderRepository.insertOrderRow from this same
+    // shippingInfo flag, exactly as for a regular checkout. The HTTP layer
+    // (claimValidation) already requires it; re-checked here so no other
+    // caller can create a claim order without a consent record.
+    if (shippingInfo?.checkout_terms_accepted !== true && shippingInfo?.checkout_terms_accepted !== "true") {
+        throw new Error("You must accept the Terms of Service, Privacy Policy, and Refund Policy");
+    }
+
     const group = await groupBuyRepository.findById(groupBuyId);
     if (!group) throw new Error("Group buy not found");
     if (group.status !== "successful") {

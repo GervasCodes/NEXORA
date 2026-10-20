@@ -13,7 +13,9 @@ const isConfigured = () => !!process.env.BREVO_API_KEY;
 // optional passthrough (e.g. List-Unsubscribe on broadcast sends - see
 // broadcast.service.js) for anything a specific caller needs that isn't
 // worth a named param here.
-const sendTransactionalEmail = async ({ to, toName, subject, html, text, replyTo, headers }) => {
+// `tags` (optional string[]) is echoed back by Brevo on every webhook event
+// for the message - broadcasts use it to carry their `broadcast-<id>`.
+const sendTransactionalEmail = async ({ to, toName, subject, html, text, replyTo, headers, tags }) => {
     if (!isConfigured()) {
         if (process.env.NODE_ENV === "production") {
             throw new Error("Email delivery is not configured (BREVO_API_KEY missing).");
@@ -41,7 +43,8 @@ const sendTransactionalEmail = async ({ to, toName, subject, html, text, replyTo
             subject,
             htmlContent: html,
             textContent: text,
-            ...(headers ? { headers } : {})
+            ...(headers ? { headers } : {}),
+            ...(tags && tags.length ? { tags } : {})
         })
     });
 

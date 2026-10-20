@@ -16,8 +16,15 @@
 // Hosting: Netlify serves a real file before applying the /* -> /index.html
 // rewrite, so /products resolves to dist/products/index.html.
 //
-// Dynamic pages (/products/:slug, /services/:slug, /stores/:slug, ...) are
-// database-driven and are not generated here.
+// Dynamic pages (/products/:slug, /services/:slug, /stores/:slug) ARE
+// also generated here as of Round 6 Phase 2 - see the dynamic-shells
+// section near the bottom of this file. They're fetched fresh from the
+// backend (GET /seo/prerender-shells.json, same visibility rules as
+// /sitemap.xml) rather than listed statically like ROUTES below, since
+// the catalog changes constantly. A build only ever sees the catalog as
+// of whenever this script runs, so freshness depends on how often the
+// site gets rebuilt - see backend/src/jobs/netlifyRebuildTrigger.job.js
+// for the scheduled-rebuild side of that.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,7 +84,12 @@ const setTag = (html, pattern, replacement, label) => {
     return html.replace(pattern, replacement);
 };
 
-const build = ({ path, title, description, h1 }) => {
+// `image`/`imageAlt` are optional - static ROUTES entries never pass
+// them (the template's site-wide og-banner.png default is fine for
+// those), but dynamic product/service/store shells do, since a real
+// photo meaningfully improves a WhatsApp/Telegram/Facebook link
+// preview over the generic banner.
+const build = ({ path, title, description, h1, image, imageAlt }) => {
     const fullTitle = `${title} · ${SITE_NAME}`;
     const url = `${SITE_URL}${path}`;
     let html = template;
@@ -88,6 +100,27 @@ const build = ({ path, title, description, h1 }) => {
     html = setTag(html, /<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(description)}" data-rh="true" />`, "og:description");
     html = setTag(html, /<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(fullTitle)}" data-rh="true" />`, "twitter:title");
     html = setTag(html, /<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(description)}" data-rh="true" />`, "twitter:description");
+
+    if (image) {
+        // Real photo of unknown dimensions - swap the image URL but drop
+        // the hardcoded 1200x630 width/height (those described the
+        // static og-banner.png, not this photo) rather than claim a
+        // size that may be wrong.
+        html = setTag(html, /<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(image)}" data-rh="true" />`, "og:image");
+        html = html.replace(/\s*<meta property="og:image:width"[^>]*>\n?/, "\n");
+        html = html.replace(/\s*<meta property="og:image:height"[^>]*>\n?/, "\n");
+        html = setTag(html, /<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(image)}" data-rh="true" />`, "twitter:image");
+        if (imageAlt) {
+            html = html.replace(
+                /(<meta property="og:image"[^>]*>)/,
+                `$1\n    <meta property="og:image:alt" content="${esc(imageAlt)}" data-rh="true" />`
+            );
+            html = html.replace(
+                /(<meta name="twitter:image"[^>]*>)/,
+                `$1\n    <meta name="twitter:image:alt" content="${esc(imageAlt)}" data-rh="true" />`
+            );
+        }
+    }
 
     // canonical + og:url, inserted right after the description tag
     html = html.replace(
@@ -120,4 +153,41 @@ const home = template.replace(
 );
 writeFileSync(join(dist, "index.html"), home);
 
-console.log(`prerender-shells: wrote ${ROUTES.length} route shells + canonical on /`);
+console.log(`prerender-shells: wrote ${ROUTES.length} static route shells + canonical on /`);
+
+// --- Dynamic shells (Round 6 Phase 2) ---------------------------------
+// Product/service/store pages, fetched fresh from the backend at build
+// time. Never fails the build: a missing API_URL or an unreachable/
+// erroring backend just means this build keeps whatever dynamic shells
+// the PREVIOUS deploy already wrote (or none, on a first-ever build) -
+// the static shells above (and the app itself) are unaffected either way.
+const API_URL = (process.env.VITE_API_URL || "http://localhost:5000/api/v1").replace(/\/api\/v1\/?$/, "");
+
+const writeDynamicShells = async () => {
+    let entries;
+    try {
+        const res = await fetch(`${API_URL}/seo/prerender-shells.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        ({ entries } = await res.json());
+    } catch (err) {
+        console.warn(`prerender-shells: skipping dynamic shells - ${err.message}`);
+        return;
+    }
+
+    let written = 0;
+    for (const entry of entries || []) {
+        try {
+            const dir = join(dist, ...entry.path.split("/").filter(Boolean));
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(join(dir, "index.html"), build({ ...entry, h1: entry.title }));
+            written += 1;
+        } catch (err) {
+            // One bad entry (e.g. an unusual slug) shouldn't take the
+            // rest of the catalog down with it.
+            console.warn(`prerender-shells: skipped ${entry.path} - ${err.message}`);
+        }
+    }
+    console.log(`prerender-shells: wrote ${written} dynamic route shell(s) from ${API_URL}`);
+};
+
+await writeDynamicShells();

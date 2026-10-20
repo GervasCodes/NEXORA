@@ -110,7 +110,7 @@ export default function Login() {
         setStep("otp");
     };
 
-    // Phase 7 (round 5): one-tap Google sign-in. A returning/linked Google user
+    // One-tap Google sign-in. A returning/linked Google user
     // is signed in straight away (no OTP - Google already verified them); a new
     // one continues on the register page to add phone, username and terms.
     const handleGoogleCredential = async (credential) => {

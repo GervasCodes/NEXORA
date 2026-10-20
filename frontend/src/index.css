@@ -254,24 +254,11 @@ body {
     --z-feed: 1300;
 }
 
-/* Phone bottom navigation (Phase 8). App.jsx sets data-bottom-nav on <html>
-   while the bar is on screen. --bottom-inset is how far fixed bottom-anchored
-   UI (floating buttons, banners, toasts, sticky action bars) must stay clear
-   of the screen edge: just the safe area normally, the bar's height plus the
-   safe area while the bar is showing. The bar is hidden from md up. */
+/* --bottom-inset is how far fixed bottom-anchored UI (floating buttons,
+   banners, toasts, sticky action bars) must stay clear of the screen edge.
+   Used to reserve extra room for the phone bottom-nav bar (Phase 8); that
+   bar has been removed in favor of the side drawer, so this is just the
+   safe area now - kept as a variable since other fixed UI still reads it. */
 :root {
     --bottom-inset: env(safe-area-inset-bottom, 0px);
-}
-@media (max-width: 767.98px) {
-    :root[data-bottom-nav] {
-        --bottom-inset: calc(3.5rem + env(safe-area-inset-bottom, 0px));
-    }
-    :root[data-bottom-nav] body {
-        padding-bottom: var(--bottom-inset);
-    }
-}
-
-/* An open drawer (ui/SideDrawer.jsx) takes over the screen: hide the bar. */
-:root[data-drawer-open] nav[aria-label="Primary"] {
-    display: none;
 }

@@ -148,6 +148,14 @@ exports.changePassword = async (userId, reauthToken, newPassword) => {
 
     const hashed = await hashPassword(newPassword);
     await accountRepository.updatePassword(userId, hashed);
+
+    // Round 6 Phase 3 - updatePassword bumps token_version, so any
+    // socket already open under the old token is carrying a now-stale
+    // claim. The device that just changed the password will reconnect
+    // on its own with its fresh REST session; any other still-open
+    // socket (another tab, another device) gets correctly rejected on
+    // reconnect by the handshake check. See socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
 };
 
 // Soft Account Deletion.
@@ -194,6 +202,13 @@ exports.deleteAccount = async (userId, password) => {
         await accountRepository.softDeleteUser(userId, hashedRandomPassword, connection);
 
         await connection.commit();
+
+        // Round 6 Phase 3 - softDeleteUser sets is_active = FALSE, so
+        // any socket already open for this account should go down with
+        // it immediately rather than staying connected until it next
+        // reconnects (or for the rest of its token's life, if it
+        // doesn't). See socket.js#disconnectUser.
+        require("../../socket/socket").disconnectUser(userId);
 
     } catch (error) {
         await connection.rollback();

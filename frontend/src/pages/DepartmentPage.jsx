@@ -210,7 +210,7 @@ export default function DepartmentPage() {
                 <p className="text-sm text-ash max-w-3xl mb-8">
                     {t("seo.department.intro", { name: department.name, count: department.productCount })}
                 </p>
-                {/* Phase 3: per-department cross-link to Services, styled
+                {/* per-department cross-link to Services, styled
                     consistently with the homepage's own "Looking for a
                     service, not a product?" card (see Home.jsx) but sized
                     down to sit alongside this page's other rows instead of

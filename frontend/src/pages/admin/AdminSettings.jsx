@@ -37,6 +37,8 @@ export default function AdminSettings() {
     const [riderFee, setRiderFee] = useState("");
     const [usdRate, setUsdRate] = useState("");
     const [retentionDays, setRetentionDays] = useState("0");
+    const [maxQtyPerLine, setMaxQtyPerLine] = useState("500");
+    const [maxCartLines, setMaxCartLines] = useState("100");
     const [usernameBlocklist, setUsernameBlocklist] = useState("");
     const [sponsorshipRate, setSponsorshipRate] = useState("");
     const [featuredStoreRate, setFeaturedStoreRate] = useState("");
@@ -64,6 +66,8 @@ export default function AdminSettings() {
                 setRiderFee(data.data.rider_delivery_fee);
                 setUsdRate(data.data.usd_exchange_rate);
                 setRetentionDays(String(data.data.approved_document_retention_days ?? "0"));
+                setMaxQtyPerLine(String(data.data.max_quantity_per_cart_line ?? "500"));
+                setMaxCartLines(String(data.data.max_cart_line_items ?? "100"));
                 setUsernameBlocklist(String(data.data.username_blocklist ?? ""));
                 setSponsorshipRate(data.data.sponsorship_daily_rate);
                 setFeaturedStoreRate(data.data.featured_store_daily_rate);
@@ -141,6 +145,8 @@ export default function AdminSettings() {
                 rider_delivery_fee: Number(riderFee),
                 usd_exchange_rate: Number(usdRate),
                 approved_document_retention_days: Number(retentionDays),
+                max_quantity_per_cart_line: Number(maxQtyPerLine),
+                max_cart_line_items: Number(maxCartLines),
                 username_blocklist: usernameBlocklist,
                 sponsorship_daily_rate: Number(sponsorshipRate),
                 featured_store_daily_rate: Number(featuredStoreRate),
@@ -338,6 +344,36 @@ export default function AdminSettings() {
                     <p className="text-xs text-ash mt-1">
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
                         Snippe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
+                    </p>
+                </div>
+
+                <div>
+                    <label htmlFor="maxQtyPerLine" className="text-xs text-ash block mb-1">Max quantity of one item per cart line</label>
+                    <input
+                        id="maxQtyPerLine"
+                        type="number"
+                        min="1"
+                        max="10000"
+                        step="1"
+                        required
+                        value={maxQtyPerLine}
+                        onChange={(e) => setMaxQtyPerLine(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                    />
+                    <label htmlFor="maxCartLines" className="text-xs text-ash block mb-1 mt-3">Max different items in one cart</label>
+                    <input
+                        id="maxCartLines"
+                        type="number"
+                        min="1"
+                        max="500"
+                        step="1"
+                        required
+                        value={maxCartLines}
+                        onChange={(e) => setMaxCartLines(e.target.value)}
+                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
+                    />
+                    <p className="text-xs text-ash mt-1">
+                        Cart caps that blunt scripted cart-flooding. Defaults are 500 per line and 100 lines; changes apply to the next add-to-cart.
                     </p>
                 </div>
 

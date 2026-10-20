@@ -12,7 +12,6 @@ import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIc
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
 import SideDrawer from "./ui/SideDrawer";
-import AppBottomNav from "./AppBottomNav";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -457,7 +456,6 @@ export default function Header() {
             onCancel={() => setSignOutConfirmOpen(false)}
         />
 
-        <AppBottomNav cartCount={itemCount} unreadMessages={unreadMessages} />
         </>
     );
 }

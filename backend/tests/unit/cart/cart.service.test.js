@@ -1,8 +1,10 @@
 jest.mock("../../../src/modules/cart/cart.repository");
 jest.mock("../../../src/modules/business/business.service");
+jest.mock("../../../src/modules/settings/settings.service");
 
 const cartRepository = require("../../../src/modules/cart/cart.repository");
 const businessService = require("../../../src/modules/business/business.service");
+const settingsService = require("../../../src/modules/settings/settings.service");
 const cartService = require("../../../src/modules/cart/cart.service");
 
 // A product row in the shape cart.repository#findProductById returns. It must
@@ -13,6 +15,7 @@ const productRow = (overrides = {}) => ({
 });
 
 beforeEach(() => {
+    settingsService.getCartLimits.mockResolvedValue({ maxQuantityPerLine: 500, maxLineItems: 100 });
     // Every seller is active unless a test says otherwise.
     cartRepository.findActiveSellerIds.mockImplementation(async (sellerIds) => sellerIds);
     // Not in the cart yet, empty cart, and the atomic write reports exactly

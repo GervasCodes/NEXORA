@@ -148,7 +148,7 @@ export default function Orders() {
                                             {t("orders.vendorsBadge", { count: order.vendor_count })}
                                         </span>
                                     ) : (
-                                        // (Phase 4 remediation): was a
+                                        // (remediation): was a
                                         // raw, untranslated `order.status`
                                         // string in a locally-styled pill -
                                         // now the shared StatusBadge, same

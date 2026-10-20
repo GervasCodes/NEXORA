@@ -201,92 +201,10 @@ exports.sendBroadcast = async ({
 
     const recipients = await broadcastRepository.findRecipientsBySegment(segment);
 
-    let emailSentCount = 0;
-    let smsSentCount = 0;
-    let whatsappSentCount = 0;
-    let inAppSentCount = 0;
-
-    for (const recipient of recipients) {
-        const eligibleChannels = exports.resolveChannelsForRecipient(recipient, channels);
-
-        for (const channel of eligibleChannels) {
-            try {
-                if (channel === "email") {
-                    // Previously called sendEmail() with no `html` arg, which
-                    // falls back to utils/sendEmail.js's bare textToHtml()
-                    // wrapper - a plain paragraph with none of the branded
-                    // header, so the logo never appeared in a broadcast email
-                    // even though every other transactional email (order
-                    // updates, OTP) renders it via renderEmail(). Routed
-                    // through the same renderEmail() template here so
-                    // broadcasts match.
-                    const rendered = renderEmail({
-                        locale: recipient.language,
-                        heading: content.email.subject,
-                        message: content.email.message,
-                        eyebrow: "ANNOUNCEMENT",
-                        // Personalizes the greeting line when we have a
-                        // name on file - see broadcast.repository.js and
-                        // emailTemplate.js for why this matters beyond
-                        // being a nice touch.
-                        greetingName: recipient.first_name || undefined
-                    });
-                    // sendEmail({retry:false}) never throws - it swallows a
-                    // failed send internally (see utils/sendEmail.js) so one
-                    // bad address can't abort the loop. That used to mean
-                    // this count went up unconditionally on every attempt,
-                    // so a broadcast could show "email 500/500 sent" while
-                    // every single one had actually failed at the provider.
-                    // sendEmail now reports back whether it really went out,
-                    // so only count it when it did.
-                    // Bulk/marketing mail without a List-Unsubscribe header is
-                    // exactly what Gmail (and Yahoo) use as a signal to file a
-                    // message under Promotions/Updates instead of the Primary
-                    // inbox - and Gmail's mobile app only pushes a notification
-                    // for Primary by default, which is what "it sends now but
-                    // arrives silently, you only see it in All Mail" describes.
-                    // A plain mailto: unsubscribe address is a legitimate,
-                    // recognised value for this header (RFC 2369) without
-                    // needing a one-click HTTPS endpoint + suppression-list
-                    // feature - a real "unsubscribe from broadcasts" feature
-                    // (its own opt-out flag + enforcing it in
-                    // resolveChannelsForRecipient) is a bigger follow-up, not
-                    // done here.
-                    const unsubscribeMailto = process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM;
-                    const broadcastHeaders = unsubscribeMailto
-                        ? {
-                            "List-Unsubscribe": `<mailto:${unsubscribeMailto}?subject=Unsubscribe>, <${absoluteUrl("/account")}>`
-                        }
-                        : undefined;
-                    const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, {
-                        retry: false,
-                        headers: broadcastHeaders,
-                        toName: recipient.first_name || undefined
-                    });
-                    if (delivered) {
-                        emailSentCount += 1;
-                    }
-                } else if (channel === "sms") {
-                    await smsProvider.sendText(recipient.phone, content.sms);
-                    smsSentCount += 1;
-                } else if (channel === "whatsapp") {
-                    await whatsappProvider.sendText(recipient.phone, content.whatsapp);
-                    whatsappSentCount += 1;
-                } else if (channel === "in_app") {
-                    await notificationService.notify({
-                        userId: recipient.id,
-                        type: "broadcast",
-                        title: content.inApp.title,
-                        message: content.inApp.message
-                    });
-                    inAppSentCount += 1;
-                }
-            } catch (error) {
-                logger.warn({ err: error, recipientId: recipient.id, channel }, "broadcast send error for one recipient");
-            }
-        }
-    }
-
+    // Row is created BEFORE sending (counts start at 0, filled in once the
+    // loop ends) so its id can tag every outgoing email - Brevo echoes the
+    // tag back on delivery webhooks, which is how delivered/bounced/spam
+    // events get attributed to this broadcast (brevoWebhook.controller.js).
     const broadcastId = await broadcastRepository.create({
         adminId,
         segment,
@@ -298,12 +216,103 @@ exports.sendBroadcast = async ({
         whatsappMessage: whatsappMessage || null,
         inAppTitle: inAppTitle || null,
         inAppMessage: inAppMessage || null,
-        recipientCount: recipients.length,
-        emailSentCount,
-        smsSentCount,
-        whatsappSentCount,
-        inAppSentCount
+        recipientCount: recipients.length
     });
+
+    let emailSentCount = 0;
+    let smsSentCount = 0;
+    let whatsappSentCount = 0;
+    let inAppSentCount = 0;
+
+    // try/finally so the counts of whatever DID go out are saved even if
+    // something unexpected aborts the loop - the row already exists.
+    try {
+        for (const recipient of recipients) {
+            const eligibleChannels = exports.resolveChannelsForRecipient(recipient, channels);
+
+            for (const channel of eligibleChannels) {
+                try {
+                    if (channel === "email") {
+                        // Previously called sendEmail() with no `html` arg, which
+                        // falls back to utils/sendEmail.js's bare textToHtml()
+                        // wrapper - a plain paragraph with none of the branded
+                        // header, so the logo never appeared in a broadcast email
+                        // even though every other transactional email (order
+                        // updates, OTP) renders it via renderEmail(). Routed
+                        // through the same renderEmail() template here so
+                        // broadcasts match.
+                        const rendered = renderEmail({
+                            locale: recipient.language,
+                            heading: content.email.subject,
+                            message: content.email.message,
+                            eyebrow: "ANNOUNCEMENT",
+                            // Personalizes the greeting line when we have a
+                            // name on file - see broadcast.repository.js and
+                            // emailTemplate.js for why this matters beyond
+                            // being a nice touch.
+                            greetingName: recipient.first_name || undefined
+                        });
+                        // sendEmail({retry:false}) never throws - it swallows a
+                        // failed send internally (see utils/sendEmail.js) so one
+                        // bad address can't abort the loop. That used to mean
+                        // this count went up unconditionally on every attempt,
+                        // so a broadcast could show "email 500/500 sent" while
+                        // every single one had actually failed at the provider.
+                        // sendEmail now reports back whether it really went out,
+                        // so only count it when it did.
+                        // Bulk/marketing mail without a List-Unsubscribe header is
+                        // exactly what Gmail (and Yahoo) use as a signal to file a
+                        // message under Promotions/Updates instead of the Primary
+                        // inbox - and Gmail's mobile app only pushes a notification
+                        // for Primary by default, which is what "it sends now but
+                        // arrives silently, you only see it in All Mail" describes.
+                        // A plain mailto: unsubscribe address is a legitimate,
+                        // recognised value for this header (RFC 2369) without
+                        // needing a one-click HTTPS endpoint + suppression-list
+                        // feature - a real "unsubscribe from broadcasts" feature
+                        // (its own opt-out flag + enforcing it in
+                        // resolveChannelsForRecipient) is a bigger follow-up, not
+                        // done here.
+                        const unsubscribeMailto = process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM;
+                        const broadcastHeaders = unsubscribeMailto
+                            ? {
+                                "List-Unsubscribe": `<mailto:${unsubscribeMailto}?subject=Unsubscribe>, <${absoluteUrl("/account")}>`
+                            }
+                            : undefined;
+                        const delivered = await sendEmail(recipient.email, content.email.subject, rendered.text, rendered.html, {
+                            retry: false,
+                            headers: broadcastHeaders,
+                            toName: recipient.first_name || undefined,
+                            tags: [`broadcast-${broadcastId}`]
+                        });
+                        if (delivered) {
+                            emailSentCount += 1;
+                        }
+                    } else if (channel === "sms") {
+                        await smsProvider.sendText(recipient.phone, content.sms);
+                        smsSentCount += 1;
+                    } else if (channel === "whatsapp") {
+                        await whatsappProvider.sendText(recipient.phone, content.whatsapp);
+                        whatsappSentCount += 1;
+                    } else if (channel === "in_app") {
+                        await notificationService.notify({
+                            userId: recipient.id,
+                            type: "broadcast",
+                            title: content.inApp.title,
+                            message: content.inApp.message
+                        });
+                        inAppSentCount += 1;
+                    }
+                } catch (error) {
+                    logger.warn({ err: error, recipientId: recipient.id, channel }, "broadcast send error for one recipient");
+                }
+            }
+        }
+    } finally {
+        await broadcastRepository.updateSentCounts(broadcastId, {
+            emailSentCount, smsSentCount, whatsappSentCount, inAppSentCount
+        });
+    }
 
     auditService.log({
         userId: adminId,

@@ -323,7 +323,7 @@ export default function ServiceDetail() {
 
     const locationLine = [service.city, service.region, service.country].filter(Boolean).join(", ");
 
-    // Phase 1 (SEO Critical). Same trail as the Breadcrumbs component
+    // (SEO Critical). Same trail as the Breadcrumbs component
     // below, built once and reused for both the visible UI and the
     // BreadcrumbList structured data - one source of truth so the two
     // can never drift apart.
@@ -415,7 +415,7 @@ export default function ServiceDetail() {
                                     key={item.id || i}
                                     type="button"
                                     onClick={() => setActiveMedia(i)}
-                                    // Phase 3 (alt-text pass): same defect as
+                                    // (alt-text pass): same defect as
                                     // ProductDetail.jsx's gallery - the button's only child
                                     // is an alt="" image or a <video>, so it had no
                                     // accessible name. The name belongs on the control.

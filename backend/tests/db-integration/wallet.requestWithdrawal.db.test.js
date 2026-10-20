@@ -41,12 +41,14 @@ const seedWallet = async (sellerId, balance) => {
     await db.query("INSERT INTO seller_wallets (seller_id, balance) VALUES (?, ?)", [sellerId, balance]);
 };
 
+const MM_PAYOUT = (phone = "0700000000") => ({ payout_network: "vodacom_mpesa", payout_phone: phone });
+
 describe("wallet.service.requestWithdrawal (real database)", () => {
     it("debits the wallet, creates a withdrawal_requests row, and logs a debit transaction", async () => {
         const seller = await fixtures.createUser({ role: "seller" });
         await seedWallet(seller.id, 10000);
 
-        const result = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
+        const result = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
 
         // NOTE: mysql2 returns DECIMAL columns as strings by default, and
         // wallet.repository.incrementBalance returns that raw value
@@ -84,8 +86,8 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         const seller = await fixtures.createUser({ role: "seller" });
         await seedWallet(seller.id, 50000);
 
-        await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
-        const second = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
+        await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
+        const second = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
 
         expect(second.isNewPayoutDetails).toBe(false);
         expect(second.holdUntil).toBeNull();
@@ -102,7 +104,7 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         await seedWallet(seller.id, 10000);
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 1000, "mobile_money", "0700000000")
+            walletService.requestWithdrawal(seller.id, 1000, "mobile_money", MM_PAYOUT())
         ).rejects.toThrow("The minimum withdrawal amount is 5000");
 
         const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
@@ -114,7 +116,7 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         await seedWallet(seller.id, 100000000);
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 6000000, "mobile_money", "0700000000")
+            walletService.requestWithdrawal(seller.id, 6000000, "mobile_money", MM_PAYOUT())
         ).rejects.toThrow("The maximum withdrawal amount is 5000000");
     });
 
@@ -123,10 +125,10 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         await seedWallet(seller.id, 500000);
         // Default verification_tier for a fresh user is 'none' - cap 200000.
 
-        await walletService.requestWithdrawal(seller.id, 150000, "mobile_money", "0700000000");
+        await walletService.requestWithdrawal(seller.id, 150000, "mobile_money", MM_PAYOUT());
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 100000, "mobile_money", "0711111111")
+            walletService.requestWithdrawal(seller.id, 100000, "mobile_money", MM_PAYOUT("0711111111"))
         ).rejects.toThrow(/daily limit of 200000/);
     });
 
@@ -145,7 +147,7 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         }
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000")
+            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT())
         ).rejects.toThrow(/open dispute/);
 
         const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
@@ -157,8 +159,8 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         await seedWallet(seller.id, 50000);
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "call me")
-        ).rejects.toThrow(/mobile money network and a valid phone number/);
+            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT("call me"))
+        ).rejects.toThrow(/valid mobile money phone number/);
     });
 
     it("rejects a withdrawal larger than the wallet balance and leaves the balance untouched", async () => {
@@ -166,7 +168,7 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         await seedWallet(seller.id, 1000);
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 5000, "mobile_money", "0700000000")
+            walletService.requestWithdrawal(seller.id, 5000, "mobile_money", MM_PAYOUT())
         ).rejects.toThrow("Withdrawal amount exceeds your wallet balance");
 
         const [[wallet]] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
@@ -187,7 +189,7 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         // wallet row) rolls back rather than leaving a zero-balance wallet.
 
         await expect(
-            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000")
+            walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT())
         ).rejects.toThrow("Withdrawal amount exceeds your wallet balance");
 
         const [wallets] = await db.query("SELECT balance FROM seller_wallets WHERE seller_id = ?", [seller.id]);
@@ -198,8 +200,8 @@ describe("wallet.service.requestWithdrawal (real database)", () => {
         const seller = await fixtures.createUser({ role: "seller" });
         await seedWallet(seller.id, 30000);
 
-        await walletService.requestWithdrawal(seller.id, 8000, "mobile_money", "0700000000");
-        const second = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
+        await walletService.requestWithdrawal(seller.id, 8000, "mobile_money", MM_PAYOUT());
+        const second = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
 
         expect(Number(second.balance)).toBe(16000); // see the string-vs-number note in the test above
 
@@ -215,7 +217,7 @@ describe("wallet.service.processWithdrawal (real database) - Phase 2 additions",
         const seller = await fixtures.createUser({ role: "seller" });
         await seedWallet(seller.id, 50000);
 
-        const { withdrawalId } = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
+        const { withdrawalId } = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
 
         await expect(
             walletService.processWithdrawal(withdrawalId, "approve", null)
@@ -229,7 +231,7 @@ describe("wallet.service.processWithdrawal (real database) - Phase 2 additions",
         const seller = await fixtures.createUser({ role: "seller" });
         await seedWallet(seller.id, 50000);
 
-        const { withdrawalId } = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", "0700000000");
+        const { withdrawalId } = await walletService.requestWithdrawal(seller.id, 6000, "mobile_money", MM_PAYOUT());
         // Simulate the 24-hour hold having already elapsed.
         await db.query("UPDATE withdrawal_requests SET hold_until = DATE_SUB(NOW(), INTERVAL 1 HOUR) WHERE id = ?", [withdrawalId]);
 

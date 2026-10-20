@@ -359,6 +359,13 @@ app.get("/", (req, res) => {
 app.get("/sitemap.xml", sitemapController.getSitemap);
 app.get(/^\/sitemap-(\d+)\.xml$/, sitemapController.getSitemapPart);
 
+// Round 6 Phase 2 (SEO - dynamic-route prerendering). Same reasoning as
+// the sitemap routes above (public, unversioned, crawler/build-tooling
+// consumer) - frontend/scripts/prerender-shells.mjs fetches this at
+// build time to generate a real shell for every product/service/store
+// page, the same way it already does for static routes.
+app.get("/seo/prerender-shells.json", sitemapController.getPrerenderShells);
+
 app.use("/api/v1/auth", authRoutes);
 // Must be mounted BEFORE /api/v1/seller: it is a more specific prefix
 // of that path, and Express falls through an unmatched router to the

@@ -1,14 +1,9 @@
 const cartRepository = require("./cart.repository");
 const businessService = require("../business/business.service");
+const settingsService = require("../settings/settings.service");
 
-// Per-line and per-cart quantity caps (Phase 3) - a sane ceiling with no
-// product-specific configuration behind it yet (that would need its own
-// admin/seller-facing setting - out of this phase's scope, flagged as a
-// follow-up). High enough that no genuine bulk/B2B buyer should hit it in
-// normal use, low enough to blunt an obvious cart-flooding/scripted abuse
-// case.
-const MAX_QUANTITY_PER_LINE = 500;
-const MAX_CART_LINE_ITEMS = 100;
+// Per-line and per-cart quantity caps are admin-editable platform settings
+// (settingsService.getCartLimits; defaults 500 per line / 100 lines).
 
 // continuation (UI/UX remediation) - variant_id threaded through.
 // Every function accepts an optional variantId (null/undefined for the
@@ -41,8 +36,10 @@ exports.addToCart = async (userId, productId, quantity, variantId = null) => {
         throw new Error("Quantity must be a positive number");
     }
 
-    if (quantity > MAX_QUANTITY_PER_LINE) {
-        throw new Error(`You can add at most ${MAX_QUANTITY_PER_LINE} of one item to your cart at a time`);
+    const { maxQuantityPerLine, maxLineItems } = await settingsService.getCartLimits();
+
+    if (quantity > maxQuantityPerLine) {
+        throw new Error(`You can add at most ${maxQuantityPerLine} of one item to your cart at a time`);
     }
 
     const product = await cartRepository.findProductById(productId);
@@ -79,8 +76,8 @@ exports.addToCart = async (userId, productId, quantity, variantId = null) => {
     const existing = await cartRepository.findByUserAndProduct(userId, productId, variantId);
     if (!existing) {
         const currentLineCount = (await cartRepository.getCartByUser(userId)).length;
-        if (currentLineCount >= MAX_CART_LINE_ITEMS) {
-            throw new Error(`Your cart is full (max ${MAX_CART_LINE_ITEMS} different items) - remove something before adding more`);
+        if (currentLineCount >= maxLineItems) {
+            throw new Error(`Your cart is full (max ${maxLineItems} different items) - remove something before adding more`);
         }
     }
 

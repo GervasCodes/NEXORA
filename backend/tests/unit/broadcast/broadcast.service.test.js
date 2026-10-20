@@ -243,8 +243,19 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({
             adminId: 9, segment: "all_buyers", channels: ["email", "sms", "whatsapp"],
             subject: "Sale", message: "20% off this weekend",
-            recipientCount: 3, emailSentCount: 2, smsSentCount: 2, whatsappSentCount: 1
+            recipientCount: 3
         }));
+        // Row is created before sending; the real counts are filled in after.
+        expect(broadcastRepository.updateSentCounts).toHaveBeenCalledWith(1, {
+            emailSentCount: 2, smsSentCount: 2, whatsappSentCount: 1, inAppSentCount: 0
+        });
+        // Every broadcast email carries its broadcast id as a Brevo tag.
+        expect(sendEmail).toHaveBeenCalledWith(
+            "a@x.com", "Sale", expect.any(String), expect.any(String),
+            expect.objectContaining({ tags: ["broadcast-1"] })
+        );
+        expect(broadcastRepository.create.mock.invocationCallOrder[0])
+            .toBeLessThan(sendEmail.mock.invocationCallOrder[0]);
 
         expect(auditService.log).toHaveBeenCalledWith(expect.objectContaining({
             userId: 9, eventType: "broadcast_sent"
@@ -356,7 +367,7 @@ describe("broadcast.service.sendBroadcast", () => {
         expect(whatsappProvider.sendText).not.toHaveBeenCalled();
 
         expect(result).toEqual(expect.objectContaining({ recipientCount: 1, inAppSentCount: 1 }));
-        expect(broadcastRepository.create).toHaveBeenCalledWith(expect.objectContaining({ inAppSentCount: 1 }));
+        expect(broadcastRepository.updateSentCounts).toHaveBeenCalledWith(1, expect.objectContaining({ inAppSentCount: 1 }));
     });
 
     it("sends each channel's own override content, not the shared message, when provided", async () => {

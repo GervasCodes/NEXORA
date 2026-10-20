@@ -9,6 +9,7 @@ const disputeRepository = require("../dispute/dispute.repository");
 const settingsService = require("../settings/settings.service");
 const notificationService = require("../notification/notification.service");
 const fraudService = require("../fraud/fraud.service");
+const { buildPayout } = require("../../utils/payoutDetails");
 
 // Called once an order's payment is confirmed (mobile money success, or a
 // Cash on Delivery confirmation). Splits the order's line items by seller,
@@ -675,42 +676,13 @@ exports.releaseOrderEarnings = async (orderId) => {
 // in which case the withdrawal is still debited from the wallet in TZS
 // (the wallet itself stays TZS-denominated - order/booking commission
 // math elsewhere is untouched) but the *payout* amount is converted
-// Payout detail validation (Phase 2, P1). payout_method/payout_details are
-// still free-text fields (not yet split into structured network+phone /
-// bank+account+name columns - see the "Flagged, not changed" note this
-// phase ships with), so this is a best-effort heuristic on top of them
-// rather than real structured validation: classify the method by keyword,
-// then check the details string plausibly contains what that method needs.
-// A real fix means giving withdrawal_requests separate structured columns
-// and updating the request-withdrawal form to collect them - out of scope
-// for this phase's wallet/escrow/COD focus.
-const MOBILE_MONEY_KEYWORDS = ["mpesa", "m-pesa", "tigo", "airtel", "halopesa", "halotel", "mobile"];
-const BANK_KEYWORDS = ["bank", "crdb", "nmb", "nbc", "exim", "stanbic", "absa", "equity"];
-
-const validatePayoutDetails = (payoutMethod, payoutDetails) => {
-    const method = String(payoutMethod || "").toLowerCase();
-    const details = String(payoutDetails || "");
-    const digitRun = (details.match(/\d+/g) || []).join("");
-
-    if (MOBILE_MONEY_KEYWORDS.some((kw) => method.includes(kw))) {
-        if (digitRun.length < 9) {
-            throw new Error("Please include the mobile money network and a valid phone number in your payout details");
-        }
-        return;
-    }
-
-    if (BANK_KEYWORDS.some((kw) => method.includes(kw))) {
-        const hasLetters = /[a-zA-Z]/.test(details);
-        if (!hasLetters || digitRun.length < 6) {
-            throw new Error("Please include the bank name, account number and account holder name in your payout details");
-        }
-    }
-};
+// Payout destination validation lives in utils/payoutDetails.js#buildPayout
+// (structured network+phone or bank+account+name; Round 6 Phase 5).
 
 // requestWithdrawal (Phase 2 additions):
 //  - min/max amount, from platform settings.
 //  - a daily cap that scales with the seller's users.verification_tier.
-//  - per-method payout detail validation (see validatePayoutDetails above).
+//  - structured payout destination validation (utils/payoutDetails.js).
 //  - a 24-hour hold, enforced at approval time, on the FIRST withdrawal
 //    ever requested to a given payout method+details combination - see
 //    wallet.repository.js#hasPriorPayoutUsage.
@@ -720,8 +692,12 @@ const validatePayoutDetails = (payoutMethod, payoutDetails) => {
 // the rate actually used are snapshotted onto the withdrawal row so a
 // later admin change to the rate never rewrites what this seller was
 // quoted.
-exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails, payoutCurrency = "TZS") => {
-    validatePayoutDetails(payoutMethod, payoutDetails);
+// `payout` is the structured destination ({ payout_method, payout_network,
+// payout_phone } or { payout_method, payout_bank_name, payout_account_number,
+// payout_account_name }); the legacy payout_details string is composed from it.
+exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payout, payoutCurrency = "TZS") => {
+    const built = buildPayout({ ...payout, payout_method: payoutMethod });
+    const payoutDetails = built.details;
 
     const limits = await settingsService.getWithdrawalLimits();
     if (Number(amount) < limits.minAmount) {
@@ -775,7 +751,7 @@ exports.requestWithdrawal = async (sellerId, amount, payoutMethod, payoutDetails
 
         const withdrawalId = await walletRepository.createWithdrawal(
             sellerId, amount, payoutMethod, payoutDetails, connection, payoutCurrency, payoutAmount, payoutExchangeRate,
-            holdUntil, isNewPayoutDetails
+            holdUntil, isNewPayoutDetails, built.fields
         );
 
         await walletRepository.insertTransaction({

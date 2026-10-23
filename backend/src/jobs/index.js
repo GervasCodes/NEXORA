@@ -26,7 +26,7 @@ const subscriptionLifecycleJob = require("./subscriptionLifecycle.job");
 const rewardSettlementJob = require("./rewardSettlement.job");
 const documentRetentionJob = require("./documentRetention.job");
 const fuelCapReminderJob = require("./fuelCapReminder.job");
-const netlifyRebuildTriggerJob = require("./netlifyRebuildTrigger.job");
+const renderDeployHookJob = require("./renderDeployHook.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -178,11 +178,11 @@ exports.startJobs = () => {
     // emailRetry.job.js and migration 131 (email_outbox).
     cron.schedule("*/5 * * * *", safeRun("emailRetry", emailRetryJob));
 
-    // Every 6 hours: ask Netlify to rebuild the frontend so dynamic
+    // Every 6 hours: ask Render to rebuild the frontend so dynamic
     // product/service/store SEO shells (prerender-shells.mjs) don't go
-    // stale between real deploys - see netlifyRebuildTrigger.job.js.
-    // No-op if NETLIFY_BUILD_HOOK_URL isn't configured.
-    cron.schedule("0 */6 * * *", safeRun("netlifyRebuildTrigger", netlifyRebuildTriggerJob));
+    // stale between real deploys - see renderDeployHook.job.js.
+    // No-op if RENDER_DEPLOY_HOOK_URL isn't configured.
+    cron.schedule("0 */6 * * *", safeRun("renderDeployHook", renderDeployHookJob));
 
     logger.info(
         "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"

@@ -13,7 +13,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 
-// Seller POS screens (Round 4, Phase 8): stock levels + adjustments, manual
+// Seller POS screens stock levels + adjustments, manual
 // off-platform sale entry, stock history, and a combined on/off-platform
 // report. Everything here is behind the paid-tier gate on the backend
 // (requireSubscriptionTier); the page probes once on mount and shows the

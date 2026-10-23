@@ -11,7 +11,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
 
 // Nexora Services (Merchant Type Switching) - reuses the same
-// PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
+// PUT /seller/merchant-type endpoint SellerSetup (onboarding)
 // and SellerServices' MerchantTypeGate (in-dashboard upgrade prompt)
 // already call. No new backend logic: the route/validator/service/
 // repository already existed and had no restrictions on switching in

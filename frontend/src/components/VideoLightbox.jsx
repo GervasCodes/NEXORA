@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-// Phase 7 (Promo Video Unification) - same overlay/Escape-to-close
+// (Promo Video Unification) - same overlay/Escape-to-close
 // shape as chat/ImageLightbox.jsx, swapping the <img> for a <video
 // controls> so a store's promo video (StorePage.jsx) plays full-screen
 // instead of just linking out to the raw file.

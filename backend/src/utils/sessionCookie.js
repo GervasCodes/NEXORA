@@ -46,13 +46,14 @@ const sameSitePolicy = () => (isProd() ? "none" : "lax");
 // reverse-proxy mechanism to wire that through:
 //   - frontend/vite.config.js has no `server.proxy` (and wouldn't apply
 //     to a production static build anyway, only Vite's own dev server)
-//   - frontend/public/_redirects is Netlify-style but only handles SPA
-//     fallback routing (`/* -> /index.html`), nothing for `/api/*`
+//   - the frontend's Render Static Site Redirects/Rewrites (dashboard-
+//     configured, see docs/DEPLOYMENT.md) only handles SPA fallback
+//     routing (`/* -> /index.html`), nothing for `/api/*`
 //   - no vercel.json / netlify.toml / render.yaml / nginx.conf exists
 //     anywhere in the repo
 //   - docs/DEPLOYMENT.md explicitly punts this to whatever's hosting the
 //     built frontend ("Serve frontend/dist behind your usual static
-//     host / reverse proxy (Nginx, Vercel, Netlify, etc.)") - i.e. the
+//     host / reverse proxy (Nginx, Vercel, Render, etc.)") - i.e. the
 //     actual hosting/proxy configuration lives in that host's dashboard
 //     or DNS settings, outside this repo and outside what a code change
 //     here can reach.

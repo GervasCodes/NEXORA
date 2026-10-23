@@ -3,7 +3,8 @@
 Short, practical version of "something just broke in production, how do I
 get back to a known-good state" - not an exhaustive incident-response
 doc. See `docs/DEPLOYMENT.md` for the full deploy setup this assumes
-(Render for the backend, Netlify for the frontend, per that doc's own
+(both the backend and the frontend run as Render services - a Web
+Service and a Static Site respectively - per that doc's own
 host-specific sections).
 
 ## 1. App code (backend - Render)
@@ -22,18 +23,27 @@ alone can leave it running against a schema it doesn't expect (missing
 columns a newer version reads, for example). Check what migrated before
 rolling back code-only.
 
-## 2. Frontend (Netlify)
+## 2. Frontend (Render Static Site)
 
-Netlify also keeps previous deploys as immutable builds:
+Render keeps previous successful deploys and can roll back to one
+without a full rebuild (it reuses that deploy's build artifact):
 
-1. Netlify dashboard → **Deploys**.
-2. Find the last good deploy → **Publish deploy** (promotes it back to
-   the live URL instantly - no rebuild needed).
+1. Render dashboard → the frontend static site → **Events** tab.
+2. Find the last deploy that was known-good → click **Rollback** → confirm
+   on the following page (**Rollback to this deploy**).
 
-Because `frontend/public/_headers` now marks `index.html` `no-cache`
-(see the CDN cache-policy block added this phase), visitors pick up a
-republished deploy on their very next request - no waiting out a stale
-cached shell.
+Unlike a plain redeploy, triggering a rollback this way **automatically
+disables autodeploy** for that service - a safeguard so a routine push
+can't silently re-introduce the bad change while you're still
+investigating. Re-enable it from the service's **Settings** page once
+the underlying issue is actually fixed forward.
+
+A rollback also reverts that deploy's Redirects/Rewrites and Headers
+settings (see `docs/DEPLOYMENT.md`'s frontend section) to match what was
+live at that deploy, not just the built files - so `index.html`'s
+`Cache-Control: no-cache` header (set there, not in a committed file)
+still applies and visitors pick up the rolled-back version on their very
+next request, no waiting out a stale cached shell.
 
 ## 3. Database (migrations are forward-only - there is no automatic `down`)
 

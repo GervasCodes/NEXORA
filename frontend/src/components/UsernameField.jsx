@@ -9,7 +9,7 @@ import { USERNAME_MAX, isValidUsernameFormat } from "../utils/username";
 const CHECK_DEBOUNCE_MS = 450;
 
 /**
- * Username input with a live availability check (round 5, phase 6).
+ * Username input with a live availability check .
  *
  * Reports its state to the parent through `onStatusChange` so the form can
  * block submit while the name is invalid/taken:

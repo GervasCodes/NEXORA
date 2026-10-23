@@ -603,7 +603,7 @@ export default function ConversationThread() {
             >
                 {messages.length === 0 && (
                     loadFailed ? (
-                        // sub-phase 3: a failed history fetch previously
+                        // a failed history fetch previously
                         // rendered identically to a brand-new, empty conversation
                         // (see loadFailed above) - this gets its own coral-toned
                         // state with a retry, consistent with ErrorState elsewhere

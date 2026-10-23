@@ -7,7 +7,7 @@ import EmptyState from "./ui/EmptyState";
 import ErrorState from "./ui/ErrorState";
 
 const PAGE_SIZE = 24;
-// Phase 6.1 follow-up: the /products request here had no per-request
+// follow-up: the /products request here had no per-request
 // timeout, unlike useUnreadMessagesCount.js and NotificationBell.jsx's
 // polls, both of which were fixed under Phase 5 (production error fixes)
 // for the exact same symptom - a stalled request on a flaky mobile

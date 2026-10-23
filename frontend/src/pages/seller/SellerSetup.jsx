@@ -72,7 +72,7 @@ export default function SellerSetup() {
         setSubmitting(true);
         try {
             // merchant_type now travels in the same request as store
-            // creation (Phase 4 remediation) - previously a non-default
+            // creation (remediation) - previously a non-default
             // pick needed a second PUT /seller/merchant-type call after
             // the store already existed, and a failure there was
             // silently swallowed, so a seller could pick "Services" and

@@ -157,11 +157,22 @@ exports.resolveChannelContent = ({ templateType = "all", subject, message, smsMe
     };
 };
 
-// Every individual provider call is best-effort (mirrors notify()'s own
-// treatment of email/WhatsApp sends elsewhere in the app) - one
-// recipient's bounced email or invalid number must never stop the rest
-// of a several-thousand-row segment from being messaged.
-exports.sendBroadcast = async ({
+// Split in two (Reliability phase): prepareBroadcast() does everything
+// that must happen before an admin gets a response - validation, content
+// resolution, recipient lookup, and creating the `broadcasts` row - and
+// runSendLoop() does the actual per-recipient/per-channel sending.
+// Previously these were one function that the HTTP handler awaited start
+// to finish, which meant a broadcast to any real-sized segment (or one
+// that landed right after a free-tier Render cold start) could run past
+// the platform's request timeout and get killed mid-loop - silently
+// dropping every send that hadn't been attempted yet, with no error
+// surfaced anywhere. sendBroadcast() below still awaits both halves
+// (unchanged behaviour, still used directly by resendBroadcast() and by
+// every existing test); queueBroadcast() is the new entry point used by
+// the HTTP route - it awaits only the prepare half and lets the send
+// loop run in the background, so the response (and the row's existence)
+// is never gated on how long the actual sending takes.
+const prepareBroadcast = async ({
     adminId, segment, channels, subject, message, templateType = "all",
     smsMessage, whatsappMessage, inAppTitle, inAppMessage,
     // Set only by resendBroadcast() below - threaded through so the
@@ -219,6 +230,16 @@ exports.sendBroadcast = async ({
         recipientCount: recipients.length
     });
 
+    return {
+        broadcastId, recipients, content, adminId, segment, channels, templateType, resentFromId
+    };
+};
+
+// Every individual provider call is best-effort (mirrors notify()'s own
+// treatment of email/WhatsApp sends elsewhere in the app) - one
+// recipient's bounced email or invalid number must never stop the rest
+// of a several-thousand-row segment from being messaged.
+const runSendLoop = async ({ broadcastId, recipients, content, adminId, segment, channels, templateType, resentFromId }) => {
     let emailSentCount = 0;
     let smsSentCount = 0;
     let whatsappSentCount = 0;
@@ -339,6 +360,33 @@ exports.sendBroadcast = async ({
     };
 };
 
+// Unchanged public behaviour: prepares AND fully sends before resolving.
+// Used directly by resendBroadcast() below and by every existing test -
+// nothing about what this returns or when it resolves has changed.
+exports.sendBroadcast = async (params) => {
+    const prepared = await prepareBroadcast(params);
+    return runSendLoop(prepared);
+};
+
+// New entry point for the HTTP route (see broadcast.controller.js#send):
+// awaits only validation + row creation, then lets the actual send loop
+// run in the background instead of blocking the response on it. A
+// failure inside the loop itself is still logged (it already updates
+// the row's counts and writes the audit log in its own `finally`/normal
+// path) - there's just no HTTP response left waiting on it.
+exports.queueBroadcast = async (params) => {
+    const prepared = await prepareBroadcast(params);
+    runSendLoop(prepared).catch((error) => {
+        logger.error({ err: error, broadcastId: prepared.broadcastId }, "broadcast send loop failed unexpectedly");
+    });
+    return {
+        broadcastId: prepared.broadcastId,
+        segment: prepared.segment,
+        recipientCount: prepared.recipients.length,
+        status: "sending"
+    };
+};
+
 exports.getHistory = async ({ type } = {}) => {
     if (type && !BROADCAST_TEMPLATE_TYPES.includes(type)) {
         throw Object.assign(new Error(`Unknown broadcast type: ${type}`), { status: 400 });
@@ -371,6 +419,29 @@ exports.resendBroadcast = async (id, adminId) => {
     }
 
     return exports.sendBroadcast({
+        adminId,
+        segment: original.segment,
+        channels: original.channels.split(","),
+        templateType: original.template_type || "all",
+        subject: original.subject,
+        message: original.message,
+        smsMessage: original.sms_message,
+        whatsappMessage: original.whatsapp_message,
+        inAppTitle: original.in_app_title,
+        inAppMessage: original.in_app_message,
+        resentFromId: original.id
+    });
+};
+
+// Background-send counterpart to resendBroadcast(), for the same reason
+// queueBroadcast() exists above - used by broadcast.controller.js#resend.
+exports.queueResendBroadcast = async (id, adminId) => {
+    const original = await broadcastRepository.findById(id);
+    if (!original) {
+        throw Object.assign(new Error("Broadcast not found"), { status: 404 });
+    }
+
+    return exports.queueBroadcast({
         adminId,
         segment: original.segment,
         channels: original.channels.split(","),

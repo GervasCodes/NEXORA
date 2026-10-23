@@ -7,7 +7,7 @@
 // etc.) into the main bundle, defeating that route-level code-splitting.
 // Living in its own file, both call sites get just the four icon paths.
 //
-// `colored` (Round 6): brand-colored badges (Instagram gradient, Facebook
+// `colored`  brand-colored badges (Instagram gradient, Facebook
 // blue, TikTok black+cyan+pink, YouTube red) instead of the plain
 // currentColor outline. Defaults to false so StorePage's seller social
 // links keep their existing monotone look unless it opts in; Footer.jsx

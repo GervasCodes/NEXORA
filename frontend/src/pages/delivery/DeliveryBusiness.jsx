@@ -11,7 +11,7 @@ import ErrorState from "../../components/ui/ErrorState";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 
-// Delivery business-management (Round 4, Phase 9). A delivery business is
+// Delivery business-management . A delivery business is
 // owned by an approved delivery_agent account: it has a roster of riders,
 // a fleet overview (their Nexora work + independent jobs) and independent
 // jobs that never touch Nexora orders or wallets (fees are record-only).

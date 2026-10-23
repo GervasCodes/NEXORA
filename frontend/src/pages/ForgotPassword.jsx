@@ -9,7 +9,7 @@ import { useLanguage } from "../context/LanguageContext";
 // (OTP resend/expiry UX) - same fallback/cooldown values as
 // Login.jsx's OTP step, mirroring otp.service.js's real
 // EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES.
-// Phase 10 (Swahili for remaining pages): this page now goes through the
+// (Swahili for remaining pages): this page now goes through the
 // same i18n t() system as Login.jsx instead of staying plain English.
 const OTP_EXPIRY_FALLBACK_SECONDS = 300;
 const RESEND_COOLDOWN_SECONDS = 60;

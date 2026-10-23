@@ -28,7 +28,7 @@ export function SkeletonList({ rows = 4 }) {
     );
 }
 
-// Phase 8 sub-phase 3 (empty & loading states, Messages.jsx): a variant of
+// (empty & loading states, Messages.jsx): a variant of
 // SkeletonRow/SkeletonList for rows built around a circular avatar - a
 // person's name + last-message preview - rather than SkeletonRow's square
 // product-image shape, so the conversation list's loading state actually

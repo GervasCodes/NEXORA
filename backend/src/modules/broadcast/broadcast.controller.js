@@ -11,7 +11,7 @@ exports.preview = async (req, res) => {
 
 exports.send = async (req, res) => {
     try {
-        const result = await broadcastService.sendBroadcast({
+        const result = await broadcastService.queueBroadcast({
             adminId: req.user.id,
             segment: req.body.segment,
             channels: req.body.channels,
@@ -49,7 +49,7 @@ exports.remove = async (req, res) => {
 
 exports.resend = async (req, res) => {
     try {
-        const result = await broadcastService.resendBroadcast(req.params.id, req.user.id);
+        const result = await broadcastService.queueResendBroadcast(req.params.id, req.user.id);
         return res.json({ success: true, data: result });
     } catch (error) {
         return res.status(error.status || 400).json({ success: false, message: error.message });

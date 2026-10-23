@@ -13,8 +13,9 @@
 // replaces these head tags (they carry data-rh) with the same values from
 // PageMeta once the app runs. Values here mirror each page's <PageMeta>.
 //
-// Hosting: Netlify serves a real file before applying the /* -> /index.html
-// rewrite, so /products resolves to dist/products/index.html.
+// Hosting: Render (static site) serves a real file at a path before
+// applying the /* -> /index.html rewrite rule, so /products resolves to
+// dist/products/index.html rather than falling through to the SPA shell.
 //
 // Dynamic pages (/products/:slug, /services/:slug, /stores/:slug) ARE
 // also generated here as of Round 6 Phase 2 - see the dynamic-shells
@@ -23,8 +24,8 @@
 // /sitemap.xml) rather than listed statically like ROUTES below, since
 // the catalog changes constantly. A build only ever sees the catalog as
 // of whenever this script runs, so freshness depends on how often the
-// site gets rebuilt - see backend/src/jobs/netlifyRebuildTrigger.job.js
-// for the scheduled-rebuild side of that.
+// site gets rebuilt - see backend/src/jobs/renderDeployHook.job.js for
+// the scheduled-rebuild side of that.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

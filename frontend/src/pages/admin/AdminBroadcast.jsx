@@ -146,8 +146,8 @@ function SendBar({ missing, sending, confirming, recipients, onSend, onCancel, l
             </div>
             {lastResult && (
                 <p className="text-xs text-teal">
-                    Sent to {lastResult.recipientCount} recipients
-                    (email {lastResult.emailSentCount}, sms {lastResult.smsSentCount}, whatsapp {lastResult.whatsappSentCount}, in-app {lastResult.inAppSentCount}).
+                    Queued for ~{lastResult.recipientCount} recipients - sending now in the background.
+                    Check History below for the final delivered counts per channel.
                 </p>
             )}
         </div>
@@ -171,7 +171,7 @@ function useSender({ templateType, buildPayload, onSent, reset }) {
         try {
             const { data } = await api.post("/admin/broadcasts", { templateType, ...buildPayload() });
             setLastResult(data.data);
-            toast?.success("Broadcast sent");
+            toast?.success("Broadcast queued - sending now");
             reset();
             setConfirming(false);
             onSent();
@@ -441,7 +441,7 @@ function History({ refreshKey }) {
         setResendingId(id);
         try {
             const { data } = await api.post(`/admin/broadcasts/${id}/resend`);
-            toast?.success(`Resent to ${data.data.recipientCount} recipients`);
+            toast?.success(`Resend queued for ~${data.data.recipientCount} recipients`);
             setReloadKey((k) => k + 1);
         } catch (err) {
             toast?.error(extractErrorMessage(err));

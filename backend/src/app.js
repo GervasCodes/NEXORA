@@ -140,6 +140,16 @@ app.use((req, res, next) => {
 // almost everything is locked to 'none', with 'self' only where a JSON
 // API response might plausibly be fetched by its own frontend.
 app.use(helmet({
+    // Helmet's own default (Cross-Origin-Resource-Policy: same-origin) sits
+    // underneath the cors() middleware above and is checked independently
+    // by the browser - it was silently blocking every cross-subdomain
+    // fetch of this API (api.nexoramarketplace.online) from the frontend
+    // (nexoramarketplace.online) with net::ERR_BLOCKED_BY_RESPONSE, /ping
+    // included, even though CORS itself explicitly allows the origin.
+    // "same-site" (not "cross-origin") is the correct, tighter setting
+    // here: both are subdomains of the same registrable domain, so this
+    // still blocks a true third-party site from loading these responses.
+    crossOriginResourcePolicy: { policy: "same-site" },
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'none'"],

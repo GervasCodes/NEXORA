@@ -19,7 +19,7 @@ import { useLanguage } from "../context/LanguageContext";
 // mobile toggle bar can show the exact current page name instead of
 // a generic "Seller" label.
 //
-// Merchant-Type-Aware Dashboard (Phase 1): each tab may carry a
+// Merchant-Type-Aware Dashboard  each tab may carry a
 // `category` of "product" or "service". A tab with no `category` is
 // shared and always shown. Visibility is resolved against
 // seller_profiles.merchant_type - see isTabVisible below. `hybrid`

@@ -281,7 +281,24 @@ exports.splitEntries = (entries, size = MAX_URLS_PER_FILE) => {
 // Sourced from FRONTEND_URL (falls back to a clearly-invalid placeholder
 // so a missing env var is loud/obvious in the generated XML rather than
 // silently producing broken links).
-const getBaseUrl = () => (process.env.FRONTEND_URL || "https://FRONTEND_URL-NOT-CONFIGURED.example").replace(/\/$/, "");
+//
+// FRONTEND_URL must be a single origin (no path, no trailing slash) -
+// unlike CORS_ORIGIN, which is documented as comma-separated. Seen in
+// production with CORS_ORIGIN's own format pasted into it instead
+// (e.g. "https://nexoramarketplace.online,https://www.nexoramarketplace.online,http://localhost:5173"),
+// which getBaseUrl() used to return as-is: string concatenation never
+// throws, so every <loc> silently became
+// "<that whole string><path>" - still well-formed JS, but invalid XML
+// (a <loc> with three comma-joined URLs, one of them localhost), which
+// is exactly what Search Console reports as "Sitemap is HTML" once a
+// crawler/validator chokes on it. Taking only the first entry fails
+// safe instead of emitting that again if this env var is ever
+// misconfigured the same way.
+const getBaseUrl = () => {
+    const raw = (process.env.FRONTEND_URL || "").trim();
+    if (!raw) return "https://FRONTEND_URL-NOT-CONFIGURED.example";
+    return raw.split(",")[0].trim().replace(/\/$/, "");
+};
 
 // Cached for a short period — this is a public, crawler-hit endpoint
 // that would otherwise run six full-table-ish queries per request; a

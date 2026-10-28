@@ -14,11 +14,13 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:update-snapshots": "playwright test --update-snapshots",
-    "lint": "eslint src --ext .js,.jsx"
+    "lint": "eslint src --ext .js,.jsx",
+    "lint:i18n": "node scripts/check-jsx-literals.mjs src",
+    "measure:throttled": "node scripts/measure-throttled.mjs"
   },
   "dependencies": {
-    "@react-three/drei": "^9.122.0",
-    "@react-three/fiber": "^8.18.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@sentry/react": "^10.69.0",
     "axios": "^1.7.9",
     "leaflet": "^1.9.4",
@@ -28,8 +30,7 @@
     "react-helmet-async": "^3.0.0",
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^7.18.2",
-    "socket.io-client": "^4.8.1",
-    "three": "^0.173.0"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -43,6 +44,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "fake-indexeddb": "^6.2.6",
     "jest-axe": "^11.0.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.4.49",

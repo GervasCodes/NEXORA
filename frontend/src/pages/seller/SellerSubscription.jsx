@@ -81,7 +81,7 @@ export default function SellerSubscription() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // (remediation) - the fast poll used to stop after 30
+    // (Phase 4 remediation) - the fast poll used to stop after 30
     // attempts (~2 minutes) and then tell the seller "this page will
     // update automatically once it's confirmed", which was no longer
     // true: nothing was still polling at that point, so the page would

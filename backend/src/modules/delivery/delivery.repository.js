@@ -1,5 +1,11 @@
 const db = require("../../config/db");
 
+// Phase 2: a made-to-order order may only be offered to drivers once the
+// seller has marked the item ready. (Shipping already requires this; the
+// condition is repeated here so the pool and the re-match sweep can never
+// surface a pre-order that is still being made, whatever its status says.)
+const DISPATCHABLE_SQL = "(o.order_type <> 'pre_order' OR o.ready_at IS NOT NULL)";
+
 // Fallback pool: orders that are ready for pickup but have no location
 // (so can't be auto-matched) or whose offer queue ran out. Manual claim
 // still works as a safety net.
@@ -17,6 +23,7 @@ exports.findAvailableForPickup = async () => {
             SELECT oi2.seller_id FROM order_items oi2 WHERE oi2.order_id = o.id ORDER BY oi2.id LIMIT 1
         )
         WHERE o.status = 'shipped' AND d.id IS NULL AND o.delivery_mode = 'platform'
+          AND ${DISPATCHABLE_SQL}
         ORDER BY o.created_at ASC`
     );
     return rows;
@@ -37,6 +44,7 @@ exports.findUnmatchedForRematch = async () => {
         LEFT JOIN deliveries d ON d.order_id = o.id
         LEFT JOIN delivery_offers off ON off.order_id = o.id AND off.status = 'offered'
         WHERE o.status = 'shipped' AND d.id IS NULL AND o.delivery_mode = 'platform' AND off.id IS NULL
+          AND ${DISPATCHABLE_SQL}
         ORDER BY o.created_at ASC`
     );
     return rows;
@@ -222,7 +230,13 @@ exports.findAgentLocation = async (agentId) => {
 // ranking (offerToNextCandidate in delivery.service.js) can request a
 // road-routing ETA on the correct OSRM profile per agent, instead of
 // treating every vehicle as a generic driving route.
-exports.findCandidateAgents = async (orderId) => {
+// Phase 2: candidates must have a FRESH position (maxAgeSeconds), and are
+// not re-offered an order they declined, are currently being offered, or
+// were offered inside the cooldown window (cooldownSeconds). Because
+// delivery_offers is UNIQUE(order_id, agent_id), re-offering an agent whose
+// earlier offer expired outside the cooldown reuses their row (see
+// createOffer).
+exports.findCandidateAgents = async (orderId, { maxAgeSeconds = 120, cooldownSeconds = 600 } = {}) => {
     const [rows] = await db.query(
         `SELECT u.id, u.first_name, u.phone, u.current_lat, u.current_lng, u.vehicle_type
         FROM users u
@@ -230,14 +244,19 @@ exports.findCandidateAgents = async (orderId) => {
           AND u.is_online = TRUE
           AND u.current_lat IS NOT NULL
           AND u.current_lng IS NOT NULL
+          AND u.location_updated_at IS NOT NULL
+          AND u.location_updated_at >= (NOW() - INTERVAL ? SECOND)
           AND u.id NOT IN (
-              SELECT agent_id FROM delivery_offers WHERE order_id = ?
+              SELECT agent_id FROM delivery_offers
+              WHERE order_id = ?
+                AND (status IN ('offered', 'accepted', 'declined')
+                     OR offered_at > (NOW() - INTERVAL ? SECOND))
           )
           AND u.id NOT IN (
               SELECT agent_id FROM deliveries
               WHERE status NOT IN ('delivered', 'failed')
           )`,
-        [orderId]
+        [maxAgeSeconds, orderId, cooldownSeconds]
     );
     return rows;
 };
@@ -359,13 +378,60 @@ exports.findOfflineEligibleAgents = async () => {
 // pushed via WhatsApp/SMS (in addition to the always-sent in-app socket
 // event + push) - null when neither integration is configured. See
 // migration 092.
-exports.createOffer = async (orderId, agentId, distanceKm, expiresAt, externalChannel = null) => {
+//
+// Phase 2: delivery_offers is UNIQUE(order_id, agent_id). An agent whose
+// earlier offer for this order expired (and is past the cooldown, see
+// findCandidateAgents) is offered again by resetting their existing row
+// rather than inserting a second one. LAST_INSERT_ID(id) makes insertId the
+// row's id in both cases. `details` carries what the agent saw and how the
+// ranking scored them, for later audit.
+exports.createOffer = async (orderId, agentId, distanceKm, expiresAt, externalChannel = null, details = {}) => {
+    const {
+        dropoffDistanceKm = null, tripMinutes = null, payoutQuote = null, score = null, radiusIndex = null
+    } = details;
     const [result] = await db.query(
-        `INSERT INTO delivery_offers (order_id, agent_id, status, distance_km, expires_at, external_channel)
-        VALUES (?, ?, 'offered', ?, ?, ?)`,
-        [orderId, agentId, distanceKm, expiresAt, externalChannel]
+        `INSERT INTO delivery_offers
+            (order_id, agent_id, status, distance_km, expires_at, external_channel,
+             dropoff_distance_km, trip_minutes, payout_quote, score, radius_index)
+        VALUES (?, ?, 'offered', ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            status = 'offered', distance_km = VALUES(distance_km), offered_at = NOW(),
+            responded_at = NULL, expires_at = VALUES(expires_at),
+            external_channel = VALUES(external_channel), response_channel = NULL,
+            dropoff_distance_km = VALUES(dropoff_distance_km), trip_minutes = VALUES(trip_minutes),
+            payout_quote = VALUES(payout_quote), score = VALUES(score), radius_index = VALUES(radius_index)`,
+        [orderId, agentId, distanceKm, expiresAt, externalChannel,
+            dropoffDistanceKm, tripMinutes, payoutQuote, score, radiusIndex]
     );
     return result.insertId;
+};
+
+// Phase 2: a deterministic rollback for acceptOffer - if the delivery row
+// could not be created after the offer was accepted (another agent or a
+// manual claim won the race), mark the offer expired again.
+exports.revertAcceptedOffer = async (offerId) => {
+    await db.query(
+        "UPDATE delivery_offers SET status = 'expired', responded_at = NOW() WHERE id = ? AND status = 'accepted'",
+        [offerId]
+    );
+};
+
+// Phase 2: sellers that can't be dispatched to - no usable store pin.
+// Admin follow-up list. `unverified` = has a pin but it was placed by hand
+// (no GPS fix with <= 100 m accuracy).
+exports.findSellersWithoutVerifiedPin = async ({ limit = 200 } = {}) => {
+    const [rows] = await db.query(
+        `SELECT sp.user_id AS seller_id, sp.store_name, sp.city, sp.region, sp.business_phone,
+                sp.pickup_lat, sp.pickup_lng, sp.pickup_accuracy_m, sp.pickup_pin_verified_at,
+                (sp.pickup_lat IS NULL OR sp.pickup_lng IS NULL) AS missing_pin
+        FROM seller_profiles sp
+        WHERE sp.pickup_lat IS NULL OR sp.pickup_lng IS NULL OR sp.pickup_pin_verified_at IS NULL
+        ORDER BY missing_pin DESC, sp.store_name ASC
+        LIMIT ?`,
+        [Number(limit)]
+    );
+    return rows;
 };
 
 // Roadmap Phase 1: looks up a delivery agent by their phone number, for

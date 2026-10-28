@@ -29,7 +29,7 @@ export default function NotFound() {
                 <path d="M9.5 14.5l2.2-5 2.8 2-2.2 5-2.8-2Z" />
                 <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none" />
             </svg>
-            {/* (SEO Supporting, H1 audit): this line was a <p>
+            {/* Phase 4 (SEO Supporting, H1 audit): this line was a <p>
                 styled to look like a heading, so the page had no real
                 heading element at all - a screen-reader user landing here
                 after a broken link got no "page title" announcement, just

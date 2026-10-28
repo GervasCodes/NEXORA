@@ -35,9 +35,11 @@ export default {
                 frost: withOpacity("--color-frost")
             },
             fontFamily: {
-                display: ["Fraunces", "serif"],
+                display: ["'Fraunces Variable'", "Fraunces", "serif"],
                 sans: ["Inter", "system-ui", "sans-serif"],
-                mono: ["'IBM Plex Mono'", "monospace"]
+                // Phase 1: IBM Plex Mono is no longer loaded (one fewer font
+                // download); the system monospace stack is used instead.
+                mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"]
             },
             backgroundImage: {
                 "brand-gradient": "linear-gradient(135deg, #9FC1F2 0%, #6EA8FE 45%, #1D4ED8 100%)"

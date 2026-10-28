@@ -1,6 +1,9 @@
 const db = require("../../config/db");
 const posRepository = require("./pos.repository");
+const settingsService = require("../settings/settings.service");
+const stockLedger = require("../stock/stock.ledger");
 const productAlertService = require("../productAlert/productAlert.service");
+const { todayInTz, addDaysInTz } = require("../../utils/dateTz");
 
 // Seller POS (Phase 7): manual stock movements + off-platform sales.
 //
@@ -39,36 +42,22 @@ const formatVariantLabel = (options) => {
     return String(parsed);
 };
 
-// Locks and returns { product, variant, stockBefore } for the requested
-// target, enforcing that variant products are always addressed by variant.
+// Locks and returns { product, variant, item, stockBefore, ... } for the requested
+// target, enforcing that variant products are always addressed by variant. The
+// stock ledger decides where the live number is (product, variant, or the
+// external item a tools-only product was migrated to - migration 157).
 const lockTarget = async (connection, sellerId, productId, variantId) => {
-    const product = await posRepository.lockOwnedProduct(connection, sellerId, productId);
-    if (!product) {
-        throw fail("Product not found.", 404);
-    }
-
-    if (product.has_variants) {
-        if (!variantId) {
-            throw fail("This product has variants - choose which variant to update.");
-        }
-        const variant = await posRepository.lockVariant(connection, product.id, variantId);
-        if (!variant) {
-            throw fail("Variant not found for this product.", 404);
-        }
-        return { product, variant, stockBefore: Number(variant.stock) };
-    }
-
-    if (variantId) {
-        throw fail("This product has no variants.");
-    }
-    return { product, variant: null, stockBefore: Number(product.stock) };
+    const target = await stockLedger.lockByProduct(connection, sellerId, productId, variantId, { createdBy: sellerId });
+    target.stockBefore = target.stock;
+    return target;
 };
 
-const writeStock = async (connection, { product, variant }, newStock) => {
-    if (variant) {
-        await posRepository.setVariantStock(connection, variant.id, newStock);
-    } else {
-        await posRepository.setProductStock(connection, product.id, newStock);
+const norm = (v) => (v === undefined || v === null || v === "" ? null : String(v));
+
+// A repeated key with a different body is refused instead of replayed.
+const assertSameRequest = (existing, payloadHash) => {
+    if (existing && existing.payload_hash && existing.payload_hash !== payloadHash) {
+        throw fail("This request id was already used for a different change. Reload and try again.", 409);
     }
 };
 
@@ -122,9 +111,16 @@ exports.adjustStock = async (sellerId, input) => {
         const outcome = await withTransaction(async (connection) => {
             const target = await lockTarget(connection, sellerId, productId, variantId);
 
+            const payloadHash = stockLedger.hashPayload({
+                kind: "adjust", productId, variantId: variantId || null, type,
+                quantity: norm(input.quantity), newStock: norm(input.newStock)
+            });
             if (idempotencyKey) {
                 const existing = await posRepository.findAdjustmentByKey(sellerId, idempotencyKey, connection);
-                if (existing) return { existing };
+                if (existing) {
+                    assertSameRequest(existing, payloadHash);
+                    return { existing };
+                }
             }
 
             const { stockBefore } = target;
@@ -147,7 +143,11 @@ exports.adjustStock = async (sellerId, input) => {
                 stockAfter = newStock;
             }
 
-            await writeStock(connection, target, stockAfter);
+            await stockLedger.applyDelta(connection, target, stockAfter - stockBefore, {
+                type: type === "restock" ? "purchase" : "correction",
+                reason, idempotencyKey, payloadHash,
+                refType: "pos_adjustment", createdBy: sellerId
+            });
 
             const adjustmentId = await posRepository.insertAdjustment(connection, {
                 sellerId,
@@ -158,7 +158,8 @@ exports.adjustStock = async (sellerId, input) => {
                 stockBefore,
                 stockAfter,
                 reason,
-                idempotencyKey
+                idempotencyKey,
+                payloadHash
             });
 
             const adjustment = await posRepository.findAdjustmentById(adjustmentId, connection);
@@ -205,9 +206,17 @@ exports.recordSale = async (sellerId, input) => {
         const outcome = await withTransaction(async (connection) => {
             const target = await lockTarget(connection, sellerId, productId, variantId);
 
+            const payloadHash = stockLedger.hashPayload({
+                kind: "sale", productId, variantId: variantId || null, quantity,
+                unitPrice: norm(input.unitPrice), paymentMethod: paymentMethod || "cash",
+                customerName: norm(customerName), note: norm(note), soldAt: norm(input.soldAt)
+            });
             if (idempotencyKey) {
                 const existing = await posRepository.findAdjustmentByKey(sellerId, idempotencyKey, connection);
-                if (existing) return { existing };
+                if (existing) {
+                    assertSameRequest(existing, payloadHash);
+                    return { existing };
+                }
             }
 
             const { product, variant, stockBefore } = target;
@@ -228,7 +237,6 @@ exports.recordSale = async (sellerId, input) => {
             const totalAmount = Math.round(roundedUnitPrice * quantity * 100) / 100;
 
             const stockAfter = stockBefore - quantity;
-            await writeStock(connection, target, stockAfter);
 
             const saleId = await posRepository.insertOfflineSale(connection, {
                 sellerId,
@@ -245,6 +253,11 @@ exports.recordSale = async (sellerId, input) => {
                 soldAt
             });
 
+            await stockLedger.applyDelta(connection, target, -quantity, {
+                type: "sale", reason: `Off-platform sale #${saleId}`,
+                idempotencyKey, payloadHash, refType: "offline_sale", refId: saleId, createdBy: sellerId
+            });
+
             const adjustmentId = await posRepository.insertAdjustment(connection, {
                 sellerId,
                 productId: product.id,
@@ -255,7 +268,8 @@ exports.recordSale = async (sellerId, input) => {
                 stockAfter,
                 reason: `Off-platform sale #${saleId}`,
                 offlineSaleId: saleId,
-                idempotencyKey
+                idempotencyKey,
+                payloadHash
             });
 
             return {
@@ -310,11 +324,10 @@ exports.listSales = async (sellerId, query) => {
 // Phase 8 - read models
 // ---------------------------------------------------------------------
 
-const DEFAULT_LOW_STOCK_THRESHOLD = 5;
-
+// null = use each item's own reorder level (Phase 6); a number is an explicit override.
 const lowStockThreshold = (query) => {
     const parsed = parseInt(query.threshold, 10);
-    return Number.isInteger(parsed) && parsed >= 0 ? Math.min(parsed, 100000) : DEFAULT_LOW_STOCK_THRESHOLD;
+    return Number.isInteger(parsed) && parsed >= 0 ? Math.min(parsed, 100000) : null;
 };
 
 exports.getStockLevels = async (sellerId, query) => {
@@ -323,9 +336,10 @@ exports.getStockLevels = async (sellerId, query) => {
     const search = (query.q || "").trim().slice(0, 100);
     const lowOnly = query.low_stock === "1" || query.low_stock === "true";
 
+    const defaultLevel = await settingsService.getStockDefaultReorderLevel();
     const [{ rows, total }, summary] = await Promise.all([
-        posRepository.listStockLevels(sellerId, { search, lowOnly, threshold, limit, offset }),
-        posRepository.getStockSummary(sellerId, threshold)
+        posRepository.listStockLevels(sellerId, { search, lowOnly, threshold, defaultLevel, limit, offset }),
+        posRepository.getStockSummary(sellerId, threshold, defaultLevel)
     ]);
 
     const variantRows = await posRepository.findActiveVariantsForProducts(
@@ -357,7 +371,7 @@ exports.getStockLevels = async (sellerId, query) => {
         total,
         page,
         limit,
-        threshold,
+        threshold: threshold === null ? defaultLevel : threshold,
         summary: {
             products: Number(summary.products),
             low_stock: Number(summary.low_stock),
@@ -371,38 +385,43 @@ const MAX_REPORT_DAYS = 366;
 
 const toDateString = (date) => date.toISOString().slice(0, 10);
 
+// Phase 8: the range is whole Africa/Dar_es_Salaam calendar days. The default "last 30 days
+// ending today" used the UTC date (the previous day for three hours after local midnight), and
+// the SQL compared the dates in the database's own zone. `from` / `to` stay "YYYY-MM-DD" text
+// in the response; `start` / `endExclusive` are the UTC instants the queries compare against.
 const resolveReportRange = (query) => {
-    const today = new Date();
-    const to = query.to || toDateString(today);
-    const from = query.from || toDateString(new Date(new Date(to).getTime() - 29 * DAY_MS));
+    const to = query.to || todayInTz();
+    const from = query.from || addDaysInTz(-29, new Date(`${to}T12:00:00+03:00`));
 
-    const fromMs = new Date(from).getTime();
-    const toMs = new Date(to).getTime();
+    const fromMs = new Date(`${from}T00:00:00+03:00`).getTime();
+    const toMs = new Date(`${to}T00:00:00+03:00`).getTime();
     if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
         throw fail("Invalid date range.");
     }
     if (toMs < fromMs) {
         throw fail("The end date must be on or after the start date.");
     }
-    if ((toMs - fromMs) / DAY_MS + 1 > MAX_REPORT_DAYS) {
+    if (Math.round((toMs - fromMs) / DAY_MS) + 1 > MAX_REPORT_DAYS) {
         throw fail("Choose a range of one year or less.");
     }
-    return { from, to };
+    return { from, to, start: new Date(fromMs), endExclusive: new Date(toMs + DAY_MS) };
 };
+exports.resolveReportRange = resolveReportRange;
 
 // Combined on-platform (Nexora orders) + off-platform (manual sales)
 // report. Money is revenue as recorded: order-item subtotals for
 // platform sales, the recorded total for off-platform sales.
 exports.getReport = async (sellerId, query) => {
-    const { from, to } = resolveReportRange(query);
+    const range = resolveReportRange(query);
+    const { from, to } = range;
 
     const [onTotals, offTotals, onDaily, offDaily, onProducts, offProducts] = await Promise.all([
-        posRepository.onPlatformTotals(sellerId, from, to),
-        posRepository.offlineTotals(sellerId, from, to),
-        posRepository.onPlatformDaily(sellerId, from, to),
-        posRepository.offlineDaily(sellerId, from, to),
-        posRepository.onPlatformByProduct(sellerId, from, to),
-        posRepository.offlineByProduct(sellerId, from, to)
+        posRepository.onPlatformTotals(sellerId, range),
+        posRepository.offlineTotals(sellerId, range),
+        posRepository.onPlatformDaily(sellerId, range),
+        posRepository.offlineDaily(sellerId, range),
+        posRepository.onPlatformByProduct(sellerId, range),
+        posRepository.offlineByProduct(sellerId, range)
     ]);
 
     const summarize = (row) => ({
@@ -415,7 +434,7 @@ exports.getReport = async (sellerId, query) => {
 
     // Every day in the range, zero-filled, so a chart has no gaps.
     const dailyMap = new Map();
-    for (let ms = new Date(from).getTime(); ms <= new Date(to).getTime(); ms += DAY_MS) {
+    for (let ms = new Date(`${from}T00:00:00Z`).getTime(); ms <= new Date(`${to}T00:00:00Z`).getTime(); ms += DAY_MS) {
         dailyMap.set(toDateString(new Date(ms)), { day: toDateString(new Date(ms)), on_platform: 0, off_platform: 0 });
     }
     onDaily.forEach((r) => { if (dailyMap.has(r.day)) dailyMap.get(r.day).on_platform = Number(r.revenue); });

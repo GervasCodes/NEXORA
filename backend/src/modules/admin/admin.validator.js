@@ -134,6 +134,16 @@ exports.updateSettingsValidation = [
         .isInt({ min: 1000 })
         .withMessage("Offer timeout must be at least 1000ms"),
 
+    body("delivery_location_max_age_seconds")
+        .optional()
+        .isInt({ min: 10, max: 3600 })
+        .withMessage("Agent location freshness must be between 10 and 3600 seconds"),
+
+    body("delivery_offer_cooldown_seconds")
+        .optional()
+        .isInt({ min: 30, max: 86400 })
+        .withMessage("Re-offer cooldown must be between 30 and 86400 seconds"),
+
     // Nexora Assistant (admin controls) -
     // see settingsService.getAiSettings/ai.service.js#checkSpendGuard.
     body("ai_enabled")

@@ -66,6 +66,8 @@ const productRow = (overrides = {}) => ({
 });
 
 beforeEach(() => {
+    // Phase 2: accepting / shipping needs the seller's pickup pin.
+    sellerRepository.findByUserId.mockResolvedValue({ id: 10, pickup_lat: -6.8, pickup_lng: 39.2 });
     notificationService.notify.mockResolvedValue(undefined);
     fraudService.evaluateOrder.mockResolvedValue(undefined);
     socket.emitToAdmins.mockImplementation(() => {});
@@ -1134,7 +1136,7 @@ describe("order.service.updateOrderStatusBySeller", () => {
     it("allows shipping a pre-order once the balance is fully paid", async () => {
         orderRepository.findOrderById.mockResolvedValue({
             id: 1, status: "processing", buyer_id: 5, order_number: "ORD-1",
-            payment_status: "paid", payment_method: "mobile_money", order_type: "pre_order"
+            payment_status: "paid", payment_method: "mobile_money", order_type: "pre_order", ready_at: "2026-10-20 10:00:00"
         });
         orderRepository.sellerHasItemInOrder.mockResolvedValue(true);
         deliveryService.startMatching.mockResolvedValue(undefined);

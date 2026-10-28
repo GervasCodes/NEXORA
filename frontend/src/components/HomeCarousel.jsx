@@ -18,42 +18,14 @@ const SWIPE_THRESHOLD_PX = 50;
 
 // Safety-net default banner shown only when the API returns no live
 // promo content (no active sponsorship/promotion/featured-store
-// campaigns or seller promo videos yet) - same three real, verified,
-// freely-licensed photos (Unsplash License - free for commercial use,
-// no attribution required: https://unsplash.com/license) this hero
-// briefly shipped with as a static collage: "Marketing Flatlay" by
-// Campaign Creators (https://unsplash.com/photos/RSc6D7bO0fA), "Ships
-// out today" by Bench Accounting (https://unsplash.com/photos/MGaFENpDCsw),
-// and "GRAB courier makes delivery" by Kseniia Ilinykh
-// (https://unsplash.com/photos/62JneRv7jW4).
+// campaigns or seller promo videos yet). Phase 1: these used to be
+// hot-linked Unsplash photos; they are now small original SVG artworks
+// hosted with the app (no third-party request, a ~1 KB download each),
+// and the copy is translated through the language dictionary.
 const FALLBACK_SLIDES = [
-    {
-        type: "fallback",
-        title: "Everything you need",
-        subtitle: "Thousands of products from local vendors",
-        imageUrl: "https://images.unsplash.com/photo-1533750516457-a7f992034fec?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/feed",
-        badge: null
-    },
-    {
-        type: "fallback",
-        title: "From sellers you trust",
-        subtitle: "Verified stores, ready to ship",
-        imageUrl: "https://images.unsplash.com/photo-1449247666642-264389f5f5b1?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/feed",
-        badge: null
-    },
-    {
-        type: "fallback",
-        title: "Tracked door to door",
-        subtitle: "Follow every order from pickup to drop-off",
-        imageUrl: "https://images.unsplash.com/photo-1587476351660-e9fa4bb8b26c?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/feed",
-        badge: null
-    }
+    { type: "fallback", titleKey: "home.fallback.everything.title", subtitleKey: "home.fallback.everything.subtitle", imageUrl: "/images/hero/everything.svg", videoUrl: null, href: "/feed", badge: null },
+    { type: "fallback", titleKey: "home.fallback.trusted.title", subtitleKey: "home.fallback.trusted.subtitle", imageUrl: "/images/hero/trusted.svg", videoUrl: null, href: "/feed", badge: null },
+    { type: "fallback", titleKey: "home.fallback.tracked.title", subtitleKey: "home.fallback.tracked.subtitle", imageUrl: "/images/hero/tracked.svg", videoUrl: null, href: "/feed", badge: null }
 ];
 
 const BADGE_STYLES = {
@@ -62,11 +34,18 @@ const BADGE_STYLES = {
     "Featured store": "bg-mango/90 text-abyss"
 };
 
+const BADGE_KEYS = {
+    Sponsored: "home.badge.sponsored",
+    "On sale": "home.badge.onSale",
+    "Featured store": "home.badge.featuredStore"
+};
+
 function SlideBadge({ badge }) {
+    const { t } = useLanguage();
     if (!badge) return null;
     return (
         <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${BADGE_STYLES[badge] || "bg-frost/90 text-abyss"}`}>
-            {badge}
+            {BADGE_KEYS[badge] ? t(BADGE_KEYS[badge]) : badge}
         </span>
     );
 }
@@ -79,7 +58,7 @@ function SlidePrice({ slide }) {
         <p className="text-frost text-sm mt-1">
             <span className="font-medium">{format(hasDiscount ? slide.discountPrice : slide.price)}</span>
             {hasDiscount && (
-                <span className="text-frost/50 line-through ml-2">{format(slide.price)}</span>
+                <span className="text-frost/70 line-through ml-2">{format(slide.price)}</span>
             )}
         </p>
     );
@@ -89,6 +68,9 @@ export default function HomeCarousel() {
     const [slides, setSlides] = useState(null);
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
+    // Explicit, user-controlled pause (WCAG 2.2.2) - separate from the
+    // temporary hover/focus/drag pause above.
+    const [manualPause, setManualPause] = useState(false);
     const [reduceMotion] = useState(prefersReducedMotion);
     const { t } = useLanguage();
     const dataSaver = useDataSaver();
@@ -109,15 +91,14 @@ export default function HomeCarousel() {
         });
     }, [count]);
 
-    // Autoplay - paused on hover/focus (desktop) and mid-drag (touch),
-    // so a slide never gets yanked out from under a reader or a swipe.
-    // No manual pause/play control anymore (removed per request), so this
-    // is the only thing that stops it other than reduced-motion.
+    // Autoplay - paused on hover/focus (desktop), mid-drag (touch), when the
+    // visitor presses the pause button, and never under reduced-motion, so a
+    // slide is never yanked out from under a reader or a swipe.
     useEffect(() => {
-        if (paused || reduceMotion || count < 2) return undefined;
+        if (paused || manualPause || reduceMotion || count < 2) return undefined;
         const timer = setInterval(() => goTo(index + 1), AUTOPLAY_INTERVAL_MS);
         return () => clearInterval(timer);
-    }, [paused, reduceMotion, count, index, goTo]);
+    }, [paused, manualPause, reduceMotion, count, index, goTo]);
 
     if (slides === null) {
         return (
@@ -127,6 +108,8 @@ export default function HomeCarousel() {
 
     const slide = slides[index];
     if (!slide) return null;
+    const slideTitle = slide.titleKey ? t(slide.titleKey) : slide.title;
+    const slideSubtitle = slide.subtitleKey ? t(slide.subtitleKey) : slide.subtitle;
 
     const handleTouchStart = (e) => {
         dragStartX.current = e.touches[0].clientX;
@@ -151,6 +134,8 @@ export default function HomeCarousel() {
             className="relative rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] border border-frost/10 bg-azure/10 group"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
+            onFocus={() => setPaused(true)}
+            onBlur={() => setPaused(false)}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
@@ -170,7 +155,7 @@ export default function HomeCarousel() {
                     <img
                         key={slide.imageUrl}
                         src={slide.imageUrl}
-                        alt={slide.title || ""}
+                        alt={slideTitle || ""}
                         className="w-full h-full object-cover animate-fade-in motion-reduce:animate-none"
                         loading={index === 0 ? "eager" : "lazy"}
                         fetchPriority={index === 0 ? "high" : undefined}
@@ -183,28 +168,58 @@ export default function HomeCarousel() {
                 <div className="absolute bottom-4 left-4 right-16 max-h-[65%] overflow-hidden">
                     <SlideBadge badge={slide.badge} />
                     <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 line-clamp-2">
-                        {slide.title}
+                        {slideTitle}
                     </h3>
-                    {slide.subtitle && (
-                        <p className="text-frost/70 text-xs sm:text-sm truncate">{slide.subtitle}</p>
+                    {slideSubtitle && (
+                        <p className="text-frost/80 text-xs sm:text-sm truncate">{slideSubtitle}</p>
                     )}
                     <SlidePrice slide={slide} />
                 </div>
             </Link>
 
-            {/* Prev/next arrows and the manual play/pause toggle were removed
-                per request - the banner just autoplays continuously now
-                (still pausable by hover, and swipeable on touch), with only
-                the slide-position dots left as a (non-navigating) indicator. */}
             {count > 1 && (
-                <div className="absolute bottom-1 right-3 flex items-center gap-0.5">
-                    {slides.map((_, i) => (
-                        <span
-                            key={i}
-                            aria-hidden="true"
-                            className={`block h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40"}`}
-                        />
-                    ))}
+                <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-abyss/55 backdrop-blur px-1.5 py-0.5">
+                    <button
+                        type="button"
+                        onClick={() => goTo(index - 1)}
+                        aria-label={t("home.carousel.prev")}
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
+                    >
+                        <span aria-hidden="true">‹</span>
+                    </button>
+                    {!reduceMotion && (
+                        <button
+                            type="button"
+                            onClick={() => setManualPause((p) => !p)}
+                            aria-label={manualPause ? t("home.carousel.play") : t("home.carousel.pause")}
+                            aria-pressed={manualPause}
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
+                        >
+                            <span aria-hidden="true" className="text-xs">{manualPause ? "▶" : "❚❚"}</span>
+                        </button>
+                    )}
+                    <div className="flex items-center" role="group" aria-label={t("home.carouselLabel")}>
+                        {slides.map((_, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => goTo(i)}
+                                aria-label={t("home.carousel.goTo", { n: i + 1 })}
+                                aria-current={i === index ? "true" : undefined}
+                                className="h-8 w-5 inline-flex items-center justify-center focus-ring rounded"
+                            >
+                                <span className={`block h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-frost" : "w-1.5 bg-frost/50"}`} />
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => goTo(index + 1)}
+                        aria-label={t("home.carousel.next")}
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
+                    >
+                        <span aria-hidden="true">›</span>
+                    </button>
                 </div>
             )}
         </div>

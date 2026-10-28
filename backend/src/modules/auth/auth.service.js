@@ -19,7 +19,7 @@ const VERIFICATION_REQUIRED_ROLES = ["seller", "delivery_agent"];
 // yet (that would need a "please re-accept" gate on login) - this just
 // makes each new registration's acceptance traceable to a specific
 // version of the documents.
-const CURRENT_TERMS_VERSION = "2026-07-19";
+const { REGISTRATION_TERMS_VERSION: CURRENT_TERMS_VERSION } = require("../../config/termsVersions");
 
 // Every role in VERIFICATION_REQUIRED_ROLES needs an owner photo/selfie
 // plus at least one government ID. Delivery agents additionally need a

@@ -110,7 +110,7 @@ export default function Login() {
         setStep("otp");
     };
 
-    // One-tap Google sign-in. A returning/linked Google user
+    // Phase 7 (round 5): one-tap Google sign-in. A returning/linked Google user
     // is signed in straight away (no OTP - Google already verified them); a new
     // one continues on the register page to add phone, username and terms.
     const handleGoogleCredential = async (credential) => {
@@ -189,8 +189,9 @@ export default function Login() {
 
                 <form onSubmit={handleOtp} className="space-y-4">
                     <div>
-                        <label className="block text-sm mb-1">{t("auth.otp.codeLabel")}</label>
+                        <label htmlFor="login-otp-code" className="block text-sm mb-1">{t("auth.otp.codeLabel")}</label>
                         <input
+                            id="login-otp-code"
                             type="text"
                             inputMode="numeric"
                             autoComplete="one-time-code"
@@ -272,10 +273,11 @@ export default function Login() {
                 />
                 <div>
                     <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-sm font-medium text-ink">{t("auth.passwordLabel")}</label>
+                        <label htmlFor="login-password" className="block text-sm font-medium text-ink">{t("auth.passwordLabel")}</label>
                         <Link to="/forgot-password" className="text-xs text-teal hover:underline">{t("auth.forgotPasswordLink")}</Link>
                     </div>
                     <Input
+                        id="login-password"
                         type="password"
                         required
                         autoComplete="current-password"

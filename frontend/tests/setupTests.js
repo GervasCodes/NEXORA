@@ -48,3 +48,12 @@ vi.mock("react-helmet-async", () => ({
     HelmetProvider: ({ children }) => children
 }));
 
+
+// Phase 1: the app now picks Kiswahili for Swahili browsers / Tanzanian time
+// zones on a first visit. Tests assert English copy, so pin the detector to
+// "en" here and keep the machine's own time zone from changing the result.
+// (tests/utils/detectLanguage.test.js loads the real module via importActual.)
+vi.mock("../src/utils/detectLanguage", () => ({
+    SWAHILI_TIME_ZONES: [],
+    detectDefaultLanguage: () => "en"
+}));

@@ -65,7 +65,7 @@ export function SellOnNexora() {
             <Steps prefix="marketing.sell" />
             <div className="flex flex-wrap items-center gap-4">
                 <Link to="/register" className="inline-block px-5 py-2.5 rounded-md bg-ink text-paper text-sm">{t("marketing.sell.cta")}</Link>
-                <Link to="/legal/vendor-agreement" className="text-sm text-teal hover:underline">{t("marketing.sell.legal")}</Link>
+                <Link to="/terms#vendor-agreement" className="text-sm text-teal hover:underline">{t("marketing.sell.legal")}</Link>
             </div>
         </Shell>
     );
@@ -87,7 +87,7 @@ export function About() {
         <Shell path="/about" titleKey="marketing.about.title" descriptionKey="marketing.about.description" headingKey="marketing.about.heading" schemaType="AboutPage" extraJsonLd={{ about: { "@id": `${SITE_URL}/#organization` } }}>
             <p className="mb-4">{t("marketing.about.body1")}</p>
             <p className="mb-8 text-ash">{t("marketing.about.body2")}</p>
-            <Link to="/legal/company-information" className="text-sm text-teal hover:underline">{t("marketing.about.company")}</Link>
+            <Link to="/terms#company-information" className="text-sm text-teal hover:underline">{t("marketing.about.company")}</Link>
         </Shell>
     );
 }

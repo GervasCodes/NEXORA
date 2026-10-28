@@ -7,6 +7,7 @@ import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Input from "../../components/ui/Input";
 import { compressImage } from "../../utils/imageCompression";
+import { checkMediaFile, MAX_IMAGES_PER_PRODUCT, MAX_VIDEOS_PER_PRODUCT } from "../../utils/mediaLimits";
 import { useLanguage } from "../../context/LanguageContext";
 
 const emptyForm = {
@@ -16,7 +17,7 @@ const emptyForm = {
 };
 
 // Swaps the item at `index` with its neighbour in `direction` ("up"/"down")
-// and returns a new array - used by the photo/video/audio reorder controls
+// and returns a new array - used by the photo/video reorder controls
 // below. No-op (returns the same array) at either end of the list.
 const swapWithNeighbour = (list, index, direction) => {
     const target = direction === "up" ? index - 1 : index + 1;
@@ -113,16 +114,17 @@ export default function SellerProductForm() {
     const [form, setForm] = useState(emptyForm);
     const [images, setImages] = useState([]);
     const [videos, setVideos] = useState([]);
-    const [audio, setAudio] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
-    const [uploadingAudio, setUploadingAudio] = useState(false);
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [savedId, setSavedId] = useState(isEdit ? id : null);
     // isDraft: the row is a draft (not visible to buyers yet). New products
     // start as drafts on their first field, so photos can be added right away.
     const [isDraft, setIsDraft] = useState(!isEdit);
+    // The stock figure this form loaded. Sent back on save so the server applies only
+    // the seller's own change on top of any sale that happened in the meantime.
+    const stockBaseline = useRef(null);
     // dirty: edits not yet saved. editCount lets an autosave that finishes
     // after newer typing know not to clear the dirty flag.
     const [dirty, setDirty] = useState(false);
@@ -136,7 +138,7 @@ export default function SellerProductForm() {
     // only that row's controls disable during a delete/reorder/set-primary
     // call instead of locking the whole media section.
     const [mediaBusyKey, setMediaBusyKey] = useState(null);
-    // { type: "image" | "video" | "audio", id } of the row pending delete
+    // { type: "image" | "video", id } of the row pending delete
     // confirmation, or null when the ConfirmDialog is closed.
     const [pendingDelete, setPendingDelete] = useState(null);
 
@@ -162,8 +164,8 @@ export default function SellerProductForm() {
             });
             setImages(p.images || []);
             setVideos(p.videos || []);
-            setAudio(p.audio || []);
             setIsDraft(Boolean(p.is_draft));
+            stockBaseline.current = p.is_draft || p.stock === null || p.stock === undefined ? null : Number(p.stock);
             setDirty(false);
         });
     }, [id, isEdit]);
@@ -244,7 +246,10 @@ export default function SellerProductForm() {
             const productId = await ensureDraft();
             if (!isDraft) {
                 // Already-published product: plain edit, no publish step.
-                await api.put(`/products/${productId}`, buildPayload(form));
+                await api.put(`/products/${productId}`, {
+                    ...buildPayload(form),
+                    ...(stockBaseline.current === null ? {} : { stock_baseline: stockBaseline.current })
+                });
             } else {
                 await api.post(`/products/draft/${productId}/publish`, buildPayload(form));
             }
@@ -263,6 +268,10 @@ export default function SellerProductForm() {
         if (files.length === 0) return;
 
         setError("");
+        if (images.length + files.length > MAX_IMAGES_PER_PRODUCT) {
+            setError(t("media.tooMany", { max: MAX_IMAGES_PER_PRODUCT }));
+            return;
+        }
         let productId;
         try {
             productId = await ensureDraft();
@@ -278,6 +287,8 @@ export default function SellerProductForm() {
                 setUploadProgress(t("seller.productForm.progressPreparing", { label }));
                 try {
                     const file = await compressImage(files[i]);
+                    const problem = checkMediaFile(file, "image");
+                    if (problem) throw new Error(t(problem.key, problem.params));
                     const body = new FormData();
                     body.append("image", file);
                     const { data } = await api.post(`/products/${productId}/images`, body, {
@@ -353,11 +364,18 @@ export default function SellerProductForm() {
     // Kept in sync with the backend's MAX_VIDEOS_PER_PRODUCT
     // (product.service.js) so the "+ Add video" control disappears
     // instead of letting a seller pick a file only to have it rejected.
-    const MAX_VIDEOS = 3;
+    const MAX_VIDEOS = MAX_VIDEOS_PER_PRODUCT;
 
     const handleVideoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file || !savedId) return;
+
+        const problem = checkMediaFile(file, "video");
+        if (problem) {
+            setError(t(problem.key, problem.params));
+            e.target.value = "";
+            return;
+        }
 
         setUploadingVideo(true);
         setError("");
@@ -404,64 +422,10 @@ export default function SellerProductForm() {
         }
     };
 
-    // Kept in sync with the backend's MAX_AUDIO_PER_PRODUCT
-    // (product.service.js), same reasoning as MAX_VIDEOS above.
-    const MAX_AUDIO = 3;
-
-    const handleAudioUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || !savedId) return;
-
-        setUploadingAudio(true);
-        setError("");
-        try {
-            const body = new FormData();
-            body.append("audio", file);
-            const { data } = await api.post(`/products/${savedId}/audio`, body);
-            setAudio([...audio, { id: data.data.id, audio_url: data.data.audioUrl }]);
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setUploadingAudio(false);
-            e.target.value = "";
-        }
-    };
-
-    const handleDeleteAudio = async (audioId) => {
-        setMediaBusyKey(`audio-${audioId}`);
-        setError("");
-        try {
-            await api.delete(`/products/${savedId}/audio/${audioId}`);
-            setAudio((prev) => prev.filter((clip) => clip.id !== audioId));
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setMediaBusyKey(null);
-            setPendingDelete(null);
-        }
-    };
-
-    const handleMoveAudio = async (index, direction) => {
-        const reordered = swapWithNeighbour(audio, index, direction);
-        if (reordered === audio) return;
-        setAudio(reordered);
-        setMediaBusyKey(`audio-${audio[index].id}`);
-        setError("");
-        try {
-            await api.put(`/products/${savedId}/audio/reorder`, { ids: reordered.map((clip) => clip.id) });
-        } catch (err) {
-            setAudio(audio);
-            setError(extractErrorMessage(err));
-        } finally {
-            setMediaBusyKey(null);
-        }
-    };
-
     const confirmPendingDelete = () => {
         if (!pendingDelete) return;
         if (pendingDelete.type === "image") handleDeleteImage(pendingDelete.id);
         else if (pendingDelete.type === "video") handleDeleteVideo(pendingDelete.id);
-        else if (pendingDelete.type === "audio") handleDeleteAudio(pendingDelete.id);
     };
 
     return (
@@ -664,7 +628,7 @@ export default function SellerProductForm() {
                     <div className="flex flex-wrap gap-2">
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
                             {uploading ? t("seller.productForm.uploading") : t("seller.productForm.choosePhotos")}
-                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                            <input type="file" accept="image/*,.heic,.heif,.avif" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
                         </label>
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
                             {t("seller.productForm.takePhoto")}
@@ -729,59 +693,6 @@ export default function SellerProductForm() {
                         <p className="text-ash text-xs">{t("seller.productForm.maxVideos", { max: MAX_VIDEOS })}</p>
                     )}
 
-                    <h2 className="font-display text-lg mb-3 mt-8">{t("seller.productForm.audio")}</h2>
-
-                    <div className="flex flex-col gap-2 mb-4">
-                        {audio.map((clip, i) => {
-                            const busy = mediaBusyKey === `audio-${clip.id}`;
-                            return (
-                                <div key={clip.id} className="flex items-center gap-2">
-                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded voice note, no caption track available */}
-                                    <audio src={clip.audio_url} controls className="flex-1" />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleMoveAudio(i, "up")}
-                                        disabled={busy || i === 0}
-                                        aria-label={t("seller.productForm.moveAudioEarlier")}
-                                        title={t("seller.productForm.moveEarlier")}
-                                        className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                    >
-                                        ↑
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleMoveAudio(i, "down")}
-                                        disabled={busy || i === audio.length - 1}
-                                        aria-label={t("seller.productForm.moveAudioLater")}
-                                        title={t("seller.productForm.moveLater")}
-                                        className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                    >
-                                        ↓
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPendingDelete({ type: "audio", id: clip.id })}
-                                        disabled={busy}
-                                        aria-label={t("seller.productForm.removeAudio")}
-                                        title={t("seller.productForm.removeAudio")}
-                                        className="text-ash hover:text-coral text-xs px-1 disabled:opacity-50"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {audio.length < MAX_AUDIO ? (
-                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingAudio ? t("seller.productForm.uploading") : t("seller.productForm.addAudio")}
-                            <input type="file" accept="audio/*" onChange={handleAudioUpload} disabled={uploadingAudio} className="hidden" />
-                        </label>
-                    ) : (
-                        <p className="text-ash text-xs">{t("seller.productForm.maxAudio", { max: MAX_AUDIO })}</p>
-                    )}
-
                     {!isEdit && (
                         <p className="mt-6">
                             <Link to="/seller/products" className="text-teal text-sm hover:underline">
@@ -794,7 +705,7 @@ export default function SellerProductForm() {
 
             <ConfirmDialog
                 open={Boolean(pendingDelete)}
-                title={pendingDelete?.type === "image" ? t("seller.productForm.confirmPhoto") : pendingDelete?.type === "video" ? t("seller.productForm.confirmVideo") : t("seller.productForm.confirmAudio")}
+                title={pendingDelete?.type === "image" ? t("seller.productForm.confirmPhoto") : pendingDelete?.type === "video" ? t("seller.productForm.confirmVideo") : ""}
                 description={t("seller.productForm.cantUndo")}
                 confirmLabel={t("seller.productForm.remove")}
                 cancelLabel={t("seller.productForm.cancel")}

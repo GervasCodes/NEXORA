@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { SITE_NAME, SITE_URL, DEFAULT_DESCRIPTION, normalizePath, toAbsoluteUrl, toOgLocale } from "../utils/seo";
+import { SITE_NAME, SITE_URL, DEFAULT_DESCRIPTION, LANG_PARAM, buildHreflangLinks, normalizePath, readLangParam, toAbsoluteUrl, toOgLocale } from "../utils/seo";
 import { useLanguage } from "../context/LanguageContext";
 
 // (Branding): dedicated 1200x630 Open Graph banner.
@@ -19,13 +19,15 @@ const GSC_VERIFICATION = import.meta.env.VITE_GSC_VERIFICATION || "";
 
 const buildCanonicalUrl = (pathname, search, keepParams = []) => {
     const path = normalizePath(pathname);
-    if (!search || keepParams.length === 0) return `${SITE_URL}${path}`;
-
-    const incoming = new URLSearchParams(search);
+    const incoming = new URLSearchParams(search || "");
     const kept = new URLSearchParams();
     for (const name of keepParams) {
         if (incoming.has(name)) kept.set(name, incoming.get(name));
     }
+    // Kiswahili is its own indexable URL (?lang=sw) that canonicalizes to
+    // itself and is cross-linked with hreflang below. English stays the
+    // clean URL, so ?lang=en collapses to it.
+    if (readLangParam(search) === "sw") kept.set(LANG_PARAM, "sw");
     const query = kept.toString();
     return query ? `${SITE_URL}${path}?${query}` : `${SITE_URL}${path}`;
 };
@@ -76,6 +78,8 @@ export default function PageMeta({
     const canonicalUrl = buildCanonicalUrl(pathname, search, keepParams);
     const jsonLdBlocks = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
     const robots = noIndex ? "noindex, nofollow" : noIndexFollow ? "noindex, follow" : null;
+    // hreflang only makes sense for pages that are meant to be indexed.
+    const hreflangLinks = robots ? [] : buildHreflangLinks(pathname);
 
     return (
         <Helmet>
@@ -83,6 +87,9 @@ export default function PageMeta({
             <meta name="description" content={resolvedDescription} />
             {robots && <meta name="robots" content={robots} />}
             <link rel="canonical" href={canonicalUrl} />
+            {hreflangLinks.map((alt) => (
+                <link key={alt.hreflang} rel="alternate" hrefLang={alt.hreflang} href={alt.href} />
+            ))}
             {GSC_VERIFICATION && normalizePath(pathname) === "/" && (
                 <meta name="google-site-verification" content={GSC_VERIFICATION} />
             )}

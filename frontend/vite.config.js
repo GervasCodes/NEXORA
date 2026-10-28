@@ -40,12 +40,8 @@ export default defineConfig({
                     // interop helper) have no node_modules path, so left
                     // unassigned Rollup was parking them inside whichever
                     // vendor chunk it processed first - which here was
-                    // vendor-three. The entry chunk imports that helper
-                    // statically, so the ~725kB three.js chunk was being
-                    // downloaded (and modulepreloaded) on EVERY page,
-                    // defeating the lazy Hero3DScene split below. Pinning
-                    // them to the always-loaded React chunk keeps three.js
-                    // off every route except the 3D hero.
+                    // a vendor chunk that then loaded on every page.
+                    // Pinning them to the always-loaded React chunk avoids that.
                     if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers")) return "vendor-react";
                     if (!id.includes("node_modules")) return undefined;
                     if (id.includes("react-router")) return "vendor-router";
@@ -53,18 +49,6 @@ export default defineConfig({
                     if (id.includes("@sentry")) return "vendor-sentry";
                     if (id.includes("socket.io-client") || id.includes("engine.io-client")) return "vendor-socket";
                     if (id.includes("leaflet")) return "vendor-map";
-                    // three.js + @react-three/fiber + @react-three/drei are
-                    // by far the heaviest single dependency here, and only
-                    // Hero3DScene (already lazy-loaded behind
-                    // use3DHeroSupport - see App.jsx/Hero3D.jsx) uses them.
-                    // Without this, the fallback "vendor" bucket below
-                    // pulled them into the one chunk shared by every page,
-                    // so visitors who never even qualify for the 3D hero
-                    // (low-end device, reduced-motion, save-data) paid for
-                    // downloading and parsing it anyway. Splitting it out
-                    // lets it load only alongside Hero3DScene's own dynamic
-                    // import, not on every route.
-                    if (id.includes("/three/") || id.includes("@react-three")) return "vendor-three";
                     return "vendor";
                 }
             }

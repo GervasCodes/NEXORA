@@ -6,10 +6,10 @@ import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
 import { useLanguage } from "../context/LanguageContext";
 
-// (OTP resend/expiry UX) - same fallback/cooldown values as
+// Phase 5 (OTP resend/expiry UX) - same fallback/cooldown values as
 // Login.jsx's OTP step, mirroring otp.service.js's real
 // EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES.
-// (Swahili for remaining pages): this page now goes through the
+// Phase 10 (Swahili for remaining pages): this page now goes through the
 // same i18n t() system as Login.jsx instead of staying plain English.
 const OTP_EXPIRY_FALLBACK_SECONDS = 300;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -31,7 +31,7 @@ export default function ForgotPassword() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    // (OTP resend/expiry UX) - live "expires in mm:ss" plus a
+    // Phase 5 (OTP resend/expiry UX) - live "expires in mm:ss" plus a
     // resend-button cooldown, same shape as Login.jsx's OTP step.
     const [expiresIn, setExpiresIn] = useState(OTP_EXPIRY_FALLBACK_SECONDS);
     const [resendCooldown, setResendCooldown] = useState(0);

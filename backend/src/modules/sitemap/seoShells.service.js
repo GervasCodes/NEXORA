@@ -39,14 +39,36 @@ const DESCRIPTION_LENGTH = 160;
 
 const truncate = (value) => (value ? String(value).slice(0, DESCRIPTION_LENGTH) : null);
 
+// Longer plain-text copy for the page body the prerender script writes
+// into the HTML (so a crawler that never runs JavaScript still sees real
+// content, not just <head> tags). Capped so a pathological description
+// can't bloat every shell.
+const BODY_LENGTH = 600;
+const bodyText = (value) => {
+    const clean = String(value || "").replace(/\s+/g, " ").trim();
+    return clean ? clean.slice(0, BODY_LENGTH) : null;
+};
+
+// Effective selling price: the discount when there is a real one.
+const effectivePrice = (price, discount) => {
+    const base = Number(price);
+    const off = Number(discount);
+    const value = Number.isFinite(off) && off > 0 && off < base ? off : base;
+    return Number.isFinite(value) && value > 0 ? value : null;
+};
+
 const getShellProducts = async () => {
     const [rows] = await dbRead.query(
         `SELECT p.slug, p.name, p.description, p.updated_at,
+                p.price, p.discount_price, p.stock, p.brand,
+                c.name AS category_name, sp.store_name, sp.store_slug,
                 (SELECT pi.image_url FROM product_images pi
                  WHERE pi.product_id = p.id
                  ORDER BY pi.is_primary DESC, pi.display_order ASC LIMIT 1) AS image_url
          FROM products p
          JOIN users u ON u.id = p.seller_id
+         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN seller_profiles sp ON sp.user_id = p.seller_id
          WHERE p.is_active = 1 AND ${SELLER_LISTED}`
     );
     return rows.map((row) => ({
@@ -55,13 +77,24 @@ const getShellProducts = async () => {
         description: truncate(row.description) || `${row.name} on NEXORA.`,
         image: row.image_url || null,
         imageAlt: row.name,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        // Body-content fields (prerender-shells.mjs renders these).
+        kind: "product",
+        bodyDescription: bodyText(row.description),
+        price: effectivePrice(row.price, row.discount_price),
+        currency: "TZS",
+        inStock: Number(row.stock) > 0,
+        brand: row.brand || null,
+        category: row.category_name || null,
+        storeName: row.store_name || null,
+        storePath: row.store_slug ? `/stores/${row.store_slug}` : null
     }));
 };
 
 const getShellServices = async () => {
     const [rows] = await dbRead.query(
-        `SELECT s.slug, s.title, s.description, s.updated_at, sp.store_name,
+        `SELECT s.slug, s.title, s.description, s.updated_at, sp.store_name, sp.store_slug,
+                s.base_price, s.discount_price, s.city, s.region,
                 (SELECT sm.media_url FROM service_media sm
                  WHERE sm.service_id = s.id AND sm.media_type = 'image'
                  ORDER BY sm.is_primary DESC, sm.display_order ASC LIMIT 1) AS image_url
@@ -76,7 +109,14 @@ const getShellServices = async () => {
         description: truncate(row.description) || `${row.title} by ${row.store_name} on NEXORA.`,
         image: row.image_url || null,
         imageAlt: row.title,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        kind: "service",
+        bodyDescription: bodyText(row.description),
+        price: effectivePrice(row.base_price, row.discount_price),
+        currency: "TZS",
+        location: [row.city, row.region].filter(Boolean).join(", ") || null,
+        storeName: row.store_name || null,
+        storePath: row.store_slug ? `/stores/${row.store_slug}` : null
     }));
 };
 
@@ -84,7 +124,7 @@ const getShellServices = async () => {
 // a store with no live listing is a thin page not worth a shell either.
 const getShellStores = async () => {
     const [rows] = await dbRead.query(
-        `SELECT sp.store_slug, sp.store_name, sp.store_banner, sp.store_logo,
+        `SELECT sp.store_slug, sp.store_name, sp.store_description, sp.store_banner, sp.store_logo,
                 GREATEST(
                     sp.updated_at,
                     COALESCE((SELECT MAX(p.updated_at) FROM products p WHERE p.seller_id = sp.user_id AND p.is_active = 1), sp.updated_at),
@@ -102,10 +142,12 @@ const getShellStores = async () => {
     return rows.map((row) => ({
         path: `/stores/${row.store_slug}`,
         title: row.store_name,
-        description: `${row.store_name} on NEXORA.`,
+        description: truncate(row.store_description) || `${row.store_name} on NEXORA.`,
         image: row.store_banner || row.store_logo || null,
         imageAlt: row.store_name,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        kind: "store",
+        bodyDescription: bodyText(row.store_description)
     }));
 };
 

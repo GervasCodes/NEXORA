@@ -16,7 +16,7 @@ export default function Loyalty() {
     const { t } = useLanguage();
     const [copied, setCopied] = useState(false);
 
-    // (remediation) - this was previously a bare
+    // (Phase 4 remediation) - this was previously a bare
     // `.catch(() => {})` with `status` staying null forever on failure,
     // and `if (!status) return <PageLoader />` meant a failed load was
     // visually identical to "still loading" - no error, no retry, just

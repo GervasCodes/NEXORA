@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BrandLogo from "../components/BrandLogo";
 import { useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
@@ -24,7 +25,7 @@ const initialForm = {
     pickup_point_id: "",
     address_id: "",
     coupon_code: "",
-    // (Legal & Consumer Trust): mirrors Register.jsx's
+    // Phase 2 (Legal & Consumer Trust): mirrors Register.jsx's
     // `terms_accepted` - an explicit, required consent, not implied by
     // submitting the form. Validated server-side in
     // order.validator.js#checkoutValidation and stamped onto the order
@@ -64,6 +65,15 @@ const estimateBuyerProtectionFee = (subtotal) => {
 // card gateway. Split into "before" and "after" so the dynamic card
 // options can be inserted between them, preserving the original
 // mobile money -> cash on delivery -> card(s) -> PayPal ordering.
+// Phase 3: network logos shown on the radio rows (BrandLogo falls back to a
+// plain name chip until the official mobile-money files are supplied).
+const paymentLogosFor = (value) => {
+    if (value === "mobile_money") return ["mpesa", "mixx", "airtel_money", "halopesa"];
+    if (value === "paypal") return ["paypal"];
+    if (/card|snippe/i.test(value)) return ["visa", "mastercard"];
+    return [];
+};
+
 const PAYMENT_METHODS_BEFORE_CARDS = [
     { value: "mobile_money", label: "Mobile Money" },
     { value: "cash_on_delivery", label: "Cash on Delivery" }
@@ -72,7 +82,7 @@ const PAYMENT_METHODS_AFTER_CARDS = [
     { value: "paypal", label: "PayPal", hint: "(charged in USD)" }
 ];
 
-// (Resilience & Growth): cash_on_delivery isn't a payment-provider
+// Phase 5 (Resilience & Growth): cash_on_delivery isn't a payment-provider
 // rail at all (no gateway involved), so it's never filtered by
 // GET /payments/methods below - only the provider-backed static options
 // are (card rails are filtered separately - see cardPaymentMethods).
@@ -721,6 +731,11 @@ export default function Checkout() {
                                         className="accent-teal" />
                                     {method.label}
                                     {method.hint && <span className="text-xs text-ash">{method.hint}</span>}
+                                    <span className="ml-auto flex items-center gap-1">
+                                        {paymentLogosFor(method.value).map((l) => (
+                                            <BrandLogo key={l} name={l} height={20} className="border border-line" />
+                                        ))}
+                                    </span>
                                 </label>
                             );
                         })}
@@ -774,15 +789,15 @@ export default function Checkout() {
                     />
                     <label htmlFor="checkout_terms_accepted" className="text-xs text-ash">
                         I agree to the{" "}
-                        <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#terms-of-service" target="_blank" className="text-teal hover:underline">
                             Terms of Service
                         </Link>
                         ,{" "}
-                        <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#privacy-policy" target="_blank" className="text-teal hover:underline">
                             Privacy Policy
                         </Link>
                         , and{" "}
-                        <Link to="/legal/refund-policy" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#refund-policy" target="_blank" className="text-teal hover:underline">
                             Refund Policy
                         </Link>
                         .

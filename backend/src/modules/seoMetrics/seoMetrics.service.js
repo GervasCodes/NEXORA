@@ -9,7 +9,7 @@ const ROUTE_PATTERNS = [
     [/^\/stores\/[^/]+$/, "/stores/:slug"],
     [/^\/departments\/[^/]+$/, "/departments/:slug"],
     [/^\/guides\/[^/]+$/, "/guides/:slug"],
-    [/^\/legal\/[^/]+$/, "/legal/:slug"],
+    [/^\/legal\/[^/]+$/, "/legal/:slug"], // legacy URLs, now redirect to /terms
     [/^\/group-buys\/[^/]+$/, "/group-buys/:id"],
     [/^\/orders\/[^/]+(\/tracking)?$/, "/orders/:id"],
     [/^\/(seller|admin|delivery)(\/.*)?$/, "/$1"],

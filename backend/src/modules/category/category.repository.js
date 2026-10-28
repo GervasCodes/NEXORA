@@ -1,6 +1,26 @@
 const db = require("../../config/db");
 const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
 
+// Home.jsx's hero trust strip ("X verified sellers", "Y products") - see
+// category.service.js#getTrustStats. Uses the same VERIFIED_BADGE_SQL
+// every listing/ranking query already uses (utils/verifiedBadge.js), so
+// this count can never drift from what "Verified Seller" means anywhere
+// else in the app. Product count mirrors product.repository.js's own
+// public-browse gate (p.is_active = 1 only) - draft/suspended/deactivated
+// products never count toward either figure.
+exports.countTrustStats = async () => {
+    const [[{ verified_sellers }]] = await db.query(
+        `SELECT COUNT(*) AS verified_sellers FROM seller_profiles sp WHERE ${VERIFIED_BADGE_SQL}`
+    );
+    const [[{ active_products }]] = await db.query(
+        "SELECT COUNT(*) AS active_products FROM products WHERE is_active = 1"
+    );
+    return {
+        verifiedSellers: Number(verified_sellers),
+        activeProducts: Number(active_products)
+    };
+};
+
 // Only genuinely 'active' departments - a department in 'maintenance' or
 // 'deactivated' status must never appear here (this backs every public
 // dropdown/listing, so both offline states have to be equally invisible).

@@ -5,7 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("../../src/context/LanguageContext", () => ({
     useLanguage: () => ({
         t: (key) => ({
-            "verification.sellerBadge": "Verified Seller"
+            "verification.sellerBadge": "Verified Seller",
+            "product.addToCart": "Add to cart"
         }[key] || key)
     })
 }));

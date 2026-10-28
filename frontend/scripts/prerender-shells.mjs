@@ -49,35 +49,21 @@ const NAV = [
     ["/guides", "Buying guides"],
     ["/group-buys", "Group buys"],
     ["/live-selling", "Live selling"],
-    ["/legal/company-information", "About NEXORA"]
+    ["/about", "About NEXORA"]
 ];
-
-const legal = (slug, title) => ({
-    path: `/legal/${slug}`,
-    title,
-    description: `${title} for buyers, sellers and delivery partners on NEXORA.`,
-    h1: title
-});
 
 // Mirrors the <PageMeta> of each page (title is suffixed like PageMeta does).
 const ROUTES = [
-    { path: "/products", title: "All Products", description: "Browse every product on NEXORA, across every department.", h1: "All products" },
-    { path: "/services", title: "Book services", description: "Book trusted local services on NEXORA - browse every service category and compare providers.", h1: "Book services" },
-    { path: "/sell", title: "Sell on NEXORA", description: "Open a store on NEXORA, list products or services, and reach buyers with tracked delivery and protected payments.", h1: "Sell on NEXORA" },
-    { path: "/how-it-works", title: "How NEXORA works", description: "How buying and booking on NEXORA works: find a product or service, pay securely, and track your order to your door.", h1: "How NEXORA works" },
-    { path: "/about", title: "About NEXORA", description: "NEXORA is an online marketplace where sellers and service providers reach buyers with protected payments and tracked delivery.", h1: "About NEXORA" },
+    { path: "/products", title: "All Products", description: "Browse every product on NEXORA, an online marketplace in Tanzania, across every department.", h1: "All products" },
+    { path: "/services", title: "Book services", description: "Book trusted local services in Tanzania on NEXORA - browse every service category and compare providers.", h1: "Book services" },
+    { path: "/sell", title: "Sell on NEXORA", description: "Open a store on NEXORA, list products or services, and reach buyers across Tanzania with tracked delivery and protected payments.", h1: "Sell on NEXORA" },
+    { path: "/how-it-works", title: "How NEXORA works", description: "How buying and booking on NEXORA works in Tanzania: find a product or service, pay securely with mobile money, and track your order to your door.", h1: "How NEXORA works" },
+    { path: "/about", title: "About NEXORA", description: "NEXORA is an online marketplace in Tanzania where sellers and service providers reach buyers with protected payments and tracked delivery.", h1: "About NEXORA" },
     { path: "/contact", title: "Contact NEXORA", description: "Contact NEXORA support by email or phone for help with an order, an account or selling on the marketplace.", h1: "Contact us" },
     { path: "/guides", title: "Buying guides", description: "Guides and tips to help you shop smarter on NEXORA.", h1: "Buying guides" },
     { path: "/group-buys", title: "Group buys", description: "Join a group buy to unlock a lower price together.", h1: "Group buys" },
     { path: "/live-selling", title: "Live selling", description: "Upcoming live selling sessions from NEXORA sellers.", h1: "Live selling" },
-    legal("company-information", "Company Information"),
-    legal("terms-of-service", "Terms of Service"),
-    legal("privacy-policy", "Privacy Policy"),
-    legal("refund-policy", "Refund Policy"),
-    legal("cookie-policy", "Cookie Policy"),
-    legal("vendor-agreement", "Vendor Agreement"),
-    legal("delivery-liability-policy", "Delivery Liability Policy"),
-    legal("insurance-policy", "Insurance Policy")
+    { path: "/terms", title: "Terms & Conditions", description: "NEXORA Terms & Conditions: terms of service, privacy, refunds, cookies, vendor agreement, delivery liability, insurance and company information in one place.", h1: "Terms & Conditions" }
 ];
 
 const setTag = (html, pattern, replacement, label) => {
@@ -85,12 +71,57 @@ const setTag = (html, pattern, replacement, label) => {
     return html.replace(pattern, replacement);
 };
 
+// Real page content written INTO #root (React's createRoot replaces it
+// on mount, so nothing hydrates and nothing mismatches). Crawlers and
+// link-preview bots that read raw HTML now see a heading, the price, the
+// description and links - not an empty div. Set PRERENDER_BODY=0 to turn
+// it off and fall back to head tags + <noscript> only.
+const BODY_ENABLED = process.env.PRERENDER_BODY !== "0";
+const SHELL_STYLE = "max-width:48rem;margin:0 auto;padding:1.5rem;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5";
+
+const formatTzs = (value) => `TSh ${Math.round(Number(value)).toLocaleString("en-US")}`;
+
+const bodyHtml = ({ h1, description, kind, bodyDescription, price, inStock, brand, category, storeName, storePath, location, image, imageAlt, path }) => {
+    const parts = [`<h1>${esc(h1)}</h1>`];
+    if (image) parts.push(`<img src="${esc(image)}" alt="${esc(imageAlt || h1)}" width="320" style="max-width:100%;height:auto" />`);
+    if (kind === "product" || kind === "service") {
+        const facts = [];
+        if (price) facts.push(`${kind === "service" ? "From " : ""}${formatTzs(price)}`);
+        if (kind === "product") facts.push(inStock ? "In stock" : "Out of stock");
+        if (brand) facts.push(`Brand: ${esc(brand)}`);
+        if (category) facts.push(`Category: ${esc(category)}`);
+        if (location) facts.push(`Location: ${esc(location)}`);
+        if (facts.length) parts.push(`<p>${facts.map((f) => (/[<&]/.test(f) ? f : esc(f))).join(" · ")}</p>`);
+    }
+    parts.push(`<p>${esc(bodyDescription || description)}</p>`);
+    if (storeName && storePath) parts.push(`<p>Sold by <a href="${esc(storePath)}">${esc(storeName)}</a> on NEXORA.</p>`);
+    const links = NAV.filter(([href]) => href !== path)
+        .map(([href, label]) => `<a href="${href}">${esc(label)}</a>`)
+        .join(" · ");
+    parts.push(`<nav aria-label="Explore NEXORA"><a href="/">NEXORA home</a> · ${links}</nav>`);
+    return `<main data-prerender="true" style="${SHELL_STYLE}">\n        ${parts.join("\n        ")}\n    </main>`;
+};
+
+// hreflang alternates: English is the clean URL (and x-default), Kiswahili
+// is the same path with ?lang=sw. Mirrors utils/seo.js#buildHreflangLinks.
+const hreflangTags = (url) =>
+    [
+        ["en", url],
+        ["sw", `${url}?lang=sw`],
+        ["x-default", url]
+    ]
+        .map(([lang, href]) => `<link rel="alternate" hreflang="${lang}" href="${esc(href)}" data-rh="true" />`)
+        .join("\n    ");
+
+const withBody = (html, body) => (BODY_ENABLED ? html.replace('<div id="root"></div>', `<div id="root">\n    ${body}\n    </div>`) : html);
+
 // `image`/`imageAlt` are optional - static ROUTES entries never pass
 // them (the template's site-wide og-banner.png default is fine for
 // those), but dynamic product/service/store shells do, since a real
 // photo meaningfully improves a WhatsApp/Telegram/Facebook link
 // preview over the generic banner.
-const build = ({ path, title, description, h1, image, imageAlt }) => {
+const build = (entry) => {
+    const { path, title, description, h1, image, imageAlt } = entry;
     const fullTitle = `${title} · ${SITE_NAME}`;
     const url = `${SITE_URL}${path}`;
     let html = template;
@@ -123,10 +154,10 @@ const build = ({ path, title, description, h1, image, imageAlt }) => {
         }
     }
 
-    // canonical + og:url, inserted right after the description tag
+    // canonical + hreflang + og:url, inserted right after the description tag
     html = html.replace(
         /(<meta name="description"[^>]*>)/,
-        `$1\n    <link rel="canonical" href="${esc(url)}" data-rh="true" />\n    <meta property="og:url" content="${esc(url)}" data-rh="true" />`
+        `$1\n    <link rel="canonical" href="${esc(url)}" data-rh="true" />\n    ${hreflangTags(url)}\n    <meta property="og:url" content="${esc(url)}" data-rh="true" />`
     );
 
     const links = NAV.filter(([href]) => href !== path)
@@ -138,7 +169,7 @@ const build = ({ path, title, description, h1, image, imageAlt }) => {
         `<noscript>\n        <h1>${esc(h1)}</h1>\n        <p>${esc(description)} NEXORA needs JavaScript enabled to run.</p>\n        <nav aria-label="Explore NEXORA"><a href="/">NEXORA home</a> · ${links}</nav>\n    </noscript>`,
         "<noscript> block"
     );
-    return html;
+    return withBody(html, bodyHtml({ ...entry, path }));
 };
 
 for (const route of ROUTES) {
@@ -147,12 +178,20 @@ for (const route of ROUTES) {
     writeFileSync(join(dir, "index.html"), build(route));
 }
 
-// The homepage shell itself gets a canonical + og:url too.
-const home = template.replace(
+// The homepage shell itself gets a canonical, hreflang and og:url too.
+const homeHtml = template.replace(
     /(<meta name="description"[^>]*>)/,
-    `$1\n    <link rel="canonical" href="${SITE_URL}/" data-rh="true" />\n    <meta property="og:url" content="${SITE_URL}/" data-rh="true" />`
+    `$1\n    <link rel="canonical" href="${SITE_URL}/" data-rh="true" />\n    ${hreflangTags(`${SITE_URL}/`)}\n    <meta property="og:url" content="${SITE_URL}/" data-rh="true" />`
 );
-writeFileSync(join(dist, "index.html"), home);
+const homeDescription = /<meta name="description" content="([^"]*)"/.exec(template)?.[1] || "";
+const homeBody = bodyHtml({
+    h1: "NEXORA — Online marketplace in Tanzania",
+    // `template` already holds this text HTML-escaped; unescape the two
+    // entities index.html uses so esc() doesn't double-encode it.
+    description: homeDescription.replace(/&amp;/g, "&").replace(/&quot;/g, '"'),
+    path: "/"
+});
+writeFileSync(join(dist, "index.html"), withBody(homeHtml, homeBody));
 
 console.log(`prerender-shells: wrote ${ROUTES.length} static route shells + canonical on /`);
 

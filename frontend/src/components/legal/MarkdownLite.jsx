@@ -54,7 +54,7 @@ const isSafeHref = (href) => {
     return /^(https?:|mailto:|tel:)/i.test(value);
 };
 
-function renderInline(text, keyPrefix) {
+function renderInline(text, keyPrefix, mapHref) {
     // Split on **bold** and [text](url) without a regex library.
     const parts = [];
     let remaining = text;
@@ -74,7 +74,8 @@ function renderInline(text, keyPrefix) {
         if (match[1]) {
             parts.push(<strong key={`${keyPrefix}-${i++}`}>{match[2]}</strong>);
         } else if (match[3]) {
-            const [, , , , label, href] = match;
+            const [, , , , label, rawHref] = match;
+            const href = mapHref ? mapHref(rawHref) : rawHref;
             if (!isSafeHref(href)) {
                 // Disallowed scheme: render the label as plain text so the
                 // document still reads correctly, but there is nothing to
@@ -106,6 +107,16 @@ function renderInline(text, keyPrefix) {
     return parts;
 }
 
+// Phase 3: stable heading ids so the single /terms page can deep-link to
+// any section. Namespaced per document (idPrefix) so two documents with a
+// same-named heading ("Contact us") never collide.
+const slugify = (text) =>
+    String(text)
+        .toLowerCase()
+        .replace(/\*\*/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
 function parseTableRow(line) {
     return line
         .trim()
@@ -114,11 +125,21 @@ function parseTableRow(line) {
         .map((cell) => cell.trim());
 }
 
-export default function MarkdownLite({ content }) {
+export default function MarkdownLite({ content, idPrefix, mapHref, demote = false }) {
     const lines = content.split("\n");
     const blocks = [];
     let i = 0;
     let key = 0;
+    const usedIds = new Set();
+    const headingId = (text) => {
+        if (!idPrefix) return undefined;
+        const base = `${idPrefix}-${slugify(text) || "section"}`;
+        let id = base;
+        let n = 2;
+        while (usedIds.has(id)) id = `${base}-${n++}`;
+        usedIds.add(id);
+        return id;
+    };
 
     while (i < lines.length) {
         const line = lines[i];
@@ -144,7 +165,7 @@ export default function MarkdownLite({ content }) {
                             <tr className="border-b border-line">
                                 {header.map((cell, ci) => (
                                     <th key={ci} className="text-left font-semibold py-2 px-3 align-top">
-                                        {renderInline(cell, `th-${key}-${ci}`)}
+                                        {renderInline(cell, `th-${key}-${ci}`, mapHref)}
                                     </th>
                                 ))}
                             </tr>
@@ -154,7 +175,7 @@ export default function MarkdownLite({ content }) {
                                 <tr key={ri} className="border-b border-line/60">
                                     {row.map((cell, ci) => (
                                         <td key={ci} className="py-2 px-3 align-top text-ash">
-                                            {renderInline(cell, `td-${key}-${ri}-${ci}`)}
+                                            {renderInline(cell, `td-${key}-${ri}-${ci}`, mapHref)}
                                         </td>
                                     ))}
                                 </tr>
@@ -168,19 +189,21 @@ export default function MarkdownLite({ content }) {
 
         // Headings
         if (line.startsWith("### ")) {
+            const H3 = demote ? "h4" : "h3";
             blocks.push(
-                <h3 key={key++} className="font-display text-lg mt-8 mb-2">
-                    {renderInline(line.slice(4), `h3-${key}`)}
-                </h3>
+                <H3 key={key++} id={headingId(line.slice(4))} className="font-display text-lg mt-8 mb-2 scroll-mt-24">
+                    {renderInline(line.slice(4), `h3-${key}`, mapHref)}
+                </H3>
             );
             i++;
             continue;
         }
         if (line.startsWith("## ")) {
+            const H2 = demote ? "h3" : "h2";
             blocks.push(
-                <h2 key={key++} className="font-display text-xl mt-10 mb-3 pb-2 border-b border-line">
-                    {renderInline(line.slice(3), `h2-${key}`)}
-                </h2>
+                <H2 key={key++} id={headingId(line.slice(3))} className="font-display text-xl mt-10 mb-3 pb-2 border-b border-line scroll-mt-24">
+                    {renderInline(line.slice(3), `h2-${key}`, mapHref)}
+                </H2>
             );
             i++;
             continue;
@@ -198,7 +221,7 @@ export default function MarkdownLite({ content }) {
                     key={key++}
                     className="border-l-2 border-mango bg-mango/10 text-ash text-sm rounded-r-md px-4 py-3 my-5"
                 >
-                    {renderInline(quoteLines.join(" "), `bq-${key}`)}
+                    {renderInline(quoteLines.join(" "), `bq-${key}`, mapHref)}
                 </blockquote>
             );
             continue;
@@ -214,7 +237,7 @@ export default function MarkdownLite({ content }) {
             blocks.push(
                 <ol key={key++} className="list-decimal pl-5 space-y-1.5 my-4 text-ash">
                     {items.map((it, ii) => (
-                        <li key={ii}>{renderInline(it, `ol-${key}-${ii}`)}</li>
+                        <li key={ii}>{renderInline(it, `ol-${key}-${ii}`, mapHref)}</li>
                     ))}
                 </ol>
             );
@@ -231,7 +254,7 @@ export default function MarkdownLite({ content }) {
             blocks.push(
                 <ul key={key++} className="list-disc pl-5 space-y-1.5 my-4 text-ash">
                     {items.map((it, ii) => (
-                        <li key={ii}>{renderInline(it, `ul-${key}-${ii}`)}</li>
+                        <li key={ii}>{renderInline(it, `ul-${key}-${ii}`, mapHref)}</li>
                     ))}
                 </ul>
             );
@@ -266,7 +289,7 @@ export default function MarkdownLite({ content }) {
         }
         blocks.push(
             <p key={key++} className="text-ash leading-relaxed my-3">
-                {renderInline(paraLines.join(" "), `p-${key}`)}
+                {renderInline(paraLines.join(" "), `p-${key}`, mapHref)}
             </p>
         );
     }

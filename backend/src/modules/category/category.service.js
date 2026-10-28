@@ -49,6 +49,14 @@ exports.getServicesTile = async () => {
     });
 };
 
+// Home.jsx's hero trust strip: live counts of verified sellers and active
+// products platform-wide. 30s TTL (shorter than this file's other
+// cache.getOrSet calls, which default to ~45s) since these are the two
+// numbers on the page most literally promising "live" to the shopper.
+exports.getTrustStats = async () => {
+    return cache.getOrSet(CACHE_NAMESPACE, "trustStats", () => categoryRepository.countTrustStats(), 30);
+};
+
 // Homepage department cards: each active category plus its live product
 // count, a trending-products preview, recent products, and a "new this
 // week" count. N+1 by design - there are only a handful of departments,

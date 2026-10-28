@@ -75,7 +75,7 @@ export default function KycStatus() {
     const { format } = useCurrency();
     const { t } = useLanguage();
 
-    // previously a `.finally(() =>
+    // (Phase 4 remediation) - previously a `.finally(() =>
     // setLoading(false))` with the error caught but no retry affordance
     // at all; `useFetch`/`PageState` give it the same error-with-retry
     // every other page gets now.

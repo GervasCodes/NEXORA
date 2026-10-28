@@ -58,7 +58,7 @@ exports.update = async (userId, data) => {
     const allowed = [
         "store_name", "store_description", "business_email",
         "business_phone", "country", "region", "city", "address", "store_type_id",
-        "pickup_lat", "pickup_lng", "store_theme",
+        "pickup_lat", "pickup_lng", "pickup_accuracy_m", "pickup_pin_verified_at", "store_theme",
         "store_tagline", "social_instagram", "social_facebook", "social_whatsapp", "public_phone",
         "accepts_preorders", "preorder_deposit_percent", "preorder_default_lead_time_days"
     ];
@@ -475,7 +475,7 @@ exports.getOverviewProductCounts = async (sellerId) => {
             COUNT(*) AS total,
             COALESCE(SUM(is_active), 0) AS active,
             COALESCE(SUM(is_draft), 0) AS drafts,
-            COALESCE(SUM(CASE WHEN is_active AND NOT is_draft AND stock <= 3 THEN 1 ELSE 0 END), 0) AS low_stock
+            COALESCE(SUM(CASE WHEN is_active AND NOT is_draft AND stock <= COALESCE((SELECT si.reorder_level FROM stock_items si WHERE si.link_key = CONCAT(products.id, '-0')), 5) THEN 1 ELSE 0 END), 0) AS low_stock
         FROM products WHERE seller_id = ?`,
         [sellerId]
     );

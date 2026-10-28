@@ -12,7 +12,11 @@ vi.mock("react-router-dom", async () => ({
 // Suggestions endpoints aren't what this test is about - every list call
 // resolves empty so the debounced suggestion fetch is a harmless no-op.
 vi.mock("../../src/api/client", () => ({
-    default: { get: vi.fn(() => Promise.resolve({ data: { data: [] } })) }
+    default: {
+        get: vi.fn(() => Promise.resolve({ data: { data: [] } })),
+        // logSearchQuery() posts fire-and-forget on every submitted search.
+        post: vi.fn(() => Promise.resolve({ data: {} }))
+    }
 }));
 
 const mockParseSearchQuery = vi.fn();

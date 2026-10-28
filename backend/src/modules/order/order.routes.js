@@ -121,4 +121,16 @@ router.post(
     orderController.requestPreorderBalance
 );
 
+// Phase 2: "Mark item ready" - the made-to-order item is finished, so the
+// order may now ship and be dispatched to a driver.
+router.post(
+    "/:id/mark-ready",
+    authMiddleware,
+    authorize("seller"),
+    requireApprovedSeller,
+    orderIdValidation,
+    validationMiddleware,
+    orderController.markPreorderReady
+);
+
 module.exports = router;

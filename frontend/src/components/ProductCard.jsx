@@ -198,7 +198,7 @@ function ProductCard({ product, priority = false, layout = "grid" }) {
                 size="sm"
                 className="w-full mt-2 min-h-[44px]"
             >
-                {adding ? "…" : "Add to cart"}
+                {adding ? "…" : t("product.addToCart")}
             </Button>
         )
     );
@@ -220,14 +220,7 @@ function ProductCard({ product, priority = false, layout = "grid" }) {
         }`}>
             <Link to={`/products/${product.slug}`} className={isList ? "flex gap-3 flex-1 min-w-0" : "block"}>
                 {isList ? <div className="w-20 shrink-0">{media}</div> : media}
-                {isList ? details : (
-                    <>
-                        {storeLine}
-                        <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-2">{product.name}</h3>
-                        {priceRow}
-                        {ratingAndStock}
-                    </>
-                )}
+                {details}
             </Link>
             {saveButton}
             {addToCartButton}

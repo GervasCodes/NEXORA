@@ -19,7 +19,7 @@ import { useLanguage } from "../context/LanguageContext";
 // mobile toggle bar can show the exact current page name instead of
 // a generic "Seller" label.
 //
-// Merchant-Type-Aware Dashboard  each tab may carry a
+// Merchant-Type-Aware Dashboard (Phase 1): each tab may carry a
 // `category` of "product" or "service". A tab with no `category` is
 // shared and always shown. Visibility is resolved against
 // seller_profiles.merchant_type - see isTabVisible below. `hybrid`
@@ -64,7 +64,7 @@ const groups = [
         tabs: [
             { to: "/seller/wallet", label: "Wallet" },
             { to: "/seller/tax-info", label: "Tax & receipts" },
-            { to: "/seller/pos", label: "Stock & sales", category: "product" },
+            { to: "/seller/stock", label: "Nexora Stock Management", labelKey: "stock.title", alsoActive: ["/seller/pos"], category: "product" },
             { to: "/seller/subscription", label: "Subscription" }
         ]
     },
@@ -91,7 +91,8 @@ const groups = [
 const allTabs = groups.flatMap((g) => g.tabs);
 
 function tabIsActive(tab, pathname) {
-    return tab.end ? pathname === tab.to : pathname.startsWith(tab.to);
+    if (tab.end) return pathname === tab.to;
+    return pathname.startsWith(tab.to) || (tab.alsoActive || []).some((p) => pathname.startsWith(p));
 }
 
 // A tab with no category is shared; hybrid sellers get everything;
@@ -108,11 +109,15 @@ function visibleGroups(merchantType) {
         .filter((group) => group.tabs.length > 0);
 }
 
+// Tabs that carry a labelKey are translated; the rest keep their English label.
+const tabLabel = (tab, t) => (tab.labelKey ? t(tab.labelKey) : tab.label);
+
 // Dashboard-wide jump search: matches tab labels and goes to the first hit on Enter.
 function SellerSearch({ tabs, onPick }) {
+    const { t } = useLanguage();
     const [query, setQuery] = useState("");
     const q = query.trim().toLowerCase();
-    const matches = q ? tabs.filter((tab) => tab.label.toLowerCase().includes(q)).slice(0, 6) : [];
+    const matches = q ? tabs.filter((tab) => tabLabel(tab, t).toLowerCase().includes(q)).slice(0, 6) : [];
 
     const pick = (to) => {
         onPick(to);
@@ -142,7 +147,7 @@ function SellerSearch({ tabs, onPick }) {
                                 onClick={() => pick(tab.to)}
                                 className="w-full text-left text-sm px-3 py-2 hover:bg-line/40"
                             >
-                                {tab.label}
+                                {tabLabel(tab, t)}
                             </button>
                         </li>
                     ))}
@@ -252,7 +257,7 @@ function SellerNavGroups({ groups, variant, pathname }) {
                                         }`
                                 }
                             >
-                                {tab.label}
+                                {tabLabel(tab, t)}
                             </NavLink>
                         ))}
                     </div>
@@ -452,7 +457,7 @@ export default function SellerLayout() {
                                 {profile.store_name}
                             </span>
                             <span className="block font-display text-lg truncate">
-                                {currentTab?.label ?? "Seller"}
+                                {currentTab ? tabLabel(currentTab, t) : "Seller"}
                             </span>
                         </span>
                         <svg

@@ -48,7 +48,7 @@ export default function ConversationThread() {
     const [highlightedId, setHighlightedId] = useState(null);
     const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
     const [wallpaperId, setWallpaperId] = useState(loadStoredWallpaperId);
-    // (empty & loading states): distinguishes "the
+    // Phase 8 sub-phase 3 (empty & loading states): distinguishes "the
     // history fetch actually failed" from "this is a genuinely brand-new
     // conversation" - both leave `messages` at `[]`, but they need very
     // different treatment (a retry vs. a friendly "say hello" placeholder).
@@ -91,7 +91,7 @@ export default function ConversationThread() {
 
     useEffect(loadMessages, [id]);
 
-    // (production error fixes): split out from the fetch effect
+    // Phase 5 (production error fixes): split out from the fetch effect
     // above. `PUT .../read` is a mutating request, so it needs the
     // X-CSRF-Token header - but that header is only populated once
     // AuthContext's own /auth/me bootstrap resolves and calls
@@ -180,7 +180,7 @@ export default function ConversationThread() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [socket, id]);
 
-    //  (Messaging UI Modernization) auto-scroll fix: this used to
+    // Phase 12 (Messaging UI Modernization) auto-scroll fix: this used to
     // always scroll with behavior: "smooth", including the very first
     // render of a conversation's full history - on a long thread, that
     // meant the browser visibly animated all the way down from the top
@@ -500,7 +500,7 @@ export default function ConversationThread() {
     return (
         <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 pb-4 flex flex-col h-screen supports-[height:100dvh]:h-[100dvh]">
             <PageMeta title="Conversation" noIndex />
-            {/* (SEO Supporting, H1 audit): this page has no heading
+            {/* Phase 4 (SEO Supporting, H1 audit): this page has no heading
                 anywhere - just a "← All messages" back link and the action
                 bar. A screen reader gets no page-title announcement at all
                 on navigating in. This component doesn't load the other
@@ -603,7 +603,7 @@ export default function ConversationThread() {
             >
                 {messages.length === 0 && (
                     loadFailed ? (
-                        // a failed history fetch previously
+                        // Phase 8 sub-phase 3: a failed history fetch previously
                         // rendered identically to a brand-new, empty conversation
                         // (see loadFailed above) - this gets its own coral-toned
                         // state with a retry, consistent with ErrorState elsewhere
@@ -668,7 +668,7 @@ export default function ConversationThread() {
 
             {error && <p role="alert" className="text-coral text-sm mb-2">{error}</p>}
 
-            {/* (input bar & attachments, premium dark/glassy
+            {/* Phase 8 sub-phase 2 (input bar & attachments, premium dark/glassy
                 direction): the attachment preview and composer both move onto
                 the same frosted-glass surface as sub-phase 1's bubbles
                 (glass-strong, already used elsewhere in the app), rather than

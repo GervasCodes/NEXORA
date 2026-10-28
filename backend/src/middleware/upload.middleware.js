@@ -2,12 +2,14 @@ const multer = require("multer");
 const { validateFileContent } = require("./fileContentValidation.middleware");
 const { wrapUpload } = require("../utils/wrapUploadMiddleware");
 
+const { MAX_IMAGE_BYTES } = require("../config/mediaLimits");
+
 const storage = multer.memoryStorage();
 
 const upload = multer({
     storage,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5 MB
+        fileSize: MAX_IMAGE_BYTES
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith("image/")) {

@@ -19,6 +19,8 @@ const refundService = require("../refund/refund.service");
 const refundCapService = require("../refund/refundCap.service");
 const walletService = require("../wallet/wallet.service");
 const logger = require("../../utils/logger").child({ module: "order" });
+const { assertSellerHasPin } = require("../../utils/pickupPin");
+const { addDaysInTz } = require("../../utils/dateTz");
 const Sentry = require("../../config/sentry");
 const {
     CANCELLABLE_STATUSES,
@@ -390,12 +392,11 @@ exports.checkout = async (buyerId, shippingInfo) => {
         const depositAmount = Number((roundedTotal * (depositPercent / 100)).toFixed(2));
         const balanceAmount = Number((roundedTotal - depositAmount).toFixed(2));
 
-        const readyBy = new Date();
-        readyBy.setDate(readyBy.getDate() + leadTimeDays);
-
+        // Phase 2: calendar date in Africa/Dar_es_Salaam, not the server's
+        // UTC date (which is a day behind for 3 hours after local midnight).
         preorder = {
             leadTimeDays,
-            readyBy: readyBy.toISOString().slice(0, 10),
+            readyBy: addDaysInTz(leadTimeDays),
             depositAmount,
             balanceAmount
         };
@@ -949,6 +950,21 @@ exports.updateOrderStatusBySeller = async (orderId, sellerId, newStatus, agentId
         throw new Error("The remaining balance must be paid before this order can be shipped");
     }
 
+    // Phase 2: ...and the seller must have marked the item ready. Shipping
+    // is what starts driver dispatch, so a made-to-order item that is still
+    // being made can never be offered to drivers early.
+    if (newStatus === "shipped" && order.order_type === "pre_order" && !order.ready_at) {
+        throw Object.assign(new Error("Mark the item as ready before shipping this made-to-order order"), {
+            code: "PREORDER_NOT_READY"
+        });
+    }
+
+    // Phase 2: drivers are matched to the shop's pin, so accepting an order
+    // (and handing it to the platform pool) requires one.
+    if (newStatus === "processing" || (newStatus === "shipped" && !agentId)) {
+        assertSellerHasPin(await sellerRepository.findByUserId(sellerId));
+    }
+
     // Moving to "shipped" is the point where a seller can hand this off to
     // one of their own hired agents instead of the open platform pool.
     if (newStatus === "shipped" && agentId) {
@@ -1052,6 +1068,11 @@ exports.requestPreorderBalance = async (orderId, sellerId) => {
     }
 
     await orderRepository.markBalanceRequested(orderId);
+    // Requesting the balance means the item is finished (Phase 2), so the
+    // rider fee quoted at checkout (possibly weeks ago) is refreshed.
+    if (await orderRepository.markReady(orderId)) {
+        await deliveryPricingService.requoteRiderFee(orderId);
+    }
 
     await notificationService.notify({
         userId: order.buyer_id,
@@ -1072,6 +1093,66 @@ exports.requestPreorderBalance = async (orderId, sellerId) => {
     });
 
     return { orderId, balanceAmount: order.balance_amount };
+};
+
+// Phase 2: "Mark item ready". The seller says the made-to-order item is
+// finished. This is the only thing that lets the order ship (and so be
+// dispatched to drivers). If only the deposit is paid it also asks the buyer
+// for the balance (same as requestPreorderBalance); if the order is already
+// fully paid it just flips the state and tells the buyer it will ship soon.
+// Idempotent.
+exports.markPreorderReady = async (orderId, sellerId) => {
+    const order = await orderRepository.findOrderById(orderId);
+
+    if (!order) {
+        throw new Error("Order not found");
+    }
+
+    const ownsItem = await orderRepository.sellerHasItemInOrder(orderId, sellerId);
+    if (!ownsItem) {
+        throw new Error("Order not found");
+    }
+
+    if (order.order_type !== "pre_order") {
+        throw new Error("This order isn't a made-to-order order");
+    }
+
+    if (order.payment_status === "unpaid") {
+        throw new Error("The deposit for this order hasn't been paid yet");
+    }
+
+    if (order.ready_at) {
+        return { orderId, alreadyReady: true, balanceAmount: order.balance_amount };
+    }
+
+    if (order.payment_status === "deposit_paid") {
+        const result = await exports.requestPreorderBalance(orderId, sellerId);
+        return { ...result, alreadyReady: false };
+    }
+
+    if (await orderRepository.markReady(orderId)) {
+        await deliveryPricingService.requoteRiderFee(orderId);
+    }
+
+    await notificationService.notify({
+        userId: order.buyer_id,
+        type: "preorder_ready",
+        titleKey: "notifications.order.preorderReady.title",
+        messageKey: "notifications.order.preorderReady.message",
+        messageParams: { orderNumber: order.order_number },
+        relatedOrderId: orderId,
+        withEmail: true,
+        withWhatsApp: true
+    });
+
+    auditService.log({
+        userId: sellerId,
+        eventType: "preorder_marked_ready",
+        description: `Made-to-order item marked ready for ${order.order_number}`,
+        metadata: { orderId }
+    });
+
+    return { orderId, alreadyReady: false, balanceAmount: order.balance_amount };
 };
 
 // (Checkout & Order Timeline UX): a pre-payment estimate of how

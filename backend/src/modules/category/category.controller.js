@@ -34,6 +34,23 @@ exports.listForAdmin = async (req, res) => {
     }
 };
 
+exports.getTrustStats = async (req, res) => {
+    try {
+        const stats = await categoryService.getTrustStats();
+
+        return res.json({
+            success: true,
+            data: stats
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 exports.getServicesTile = async (req, res) => {
     try {
         const tile = await categoryService.getServicesTile();

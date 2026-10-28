@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BrandLogo from "../../components/BrandLogo";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import Skeleton from "../../components/Skeleton";
@@ -15,6 +16,13 @@ const WITHDRAWAL_STATUS_STYLES = {
     paid: "bg-teal text-white",
     rejected: "bg-coral/10 text-coral"
 };
+
+const PAYOUT_NETWORKS = [
+    { value: "vodacom_mpesa", logo: "mpesa", label: "Vodacom M-Pesa" },
+    { value: "tigo_pesa", logo: "mixx", label: "Mixx by Yas (Tigo Pesa)" },
+    { value: "airtel_money", logo: "airtel_money", label: "Airtel Money" },
+    { value: "halopesa", logo: "halopesa", label: "HaloPesa" }
+];
 
 export default function SellerWallet() {
     const { t } = useLanguage();
@@ -213,18 +221,28 @@ export default function SellerWallet() {
                     {payoutMethod === "mobile_money" ? (
                         <>
                             <div>
-                                <label htmlFor="payoutNetwork" className="text-xs text-ash block mb-1">{t("seller.wallet.network")}</label>
-                                <select
-                                    id="payoutNetwork"
-                                    value={payoutNetwork}
-                                    onChange={(e) => setPayoutNetwork(e.target.value)}
-                                    className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                                >
-                                    <option value="vodacom_mpesa">Vodacom M-Pesa</option>
-                                    <option value="tigo_pesa">Mixx by Yas (Tigo Pesa)</option>
-                                    <option value="airtel_money">Airtel Money</option>
-                                    <option value="halopesa">HaloPesa</option>
-                                </select>
+                                <span id="payoutNetworkLabel" className="text-xs text-ash block mb-1">{t("seller.wallet.network")}</span>
+                                <div role="radiogroup" aria-labelledby="payoutNetworkLabel" className="grid grid-cols-2 gap-2">
+                                    {PAYOUT_NETWORKS.map(({ value, logo, label }) => (
+                                        <label
+                                            key={value}
+                                            className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm cursor-pointer ${
+                                                payoutNetwork === value ? "border-teal bg-teal/5" : "border-line hover:border-ash"
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="payoutNetwork"
+                                                value={value}
+                                                checked={payoutNetwork === value}
+                                                onChange={() => setPayoutNetwork(value)}
+                                                className="accent-teal"
+                                            />
+                                            <BrandLogo name={logo} height={22} className="border border-line" />
+                                            <span className="sr-only">{label}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                             <Input
                                 label={t("seller.wallet.mobileNumber")}

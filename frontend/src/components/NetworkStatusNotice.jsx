@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useToast } from "../context/ToastContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import api, { getServerWaking, subscribeServerWaking } from "../api/client";
+import { flushQueue, queueCounts } from "../utils/stockOfflineStore";
 
 // How often an open, visible tab pings the API to keep a sleepy host awake.
 // Free-tier hosts typically sleep after ~15 minutes without traffic, so 4
@@ -50,6 +51,15 @@ export default function NetworkStatusNotice() {
         const handleOnline = () => {
             if (!hasMounted.current) return;
             toast?.success(t("network.online"), 3000);
+            // Stock Management (Phase 8): sales rung up offline are sent now, wherever the
+            // seller is in the app. flushQueue never throws and does nothing with an empty queue.
+            queueCounts().then(({ pending }) => {
+                if (!pending) return null;
+                return flushQueue().then((r) => {
+                    if (r.synced + r.replayed > 0) toast?.success(t("stock.p8.off.sent", { count: r.synced + r.replayed }), 4000);
+                    if (r.flagged > 0) toast?.error(t("stock.p8.off.flagged", { count: r.flagged }), 8000);
+                });
+            }).catch(() => {});
         };
 
         window.addEventListener("offline", handleOffline);

@@ -1,3 +1,5 @@
+// Must stay the first import: guards localStorage/sessionStorage before any other module touches them.
+import "./utils/installSafeStorage.js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -16,6 +18,14 @@ import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { AIAssistantProvider } from "./context/AIAssistantContext.jsx";
 import { initWebVitals } from "./utils/seoMetrics.js";
+// Self-hosted fonts (Phase 1): Latin subsets only, served from our own
+// origin instead of a render-blocking Google Fonts stylesheet.
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-700.css";
+import "@fontsource-variable/fraunces/wght.css";
+import "@fontsource-variable/fraunces/wght-italic.css";
 import "./index.css";
 
 // Same "degrade gracefully when unconfigured" pattern as the backend

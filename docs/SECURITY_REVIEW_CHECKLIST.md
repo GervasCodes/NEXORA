@@ -50,7 +50,7 @@ reviewing.
 |---|---|---|
 | SQL parameterization | ✅ | Spot-checked across repositories (e.g. `product.repository.js`) — all queries use `?` placeholders via `mysql2`, no string-concatenated SQL found in the sampled files |
 | Request body/query validation | ✅ | Per-module `*.validator.js` files (e.g. `payment.validator.js`) |
-| File upload type/size restriction | ✅ | `multer` memory storage, 5 MB limit, MIME-type allowlist (`image/*`) — `upload.middleware.js`; separate middlewares exist for video/audio/document/chat-attachment uploads with their own limits |
+| File upload type/size restriction | ✅ | `multer` memory storage, 5 MB limit, MIME-type allowlist (`image/*`) — `upload.middleware.js`; separate middlewares exist for video/document/chat-attachment uploads with their own limits (product audio was removed in Phase 4). Image limits live in `config/mediaLimits.js`; photos are EXIF/GPS-stripped (`utils/imageSanitize.js`); video uploads are concurrency-capped; missing `CLAMAV_HOST` is flagged loudly in production |
 | Uploaded file content validated server-side (not just MIME sniffing) | ✅ | Phase 2: magic-byte content classifier (`utils/fileContentValidator.js`) runs after multer buffers the file, independent of the client-reported `mimetype` — wired into all five upload middlewares via `utils/wrapUploadMiddleware.js`; see `PHASE2_SECURITY_CHANGELOG.md` |
 | Open redirect protection (general, beyond payment return URLs) | ⚠️ | Confirmed for payment flows (§2); reviewer should check any other user-supplied-URL redirect surfaces |
 

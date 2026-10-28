@@ -16,7 +16,12 @@ exports.subscribeRedirectValidation = [
 // would break it - reject that here rather than storing it.
 const MAX_FEATURES = 12;
 
+const stockEntitlements = require("../stock/stock.entitlements");
+
 const planContentRules = [
+    body("entitlements").optional({ nullable: true })
+        .custom((value) => stockEntitlements.isValid(value))
+        .withMessage("Entitlements must be an object of known on/off features and numeric limits"),
     body("description").optional({ nullable: true }).isString().bail().trim()
         .isLength({ max: 255 }).withMessage("Description must be 255 characters or fewer"),
     body("features").optional({ nullable: true })

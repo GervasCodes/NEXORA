@@ -11,7 +11,7 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatTimeRemaining } from "../utils/format";
 
-// Status -> buyer-facing explanation (remediation) - a status
+// Status -> buyer-facing explanation (Phase 4 remediation) - a status
 // badge alone ("Failed") doesn't tell a buyer who already joined what
 // actually happened or whether they're owed anything; this fills that
 // gap next to the badge.
@@ -44,7 +44,7 @@ export default function GroupBuyDetail() {
 
     useEffect(load, [id]);
 
-    // Live countdown (remediation) - formatTimeRemaining()
+    // Live countdown (Phase 4 remediation) - formatTimeRemaining()
     // computes off Date.now() at call time, but nothing was forcing a
     // re-render as time passed, so "2 hours left" sat frozen on screen
     // until the next unrelated re-render (e.g. after join/claim). A
@@ -218,9 +218,9 @@ export default function GroupBuyDetail() {
                         />
                         <label htmlFor="claim_terms_accepted" className="text-xs text-ash">
                             I agree to the{" "}
-                            <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">Terms of Service</Link>,{" "}
-                            <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">Privacy Policy</Link>, and{" "}
-                            <Link to="/legal/refund-policy" target="_blank" className="text-teal hover:underline">Refund Policy</Link>.
+                            <Link to="/terms#terms-of-service" target="_blank" className="text-teal hover:underline">Terms of Service</Link>,{" "}
+                            <Link to="/terms#privacy-policy" target="_blank" className="text-teal hover:underline">Privacy Policy</Link>, and{" "}
+                            <Link to="/terms#refund-policy" target="_blank" className="text-teal hover:underline">Refund Policy</Link>.
                         </label>
                     </div>
                     <button

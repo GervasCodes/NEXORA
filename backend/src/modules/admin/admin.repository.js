@@ -1011,10 +1011,18 @@ exports.findProductMediaUrls = async (productIds, executor = db) => {
         `SELECT video_url AS url FROM product_videos WHERE product_id IN (?)`,
         [productIds]
     );
-    const [audio] = await executor.query(
-        `SELECT audio_url AS url FROM product_audio WHERE product_id IN (?)`,
-        [productIds]
-    );
+    // Phase 4: product audio was removed from the app. Legacy rows may still
+    // exist (their Cloudinary assets still need cleaning up) and the table
+    // is dropped in a later release, so a missing table is not an error.
+    let audio = [];
+    try {
+        [audio] = await executor.query(
+            `SELECT audio_url AS url FROM product_audio WHERE product_id IN (?)`,
+            [productIds]
+        );
+    } catch (err) {
+        if (err.code !== "ER_NO_SUCH_TABLE") throw err;
+    }
 
     return [...images, ...videos, ...audio].map((r) => r.url);
 };

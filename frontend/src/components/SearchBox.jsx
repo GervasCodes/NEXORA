@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { parseSearchQuery } from "../api/ai";
+import { fetchTrendingSearches, logSearchQuery } from "../api/search";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../utils/recentSearches";
+import { getSearchSynonyms } from "../utils/searchSynonyms";
 
 const DEBOUNCE_MS = 250;
 const MIN_CHARS = 2;
@@ -95,10 +97,20 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
     const [listening, setListening] = useState(false);
     const [parsing, setParsing] = useState(false);
     const [recent, setRecent] = useState(() => getRecentSearches());
+    const [trending, setTrending] = useState([]);
     const containerRef = useRef(null);
     const debounceRef = useRef(null);
     const recognitionRef = useRef(null);
     const parsingRef = useRef(false);
+
+    // Trending terms for the empty-input dropdown, shown alongside recent
+    // searches. Fetched once (server already caches this for 5 minutes -
+    // see search.service.js#getTrending) rather than on every focus.
+    // Silent on failure - the dropdown just shows recent-only, same as
+    // before this existed.
+    useEffect(() => {
+        fetchTrendingSearches().then(setTrending).catch(() => {});
+    }, []);
 
     useEffect(() => {
         clearTimeout(debounceRef.current);
@@ -110,6 +122,12 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
 
         debounceRef.current = setTimeout(() => {
             const term = value.trim();
+            // Swahili shoppers typing a Swahili word (e.g. "simu") get the
+            // same suggestions an English "phone" search would - see
+            // utils/searchSynonyms.js. Only ever adds extra terms to
+            // search for; it never replaces what the shopper typed.
+            const extraTerms = getSearchSynonyms(term);
+            const allTerms = [term, ...extraTerms];
             // (UI/UX remediation) - previously only ever searched
             // /products, even though the app has three other browsable
             // content types (services, stores, guides) with no way to
@@ -120,26 +138,39 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
             // own filters/pagination - a merge endpoint would just be
             // this same work moved server-side for no real benefit at
             // this result count (5 each, capped total below).
-            Promise.allSettled([
-                api.get("/products", { params: { search: term, limit: 5 } }),
-                api.get("/services", { params: { search: term, limit: 3 } }),
-                api.get("/stores", { params: { search: term, limit: 3 } }),
-                api.get("/content", { params: { search: term, limit: 3 } })
-            ]).then(([productsRes, servicesRes, storesRes, guidesRes]) => {
-                const products = productsRes.status === "fulfilled"
-                    ? (productsRes.value.data.data || []).map((p) => ({ type: "product", id: `product-${p.id}`, name: p.name, slug: p.slug, image_url: p.image_url, subtitle: p.store_name, price: p.discount_price || p.price }))
-                    : [];
-                const services = servicesRes.status === "fulfilled"
-                    ? (servicesRes.value.data.data?.services || []).map((s) => ({ type: "service", id: `service-${s.id}`, name: s.title, slug: s.slug, image_url: s.image_url, subtitle: s.store_name, price: s.discount_price || s.base_price }))
-                    : [];
-                const stores = storesRes.status === "fulfilled"
-                    ? (storesRes.value.data.data || []).map((st) => ({ type: "store", id: `store-${st.user_id}`, name: st.store_name, slug: st.store_slug, image_url: st.store_logo, subtitle: getVerificationTier(st) ? t(VERIFICATION_LABEL_KEYS[getVerificationTier(st)]) : null }))
-                    : [];
-                const guides = guidesRes.status === "fulfilled"
-                    ? (guidesRes.value.data.data || []).map((g) => ({ type: "guide", id: `guide-${g.id}`, name: g.title, slug: g.slug, image_url: g.cover_image_url, subtitle: null }))
-                    : [];
+            // Fired once per term (the typed term plus any Swahili
+            // synonym expansion above) and merged/deduped by result id -
+            // a product that happens to match both "simu" and "phone"
+            // (e.g. its description uses both) must only appear once.
+            Promise.allSettled(
+                allTerms.flatMap((t) => [
+                    api.get("/products", { params: { search: t, limit: 5 } }),
+                    api.get("/services", { params: { search: t, limit: 3 } }),
+                    api.get("/stores", { params: { search: t, limit: 3 } }),
+                    api.get("/content", { params: { search: t, limit: 3 } })
+                ])
+            ).then((results) => {
+                const merged = new Map();
+                const addAll = (items) => items.forEach((item) => merged.set(item.id, item));
 
-                setSuggestions([...products, ...services, ...stores, ...guides]);
+                allTerms.forEach((_, i) => {
+                    const [productsRes, servicesRes, storesRes, guidesRes] = results.slice(i * 4, i * 4 + 4);
+
+                    if (productsRes.status === "fulfilled") {
+                        addAll((productsRes.value.data.data || []).map((p) => ({ type: "product", id: `product-${p.id}`, name: p.name, slug: p.slug, image_url: p.image_url, subtitle: p.store_name, price: p.discount_price || p.price })));
+                    }
+                    if (servicesRes.status === "fulfilled") {
+                        addAll((servicesRes.value.data.data?.services || []).map((s) => ({ type: "service", id: `service-${s.id}`, name: s.title, slug: s.slug, image_url: s.image_url, subtitle: s.store_name, price: s.discount_price || s.base_price })));
+                    }
+                    if (storesRes.status === "fulfilled") {
+                        addAll((storesRes.value.data.data || []).map((st) => ({ type: "store", id: `store-${st.user_id}`, name: st.store_name, slug: st.store_slug, image_url: st.store_logo, subtitle: getVerificationTier(st) ? t(VERIFICATION_LABEL_KEYS[getVerificationTier(st)]) : null })));
+                    }
+                    if (guidesRes.status === "fulfilled") {
+                        addAll((guidesRes.value.data.data || []).map((g) => ({ type: "guide", id: `guide-${g.id}`, name: g.title, slug: g.slug, image_url: g.cover_image_url, subtitle: null })));
+                    }
+                });
+
+                setSuggestions(Array.from(merged.values()));
                 setOpen(true);
             }).catch(() => {});
         }, DEBOUNCE_MS);
@@ -164,7 +195,10 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
         if (parsingRef.current) return;
 
         setOpen(false);
-        if (trimmed) setRecent(addRecentSearch(trimmed));
+        if (trimmed) {
+            setRecent(addRecentSearch(trimmed));
+            logSearchQuery(trimmed);
+        }
 
         if (!trimmed) {
             onNavigate?.();
@@ -194,7 +228,10 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
     const goToResult = (result) => {
         setOpen(false);
         onNavigate?.();
-        if (value.trim()) setRecent(addRecentSearch(value.trim()));
+        if (value.trim()) {
+            setRecent(addRecentSearch(value.trim()));
+            logSearchQuery(value.trim());
+        }
         navigate(`${ROUTE_BY_TYPE[result.type]}/${result.slug}`);
     };
 
@@ -260,7 +297,7 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                 <input
                     value={value}
                     onChange={(e) => { setValue(e.target.value); setActiveIndex(-1); }}
-                    onFocus={() => (suggestions.length > 0 || (value.trim().length === 0 && recent.length > 0)) && setOpen(true)}
+                    onFocus={() => (suggestions.length > 0 || (value.trim().length === 0 && (recent.length > 0 || trending.length > 0))) && setOpen(true)}
                     onKeyDown={handleKeyDown}
                     type="text"
                     role="combobox"
@@ -291,27 +328,51 @@ export default function SearchBox({ placeholder, submitLabel, inputClassName, on
                 </button>
             </form>
 
-            {open && value.trim().length === 0 && recent.length > 0 && (
+            {open && value.trim().length === 0 && (recent.length > 0 || trending.length > 0) && (
                 <div id="searchbox-suggestions" className="absolute top-full left-0 right-0 mt-1 glass-strong rounded-md shadow-lg overflow-hidden z-50">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-line/60">
-                        <span className="text-xs uppercase tracking-wide text-ash">{t("search.recent")}</span>
-                        <button type="button" onMouseDown={handleClearRecent} className="text-xs text-teal hover:underline">
-                            {t("search.clearRecent")}
-                        </button>
-                    </div>
-                    {recent.map((term) => (
-                        <button
-                            key={term}
-                            type="button"
-                            onMouseDown={() => { setValue(term); goToResults(term); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-line/40 transition-colors"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-3.5 h-3.5 text-ash shrink-0">
-                                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
-                            </svg>
-                            <span className="truncate">{term}</span>
-                        </button>
-                    ))}
+                    {recent.length > 0 && (
+                        <>
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-line/60">
+                                <span className="text-xs uppercase tracking-wide text-ash">{t("search.recent")}</span>
+                                <button type="button" onMouseDown={handleClearRecent} className="text-xs text-teal hover:underline">
+                                    {t("search.clearRecent")}
+                                </button>
+                            </div>
+                            {recent.map((term) => (
+                                <button
+                                    key={`recent-${term}`}
+                                    type="button"
+                                    onMouseDown={() => { setValue(term); goToResults(term); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-line/40 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-3.5 h-3.5 text-ash shrink-0">
+                                        <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+                                    </svg>
+                                    <span className="truncate">{term}</span>
+                                </button>
+                            ))}
+                        </>
+                    )}
+                    {trending.length > 0 && (
+                        <>
+                            <div className="px-3 py-2 border-b border-line/60 border-t border-line/60">
+                                <span className="text-xs uppercase tracking-wide text-ash">{t("search.trendingTitle")}</span>
+                            </div>
+                            {trending.map((term) => (
+                                <button
+                                    key={`trending-${term}`}
+                                    type="button"
+                                    onMouseDown={() => { setValue(term); goToResults(term); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-line/40 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-3.5 h-3.5 text-ash shrink-0">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-5 4 4 7-8M15 8h4v4" />
+                                    </svg>
+                                    <span className="truncate">{term}</span>
+                                </button>
+                            ))}
+                        </>
+                    )}
                 </div>
             )}
 

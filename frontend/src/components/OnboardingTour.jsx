@@ -13,39 +13,27 @@ const STORAGE_PREFIX = "nexora_onboarding_seen_";
 // settling into this cadence going forward.
 const RESURFACE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// (New UI/UX & Imagery Additions, item 18): emoji-only steps
-// replaced with real illustration/photography per step. Buyer step 2
-// (checkout) now uses a verified, freely-licensed photo (Unsplash
-// License - free for commercial use, no attribution required:
-// https://unsplash.com/license) - "Woman using laptop and credit card
-// on sofa" by Vitaly Gariev (https://unsplash.com/photos/ygVEIaDM6DE).
-// I checked for suitable images for the other ten steps too, but
-// couldn't confirm licensing (many Unsplash search hits are
-// Unsplash+/paid-tier photos hosted on plus.unsplash.com, which aren't
-// free to hotlink) or a clean on-theme match in the time available, so
-// those remain clearly-marked placeholder paths under
-// /public/images/onboarding/ - real illustration or photography still
-// needs to be sourced or dropped in there. Step/copy structure (title,
-// body, per-role STEPS array, ROLE_CONFIG, the shown-once-per-account
-// mechanism) is unchanged.
+// Step images are self-hosted under /public/images/onboarding/ (WebP photos
+// plus a small original SVG illustration for the checkout step), so the tour
+// never depends on a third-party image host.
 const BUYER_STEPS = [
     {
-        image: "/images/onboarding/buyer-1.jpg",
+        image: "/images/onboarding/buyer-1.webp",
         title: "Find anything, fast",
         body: "Search or browse by category to discover products and services from sellers across Tanzania."
     },
     {
-        image: "https://images.unsplash.com/photo-1758874385215-c86fe62b446f?fm=jpg&q=80&w=1200&auto=format&fit=crop",
+        image: "/images/onboarding/buyer-2.svg",
         title: "Add to cart, checkout securely",
         body: "Pay by mobile money, card, wallet balance, or cash on delivery - and pick up from a kiosk near you instead of waiting at home, if that's easier."
     },
     {
-        image: "/images/onboarding/buyer-3.jpg",
+        image: "/images/onboarding/buyer-3.webp",
         title: "Track every order",
         body: "Watch your order move from placed to delivered in real time, right from the Orders page."
     },
     {
-        image: "/images/onboarding/buyer-4.jpg",
+        image: "/images/onboarding/buyer-4.webp",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }
@@ -58,22 +46,22 @@ const BUYER_STEPS = [
 // role instead of a hard-coded buyer-only one.
 const SELLER_STEPS = [
     {
-        image: "/images/onboarding/seller-1.jpg",
+        image: "/images/onboarding/seller-1.webp",
         title: "Your store, one dashboard",
         body: "List products or services, manage orders and bookings, and see how your store is doing - all from the Seller dashboard."
     },
     {
-        image: "/images/onboarding/seller-2.jpg",
+        image: "/images/onboarding/seller-2.webp",
         title: "Get seen",
         body: "Use Promote to pay for extra visibility - a sponsored product slot, top billing for your store, or a boosted department on the homepage."
     },
     {
-        image: "/images/onboarding/seller-3.jpg",
+        image: "/images/onboarding/seller-3.webp",
         title: "Get paid",
         body: "Orders credit your wallet automatically. Track balance, working capital advances, and payouts from Wallet."
     },
     {
-        image: "/images/onboarding/seller-4.jpg",
+        image: "/images/onboarding/seller-4.webp",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }
@@ -81,17 +69,17 @@ const SELLER_STEPS = [
 
 const DELIVERY_AGENT_STEPS = [
     {
-        image: "/images/onboarding/delivery-1.jpg",
+        image: "/images/onboarding/delivery-1.webp",
         title: "See what's available",
         body: "Browse deliveries waiting for a courier near you and claim the ones that fit your route."
     },
     {
-        image: "/images/onboarding/delivery-2.jpg",
+        image: "/images/onboarding/delivery-2.webp",
         title: "Manage your deliveries",
         body: "Track every delivery you've claimed - pickup, in transit, delivered - from My Deliveries."
     },
     {
-        image: "/images/onboarding/delivery-3.jpg",
+        image: "/images/onboarding/delivery-3.webp",
         title: "Help is always close by",
         body: "Tap the chat bubble in the corner any time you need support - a real person will get back to you."
     }

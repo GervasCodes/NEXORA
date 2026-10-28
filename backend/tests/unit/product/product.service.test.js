@@ -2,6 +2,9 @@ jest.mock("../../../src/modules/product/product.repository");
 jest.mock("../../../src/modules/category/category.repository");
 jest.mock("../../../src/utils/cloudinaryUpload");
 jest.mock("../../../src/modules/subscription/subscription.service");
+jest.mock("../../../src/modules/seller/seller.repository", () => ({
+    findByUserId: jest.fn().mockResolvedValue({ id: 1, pickup_lat: -6.8, pickup_lng: 39.2, accepts_preorders: true })
+}));
 // GetOrSet calls straight through to fetchFn so this file's
 // existing repository-level assertions keep working unchanged; bumpVersion
 // is asserted directly on every write path below.
@@ -45,12 +48,13 @@ describe("product.service.addProductVideo", () => {
     it("uploads to Cloudinary as a video resource and stores the URL", async () => {
         productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
         productRepository.countExistingVideos.mockResolvedValue(1);
+        productRepository.nextVideoOrder.mockResolvedValue(4);
         uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn/video.mp4" });
 
         const result = await productService.addProductVideo(1, 5, file);
 
         expect(uploadToCloudinary).toHaveBeenCalledWith(file.buffer, "products/videos", "video");
-        expect(productRepository.addProductVideo).toHaveBeenCalledWith(5, "https://cdn/video.mp4", 1);
+        expect(productRepository.addProductVideo).toHaveBeenCalledWith(5, "https://cdn/video.mp4", 4);
         expect(result).toEqual({ videoUrl: "https://cdn/video.mp4" });
     });
 
@@ -66,64 +70,23 @@ describe("product.service.addProductVideo", () => {
     });
 });
 
-describe("product.service.addProductAudio", () => {
-    beforeEach(() => jest.clearAllMocks());
-
-    const file = { buffer: Buffer.from("fake-audio") };
-
-    it("rejects when the product doesn't belong to this seller", async () => {
-        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 99 });
-
-        await expect(productService.addProductAudio(1, 5, file))
-            .rejects.toThrow("Product not found");
-
-        expect(uploadToCloudinary).not.toHaveBeenCalled();
-    });
-
-    it("uploads to Cloudinary as a video-pipeline resource and stores the URL", async () => {
-        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
-        productRepository.countExistingAudio.mockResolvedValue(0);
-        uploadToCloudinary.mockResolvedValue({ secure_url: "https://cdn/clip.mp3" });
-
-        const result = await productService.addProductAudio(1, 5, file);
-
-        expect(uploadToCloudinary).toHaveBeenCalledWith(file.buffer, "products/audio", "video");
-        expect(productRepository.addProductAudio).toHaveBeenCalledWith(5, "https://cdn/clip.mp3", 0);
-        expect(result).toEqual({ audioUrl: "https://cdn/clip.mp3" });
-    });
-
-    it("rejects once the product already has the maximum number of audio clips", async () => {
-        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
-        productRepository.countExistingAudio.mockResolvedValue(3);
-
-        await expect(productService.addProductAudio(1, 5, file))
-            .rejects.toThrow("A product can have at most 3 audio clips");
-
-        expect(uploadToCloudinary).not.toHaveBeenCalled();
-        expect(productRepository.addProductAudio).not.toHaveBeenCalled();
-    });
-});
-
 describe("product.service.getProductBySlug", () => {
     beforeEach(() => jest.clearAllMocks());
 
-    it("includes images, videos, and audio alongside the product", async () => {
+    it("includes images and videos alongside the product", async () => {
         productRepository.findBySlug.mockResolvedValue({ id: 7, name: "Widget" });
         productRepository.findImagesByProductId.mockResolvedValue([{ id: 1, image_url: "img" }]);
         productRepository.findVideosByProductId.mockResolvedValue([{ id: 2, video_url: "vid" }]);
-        productRepository.findAudioByProductId.mockResolvedValue([{ id: 3, audio_url: "aud" }]);
 
         const result = await productService.getProductBySlug("widget");
 
         expect(productRepository.findImagesByProductId).toHaveBeenCalledWith(7);
         expect(productRepository.findVideosByProductId).toHaveBeenCalledWith(7);
-        expect(productRepository.findAudioByProductId).toHaveBeenCalledWith(7);
         expect(result).toEqual({
             id: 7,
             name: "Widget",
             images: [{ id: 1, image_url: "img" }],
             videos: [{ id: 2, video_url: "vid" }],
-            audio: [{ id: 3, audio_url: "aud" }],
             options: [],
             variants: []
         });
@@ -257,5 +220,45 @@ describe("product.service Phase RF5 caching", () => {
 
         expect(cache.bumpVersion).toHaveBeenCalledWith("products");
         expect(cache.bumpVersion).toHaveBeenCalledWith("categories");
+    });
+});
+
+describe("product.service media hygiene (Phase 4)", () => {
+    const cloud = require("../../../src/utils/cloudinaryUpload");
+    beforeEach(() => jest.clearAllMocks());
+
+    it("rejects a photo once the product has the maximum number of photos", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
+        productRepository.countExistingImages.mockResolvedValue(10);
+        await expect(productService.addProductImage(1, 5, { buffer: Buffer.from("x") }, false))
+            .rejects.toThrow("at most 10 photos");
+        expect(cloud.uploadToCloudinary).not.toHaveBeenCalled();
+    });
+
+    it("places a new photo at MAX+1 (not COUNT) and bumps the products cache", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
+        productRepository.countExistingImages.mockResolvedValue(2);
+        productRepository.nextImageOrder.mockResolvedValue(7);
+        productRepository.addProductImage.mockResolvedValue(99);
+        cloud.uploadToCloudinary.mockResolvedValue({ secure_url: "https://res.cloudinary.com/d/image/upload/v1/products/a.jpg" });
+        await productService.addProductImage(1, 5, { buffer: Buffer.from("x") }, false);
+        expect(productRepository.addProductImage).toHaveBeenCalledWith(5, expect.any(String), false, 7);
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
+    });
+
+    it("deletes the Cloudinary asset when a photo is removed", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
+        productRepository.findImageById.mockResolvedValue({ id: 3, image_url: "https://res.cloudinary.com/d/image/upload/v1/products/a.jpg", is_primary: false });
+        await productService.deleteProductImage(1, 5, 3);
+        expect(cloud.deleteFromCloudinary).toHaveBeenCalledWith("https://res.cloudinary.com/d/image/upload/v1/products/a.jpg", "image");
+    });
+
+    it("deletes the Cloudinary asset and bumps the cache when a video is removed", async () => {
+        productRepository.findById.mockResolvedValue({ id: 5, seller_id: 1 });
+        productRepository.findVideoById.mockResolvedValue({ id: 4, video_url: "https://res.cloudinary.com/d/video/upload/v1/products/videos/v.mp4" });
+        productRepository.deleteProductVideo.mockResolvedValue(true);
+        await productService.deleteProductVideo(1, 5, 4);
+        expect(cloud.deleteFromCloudinary).toHaveBeenCalledWith(expect.stringContaining("v.mp4"), "video");
+        expect(cache.bumpVersion).toHaveBeenCalledWith("products");
     });
 });

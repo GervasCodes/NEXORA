@@ -56,7 +56,7 @@ export default function DeliveryEarnings() {
     return (
         <div className="animate-fade-in">
             <PageMeta title="Earnings" noIndex />
-            {/* (SEO Supporting, H1 audit): DeliveryLayout.jsx renders
+            {/* Phase 4 (SEO Supporting, H1 audit): DeliveryLayout.jsx renders
                 its own <h1>Your delivery rounds</h1> around every /delivery/*
                 route's <Outlet/>, so this was a second <h1> in the same
                 render - demoted to <h2>, subordinate to the layout's title,

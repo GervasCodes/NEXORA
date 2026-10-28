@@ -8,11 +8,11 @@ import RecommendedProducts from "../components/RecommendedProducts";
 import HomeRails from "../components/HomeRails";
 import RecentlyViewedRail from "../components/RecentlyViewedRail";
 import PaymentTrustBar from "../components/PaymentTrustBar";
-import Hero3D from "../components/Hero3D";
+import HomeCarousel from "../components/HomeCarousel";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
-import { SITE_URL, SITE_NAME } from "../utils/seo";
+import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION } from "../utils/seo";
 import { ServicesIcon } from "../components/NavIcons";
 
 function DepartmentCardSkeleton() {
@@ -25,16 +25,17 @@ function DepartmentCardSkeleton() {
 
 
 function DepartmentDiscovery() {
+    const { t } = useLanguage();
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [error, setError] = useState(false);
     const [serviceCount, setServiceCount] = useState(null);
     const [servicesCover, setServicesCover] = useState(null);
 
     useEffect(() => {
         api.get("/categories/departments")
             .then(({ data }) => setDepartments(data.data))
-            .catch(() => setError("Couldn't load departments right now."))
+            .catch(() => setError(true))
             .finally(() => setLoading(false));
     }, []);
 
@@ -65,7 +66,7 @@ function DepartmentDiscovery() {
         );
     }
 
-    if (error) return <p className="text-coral">{error}</p>;
+    if (error) return <p className="text-coral">{t("home.departmentsError")}</p>;
 
     return (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
@@ -93,7 +94,7 @@ function DepartmentDiscovery() {
                     {servicesCover ? (
                         <img
                             src={servicesCover}
-                            alt="Services"
+                            alt={t("home.services")}
                             loading="lazy"
                             decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -108,9 +109,9 @@ function DepartmentDiscovery() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
                     <div className="absolute bottom-3 left-3 right-3">
-                        <h3 className="font-display text-lg text-frost leading-tight mb-0.5">Services</h3>
+                        <h3 className="font-display text-lg text-frost leading-tight mb-0.5">{t("home.services")}</h3>
                         <p className="text-frost/75 text-xs">
-                            {serviceCount === null ? "Bookable providers" : `${serviceCount} ${serviceCount === 1 ? "service" : "services"}`}
+                            {serviceCount === null ? t("home.bookableProviders") : `${serviceCount} ${serviceCount === 1 ? t("home.serviceOne") : t("home.serviceMany")}`}
                         </p>
                     </div>
                 </div>
@@ -129,6 +130,17 @@ export default function Home() {
     // admins and delivery agents get neither.
     const canStartSelling = !user || user.role === "buyer";
     const isSeller = user?.role === "seller";
+
+    // Hero trust strip counts (verified sellers / active products) -
+    // see category.service.js#getTrustStats. null while loading or if the
+    // call fails; the strip falls back to its static copy in that case
+    // rather than showing a placeholder number.
+    const [trustStats, setTrustStats] = useState(null);
+    useEffect(() => {
+        api.get("/categories/trust-stats")
+            .then(({ data }) => setTrustStats(data.data))
+            .catch(() => {});
+    }, []);
     const search = searchParams.get("search") || "";
     const queryKey = searchParams.toString();
 
@@ -166,8 +178,8 @@ export default function Home() {
     return (
         <div>
             <PageMeta
-                titleOverride={search ? `${search} · NEXORA` : "NEXORA — Shop Local Products & Book Services"}
-                description="Shop products from local sellers and book services on NEXORA, a regional multi-vendor marketplace with delivery tracked door to door."
+                titleOverride={search ? `${search} · NEXORA` : HOME_TITLE}
+                description={HOME_DESCRIPTION}
                 // Search results / filtered views are not separate pages worth
                 // indexing - keep them out of the index but let links be followed.
                 // The canonical (see PageMeta) already collapses to "/".
@@ -200,7 +212,7 @@ export default function Home() {
                     />
                     <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-10 grid lg:grid-cols-[0.85fr_1.15fr] gap-4 lg:gap-8 items-center">
                         <div>
-                            <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
+                            <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">{t("home.eyebrow")}</p>
                             {(user?.username || user?.first_name) && (
                                 <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full border border-frost/20 bg-frost/5 text-frost/80 text-xs font-medium">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
@@ -232,6 +244,15 @@ export default function Home() {
                                 )}
                             </div>
 
+                            {trustStats && (
+                                <p className="text-frost/50 text-xs sm:text-sm mb-3">
+                                    {t("home.trustLiveStats", {
+                                        sellers: trustStats.verifiedSellers.toLocaleString(),
+                                        products: trustStats.activeProducts.toLocaleString()
+                                    })}
+                                </p>
+                            )}
+
                             <div className="flex flex-wrap gap-x-8 gap-y-3">
                                 {[
                                     { label: t("home.trustVerified"), icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
@@ -250,7 +271,7 @@ export default function Home() {
                         </div>
 
                         {/*
-                          replaced the static
+                          Phase 11 (Home Redesign) replaced the static
                           three-photo collage this hero briefly shipped
                           with (a stopgap for placeholder paths under
                           /public/images/hero/ that were never filled in)
@@ -268,16 +289,11 @@ export default function Home() {
                           no live campaigns yet, so there's no empty-state
                           gap to handle here.
 
-                          Hero3D just renders HomeCarousel directly now - it
-                          used to branch into a 3D ring scene for devices/
-                          preferences that supported it, but that meant the
-                          homepage banner looked different (and smaller)
-                          depending on who was logged in and what device they
-                          were on. Every homepage - buyer, seller, logged-out,
-                          all of them - now always gets this same full-size
-                          carousel. See Hero3D.jsx.
+                          Every homepage - buyer, seller, logged-out - gets
+                          this same full-size carousel (the old 3D hero was
+                          removed in Phase 1).
                         */}
-                        <Hero3D />
+                        <HomeCarousel />
                     </div>
                 </div>
             )}

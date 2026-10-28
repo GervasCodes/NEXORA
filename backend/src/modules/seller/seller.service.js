@@ -6,6 +6,7 @@ const logger = require("../../utils/logger").child({ module: "seller" });
 const productRepository = require("../product/product.repository");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { isVerifiedAccuracy } = require("../../utils/pickupPin");
 
 exports.uploadStoreLogo = async (userId, file) => {
     const seller = await sellerRepository.findByUserId(userId);
@@ -72,7 +73,23 @@ exports.updateSellerProfile = async (userId, data) => {
         throw new Error("Seller profile not found.");
     }
 
-    await sellerRepository.update(userId, data);
+    // Phase 2: a pin counts as "verified" when it was confirmed from a GPS
+    // fix accurate to <= 100 m. A pin placed by hand (no accuracy) is still
+    // usable for dispatch but not marked verified, and moving or clearing
+    // the pin always drops any earlier verification.
+    const update = { ...data };
+    const pinTouched = update.pickup_lat !== undefined || update.pickup_lng !== undefined;
+    if (pinTouched) {
+        const clearing = update.pickup_lat === null && update.pickup_lng === null;
+        update.pickup_pin_verified_at = !clearing && isVerifiedAccuracy(update.pickup_accuracy_m) ? new Date() : null;
+        update.pickup_accuracy_m = clearing || update.pickup_accuracy_m === undefined
+            ? null
+            : Math.round(Number(update.pickup_accuracy_m));
+    } else {
+        delete update.pickup_accuracy_m;
+    }
+
+    await sellerRepository.update(userId, update);
 
     return await sellerRepository.findByUserId(userId);
 };

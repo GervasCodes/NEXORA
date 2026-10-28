@@ -19,7 +19,7 @@ see `backend/.env.example`.
 
 ## Schema overview
 
-141 migrations as of this report (up from 130 at Phase RF6, API & Architecture
+159 migrations as of this report (up from 130 at Phase RF6, API & Architecture
 Docs — the detailed per-migration breakdown below was written as of RF6 and
 only covers `001`–`082` in full; migrations after `082` exist in
 `database/migrations/` but aren't individually described here), grouped by
@@ -64,7 +64,19 @@ snapshot used by the dispatch delay flag).
 seller-region index backing the Phase 3 filters.
 
 **Store content — Phase 6** (`044`–`047`)
-Product videos, product audio, review photos, seller reply on reviews.
+Product videos, product audio (feature removed in Phase 4; table kept until `database/deferred/drop_product_audio.sql` is run), review photos, seller reply on reviews.
+
+**Unified product media — Phase 5** (`156`)
+`product_media`: one ordered gallery of photos and videos per product (url, Cloudinary public_id, poster, size, duration, position, cover flag, saved edits). Backfilled from `product_images` / `product_videos`, which stay in place and are kept in sync (`legacy_id`) so existing readers keep working.
+
+**Nexora Stock Management — Phase 6** (`157`)
+`stock_items` (one row per thing a seller stocks; `source` = `nexora` for a marketplace listing, whose live number stays on `products` / `product_variants`, or `external`, whose number lives on the item; `link_key` makes a listing map to one item; `legacy_product_id` links an item migrated from a tools-only hidden product so `offline_sales` stays readable) and `stock_movements` (the ledger: purchase, sale, order_deduct, order_restore, return, void, correction, opening - each with before/after, reference, unit cost, actor, and an idempotency key plus request hash). `stock_adjustments.payload_hash` added. Setting `stock_default_reorder_level` (5). Every listing and tools-only product is backfilled with an item and an opening-balance movement so the ledger reconciles from day one.
+
+**Nexora Stock Management — Phase 7** (`158`)
+`sales` / `sale_lines` (receipt per seller, lines snapshot price and cost; `returned_amount`, `paid_amount`, `voided_at`; balance owed is derived, never stored), `sale_returns` / `sale_return_lines`, `purchases` / `purchase_lines` (cost price moves by moving weighted average on receipt), `stock_customers`, `stock_suppliers`, `stock_payments` (every money-in / money-out the stock screens make), `stock_counters` (gap-free receipt / purchase numbers per seller). Setting `stock_backdate_max_days` (7). Old `offline_sales` rows are copied into `sales` with `source = 'legacy'` (receipt `L000123`); `offline_sales` itself is untouched.
+
+**Nexora Stock Management — Phase 8** (`159`)
+`stock_expenses` (category, amount, `expense_date` as a Dar es Salaam calendar DATE, note, receipt photo URL, idempotency key + payload hash, `voided_at` keeps a cancelled expense on record but out of every total), `stock_low_alert_state` (one row per item that is currently low, so a seller is told once per dip). `subscription_plans.entitlements` (JSON: `stock_pos`, `stock_reports`, `stock_cost_reports`, `stock_import_export`, `stock_staff_users`, `stock_low_alerts`, soft limit `stock_max_items`; the existing `features` column stays display copy; NULL = no Stock Management). `sales.is_offline`, `sales.stock_flagged`, `sales.client_created_at` for sales rung up offline and synced later, and index `idx_sales_report`. Seeds default entitlements per plan only where NULL, appends Stock Management lines to the pricing copy, and adds settings `stock_export_grace_days` (30), `stock_low_alert_channels` (`push`), `stock_offline_max_age_days` (30).
 
 **Seller branding — Phase 7** (`048`–`050`)
 Store theme, seller branding fields (logo/banner), seller collections.

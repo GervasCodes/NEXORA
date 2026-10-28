@@ -342,14 +342,44 @@ exports.setPrimaryImage = async (productId, imageId) => {
 // the three hardcoded literals passed at each call site, never user
 // input, so there's no injection surface despite the string interpolation.
 const reorderMediaDisplayOrder = async (table, productId, orderedIds) => {
-    await Promise.all(
-        orderedIds.map((id, index) =>
-            db.query(
+    // Phase 4: one transaction so a failure part-way can't leave the gallery
+    // half re-ordered with duplicate display_order values.
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+        for (let index = 0; index < orderedIds.length; index += 1) {
+            await conn.query(
                 `UPDATE ${table} SET display_order = ? WHERE id = ? AND product_id = ?`,
-                [index, id, productId]
-            )
-        )
+                [index, orderedIds[index], productId]
+            );
+        }
+        await conn.commit();
+    } catch (err) {
+        await conn.rollback();
+        throw err;
+    } finally {
+        conn.release();
+    }
+};
+
+// Phase 4: next free position = MAX + 1, not COUNT. After a delete the old
+// COUNT-based value collided with an existing row's display_order.
+const nextDisplayOrder = async (table, productId) => {
+    const [rows] = await db.query(
+        `SELECT COALESCE(MAX(display_order), -1) + 1 AS next FROM ${table} WHERE product_id = ?`,
+        [productId]
     );
+    return Number(rows[0].next);
+};
+exports.nextImageOrder = (productId) => nextDisplayOrder("product_images", productId);
+exports.nextVideoOrder = (productId) => nextDisplayOrder("product_videos", productId);
+
+exports.findVideoById = async (productId, videoId) => {
+    const [rows] = await db.query(
+        "SELECT id, video_url, display_order FROM product_videos WHERE id = ? AND product_id = ?",
+        [videoId, productId]
+    );
+    return rows[0];
 };
 
 exports.reorderProductImages = (productId, orderedIds) =>
@@ -403,54 +433,6 @@ exports.deleteProductVideo = async (productId, videoId) => {
 
 exports.reorderProductVideos = (productId, orderedIds) =>
     reorderMediaDisplayOrder("product_videos", productId, orderedIds);
-
-// Product Audio. Same shape as the product_videos functions
-// above, and the same reasoning for no is_primary (see migration 045's
-// comment).
-exports.addProductAudio = async (productId, audioUrl, displayOrder) => {
-    const [result] = await db.query(
-        `INSERT INTO product_audio
-        (product_id, audio_url, display_order)
-        VALUES (?, ?, ?)`,
-        [
-            productId,
-            audioUrl,
-            displayOrder
-        ]
-    );
-
-    return result.insertId;
-};
-
-exports.findAudioByProductId = async (productId) => {
-    const [rows] = await db.query(
-        `SELECT id, audio_url, display_order
-        FROM product_audio
-        WHERE product_id = ?
-        ORDER BY display_order ASC`,
-        [productId]
-    );
-    return rows;
-};
-
-exports.countExistingAudio = async (productId) => {
-    const [rows] = await db.query(
-        "SELECT COUNT(*) AS count FROM product_audio WHERE product_id = ?",
-        [productId]
-    );
-    return rows[0].count;
-};
-
-exports.deleteProductAudio = async (productId, audioId) => {
-    const [result] = await db.query(
-        "DELETE FROM product_audio WHERE id = ? AND product_id = ?",
-        [audioId, productId]
-    );
-    return result.affectedRows > 0;
-};
-
-exports.reorderProductAudio = (productId, orderedIds) =>
-    reorderMediaDisplayOrder("product_audio", productId, orderedIds);
 
 // Seller's own product list, with the same search/category/status/
 // pagination shape admin.repository.js#findAllProducts uses (search plan,
@@ -566,9 +548,11 @@ exports.update = async (productId, data) => {
 
     const allowed = [
         "name", "description", "price", "discount_price",
-        "stock", "brand", "product_condition", "category_id",
+        "brand", "product_condition", "category_id",
         "is_preorder", "preorder_lead_time_days"
     ];
+    // "stock" is deliberately NOT here (Phase 6): a published product's stock only
+    // changes through stock.ledger so every change is locked, relative and logged.
 
     for (const key of allowed) {
         if (data[key] !== undefined) {

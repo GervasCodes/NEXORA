@@ -7,6 +7,7 @@ import Breadcrumbs from "../components/ui/Breadcrumbs";
 import PageMeta from "../components/PageMeta";
 import { useLanguage } from "../context/LanguageContext";
 import { logSearchMiss } from "../utils/seoMetrics";
+import { fetchTrendingSearches } from "../api/search";
 
 // Search results live at /search?search=...&tab=products|services.
 // The page is noindex,follow with its canonical on /search, so result pages
@@ -14,8 +15,10 @@ import { logSearchMiss } from "../utils/seoMetrics";
 // Searches that find nothing are logged (utils/seoMetrics.js) so catalogue
 // gaps are visible to admins.
 
-// Editable in code. These are shown when there is no query yet.
-const TRENDING_SEARCHES = ["phone case", "sneakers", "wedding services", "solar lamp", "coffee"];
+// Fallback shown until the live list loads (or if it fails/comes back
+// empty - a brand-new install with no search history yet). See
+// search.service.js#getTrending for where the live list comes from.
+const FALLBACK_TRENDING_SEARCHES = ["phone case", "sneakers", "wedding services", "solar lamp", "coffee"];
 
 const TABS = ["products", "services"];
 
@@ -43,10 +46,17 @@ export default function SearchResults() {
 
     const [resultCount, setResultCount] = useState(null);
     const [filters, setFilters] = useState({});
+    const [trendingSearches, setTrendingSearches] = useState(FALLBACK_TRENDING_SEARCHES);
 
     useEffect(() => {
         setResultCount(null);
     }, [queryKey]);
+
+    useEffect(() => {
+        fetchTrendingSearches()
+            .then((terms) => { if (terms.length > 0) setTrendingSearches(terms); })
+            .catch(() => {});
+    }, []);
 
     const setTab = (next) => {
         const params = new URLSearchParams(searchParams);
@@ -80,7 +90,7 @@ export default function SearchResults() {
         <div className="mb-8">
             <p className="text-xs uppercase tracking-widest text-ash mb-3">{t("search.trendingTitle")}</p>
             <div className="flex flex-wrap gap-2">
-                {TRENDING_SEARCHES.map((term) => (
+                {trendingSearches.map((term) => (
                     <Link
                         key={term}
                         to={`/search?search=${encodeURIComponent(term)}`}

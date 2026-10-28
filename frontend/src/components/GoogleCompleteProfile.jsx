@@ -88,11 +88,11 @@ export default function GoogleCompleteProfile({ ticket, profile, referralCode = 
                     />
                     <label htmlFor="googleTerms" className="text-xs text-ash">
                         {t("auth.termsPrefix")}{" "}
-                        <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#terms-of-service" target="_blank" className="text-teal hover:underline">
                             {t("auth.termsOfService")}
                         </Link>{" "}
                         {t("auth.and")}{" "}
-                        <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#privacy-policy" target="_blank" className="text-teal hover:underline">
                             {t("auth.privacyPolicy")}
                         </Link>.
                     </label>

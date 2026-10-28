@@ -17,7 +17,7 @@ export default function Affiliate() {
     const [productUrl, setProductUrl] = useState("");
     const [productLinkCopied, setProductLinkCopied] = useState(false);
 
-    // (remediation) - previously a single
+    // (Phase 4 remediation) - previously a single
     // `.catch(() => setDashboard(null))` meant "you're not an affiliate
     // yet" (the backend's expected 404) and "the request actually
     // failed" (network error, 500, etc.) rendered the exact same "Become

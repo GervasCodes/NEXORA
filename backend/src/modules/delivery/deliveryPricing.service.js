@@ -173,3 +173,32 @@ exports.snapshotRiderFee = async (orderId) => {
 
     return estimate;
 };
+
+// Phase 2: re-price an order's rider fee now (used when a made-to-order item
+// becomes ready - the quote taken at checkout may be weeks old). Replaces the
+// stored quote. Returns the new estimate, or null if the order can't be
+// priced. Never throws.
+exports.requoteRiderFee = async (orderId) => {
+    try {
+        const order = await orderRepository.findOrderById(orderId);
+        if (!order || order.is_parent) return null;
+
+        const estimate = await estimateForOrder(order);
+
+        await orderRepository.overwriteRiderFeeQuote(orderId, estimate.fee, {
+            method: estimate.method,
+            distanceKm: estimate.distanceKm,
+            durationMinutes: estimate.durationMinutes,
+            routingProvider: estimate.routingProvider ?? null,
+            pricingMethod: estimate.pricingMethod ?? "flat",
+            vehicle: estimate.vehicle ?? null,
+            rateCardId: estimate.rateCardId ?? null,
+            fuelFactor: estimate.fuelFactor ?? null,
+            fuelCap: estimate.fuelCap ?? null
+        });
+
+        return estimate;
+    } catch (err) {
+        return null;
+    }
+};

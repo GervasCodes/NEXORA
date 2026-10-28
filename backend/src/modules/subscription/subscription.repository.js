@@ -38,13 +38,14 @@ exports.findPlanByCode = async (code) => {
 exports.createPlan = async (data) => {
     const [result] = await db.query(
         `INSERT INTO subscription_plans
-            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, sponsorship_credits_per_month, features, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, sponsorship_credits_per_month, features, sort_order, entitlements)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             data.code, data.name, data.description || null, data.price, data.billingCycle || "monthly",
             data.commissionRateOverride ?? null, data.maxActiveListings ?? null,
             data.sponsorshipCreditsPerMonth ?? 0,
-            data.features ? JSON.stringify(data.features) : null, data.sortOrder ?? 0
+            data.features ? JSON.stringify(data.features) : null, data.sortOrder ?? 0,
+            data.entitlements ? JSON.stringify(data.entitlements) : null
         ]
     );
     return result.insertId;
@@ -71,6 +72,10 @@ exports.updatePlan = async (planId, data) => {
     if (data.features !== undefined) {
         fields.push("features = ?");
         values.push(data.features ? JSON.stringify(data.features) : null);
+    }
+    if (data.entitlements !== undefined) {
+        fields.push("entitlements = ?");
+        values.push(data.entitlements ? JSON.stringify(data.entitlements) : null);
     }
     setIfPresent("sort_order", data.sortOrder);
     setIfPresent("is_active", data.isActive);
@@ -161,7 +166,7 @@ exports.findById = async (subscriptionId, connection = db) => {
 exports.findEntitledForSeller = async (sellerId, connection = db) => {
     const [rows] = await connection.query(
         `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
-                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features, sp.entitlements
         FROM seller_subscriptions ss
         JOIN subscription_plans sp ON sp.id = ss.plan_id
         WHERE ss.seller_id = ?

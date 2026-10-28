@@ -1,6 +1,7 @@
 const { body } = require("express-validator");
 const { STORE_THEMES } = require("./seller.constants");
 const phoneValidator = require("../../validators/sharedPhoneValidator");
+const { isValidTanzaniaPin, MAX_ACCURACY_M } = require("../../utils/pickupPin");
 
 exports.createSellerValidation = [
     body("store_name")
@@ -62,6 +63,27 @@ exports.updateSellerValidation = [
         .optional({ nullable: true })
         .isFloat({ min: -180, max: 180 })
         .withMessage("Invalid pickup longitude"),
+
+    // Phase 2: a pin must be set as a pair, and sit inside Tanzania (this
+    // also rejects (0,0) and swapped lat/lng). Clearing both (null) is
+    // still allowed.
+    body("pickup_lat").custom((value, { req }) => {
+        const lat = req.body.pickup_lat;
+        const lng = req.body.pickup_lng;
+        const latSet = lat !== undefined && lat !== null && lat !== "";
+        const lngSet = lng !== undefined && lng !== null && lng !== "";
+        if (!latSet && !lngSet) return true;
+        if (latSet !== lngSet) throw new Error("Set both pickup latitude and longitude");
+        if (!isValidTanzaniaPin(lat, lng)) {
+            throw new Error("The store location must be inside Tanzania - move the pin to your shop");
+        }
+        return true;
+    }),
+
+    body("pickup_accuracy_m")
+        .optional({ nullable: true })
+        .isFloat({ min: 0, max: MAX_ACCURACY_M })
+        .withMessage("Invalid location accuracy"),
 
     body("store_theme")
         .optional()

@@ -50,6 +50,8 @@ function offerCooldownPassed() {
     return !Number.isFinite(last) || last <= 0 || Date.now() - last >= COOLDOWN_MS;
 }
 
+// Browsing time before a guest is offered the install banner (Phase 1).
+export const GUEST_DWELL_MS = 45000;
 const SUPPRESSED_ROUTE = /^\/(checkout|admin|feed|login|register|forgot-password)(\/|$)|^\/messages\/[^/]+\/?$/;
 
 export default function InstallPrompt({ guestLanding = false }) {
@@ -66,12 +68,26 @@ export default function InstallPrompt({ guestLanding = false }) {
     const [offerShown, setOfferShown] = useState(false);
     const [offerClosed, setOfferClosed] = useState(false);
 
+    // Phase 1: guests are no longer greeted with the install banner on
+    // arrival. They see it only after a meaningful action (cart add, saved
+    // item) or once they've been browsing for GUEST_DWELL_MS - never in the
+    // first 30 seconds.
+    const [guestEngaged, setGuestEngaged] = useState(false);
+
     useEffect(() => {
-        if (!user || guestLanding) return undefined;
-        const onAction = () => setActionSeen(true);
+        const onAction = () => {
+            setActionSeen(true);
+            setGuestEngaged(true);
+        };
         window.addEventListener(MEANINGFUL_ACTION_EVENT, onAction);
         return () => window.removeEventListener(MEANINGFUL_ACTION_EVENT, onAction);
-    }, [user, guestLanding]);
+    }, []);
+
+    useEffect(() => {
+        if (!guestLanding) return undefined;
+        const timer = setTimeout(() => setGuestEngaged(true), GUEST_DWELL_MS);
+        return () => clearTimeout(timer);
+    }, [guestLanding]);
 
     const routeAllowed = !SUPPRESSED_ROUTE.test(location.pathname);
     const offerEligible = Boolean(user) && !guestLanding && actionSeen && canInstall && routeAllowed && !offerClosed;
@@ -86,7 +102,7 @@ export default function InstallPrompt({ guestLanding = false }) {
         }
     }, [showOffer, offerShown]);
 
-    const guestVisible = guestLanding && canInstall && !dismissed;
+    const guestVisible = guestLanding && guestEngaged && canInstall && !dismissed;
     const visible = guestVisible || showOffer;
 
     const dismiss = () => {

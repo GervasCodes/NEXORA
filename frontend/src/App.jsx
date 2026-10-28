@@ -3,7 +3,6 @@ import { useLanguage } from "./context/LanguageContext";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import SplashScreen from "./components/SplashScreen";
 import SuspendedScreen from "./components/SuspendedScreen";
 import PageLoader from "./components/PageLoader";
 import PageTransition from "./components/PageTransition";
@@ -12,6 +11,7 @@ import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import InstallPrompt from "./components/InstallPrompt";
 import CookieConsentBanner from "./components/CookieConsentBanner";
+import AnalyticsTracker from "./components/AnalyticsTracker";
 import SupportWidget from "./components/SupportWidget";
 import FloatingActions from "./components/FloatingActions";
 import { COOKIE_NOTICE_KEY } from "./components/CookieConsentBanner";
@@ -78,13 +78,14 @@ const GroupBuyDetail = lazy(() => import("./pages/GroupBuyDetail"));
 const Affiliate = lazy(() => import("./pages/Affiliate"));
 const LiveSelling = lazy(() => import("./pages/LiveSelling"));
 const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
+const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts"));
-const SellerProductForm = lazy(() => import("./pages/seller/SellerProductForm"));
+const SellerProductEntry = lazy(() => import("./pages/seller/SellerProductEntry"));
 const SellerServices = lazy(() => import("./pages/seller/SellerServices"));
 const SellerServiceForm = lazy(() => import("./pages/seller/SellerServiceForm"));
 const SellerAvailability = lazy(() => import("./pages/seller/SellerAvailability"));
@@ -100,6 +101,21 @@ const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
 const SellerBusinessTools = lazy(() => import("./pages/seller/SellerBusinessTools"));
+const StockLayout = lazy(() => import("./pages/seller/stock/StockLayout"));
+const StockItems = lazy(() => import("./pages/seller/stock/StockItems"));
+const StockItemForm = lazy(() => import("./pages/seller/stock/StockItemForm"));
+const StockMovements = lazy(() => import("./pages/seller/stock/StockMovements"));
+const StockExpenses = lazy(() => import("./pages/seller/stock/StockExpenses"));
+const StockReports = lazy(() => import("./pages/seller/stock/StockReports"));
+const StockImportExport = lazy(() => import("./pages/seller/stock/StockImportExport"));
+const QuickSale = lazy(() => import("./pages/seller/stock/QuickSale"));
+const SalesList = lazy(() => import("./pages/seller/stock/SalesList"));
+const SaleDetail = lazy(() => import("./pages/seller/stock/SaleDetail"));
+const PurchasesList = lazy(() => import("./pages/seller/stock/PurchasesList"));
+const PurchaseNew = lazy(() => import("./pages/seller/stock/PurchaseNew"));
+const PurchaseDetail = lazy(() => import("./pages/seller/stock/PurchaseDetail"));
+const StockCustomers = lazy(() => import("./pages/seller/stock/StockCustomers"));
+const StockSuppliers = lazy(() => import("./pages/seller/stock/StockSuppliers"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
 const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"));
 const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
@@ -153,12 +169,7 @@ const AdminDeliveryRates = lazy(() => import("./pages/admin/AdminDeliveryRates")
 
 export default function App() {
     const { t } = useLanguage();
-    // Splash is a homepage-only moment: other entry points (deep links,
-    // shared product URLs) go straight to content.
-    const [showSplash, setShowSplash] = useState(
-        () => !sessionStorage.getItem("nexora_splash_shown") && window.location.pathname === "/"
-    );
-    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired, sessionReady } = useAuth();
+    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const toast = useToast();
@@ -242,9 +253,6 @@ export default function App() {
         return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
     }, [navigate]);
 
-    if (showSplash) {
-        return <SplashScreen appReady={sessionReady} onDone={() => setShowSplash(false)} />;
-    }
 
     // CSRF cookie expired while the session cookie was still alive. The
     // only recovery is a page reload which causes the browser to re-issue
@@ -287,6 +295,7 @@ export default function App() {
             {cookieAcknowledged && <UpdateAvailableBanner onVisibilityChange={setUpdateVisible} />}
             <NetworkStatusNotice />
             {cookieAcknowledged && !updateVisible && <InstallPrompt guestLanding={isGuestLandingRoute} />}
+            <AnalyticsTracker />
             {!isAdminRoute && <CookieConsentBanner onAcknowledged={() => setCookieAcknowledged(true)} />}
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
@@ -325,6 +334,7 @@ export default function App() {
                         <Route path="/bookings" element={<RequireBuyer><Bookings /></RequireBuyer>} />
                         {/* Shared: buyer or provider - booking.service.js#getBookingById enforces per-booking access */}
                         <Route path="/bookings/:id" element={<RequireAuth><BookingDetail /></RequireAuth>} />
+                        <Route path="/terms" element={<TermsPage />} />
                         <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/status" element={<StatusPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
@@ -360,7 +370,25 @@ export default function App() {
                         <Route path="/business-tools" element={<BusinessToolsPricing />} />
 
                         <Route path="/business" element={<RequireSeller><BusinessToolsLayout /></RequireSeller>}>
-                            <Route index element={<SellerBusinessTools />} />
+                            <Route index element={<Navigate to="/business/stock" replace />} />
+                            <Route path="stock" element={<StockLayout />}>
+                                <Route index element={<StockItems />} />
+                                <Route path="items/new" element={<StockItemForm />} />
+                                <Route path="items/:id" element={<StockItemForm />} />
+                                <Route path="movements" element={<StockMovements />} />
+                                <Route path="expenses" element={<StockExpenses />} />
+                                <Route path="reports" element={<StockReports />} />
+                                <Route path="import-export" element={<StockImportExport />} />
+                                <Route path="sell" element={<QuickSale />} />
+                                <Route path="sales" element={<SalesList />} />
+                                <Route path="sales/:id" element={<SaleDetail />} />
+                                <Route path="purchases" element={<PurchasesList />} />
+                                <Route path="purchases/new" element={<PurchaseNew />} />
+                                <Route path="purchases/:id" element={<PurchaseDetail />} />
+                                <Route path="customers" element={<StockCustomers />} />
+                                <Route path="suppliers" element={<StockSuppliers />} />
+                            </Route>
+                            <Route path="classic" element={<SellerBusinessTools />} />
                             <Route path="plan" element={<SellerSubscription />} />
                             <Route path="upgrade" element={<BusinessToolsUpgrade />} />
                         </Route>
@@ -369,8 +397,8 @@ export default function App() {
                             <Route path="setup" element={<SellerSetup />} />
                             <Route index element={<SellerOverview />} />
                             <Route path="products" element={<SellerProducts />} />
-                            <Route path="products/new" element={<SellerProductForm />} />
-                            <Route path="products/:id/edit" element={<SellerProductForm />} />
+                            <Route path="products/new" element={<SellerProductEntry />} />
+                            <Route path="products/:id/edit" element={<SellerProductEntry />} />
                             <Route path="services" element={<SellerServices />} />
                             <Route path="services/new" element={<SellerServiceForm />} />
                             <Route path="services/:id/edit" element={<SellerServiceForm />} />
@@ -384,6 +412,23 @@ export default function App() {
                             <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
+                            <Route path="stock" element={<StockLayout />}>
+                                <Route index element={<StockItems />} />
+                                <Route path="items/new" element={<StockItemForm />} />
+                                <Route path="items/:id" element={<StockItemForm />} />
+                                <Route path="movements" element={<StockMovements />} />
+                                <Route path="expenses" element={<StockExpenses />} />
+                                <Route path="reports" element={<StockReports />} />
+                                <Route path="import-export" element={<StockImportExport />} />
+                                <Route path="sell" element={<QuickSale />} />
+                                <Route path="sales" element={<SalesList />} />
+                                <Route path="sales/:id" element={<SaleDetail />} />
+                                <Route path="purchases" element={<PurchasesList />} />
+                                <Route path="purchases/new" element={<PurchaseNew />} />
+                                <Route path="purchases/:id" element={<PurchaseDetail />} />
+                                <Route path="customers" element={<StockCustomers />} />
+                                <Route path="suppliers" element={<StockSuppliers />} />
+                            </Route>
                             <Route path="pos" element={<SellerBusinessTools />} />
                             <Route path="wallet" element={<SellerWallet />} />
                             <Route path="promote" element={<SellerPromote />} />

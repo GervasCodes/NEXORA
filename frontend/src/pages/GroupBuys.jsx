@@ -19,7 +19,7 @@ export default function GroupBuys() {
         api.get("/group-buys").then(({ data }) => setGroups(data.data)).catch(() => setGroups([]));
     }, []);
 
-    // Live countdown (remediation) - same reasoning as
+    // Live countdown (Phase 4 remediation) - same reasoning as
     // GroupBuyDetail.jsx: formatTimeRemaining() is only as fresh as the
     // last render, so without a tick a list left open in a background
     // tab would show a stale "2 hours left" indefinitely.

@@ -105,7 +105,7 @@ describe("sitemap.service.collectEntries", () => {
         const entries = await sitemapService.collectEntries();
         const paths = entries.map((entry) => entry.path);
 
-        expect(paths).toEqual(expect.arrayContaining(["/sell", "/how-it-works", "/about", "/contact", "/legal/refund-policy", "/legal/cookie-policy"]));
+        expect(paths).toEqual(expect.arrayContaining(["/sell", "/how-it-works", "/about", "/contact", "/terms"]));
         expect(entries.some((entry) => "changefreq" in entry || "priority" in entry)).toBe(false);
     });
 

@@ -62,6 +62,11 @@ const isoBmffBrand = (buffer) => {
 
 const AUDIO_ISO_BRANDS = new Set(["M4A", "M4B", "M4P"]);
 
+// Phase 4: HEIC/HEIF (iPhone photos) and AVIF are ISO-BMFF images, not video.
+// Without this they were classified as MP4 video and rejected by the image
+// upload endpoint.
+const IMAGE_ISO_BRANDS = new Set(["HEIC", "HEIX", "HEVC", "HEVX", "HEIM", "HEIS", "MIF1", "MSF1", "AVIF", "AVIS"]);
+
 // Returns { category, ext } for the first recognized signature, or null
 // if the content doesn't match anything this module knows how to
 // recognize. Order matters where formats share a container (RIFF/ftyp
@@ -99,6 +104,9 @@ const classify = (buffer) => {
     // --- ISO-BMFF (MP4/MOV/M4A) -----------------------------------------
     const brand = isoBmffBrand(buffer);
     if (brand) {
+        if (IMAGE_ISO_BRANDS.has(brand.toUpperCase())) {
+            return { category: "image", ext: brand.toUpperCase().startsWith("AVI") ? "avif" : "heic" };
+        }
         return AUDIO_ISO_BRANDS.has(brand)
             ? { category: "audio", ext: "m4a" }
             : { category: "video", ext: "mp4" };

@@ -10,8 +10,15 @@ export const SITE_NAME = "NEXORA";
 
 export const SITE_URL = (import.meta.env?.VITE_SITE_URL || "https://nexoramarketplace.online").replace(/\/+$/, "");
 
+// Country-level wording on purpose: searches like "online marketplace
+// Tanzania" or "buy online Tanzania" can only match pages that say so.
+export const HOME_TITLE = "NEXORA — Online Marketplace in Tanzania: Shop & Book Services";
+
+export const HOME_DESCRIPTION =
+    "Shop products from local sellers and book trusted services in Tanzania on NEXORA. Pay with mobile money and track your delivery door to door.";
+
 export const DEFAULT_DESCRIPTION =
-    "NEXORA  a regional multi-vendor marketplace connecting buyers, sellers, and delivery partners.";
+    "NEXORA is an online marketplace in Tanzania connecting buyers, sellers, and delivery partners.";
 
 // Official NEXORA profiles (same accounts linked from Footer.jsx, with
 // share/tracking query strings removed). Facebook is intentionally left
@@ -54,6 +61,28 @@ export const buildBreadcrumbJsonLd = (items = [], currentPath) => ({
         };
     })
 });
+
+// Languages the app ships. English is the default (clean URL); Kiswahili
+// is addressed with ?lang=sw so it has its own crawlable URL.
+export const LANG_PARAM = "lang";
+export const SUPPORTED_LANGS = ["en", "sw"];
+
+// "sw" / "en" when the query string asks for one of them, otherwise null.
+export const readLangParam = (search = "") => {
+    const value = new URLSearchParams(search).get(LANG_PARAM);
+    return SUPPORTED_LANGS.includes(value) ? value : null;
+};
+
+// hreflang alternates for one page. `path` is the normalized path with no
+// query string. English is the clean URL and also the x-default.
+export const buildHreflangLinks = (path = "/") => {
+    const clean = `${SITE_URL}${normalizePath(path)}`;
+    return [
+        { hreflang: "en", href: clean },
+        { hreflang: "sw", href: `${clean}?${LANG_PARAM}=sw` },
+        { hreflang: "x-default", href: clean }
+    ];
+};
 
 // og:locale values for the two languages the app ships.
 export const OG_LOCALES = { en: "en_US", sw: "sw_TZ" };

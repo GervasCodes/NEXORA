@@ -110,6 +110,12 @@ export default function SellerOverview() {
             <PageMeta title={t("seller.overview.metaTitle")} noIndex />
             <h1 className="font-display text-2xl mb-1">{user?.first_name ? t("seller.overview.welcomeName", { name: user.first_name }) : t("seller.overview.welcome")}</h1>
             <p className="text-ash text-sm mb-8">{t("seller.overview.howDoing", { store: profile.store_name })}</p>
+            {(profile.pickup_lat == null || profile.pickup_lng == null) && (
+                <div role="alert" className="mb-6 rounded-lg border border-coral/40 bg-coral/10 p-4 flex flex-wrap items-center gap-3">
+                    <p className="text-sm flex-1 min-w-[200px]">{t("seller.pin.required")}</p>
+                    <Link to="/seller/store"><Button size="sm">{t("seller.pin.setNow")}</Button></Link>
+                </div>
+            )}
 
             <SellerOnboardingChecklist
                 userId={user?.id}

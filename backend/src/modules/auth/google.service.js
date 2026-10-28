@@ -20,7 +20,7 @@ const SIGNUP_TICKET_TYP = "google_signup";
 const SIGNUP_TICKET_EXPIRY = "15m";
 
 // Same constant auth.service.js stamps on normal registrations.
-const CURRENT_TERMS_VERSION = "2026-07-19";
+const { REGISTRATION_TERMS_VERSION: CURRENT_TERMS_VERSION } = require("../../config/termsVersions");
 
 let client = null;
 const getClient = () => {

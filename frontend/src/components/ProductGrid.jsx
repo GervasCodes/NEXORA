@@ -7,7 +7,7 @@ import EmptyState from "./ui/EmptyState";
 import ErrorState from "./ui/ErrorState";
 
 const PAGE_SIZE = 24;
-// follow-up: the /products request here had no per-request
+// Phase 6.1 follow-up: the /products request here had no per-request
 // timeout, unlike useUnreadMessagesCount.js and NotificationBell.jsx's
 // polls, both of which were fixed under Phase 5 (production error fixes)
 // for the exact same symptom - a stalled request on a flaky mobile
@@ -214,7 +214,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     if (error) {
         return (
             <ErrorState
-                title="Couldn't load products"
+                title={t("products.loadError")}
                 hint={error}
                 onRetry={() => setRetryCount((n) => n + 1)}
             />
@@ -294,7 +294,7 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 </div>
             )}
             {page >= totalPages && products.length >= PAGE_SIZE && (
-                <p className="text-center text-ash text-xs mt-8">You've reached the end.</p>
+                <p className="text-center text-ash text-xs mt-8">{t("products.endOfList")}</p>
             )}
 
             {feedOpen && (

@@ -64,7 +64,7 @@ export default function Register() {
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [usernameStatus, setUsernameStatus] = useState("idle");
-    // (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
+    // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
     // finishing phone/username/terms; it can arrive from the Login page via
     // router state. `googleTicket` = a seller/delivery agent whose name + email
     // were prefilled from Google (email locked, no password, documents still
@@ -284,8 +284,9 @@ export default function Register() {
                     </div>
 
                     <div>
-                        <label className="block text-sm mb-1">{t("auth.verify.idDocTypeLabel")}</label>
+                        <label htmlFor="register-id-doc-type" className="block text-sm mb-1">{t("auth.verify.idDocTypeLabel")}</label>
                         <select
+                            id="register-id-doc-type"
                             value={idDocType}
                             onChange={(e) => setIdDocType(e.target.value)}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper mb-2"
@@ -320,8 +321,9 @@ export default function Register() {
                     {form.role === "delivery_agent" && (
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm mb-1">{t("auth.verify.vehicleTypeLabel")}</label>
+                                <label htmlFor="register-vehicle-type" className="block text-sm mb-1">{t("auth.verify.vehicleTypeLabel")}</label>
                                 <select
+                                    id="register-vehicle-type"
                                     value={form.vehicle_type}
                                     onChange={update("vehicle_type")}
                                     className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
@@ -490,8 +492,8 @@ export default function Register() {
                 )}
 
                 <div>
-                    <label className="block text-sm mb-1">{t("auth.roleLabel")}</label>
-                    <select value={form.role} onChange={update("role")}
+                    <label htmlFor="register-role" className="block text-sm mb-1">{t("auth.roleLabel")}</label>
+                    <select id="register-role" value={form.role} onChange={update("role")}
                         className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                         <option value="buyer">{t("auth.roleBuyer")}</option>
                         <option value="seller">{t("auth.roleSeller")}</option>
@@ -506,8 +508,8 @@ export default function Register() {
 
                 {form.role === "seller" && (
                     <div>
-                        <label className="block text-sm mb-1">{t("auth.sellerMode.label")}</label>
-                        <select value={form.seller_mode} onChange={update("seller_mode")}
+                        <label htmlFor="register-seller-mode" className="block text-sm mb-1">{t("auth.sellerMode.label")}</label>
+                        <select id="register-seller-mode" value={form.seller_mode} onChange={update("seller_mode")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
                             <option value="marketplace">{t("auth.sellerMode.marketplace")}</option>
                             <option value="business_tools">{t("auth.sellerMode.tools")}</option>
@@ -526,11 +528,11 @@ export default function Register() {
                     />
                     <label htmlFor="terms_accepted" className="text-xs text-ash">
                         {t("auth.termsPrefix")}{" "}
-                        <Link to="/legal/terms-of-service" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#terms-of-service" target="_blank" className="text-teal hover:underline">
                             {t("auth.termsOfService")}
                         </Link>{" "}
                         {t("auth.and")}{" "}
-                        <Link to="/legal/privacy-policy" target="_blank" className="text-teal hover:underline">
+                        <Link to="/terms#privacy-policy" target="_blank" className="text-teal hover:underline">
                             {t("auth.privacyPolicy")}
                         </Link>.
                     </label>

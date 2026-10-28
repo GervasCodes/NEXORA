@@ -27,7 +27,7 @@ export default function Account() {
 
     const [profile, setProfile] = useState(null);
     const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
-    //  username, saved separately from the name/email/phone
+    // Phase 6 (round 5): username, saved separately from the name/email/phone
     // form because it has its own once-per-30-days rule.
     const [usernameValue, setUsernameValue] = useState("");
     const [usernameStatus, setUsernameStatus] = useState("idle");
@@ -134,7 +134,7 @@ export default function Account() {
         }
     };
 
-    // (profile photo delete + full view) - mirrors
+    // Phase 6 (profile photo delete + full view) - mirrors
     // handlePhotoUpload's shape: optimistic local state update on
     // success, toast on failure, busy flag scoped to this action only
     // (not the shared `busy` state used by the profile/settings forms)
@@ -268,7 +268,7 @@ export default function Account() {
             <section>
                 <h2 className="font-display text-lg mb-4">{t("account.profile")}</h2>
 
-                {/* (Real Imagery & Avatars): shared photo upload for
+                {/* Phase 4 (Real Imagery & Avatars): shared photo upload for
                     every account type - Avatar.jsx already renders `src`
                     when present and falls back to initials otherwise, so
                     this is the only place a photo needs wiring in. */}

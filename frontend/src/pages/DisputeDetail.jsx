@@ -201,7 +201,7 @@ export default function DisputeDetail() {
             </div>
 
             {dispute.status === "resolved" && (() => {
-                // "resolved - refund pending"  the dispute
+                // "resolved - refund pending" (Phase 5) - the dispute
                 // row flips to "resolved" the moment an admin picks a
                 // refund resolution, well before the actual provider
                 // refund call (fire-and-forget) succeeds or fails. Show

@@ -7,7 +7,9 @@ const requireApprovedSeller = require("../../middleware/requireApprovedSeller.mi
 const requireProductProvider = require("../../middleware/requireProductProvider.middleware");
 const upload = require("../../middleware/upload.middleware");
 const uploadVideo = require("../../middleware/uploadVideo.middleware");
-const uploadAudio = require("../../middleware/uploadAudio.middleware");
+const limitConcurrency = require("../../middleware/limitConcurrency.middleware");
+const { MAX_CONCURRENT_VIDEO_UPLOADS } = require("../../config/mediaLimits");
+const videoUploadSlots = limitConcurrency(MAX_CONCURRENT_VIDEO_UPLOADS);
 const { createProductValidation, bulkProductStatusValidation, bulkProductPriceValidation, reorderMediaValidation } = require("./product.validator");
 
 const productController = require("./product.controller");
@@ -103,6 +105,7 @@ router.post(
     authorize("seller"),
     requireApprovedSeller,
     requireProductProvider,
+    videoUploadSlots,
     uploadVideo.single("video"),
     productController.uploadProductVideo
 );
@@ -126,33 +129,26 @@ router.put(
     productController.reorderProductVideos
 );
 
-router.post(
-    "/:id/audio",
-    authMiddleware,
-    authorize("seller"),
-    requireApprovedSeller,
-    requireProductProvider,
-    uploadAudio.single("audio"),
-    productController.uploadProductAudio
-);
+// Phase 5: one gallery for photos and videos, uploaded straight to Cloudinary.
+const mediaController = require("./productMedia.controller");
+const { mediaSignValidation, mediaRegisterValidation, mediaOrderValidation } = require("./product.validator");
+const sellerMediaGuards = [authMiddleware, authorize("seller"), requireApprovedSeller, requireProductProvider];
 
-router.delete(
-    "/:id/audio/:audioId",
-    authMiddleware,
-    authorize("seller"),
-    requireApprovedSeller,
-    requireProductProvider,
-    productController.deleteProductAudio
-);
+router.get("/:id/media", ...sellerMediaGuards, mediaController.list);
+router.post("/:id/media/sign", ...sellerMediaGuards, mediaSignValidation, mediaController.sign);
+router.post("/:id/media", ...sellerMediaGuards, mediaRegisterValidation, mediaController.register);
+router.put("/:id/media/order", ...sellerMediaGuards, mediaOrderValidation, mediaController.reorder);
+router.delete("/:id/media/:mediaId", ...sellerMediaGuards, mediaController.remove);
 
-router.put(
-    "/:id/audio/reorder",
-    authMiddleware,
-    authorize("seller"),
-    requireApprovedSeller,
-    requireProductProvider,
-    reorderMediaValidation,
-    productController.reorderProductAudio
+// Phase 4: product audio was removed. Old clients get a clear 410 Gone for
+// two releases instead of a confusing 404/validation error. (Chat voice
+// notes are a separate feature and are untouched.)
+router.all(/^\/[^/]+\/audio(\/.*)?$/, (req, res) =>
+    res.status(410).json({
+        success: false,
+        code: "PRODUCT_AUDIO_REMOVED",
+        message: "Product audio has been removed. Use photos and videos instead."
+    })
 );
 
 router.get(

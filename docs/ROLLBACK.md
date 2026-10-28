@@ -81,6 +81,27 @@ pick the approach that fits what actually broke:
   are skipped) brings a restored-but-older database back up to the
   current schema in one more step.
 
+### Migration 157 (Nexora Stock Management)
+
+Additive only: two new tables, one new column, one setting. To go back to the
+previous release, redeploy the previous code - it ignores the new tables and
+columns. Caveat: while the new code ran, stock changes were written to
+`stock_movements`; the old code does not write them, so the ledger will show
+drift (`GET /seller/stock/reconcile`) if you roll back and then forward again.
+Tools-only products' live stock now sits on `stock_items.stock`; the old code
+reads `products.stock`, so roll back **only** with a database restore for those
+accounts, or copy the numbers back first:
+`UPDATE products p JOIN stock_items si ON si.legacy_product_id = p.id SET p.stock = si.stock;`
+Do not drop the tables in the same release that stops using them.
+
+### Migration 158 (Nexora Stock Management: sales and purchases)
+
+Additive only: new tables (`stock_counters`, `stock_customers`, `stock_suppliers`, `sales`, `sale_lines`, `sale_returns`, `sale_return_lines`, `purchases`, `purchase_lines`, `stock_payments`) and one setting. To go back, redeploy the previous code; it ignores them. Sales, returns and purchases recorded by the new screens changed stock through the ledger, so stock numbers stay correct, but the old code cannot show those records (old sales screen reads `offline_sales` only). The migration copies `offline_sales` into `sales`; it never edits or deletes `offline_sales`. Do not drop the tables in the same release that stops using them.
+
+### Migration 159 (Nexora Stock Management: expenses, reports, alerts, plan entitlements)
+
+Additive only: new tables `stock_expenses` and `stock_low_alert_state`, new columns `subscription_plans.entitlements` and `sales.is_offline` / `stock_flagged` / `client_created_at`, one index, three settings and a few pricing-copy lines. To go back, redeploy the previous code; it ignores them. The previous code does not read `entitlements`, so Stock Management is gated as in Phase 7 again, and expenses and offline flags are simply not shown (the data stays). Sales synced from an offline till are ordinary sales and keep reconciling. Do not drop the tables or columns in the same release that stops using them.
+
 ## 4. Health-check gate on rolling restarts
 
 `GET /health` already exists (`backend/src/app.js`) and checks real DB

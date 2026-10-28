@@ -138,10 +138,12 @@ exports.check = () => {
         problems.push("MOBILE_MONEY_PROVIDER is not set in production - mobile money payments will fail to resolve a provider (see mobileMoney.provider.js)");
     }
 
-    // No production-required check for CLAMAV_HOST here (unlike
-    // MOBILE_MONEY_PROVIDER above) - as of Roadmap Phase 1, an unset
-    // CLAMAV_HOST fails open (uploads proceed unscanned) rather than
-    // rejecting uploads, so there's nothing broken to warn about.
+    // Uploads fail OPEN without CLAMAV_HOST (see utils/malwareScan.js), so in
+    // production that is a real security gap worth being loud about - it
+    // does not block startup, but it shows in the boot log on every deploy.
+    if (process.env.NODE_ENV === "production" && !process.env.CLAMAV_HOST) {
+        problems.push("CLAMAV_HOST is not set in production - uploaded files are NOT being virus-scanned (see utils/malwareScan.js)");
+    }
 
     return problems;
 };

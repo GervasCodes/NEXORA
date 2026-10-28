@@ -167,6 +167,26 @@ exports.updateOrderStatus = async (req, res) => {
     } catch (error) {
         return res.status(400).json({
             success: false,
+            code: error.code,
+            message: error.message
+        });
+    }
+};
+
+// Phase 2: seller marks a made-to-order item ready (lets it ship / dispatch).
+exports.markPreorderReady = async (req, res) => {
+    try {
+        const result = await orderService.markPreorderReady(req.params.id, req.user.id);
+
+        return res.json({
+            success: true,
+            message: result.alreadyReady ? "This order was already marked ready" : "Marked as ready - the buyer has been notified",
+            data: result
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
             message: error.message
         });
     }

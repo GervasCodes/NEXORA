@@ -146,6 +146,12 @@ these up once per environment:
     `https://api.nexoramarketplace.online/sitemap.xml` (proxies the
     backend-generated sitemap so it appears same-origin to crawlers -
     see `backend/src/modules/sitemap`)
+  - Source `/sitemap-:n.xml` -> Destination
+    `https://api.nexoramarketplace.online/sitemap-:n.xml` (only needed once
+    the catalog outgrows one sitemap file; the backend then serves
+    `/sitemap-1.xml`, `/sitemap-2.xml`, ...). Put it **above** the `/*` rule,
+    and verify `https://nexoramarketplace.online/sitemap.xml` returns XML
+    (not the app's HTML) before submitting it in Search Console.
   - Source `/*` -> Destination `/index.html` (SPA fallback - without
     this, refreshing any client-side route like `/products/some-slug`
     404s instead of mounting the React app)
@@ -156,6 +162,16 @@ these up once per environment:
   `_headers` file - add them as Custom Response Headers in the
   Dashboard. The CSP's `connect-src` must list your real deployed
   backend API/Socket.IO origin(s).
+- **Google Analytics (optional)**: set `VITE_GA_MEASUREMENT_ID` on the static
+  site and rebuild. Then extend the dashboard CSP: `script-src` +
+  `https://www.googletagmanager.com`; `connect-src` +
+  `https://*.google-analytics.com https://*.analytics.google.com
+  https://*.googletagmanager.com`; `img-src` + `https://*.google-analytics.com
+  https://*.googletagmanager.com`. GA only loads after a visitor presses
+  Accept on the cookie banner.
+- **Prerendered page content**: `npm run build` now writes real text
+  (heading, price, description, links) into each prerendered shell. Set
+  `PRERENDER_BODY=0` in the build environment to switch that off.
 - **www -> non-www canonical redirect**: not expressible as a path-only
   Redirects/Rewrites rule (those match request path, not hostname) -
   add both `nexoramarketplace.online` and `www.nexoramarketplace.online`

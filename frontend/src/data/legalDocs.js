@@ -11,11 +11,13 @@ import companyInformation from "../legal/company-information.md?raw";
 
 export const LEGAL_DOCS = {
     "terms-of-service": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Terms of Service",
         shortTitle: "Terms",
         content: termsOfService
     },
     "privacy-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Privacy Policy",
         shortTitle: "Privacy",
         content: privacyPolicy
@@ -29,26 +31,31 @@ export const LEGAL_DOCS = {
     // right after Privacy so the three documents a buyer consents to at
     // checkout (Terms, Privacy, Refund) sit together in LEGAL_DOC_LIST.
     "refund-policy": {
+        audience: ["buyers", "sellers"],
         title: "Refund Policy",
         shortTitle: "Refunds",
         content: refundPolicy
     },
     "cookie-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Cookie Policy",
         shortTitle: "Cookies",
         content: cookiePolicy
     },
     "vendor-agreement": {
+        audience: ["sellers"],
         title: "Vendor Agreement",
         shortTitle: "Vendor Agreement",
         content: vendorAgreement
     },
     "delivery-liability-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Delivery Liability Policy",
         shortTitle: "Delivery Liability",
         content: deliveryLiabilityPolicy
     },
     "insurance-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Insurance Policy",
         shortTitle: "Insurance",
         content: insurancePolicy
@@ -70,6 +77,7 @@ export const LEGAL_DOCS = {
     // that says only "NEXORA" identifies no one a buyer could actually
     // pursue.
     "company-information": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Company Information",
         shortTitle: "Company",
         content: companyInformation

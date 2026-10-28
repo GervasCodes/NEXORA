@@ -113,6 +113,21 @@ export default function SellerOrders() {
         }
     };
 
+    // Phase 2: made-to-order items can't be shipped (and so can't be offered
+    // to drivers) until the seller says they're finished.
+    const markReady = async (orderId) => {
+        setBusyId(orderId);
+        try {
+            await api.post(`/orders/${orderId}/mark-ready`);
+            toast?.success(t("seller.orders.readyDone"));
+            load(true);
+        } catch (err) {
+            toast?.error(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     return (
         <div>
             <PageMeta title="Orders" noIndex />
@@ -243,6 +258,16 @@ export default function SellerOrders() {
                                                 Request balance payment
                                             </Button>
                                         )
+                                    )}
+                                    {order.order_type === "pre_order" && !order.ready_at && (
+                                        <Button
+                                            onClick={() => markReady(order.id)}
+                                            disabled={busyId === order.id}
+                                            variant="secondary"
+                                            size="sm"
+                                        >
+                                            {t("seller.orders.markReady")}
+                                        </Button>
                                     )}
                                     {roster.length > 0 && (
                                         <select

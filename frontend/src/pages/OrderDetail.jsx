@@ -100,7 +100,7 @@ export default function OrderDetail() {
     const pollForPaymentConfirmation = (attempt = 0) => {
         api.get(`/orders/${id}`).then(({ data }) => {
             const fresh = data.data;
-            // Pre-order / made-to-order - a pre-order's deposit
+            // Pre-order / made-to-order (Phase 8) - a pre-order's deposit
             // landing sets payment_status to 'deposit_paid', not 'paid'
             // (the balance is a separate, later payment) - either one
             // means THIS charge succeeded, so both are a terminal success

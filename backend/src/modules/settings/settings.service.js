@@ -6,6 +6,18 @@ const { OFFER_RADIUS_KM, OFFER_TIMEOUT_MS } = require("../../constants/orderStat
 // but the default INSERT was skipped) - keeps the platform functional
 // instead of throwing mid-checkout.
 const DEFAULTS = {
+    // Nexora Stock Management (Phase 6): the low-stock threshold a new item
+    // starts with. Each item then keeps its own reorder_level.
+    stock_default_reorder_level: "5",
+    // Phase 7: how many days back a sale or purchase may be dated.
+    stock_backdate_max_days: "7",
+    // Phase 8: how long after a plan lapses the seller can still view and export
+    // their stock data; which channels carry low-stock alerts; how old an offline
+    // sale may be and still be accepted on sync (older ones are accepted too, but
+    // flagged - see sales.service createSale).
+    stock_export_grace_days: "30",
+    stock_low_alert_channels: "push",
+    stock_offline_max_age_days: "30",
     commission_rate: "10",
     rider_delivery_fee: "3000",
     // TZS per 1 USD. Only used to convert a TZS amount into USD for
@@ -68,6 +80,15 @@ const DEFAULTS = {
     // radius is exhausted) - same value OFFER_TIMEOUT_MS always was,
     // just now admin-editable instead of a fixed constant.
     delivery_offer_timeout_ms: String(OFFER_TIMEOUT_MS),
+    // Phase 2: only agents whose last GPS update is at most this old (seconds)
+    // are offered orders - an "online" agent with a stale position used to
+    // get offers for pickups they were nowhere near.
+    delivery_location_max_age_seconds: "120",
+    // Phase 2: an agent who let an offer time out can be offered the same
+    // order again once this many seconds have passed (agents who explicitly
+    // declined are never re-offered). Always at least twice the offer
+    // timeout, so a late expiry job can never hit a fresh offer.
+    delivery_offer_cooldown_seconds: "600",
 
     // Nexora AI . ai_enabled is a master switch
     // independent of whether a provider is actually configured via env
@@ -266,6 +287,59 @@ exports.getDeliveryOfferTimeoutMs = async () => {
     return Number.isFinite(value) && value > 0 ? value : OFFER_TIMEOUT_MS;
 };
 
+// Phase 2: how fresh (seconds) an agent's GPS position must be to be offered
+// an order. Falls back to the default for a missing/invalid stored value.
+exports.getDeliveryLocationMaxAgeSeconds = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.delivery_location_max_age_seconds);
+    return Number.isFinite(value) && value >= 10 ? Math.floor(value) : Number(DEFAULTS.delivery_location_max_age_seconds);
+};
+
+// Phase 2: how long (seconds) before an agent whose offer timed out can be
+// offered the same order again. Never less than twice the offer timeout.
+exports.getDeliveryOfferCooldownSeconds = async () => {
+    const map = await getCachedAll();
+    const stored = Number(map.delivery_offer_cooldown_seconds);
+    const base = Number.isFinite(stored) && stored > 0 ? stored : Number(DEFAULTS.delivery_offer_cooldown_seconds);
+    const timeoutMs = Number(map.delivery_offer_timeout_ms);
+    const timeoutSeconds = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs / 1000 : OFFER_TIMEOUT_MS / 1000;
+    return Math.ceil(Math.max(base, timeoutSeconds * 2));
+};
+
+// Phase 6: reorder level a new stock item starts with.
+exports.getStockDefaultReorderLevel = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_default_reorder_level);
+    return Number.isInteger(value) && value >= 0 && value <= 100000 ? value : 5;
+};
+
+// Phase 7: how far back (days) a seller may date a sale or purchase.
+exports.getStockBackdateMaxDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_backdate_max_days);
+    return Number.isInteger(value) && value >= 0 && value <= 365 ? value : 7;
+};
+
+exports.getStockExportGraceDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_export_grace_days);
+    return Number.isInteger(value) && value >= 0 && value <= 3650 ? value : 30;
+};
+
+exports.getStockOfflineMaxAgeDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_offline_max_age_days);
+    return Number.isInteger(value) && value >= 1 && value <= 365 ? value : 30;
+};
+
+// Subset of push | whatsapp | sms, comma separated. Anything else is ignored; empty -> push.
+exports.getStockLowAlertChannels = async () => {
+    const map = await getCachedAll();
+    const wanted = String(map.stock_low_alert_channels || "push").split(",").map((c) => c.trim().toLowerCase());
+    const valid = ["push", "whatsapp", "sms"].filter((c) => wanted.includes(c));
+    return valid.length ? valid : ["push"];
+};
+
 // Flat cost (TZS) a seller currently pays per day to sponsor one product.
 exports.getSponsorshipDailyRate = async () => {
     const map = await getCachedAll();
@@ -438,6 +512,7 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
         "topup_daily_cap_tier0", "topup_daily_cap_tier1", "topup_daily_cap_tier2",
         "cod_auto_confirm_hours", "cod_block_after_refused_count",
         "delivery_offer_timeout_ms",
+        "delivery_location_max_age_seconds", "delivery_offer_cooldown_seconds",
         "ai_daily_token_cap_per_user", "ai_monthly_token_cap_per_user",
         "ai_daily_token_cap_global", "ai_monthly_token_cap_global",
         "approved_document_retention_days",

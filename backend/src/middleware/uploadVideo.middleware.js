@@ -6,12 +6,14 @@ const { wrapUpload } = require("../utils/wrapUploadMiddleware");
 // uploadDocument.middleware.js (image/PDF, 8 MB) - product demo videos
 // are a different media type entirely and need a much higher size cap
 // than a photo or a scanned document.
+const { MAX_VIDEO_BYTES } = require("../config/mediaLimits");
+
 const storage = multer.memoryStorage();
 
 const uploadVideo = multer({
     storage,
     limits: {
-        fileSize: 50 * 1024 * 1024 // 50 MB
+        fileSize: MAX_VIDEO_BYTES
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith("video/")) {

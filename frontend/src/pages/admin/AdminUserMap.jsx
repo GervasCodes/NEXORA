@@ -27,7 +27,7 @@ function FitToPoints({ points }) {
     return null;
 }
 
-// (map showing users) - live map of every opted-in buyer/seller,
+// Phase 5 (map showing users) - live map of every opted-in buyer/seller,
 // per the overridden Phase 1.4 decision (opt-out, both roles, precise
 // coordinates - see PHASE1_DECISIONS.md #4). Loads the current snapshot
 // via GET /admin/users/map, then keeps it live from the `admins` room's

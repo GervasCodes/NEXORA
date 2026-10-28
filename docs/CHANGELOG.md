@@ -450,3 +450,51 @@ Improvement" roadmap (roadmap Section 8) — the final phase.
   blocking or flashing empty), so no change was made there either.
 - See `README-phase-8.md` for the full write-up, including what was
   scoped out and why.
+
+## Upgrade Round 2 — Phase 1: Quick wins and hardening
+
+- Removed the forced splash screen; the app shell renders immediately.
+- `localStorage`/`sessionStorage` are now guarded app-wide (`utils/safeStorage.js`, installed first in `main.jsx`); the app renders with storage blocked.
+- First-visit language is Kiswahili for Swahili browsers and Tanzanian time zones (`utils/detectLanguage.js`); a saved choice still wins.
+- Deleted the unused 3D hero code and the `three`, `@react-three/fiber`, `@react-three/drei` dependencies.
+- Hero fallback slides and onboarding images are self-hosted (SVG/WebP); no Unsplash hot-links in those two places.
+- Fonts self-hosted via `@fontsource` (Inter, Fraunces); IBM Plex Mono dropped; Google Fonts stylesheet removed.
+- Cookie notice is a slim one-line bar shown after first interaction; install prompt for guests waits for a meaningful action or 45 s; AI/support launchers appear after 20 s (immediately on checkout).
+- Carousel: prev/next, pause/play and clickable dots; translated fallback copy and badges.
+- Contrast: light-mode `ash` darkened; faint `text-frost/40|50|55` raised to `/70`.
+- Home rails render independently; `ProductCard` duplicate markup removed; `og:title` separator fixed.
+- New `npm run lint:i18n` reports literal English in JSX (report-only; not yet a CI gate).
+
+
+## Phase 6 — Nexora Stock Management: foundation
+
+- Migration `157_nexora_stock_management.sql`: `stock_items`, `stock_movements`, `stock_adjustments.payload_hash`, setting `stock_default_reorder_level`; backfill of items and opening balances.
+- Every stock change now goes through `modules/stock/stock.ledger.js`: a locked, relative change plus a ledger row. This covers product edits (`PUT /products/:id`, optional `stock_baseline`), variant saves (`variants[].stock_baseline`), the classic POS adjustments and sales, checkout deductions (`order_deduct`) and cancellation restores (`order_restore`).
+- Idempotency keys are now checked against the request body; reusing a key with a different body returns 409.
+- One low-stock rule: each item's `reorder_level` (default 5) replaces the old 3 (dashboard) / 5 (POS) split.
+- New API `/api/v1/seller/stock/*` (items, stock movements, list on Nexora / unlink, ledger, reconcile) and screens `/seller/stock` and `/business/stock`. The nav entry "Stock & sales" is now "Nexora Stock Management" (Usimamizi wa Hisa wa Nexora).
+- Tools-only products were migrated to external items; `/business` now opens the new screens, the old page is at `/business/classic` and `/seller/pos`.
+
+
+## Phase 7 — Nexora Stock Management: sales, purchases, receipts
+
+- Migration `158_stock_sales_purchases.sql` (sales, returns, purchases, suppliers, customers, payments ledger, number counters; backfills `offline_sales` as legacy sales).
+- Multi-line quick sale (search or barcode), payment by cash / mobile money / card / bank / credit, discount, optional customer, limited and logged back-dating. Cancel (void) and return flows put stock back through the ledger (`void`, `return` rows) and keep an audit trail (`audit_logs`: `stock.sale_voided`, `stock.sale_returned`, `stock.sale_backdated`, ...).
+- Purchases with suppliers, invoice number, unit cost and paid / unpaid; receiving adds stock and updates cost (moving weighted average).
+- Customers with debts (payments applied to the oldest unpaid sale first) and suppliers with what you owe.
+- Receipts: shareable text (WhatsApp / share sheet) and an 80 mm PDF, English or Swahili, currency always shown, marked "not a fiscal (EFD) receipt".
+- New API `/api/v1/seller/stock/{lookup,sales,purchases,customers,suppliers}`; new tabs Sell, Sales, Purchases, Customers, Suppliers under `/seller/stock` and `/business/stock`.
+- Fix: `SellerProductEntry.jsx` and `SellerProductWizard.jsx` (Phase 5) were in `src/pages/` but imported from `src/pages/seller/`, which broke the production build; moved to `src/pages/seller/`.
+
+## Phase 8 — Nexora Stock Management: expenses, reports, alerts, import/export, offline, plans
+
+- Migration `159_stock_reports_alerts_plans.sql` (expenses, low-stock alert state, plan entitlements, offline sale flags, settings).
+- Expenses (category, amount, date, note, receipt photo) that count against profit; cancelling keeps the record.
+- Reports: profit, best sellers, stock valuation, low stock, daily close, debts. On-Nexora revenue (after commission and refunds, as in the wallet) is shown apart from shop sales. Report days are Africa/Dar_es_Salaam days (also fixed for the classic POS report and the Business Tools date pickers).
+- Low-stock alerts per `reorder_level` through push / WhatsApp / SMS (hourly job, once per dip, quiet hours 21:00–07:00).
+- Import items and opening stock from CSV or XLSX with a preview that saves nothing, plus a downloadable template; CSV export of items, sales, purchases, movements, valuation.
+- Offline selling: sales are queued on the device and synced with their client id; a finished sale is never refused (stock may go negative, flagged and alerted).
+- Plans: `requireFeature` driven by `subscription_plans.entitlements`; soft item limit; after a plan ends the screens stay readable and exportable for `stock_export_grace_days`; Stock Management added to the pricing copy; audit log for stock actions.
+- New dependency `fflate` (backend, XLSX reading).
+
+Detail: `PHASE_8_CHANGES.md`

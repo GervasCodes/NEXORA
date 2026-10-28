@@ -8,6 +8,7 @@ import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
 import Button from "./ui/Button";
 import ThemeToggle from "./ThemeToggle";
+import LanguageToggle from "./LanguageToggle";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
@@ -267,6 +268,7 @@ export default function Header() {
                         </button>
                     ) : !user ? (
                         <>
+                            <LanguageToggle className="mr-1" />
                             <ThemeToggle className="mr-1" />
                             <IconNavLink
                                 to="/login"
@@ -306,7 +308,7 @@ export default function Header() {
                     <button
                         type="button"
                         onClick={() => setMenuOpen((v) => !v)}
-                        aria-label="Menu"
+                        aria-label={t("header.menu")}
                         aria-expanded={menuOpen}
                         aria-controls="mobile-nav-drawer"
                         className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-frost/90 hover:text-azure-light focus-ring transition-all duration-150 ease-out active:scale-90"
@@ -422,6 +424,7 @@ export default function Header() {
                             </button>
                         ) : !user ? (
                             <div className="py-3 flex items-center gap-3">
+                                <LanguageToggle />
                                 <ThemeToggle />
                                 <Link
                                     to="/login"

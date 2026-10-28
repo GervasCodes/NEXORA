@@ -405,7 +405,14 @@ export default function ProductDetail() {
             // fee is claimed because that varies by order.
             hasMerchantReturnPolicy: {
                 "@type": "MerchantReturnPolicy",
-                merchantReturnLink: `${SITE_URL}/legal/refund-policy`
+                merchantReturnLink: `${SITE_URL}/terms#refund-policy`,
+                applicableCountry: "TZ"
+            },
+            // Destination only - no rate or transit time is claimed,
+            // because delivery fees are calculated per order at checkout.
+            shippingDetails: {
+                "@type": "OfferShippingDetails",
+                shippingDestination: { "@type": "DefinedRegion", addressCountry: "TZ" }
             },
             priceCurrency: "TZS",
             price: String(hasDiscount ? product.discount_price : product.price),
@@ -428,8 +435,11 @@ export default function ProductDetail() {
             <Breadcrumbs items={breadcrumbItems} />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
+                    {/* Accessible carousel region: keyboard arrows + swipe are the interaction model. */}
+                    {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
                     <div
                         className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-1 relative touch-pan-y focus-ring"
+                        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
                         tabIndex={0}
                         role="group"
                         aria-roledescription="carousel"
@@ -488,17 +498,6 @@ export default function ProductDetail() {
                                     // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded product clip, no caption track available
                                     <video key={vid.id} src={vid.video_url} controls
                                         className="w-full rounded-lg border border-line" />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {product.audio?.length > 0 && (
-                        <div className="mt-6">
-                            <h2 className="font-display text-lg mb-3">{t("product.audioTitle")}</h2>
-                            <div className="space-y-3">
-                                {product.audio.map((clip) => (
-                                    // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded audio clip, no caption track available
-                                    <audio key={clip.id} src={clip.audio_url} controls className="w-full" />
                                 ))}
                             </div>
                         </div>

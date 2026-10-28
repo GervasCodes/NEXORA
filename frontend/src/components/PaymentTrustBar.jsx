@@ -1,13 +1,14 @@
 import { useLanguage } from "../context/LanguageContext";
+import BrandLogo from "./BrandLogo";
 
 // Payment methods shown on Home. Mirrors what checkout offers (see
-// pages/Checkout.jsx). Text badges, not provider logos, so no third-party
-// assets are fetched. Edit this list if checkout's methods change.
-const METHOD_KEYS = [
-    "home.payMobileMoney",
-    "home.payCashOnDelivery",
-    "home.payPayPal",
-    "home.payCard",
+// pages/Checkout.jsx). Phase 3: real network logos (BrandLogo) with the
+// method name kept as text for screen readers and as the fallback.
+const METHODS = [
+    { key: "home.payMobileMoney", logos: ["mpesa", "mixx", "airtel_money", "halopesa"] },
+    { key: "home.payCashOnDelivery", logos: [] },
+    { key: "home.payPayPal", logos: ["paypal"] },
+    { key: "home.payCard", logos: ["visa", "mastercard"] }
 ];
 
 export default function PaymentTrustBar() {
@@ -16,9 +17,10 @@ export default function PaymentTrustBar() {
         <section aria-labelledby="home-payments" className="mb-10">
             <h2 id="home-payments" className="text-xs uppercase tracking-widest text-ash mb-3">{t("home.paymentsTitle")}</h2>
             <ul className="flex flex-wrap gap-2">
-                {METHOD_KEYS.map((key) => (
-                    <li key={key} className="h-9 px-3 inline-flex items-center rounded-md border border-line text-sm text-ash">
+                {METHODS.map(({ key, logos }) => (
+                    <li key={key} className="min-h-9 px-3 py-1 inline-flex items-center gap-2 rounded-md border border-line text-sm text-ash">
                         {t(key)}
+                        {logos.map((l) => <BrandLogo key={l} name={l} height={20} className="border border-line" />)}
                     </li>
                 ))}
             </ul>

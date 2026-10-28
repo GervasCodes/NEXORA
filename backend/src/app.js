@@ -18,6 +18,7 @@ const authMiddleware = require("./middleware/auth.middleware");
 const sellerRoutes = require("./modules/seller/seller.routes");
 const productRoutes = require("./modules/product/product.routes");
 const categoryRoutes = require("./modules/category/category.routes");
+const searchRoutes = require("./modules/search/search.routes");
 const storeTypeRoutes = require("./modules/storeType/storeType.routes");
 const serviceCategoryRoutes = require("./modules/serviceCategory/serviceCategory.routes");
 const serviceRoutes = require("./modules/service/service.routes");
@@ -64,6 +65,7 @@ const groupBuyRoutes = require("./modules/groupBuy/groupBuy.routes");
 const liveSellingRoutes = require("./modules/liveSelling/liveSelling.routes");
 const businessRoutes = require("./modules/business/business.routes");
 const posRoutes = require("./modules/pos/pos.routes");
+const stockRoutes = require("./modules/stock/stock.routes");
 const deliveryBusinessRoutes = require("./modules/deliveryBusiness/deliveryBusiness.routes");
 const businessToolsRoutes = require("./modules/businessTools/businessTools.routes");
 const affiliateRoutes = require("./modules/affiliate/affiliate.routes");
@@ -398,9 +400,15 @@ app.use("/api/v1/seller/business-verification", accountVerificationSellerRoutes)
 // authorize("seller") + requireApprovedSeller + requireSubscriptionTier
 // inside pos.routes.js.
 app.use("/api/v1/seller/pos", posRoutes);
+app.use("/api/v1/seller/stock", stockRoutes);
 app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
+// Trending-search read + fire-and-forget search-term logging backing
+// SearchBox.jsx's empty-input dropdown. Its own top-level namespace since
+// it spans products/services/stores/content rather than belonging to any
+// one of them - same reasoning as /service-categories vs /categories.
+app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/store-types", storeTypeRoutes);
 // Nexora Services - (Foundation). Separate top-level namespaces
 // from /categories and /products, matching CHANGES.md's own framing of

@@ -20,6 +20,9 @@ router.get("/", categoryController.listPublic);
 // Public - homepage department cards (cover, live product count, trending preview)
 router.get("/departments", categoryController.listDepartments);
 
+// Public - homepage hero trust strip (live verified-seller / product counts)
+router.get("/trust-stats", categoryController.getTrustStats);
+
 // Public - cover image (and id, for the admin upload control) for the
 // homepage's separately-rendered "Services" tile. See
 // category.service.js#getServicesTile.

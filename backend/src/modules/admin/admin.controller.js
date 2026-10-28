@@ -307,6 +307,16 @@ exports.getCoverageHeatmap = async (req, res) => {
     }
 };
 
+// Phase 2: follow-up list of sellers without a verified store pin.
+exports.getSellersWithoutPin = async (req, res) => {
+    try {
+        const data = await adminService.getSellersWithoutVerifiedPin();
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // (Admin Manual Override & Ops Visibility) - counterpart to the
 // dispatch overview above: pushes one unmatched order onto one specific
 // online agent instead of just watching the board wait on auto-matching.

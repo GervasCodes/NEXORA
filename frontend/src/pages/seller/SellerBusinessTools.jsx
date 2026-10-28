@@ -12,8 +12,9 @@ import ErrorState from "../../components/ui/ErrorState";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { daysAgoDar, todayDar } from "../../utils/darDate";
 
-// Seller POS screens stock levels + adjustments, manual
+// Seller POS screens (Round 4, Phase 8): stock levels + adjustments, manual
 // off-platform sale entry, stock history, and a combined on/off-platform
 // report. Everything here is behind the paid-tier gate on the backend
 // (requireSubscriptionTier); the page probes once on mount and shows the
@@ -29,8 +30,9 @@ const newKey = () =>
         ? crypto.randomUUID()
         : `k${Date.now()}${Math.random().toString(36).slice(2, 10)}`;
 
-const todayString = () => new Date().toISOString().slice(0, 10);
-const daysAgoString = (days) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+// Phase 8: Dar es Salaam calendar days (the UTC date is the previous day for 3 hours after midnight).
+const todayString = () => todayDar();
+const daysAgoString = (days) => daysAgoDar(days);
 
 // <input type="datetime-local"> wants local time without a zone.
 const nowLocalInput = () => {
@@ -873,6 +875,10 @@ export default function SellerBusinessTools() {
     return (
         <div className="animate-fade-in">
             {header}
+            <p className="text-sm border border-line rounded-lg p-3 mb-4 bg-line/10">
+                {t("stock.trade.classicBanner")}{" "}
+                <Link to={toolsOnly ? "/business/stock/sell" : "/seller/stock/sell"} className="underline font-medium focus-ring">{t("stock.trade.tabSell")}</Link>
+            </p>
             <div className="flex gap-1 border-b border-line mb-6 overflow-x-auto" role="tablist">
                 {TABS.map((key) => (
                     <button key={key} type="button" role="tab" aria-selected={tab === key}

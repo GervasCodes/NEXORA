@@ -24,8 +24,9 @@ exports.createProduct = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
+            code: error.code,
             message: error.message
         });
     }
@@ -207,57 +208,6 @@ exports.reorderProductVideos = async (req, res) => {
     try {
         await productService.reorderProductVideos(req.user.id, req.params.id, req.body.ids);
         return res.json({ success: true, message: "Video order updated" });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.uploadProductAudio = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: "An audio file is required"
-            });
-        }
-
-        const result = await productService.addProductAudio(
-            req.user.id,
-            req.params.id,
-            req.file
-        );
-
-        return res.status(201).json({
-            success: true,
-            message: "Audio uploaded",
-            data: result
-        });
-
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-exports.deleteProductAudio = async (req, res) => {
-    try {
-        await productService.deleteProductAudio(req.user.id, req.params.id, req.params.audioId);
-        return res.json({ success: true, message: "Audio removed" });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.reorderProductAudio = async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ success: false, errors: errors.array() });
-    }
-    try {
-        await productService.reorderProductAudio(req.user.id, req.params.id, req.body.ids);
-        return res.json({ success: true, message: "Audio order updated" });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }

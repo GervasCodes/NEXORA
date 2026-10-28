@@ -34,6 +34,10 @@ router.get("/dispatch", adminController.getDispatchOverview);
 // dispatch overview above.
 router.get("/dispatch/coverage-heatmap", adminController.getCoverageHeatmap);
 
+// Phase 2: sellers drivers can't be dispatched to (no usable store pin) or
+// whose pin was placed by hand rather than from a GPS fix.
+router.get("/dispatch/sellers-without-pin", adminController.getSellersWithoutPin);
+
 // (Admin Manual Override & Ops Visibility)
 router.put(
     "/dispatch/:id/assign",

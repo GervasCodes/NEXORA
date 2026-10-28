@@ -49,16 +49,15 @@ export default function HomeRails() {
         return () => { ignore = true; };
     }, []);
 
-    const loading = newArrivals === null || topRated === null || topServices === null || onSale === null;
-
-    if (loading) return <><RailSkeleton /><RailSkeleton /></>;
-
+    // Phase 1: each rail renders as soon as ITS request finishes. Before,
+    // every rail waited for the slowest of the four requests (up to the 10 s
+    // timeout), so one slow endpoint held back the whole page.
     return (
         <>
-            <ProductRow title={t("home.railNew")} products={newArrivals} />
-            {onSale.length > 0 && <ProductRow title={t("home.railDeals")} products={onSale} />}
-            <ProductRow title={t("home.railTopRated")} products={topRated} />
-            {topServices.length > 0 && (
+            {newArrivals === null ? <RailSkeleton /> : <ProductRow title={t("home.railNew")} products={newArrivals} />}
+            {onSale === null ? <RailSkeleton /> : onSale.length > 0 && <ProductRow title={t("home.railDeals")} products={onSale} />}
+            {topRated === null ? <RailSkeleton /> : <ProductRow title={t("home.railTopRated")} products={topRated} />}
+            {topServices !== null && topServices.length > 0 && (
                 <section className="mb-10 animate-fade-in" aria-labelledby="home-top-services">
                     <h2 id="home-top-services" className="font-display text-xl mb-4">{t("home.railTopServices")}</h2>
                     <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 snap-x snap-mandatory scrollbar-thin">

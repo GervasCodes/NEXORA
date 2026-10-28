@@ -15,11 +15,11 @@ export default function BusinessToolsLayout() {
 
     // Once converted to a marketplace seller the same POS lives under /seller.
     if (user && user.seller_mode !== "business_tools") {
-        return <Navigate to="/seller/pos" replace />;
+        return <Navigate to="/seller/stock" replace />;
     }
 
     const tabs = [
-        { to: "/business", label: t("business.navStock"), end: true },
+        { to: "/business/stock", label: t("stock.title"), end: false },
         { to: "/business/plan", label: t("business.navPlan") },
         { to: "/business/upgrade", label: t("business.navUpgrade") }
     ];

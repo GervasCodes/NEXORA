@@ -1321,6 +1321,31 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
 // without a redeploy.
 const DEFAULT_HEATMAP_WINDOW_DAYS = 28;
 
+// Phase 2: sellers drivers can't reliably be dispatched to. "missing" have no
+// pin (or one outside Tanzania); "unverified" have a pin that was placed by
+// hand instead of confirmed from a GPS fix.
+exports.getSellersWithoutVerifiedPin = async () => {
+    const { isValidTanzaniaPin } = require("../../utils/pickupPin");
+    const deliveryRepository = require("../delivery/delivery.repository");
+    const rows = await deliveryRepository.findSellersWithoutVerifiedPin({ limit: 500 });
+
+    const sellers = rows.map((row) => ({
+        seller_id: row.seller_id,
+        store_name: row.store_name,
+        city: row.city,
+        region: row.region,
+        business_phone: row.business_phone,
+        pickup_accuracy_m: row.pickup_accuracy_m,
+        status: isValidTanzaniaPin(row.pickup_lat, row.pickup_lng) ? "unverified" : "missing"
+    }));
+
+    return {
+        missingCount: sellers.filter((s) => s.status === "missing").length,
+        unverifiedCount: sellers.filter((s) => s.status === "unverified").length,
+        sellers
+    };
+};
+
 exports.getCoverageHeatmap = async (windowDays = DEFAULT_HEATMAP_WINDOW_DAYS) => {
     const days = Number.isFinite(Number(windowDays)) && Number(windowDays) > 0
         ? Number(windowDays)

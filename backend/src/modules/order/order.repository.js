@@ -7,6 +7,20 @@ const db = require("../../config/db");
 // order that was never actually placed.
 const couponService = require("../coupon/coupon.service");
 const referralService = require("../referral/referral.service");
+const stockLedger = require("../stock/stock.ledger");
+const logger = require("../../utils/logger").child({ module: "order.repository" });
+
+// Nexora Stock Management (Phase 6): checkout deductions and cancellation
+// restores are written to the stock ledger in the same transaction as the stock
+// change. A bookkeeping failure must never block a sale or a refund, so errors
+// are logged (and surface in the seller's ledger reconcile check) instead of thrown.
+const recordLedger = async (connection, rows, type) => {
+    try {
+        await stockLedger.recordOrderMovements(connection, rows, type);
+    } catch (error) {
+        logger.error({ err: error, type }, "stock ledger write failed");
+    }
+};
 
 // Phase 2 (Legal & Consumer Trust): the version of the consent bundle
 // (Terms of Service + Privacy Policy + Refund Policy) a buyer agrees to
@@ -16,7 +30,7 @@ const referralService = require("../referral/referral.service");
 //
 // Lives here rather than in order.service.js purely to respect Phase 2's
 // file-scope list (order.service.js isn't in it). See PHASE_2_NOTES.md.
-const CURRENT_CHECKOUT_TERMS_VERSION = "2026-09-18";
+const { CHECKOUT_TERMS_VERSION: CURRENT_CHECKOUT_TERMS_VERSION } = require("../../config/termsVersions");
 
 // Shared by createOrder/createSplitOrder below: insert one `orders` row
 // (optionally as a child of `parentOrderId`) and return its insertId.
@@ -119,6 +133,15 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
     // back via orderRepository.findOrderById(id).delivery_handover_code
     // instead, which avoids rippling a shape change through every call
     // site and their own callers for one notification step.
+    // Phase 2: made-to-order orders start "awaiting_ready" - the seller must
+    // mark the item ready before the order can ship / be dispatched.
+    if (preorder) {
+        await connection.query(
+            "UPDATE orders SET fulfilment_state = 'awaiting_ready' WHERE id = ?",
+            [orderResult.insertId]
+        );
+    }
+
     return orderResult.insertId;
 };
 
@@ -232,6 +255,13 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
             }
         }
     }
+    await recordLedger(connection, cartItems.map((item) => ({
+        order_id: orderId,
+        seller_id: item.seller_id,
+        product_id: item.product_id,
+        variant_id: item.variant_id || null,
+        quantity: item.quantity
+    })), "order_deduct");
 };
 
 // Checkout idempotency (Phase 3) - locks exactly the cart rows this
@@ -495,15 +525,31 @@ const applyStockIncrease = async (executor, rows) => {
     }
 };
 
+// The stock increase and its ledger rows commit together.
+const restoreWithLedger = async (rows) => {
+    if (!rows.length) return;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        await applyStockIncrease(connection, rows);
+        await recordLedger(connection, rows, "order_restore");
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 // Restores stock for a single standalone or child order's items. Safe to
 // call even for an order with no items (no-op).
 exports.restoreStockForOrder = async (orderId) => {
     const [rows] = await db.query(
-        "SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?",
+        "SELECT order_id, seller_id, product_id, variant_id, quantity FROM order_items WHERE order_id = ?",
         [orderId]
     );
-
-    await applyStockIncrease(db, rows);
+    await restoreWithLedger(rows);
 };
 
 // Restores stock for every child order under a parent in one pass -
@@ -511,14 +557,13 @@ exports.restoreStockForOrder = async (orderId) => {
 // rather than looping restoreStockForOrder per child.
 exports.restoreStockForChildOrders = async (parentOrderId) => {
     const [rows] = await db.query(
-        `SELECT oi.product_id, oi.variant_id, oi.quantity
+        `SELECT oi.order_id, oi.seller_id, oi.product_id, oi.variant_id, oi.quantity
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         WHERE o.parent_order_id = ?`,
         [parentOrderId]
     );
-
-    await applyStockIncrease(db, rows);
+    await restoreWithLedger(rows);
 };
 
 // Orders placed via mobile money that never got a payment confirmation
@@ -795,6 +840,43 @@ exports.markBalancePaid = async (orderId, executor = db) => {
 // balance" (order.service.js#requestPreorderBalance). Just a timestamp -
 // doesn't touch payment_status - the buyer paying is what actually
 // advances that.
+// Phase 2: the seller says the made-to-order item is finished. Idempotent:
+// a second call keeps the original ready_at. Returns true when this call
+// changed the state.
+exports.markReady = async (orderId) => {
+    const [result] = await db.query(
+        `UPDATE orders SET fulfilment_state = 'ready', ready_at = NOW()
+        WHERE id = ? AND order_type = 'pre_order' AND ready_at IS NULL`,
+        [orderId]
+    );
+    return result.affectedRows > 0;
+};
+
+// Phase 2: made-to-order orders the reminder job should look at - still
+// being made, with a ready-by date.
+exports.findPreordersAwaitingReady = async () => {
+    const [rows] = await db.query(
+        `SELECT o.id, o.order_number, o.buyer_id, o.preorder_ready_by,
+                o.ready_reminder_sent_at, o.overdue_notified_at,
+                (SELECT oi.seller_id FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.id LIMIT 1) AS seller_id
+        FROM orders o
+        WHERE o.order_type = 'pre_order'
+          AND o.fulfilment_state = 'awaiting_ready'
+          AND o.preorder_ready_by IS NOT NULL
+          AND o.status IN ('pending', 'processing')
+          AND o.payment_status IN ('deposit_paid', 'paid')`
+    );
+    return rows;
+};
+
+exports.markReadyReminderSent = async (orderId) => {
+    await db.query("UPDATE orders SET ready_reminder_sent_at = NOW() WHERE id = ?", [orderId]);
+};
+
+exports.markOverdueNotified = async (orderId) => {
+    await db.query("UPDATE orders SET overdue_notified_at = NOW() WHERE id = ?", [orderId]);
+};
+
 exports.markBalanceRequested = async (orderId) => {
     await db.query(
         "UPDATE orders SET balance_requested_at = NOW() WHERE id = ?",
@@ -876,6 +958,7 @@ exports.findOrdersBySeller = async (sellerId, { status, q, sort } = {}) => {
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at,
+                o.order_type, o.ready_at, o.fulfilment_state, o.balance_requested_at,
                 u.first_name AS buyer_first_name, u.last_name AS buyer_last_name,
                 (SELECT p.name FROM order_items oi4
                     JOIN products p ON p.id = oi4.product_id
@@ -967,6 +1050,18 @@ exports.CURRENT_CHECKOUT_TERMS_VERSION = CURRENT_CHECKOUT_TERMS_VERSION;
 // Round 5, Phase 5 - stores the rider-pay quote taken when the order was
 // placed (migration 150). Only writes when no quote exists yet, so a quote is
 // never silently replaced later.
+// Phase 2: a made-to-order item can sit for days or weeks between checkout and
+// "ready", so its rider fee is re-quoted when it becomes ready (unlike
+// setRiderFeeQuote, which only ever fills an empty quote).
+exports.overwriteRiderFeeQuote = async (orderId, fee, details) => {
+    const [result] = await db.query(
+        `UPDATE orders
+        SET rider_fee_quote = ?, rider_fee_quote_details = ?, rider_fee_quoted_at = NOW()
+        WHERE id = ?`,
+        [fee, JSON.stringify(details), orderId]
+    );
+    return result.affectedRows > 0;
+};
 exports.setRiderFeeQuote = async (orderId, fee, details) => {
     const [result] = await db.query(
         `UPDATE orders

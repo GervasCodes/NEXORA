@@ -27,6 +27,9 @@ const rewardSettlementJob = require("./rewardSettlement.job");
 const documentRetentionJob = require("./documentRetention.job");
 const fuelCapReminderJob = require("./fuelCapReminder.job");
 const renderDeployHookJob = require("./renderDeployHook.job");
+const preorderRemindersJob = require("./preorderReminders.job");
+const draftCleanupJob = require("./draftCleanup.job");
+const lowStockAlertsJob = require("./lowStockAlerts.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -63,6 +66,12 @@ exports.startJobs = () => {
 
     // Once a day at 03:00 server time: housekeeping, low traffic hour.
     cron.schedule("0 3 * * *", safeRun("otpCleanup", otpCleanupJob));
+
+    // Once a day at 03:30: purge abandoned product drafts and their cloud media.
+    cron.schedule("30 3 * * *", safeRun("draftCleanup", draftCleanupJob));
+
+    // Every hour at :40: low-stock alerts (skips 21:00-07:00 Dar es Salaam).
+    cron.schedule("40 * * * *", safeRun("lowStockAlerts", lowStockAlertsJob));
 
     // Every hour, on the hour: close out sponsorship campaigns whose paid
     // duration has ended and clear the display flag - see
@@ -136,6 +145,10 @@ exports.startJobs = () => {
     // pinned down, so it's easy to retune here if 5 minutes turns out
     // too tight/loose in practice.
     cron.schedule("*/5 * * * *", safeRun("deliveryRematch", deliveryRematchJob));
+
+    // Hourly: remind sellers the day before a made-to-order item is due and
+    // escalate when it's late - see preorderReminders.job.js (Phase 2).
+    cron.schedule("0 * * * *", safeRun("preorderReminders", preorderRemindersJob));
 
     // Every 30 minutes: compare this hour's typical order volume against
     // how many delivery agents are currently online and, if coverage

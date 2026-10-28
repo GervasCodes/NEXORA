@@ -108,6 +108,42 @@ export const subscribeServerWaking = (listener) => {
     return () => wakingListeners.delete(listener);
 };
 
+// ---- Circuit breaker for "no response at all" failures -------------------
+// A dropped connection, a timeout, a sleeping free-tier server AND a
+// misconfigured CORS origin all look identical from here: axios reports
+// no error.response for any of them, and the browser deliberately hides
+// which one it was. Retrying a single stalled request a handful of times
+// is the right call for "one request hit a blip" - but if that keeps
+// happening across many different requests in a row, it isn't a blip
+// anymore, it's systemic (an outage, a bad CORS_ORIGIN deploy), and
+// retrying each one up to RETRY_DELAYS_MS.length+1 times just multiplies
+// every failed request several-fold - flooding the console and burning
+// through apiLimiter's per-IP budget for calls that were never going to
+// succeed. Once several distinct requests fail this way in a short
+// window, pause retries for a cooldown instead of retrying every single
+// one; a real blip (one request, then recovery) never trips this.
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_WINDOW_MS = 10000;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 20000;
+
+let noResponseFailureTimestamps = [];
+let circuitOpenUntil = 0;
+
+const resetFailureStreak = () => {
+    noResponseFailureTimestamps = [];
+};
+
+const recordNoResponseFailure = () => {
+    const now = Date.now();
+    noResponseFailureTimestamps = noResponseFailureTimestamps.filter(
+        (t) => now - t < CIRCUIT_BREAKER_WINDOW_MS
+    );
+    noResponseFailureTimestamps.push(now);
+    if (noResponseFailureTimestamps.length >= CIRCUIT_BREAKER_THRESHOLD) {
+        circuitOpenUntil = now + CIRCUIT_BREAKER_COOLDOWN_MS;
+    }
+};
+
 const isRetryable = (error) => {
     const config = error?.config;
     if (!config || config.skipRetry) return false;
@@ -116,9 +152,21 @@ const isRetryable = (error) => {
     // Truly offline: retrying is pointless and NetworkStatusNotice already
     // tells the person. The browser's "online" event brings them back.
     if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
-    // Server answered: only the "gateway/unavailable" family is worth retrying.
-    if (error.response) return RETRYABLE_STATUS.has(error.response.status);
-    // No response at all (connection closed/reset, timeout, server asleep).
+    // Server answered: only the "gateway/unavailable" family is worth
+    // retrying, and a real answer (of any kind) means the connection
+    // itself is fine, so it clears the no-response failure streak.
+    if (error.response) {
+        resetFailureStreak();
+        return RETRYABLE_STATUS.has(error.response.status);
+    }
+    // No response at all. Only count a request's FIRST no-response failure
+    // toward the systemic signal above - otherwise a single request's own
+    // retries of itself (same request, same config) would trip the
+    // breaker on their own regardless of anything else going on.
+    if (!(config._retryCount > 0)) {
+        recordNoResponseFailure();
+    }
+    if (Date.now() < circuitOpenUntil) return false;
     return true;
 };
 
@@ -162,7 +210,14 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // A successful response proves the connection (and CORS, and the
+        // server) are actually fine right now - clear the failure streak
+        // so a breaker tripped by an earlier, now-resolved problem doesn't
+        // keep blocking retries for later requests.
+        resetFailureStreak();
+        return response;
+    },
     (error) => {
         if (isRetryable(error)) {
             const attempt = error.config._retryCount || 0;

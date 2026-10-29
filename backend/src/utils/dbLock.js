@@ -16,9 +16,17 @@
 // session semantics mean it would otherwise stay held (and block every
 // other replica) until that pooled connection happened to be closed.
 //
+// IMPORTANT: the lock connection comes from a DEDICATED pool (config/db.js
+// `lockPool`), never the main app pool. A job holds its lock connection for
+// its whole run AND needs further connections from the main pool to do its
+// work. When both came from the same pool, enough jobs firing together (the
+// top of the hour starts a dozen at once) took every connection as a lock
+// holder, each then waited forever for a second connection, and the whole
+// API deadlocked ("db pool saturated", queuedRequests climbing for hours).
+//
 // See docs/SCALABILITY_REPORT.md (Phase 4) for the full design and why
 // this approach was chosen over an app-level mutex or a jobs table.
-const pool = require("../config/db");
+const { lockPool: pool } = require("../config/db");
 const logger = require("./logger");
 
 // Acquires named lock `lockName`, runs `fn`, then always releases -

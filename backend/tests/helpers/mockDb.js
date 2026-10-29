@@ -21,4 +21,6 @@ const db = {
     __mockConnection: mockConnection
 };
 
+// dbLock uses a dedicated lock pool in production; in tests it is the same mock.
+db.lockPool = db;
 module.exports = db;

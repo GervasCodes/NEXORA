@@ -47,7 +47,45 @@ const pool = mysql.createPool({
     // overridable via DB_POOL_CONNECTION_LIMIT without another code
     // change. See docs/DEPLOYMENT.md for how to read the saturation
     // warning below when deciding on a new value.
-    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 25
+    connectionLimit: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 30,
+    // Fail fast instead of piling up thousands of waiting requests that can
+    // never be served (production had 900+ queued and aborted after minutes).
+    queueLimit: parseInt(process.env.DB_POOL_QUEUE_LIMIT, 10) || 300,
+    connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT_MS, 10) || 10000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    // Recycle idle connections so a silently-dropped one is never reused.
+    maxIdle: parseInt(process.env.DB_POOL_CONNECTION_LIMIT, 10) || 30,
+    idleTimeout: 60000
+});
+
+// Dedicated, separate pool used ONLY by utils/dbLock.js (advisory locks for
+// scheduled jobs). Sized above the number of scheduled jobs so a job tick
+// never waits here, and so lock holders can never consume the main pool.
+const lockPool = mysql.createPool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    ssl: buildSslConfig(),
+    waitForConnections: true,
+    connectionLimit: parseInt(process.env.DB_LOCK_POOL_LIMIT, 10) || 30,
+    queueLimit: 0,
+    connectTimeout: 10000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
+});
+
+// Safety net for a stuck query/lock: a single runaway statement can no longer
+// hold a pooled connection forever. Best effort - older servers / MariaDB
+// that don't support a variable just ignore the error.
+const SESSION_GUARDS = [
+    `SET SESSION innodb_lock_wait_timeout = ${parseInt(process.env.DB_LOCK_WAIT_TIMEOUT_S, 10) || 20}`,
+    `SET SESSION max_execution_time = ${parseInt(process.env.DB_MAX_EXECUTION_MS, 10) || 30000}`
+];
+pool.pool.on("connection", (connection) => {
+    SESSION_GUARDS.forEach((sql) => connection.query(sql, () => {}));
 });
 
 // the pool had zero visibility into its own saturation before
@@ -101,3 +139,4 @@ pool.on("error", (error) => {
 });
 
 module.exports = pool;
+module.exports.lockPool = lockPool;

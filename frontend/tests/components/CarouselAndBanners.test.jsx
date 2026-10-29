@@ -12,8 +12,8 @@ import { LanguageProvider } from "../../src/context/LanguageContext";
 import { CurrencyProvider } from "../../src/context/CurrencyContext";
 import { DataSaverProvider } from "../../src/context/DataSaverContext";
 
-describe("HomeCarousel controls", () => {
-    it("shows local fallback slides with keyboard-operable controls", async () => {
+describe("HomeCarousel", () => {
+    it("has no arrow or play/pause buttons and advances automatically", async () => {
         render(
             <MemoryRouter>
                 <LanguageProvider><CurrencyProvider><DataSaverProvider>
@@ -21,16 +21,13 @@ describe("HomeCarousel controls", () => {
                 </DataSaverProvider></CurrencyProvider></LanguageProvider>
             </MemoryRouter>
         );
-        const next = await screen.findByRole("button", { name: "Next slide" });
-        expect(screen.getByRole("button", { name: "Previous slide" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Pause slideshow" })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Everything you need" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Next slide" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Previous slide" })).toBeNull();
+        expect(screen.queryByRole("button", { name: /slideshow/i })).toBeNull();
         expect(screen.getAllByRole("img")[0].getAttribute("src")).toMatch(/^\/images\/hero\//);
-        expect(screen.getByRole("heading", { name: "Everything you need" })).toBeInTheDocument();
-        fireEvent.click(next);
-        expect(screen.getByRole("heading", { name: "From sellers you trust" })).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: "Pause slideshow" }));
-        expect(screen.getByRole("button", { name: "Play slideshow" })).toHaveAttribute("aria-pressed", "true");
-    });
+        expect(await screen.findByRole("heading", { name: "From sellers you trust" }, { timeout: 8000 })).toBeInTheDocument();
+    }, 15000);
 });
 
 describe("FloatingActions", () => {

@@ -76,9 +76,8 @@ class SlideErrorBoundary extends Component {
         return { hasError: true };
     }
 
-    componentDidCatch(error) {
-        // eslint-disable-next-line no-console -- surfaced to Sentry via the app's global handler; this local log is for local/dev visibility only.
-        console.error("ProductSwipeFeed slide failed to render:", error);
+    componentDidCatch() {
+        // Reported to Sentry via the app's global handler; nothing to log here.
     }
 
     render() {

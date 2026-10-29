@@ -1,5 +1,6 @@
 // Brevo SMTP transactional email helper. See backend/.env.example for the required env vars.
 
+const logger = require("../utils/logger");
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
 const isConfigured = () => !!process.env.BREVO_API_KEY;
@@ -20,7 +21,7 @@ const sendTransactionalEmail = async ({ to, toName, subject, html, text, replyTo
         if (process.env.NODE_ENV === "production") {
             throw new Error("Email delivery is not configured (BREVO_API_KEY missing).");
         }
-        console.warn(`[Brevo not configured] Would send "${subject}" to ${to}:\n${text}`);
+        logger.warn(`[Brevo not configured] Would send "${subject}" to ${to}:\n${text}`);
         return { simulated: true };
     }
 

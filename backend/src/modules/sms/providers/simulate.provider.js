@@ -4,8 +4,9 @@
  * sms.provider.js (mirrors whatsapp/providers/simulate.provider.js).
  */
 
+const logger = require("../../../utils/logger");
 exports.sendText = (to, body) => {
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED SMS MESSAGE — nothing was actually sent.\n" +

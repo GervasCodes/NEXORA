@@ -1,3 +1,4 @@
+const logger = require("../../utils/logger");
 const seoMetricsService = require("./seoMetrics.service");
 
 // Both public endpoints are fire-and-forget from the browser: they always
@@ -6,7 +7,7 @@ exports.reportWebVital = async (req, res) => {
     try {
         await seoMetricsService.recordVital(req.body);
     } catch (error) {
-        console.error("web vital write failed:", error.message);
+        logger.error({ err: error.message }, "web vital write failed");
     }
     return res.status(204).end();
 };
@@ -15,7 +16,7 @@ exports.reportSearchMiss = async (req, res) => {
     try {
         await seoMetricsService.recordSearchMiss(req.body);
     } catch (error) {
-        console.error("search miss write failed:", error.message);
+        logger.error({ err: error.message }, "search miss write failed");
     }
     return res.status(204).end();
 };

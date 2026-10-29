@@ -31,8 +31,8 @@ export function CartProvider({ children }) {
             const { data } = await api.get("/cart");
             setItems(data.data.items);
             setTotal(data.data.total);
-        } catch (error) {
-            console.error("Failed to refresh cart:", error);
+        } catch {
+            // Cart refresh is best-effort; keep the last known cart.
         } finally {
             setLoading(false);
         }

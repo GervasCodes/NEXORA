@@ -5,10 +5,6 @@ import { useCurrency } from "../context/CurrencyContext";
 import { useDataSaver } from "../context/DataSaverContext";
 import { useLanguage } from "../context/LanguageContext";
 
-// Respect the OS "reduce motion" setting: no autoplay, no crossfade.
-const prefersReducedMotion = () =>
-    typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
-
 // How often autoplay advances - long enough to read a slide's title,
 // short enough that a full deck (see HOME_CAROUSEL_MAX_SLIDES on the
 // backend) cycles in well under a minute.
@@ -68,10 +64,6 @@ export default function HomeCarousel() {
     const [slides, setSlides] = useState(null);
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
-    // Explicit, user-controlled pause (WCAG 2.2.2) - separate from the
-    // temporary hover/focus/drag pause above.
-    const [manualPause, setManualPause] = useState(false);
-    const [reduceMotion] = useState(prefersReducedMotion);
     const { t } = useLanguage();
     const dataSaver = useDataSaver();
     const dragStartX = useRef(null);
@@ -91,14 +83,14 @@ export default function HomeCarousel() {
         });
     }, [count]);
 
-    // Autoplay - paused on hover/focus (desktop), mid-drag (touch), when the
-    // visitor presses the pause button, and never under reduced-motion, so a
-    // slide is never yanked out from under a reader or a swipe.
+    // Fully automatic: advances on its own, no arrows and no play/pause
+    // buttons. Only held briefly while a finger is mid-swipe so a slide is
+    // never yanked out from under a touch. (Hover/focus no longer pause it.)
     useEffect(() => {
-        if (paused || manualPause || reduceMotion || count < 2) return undefined;
+        if (paused || count < 2) return undefined;
         const timer = setInterval(() => goTo(index + 1), AUTOPLAY_INTERVAL_MS);
         return () => clearInterval(timer);
-    }, [paused, manualPause, reduceMotion, count, index, goTo]);
+    }, [paused, count, index, goTo]);
 
     if (slides === null) {
         return (
@@ -130,12 +122,8 @@ export default function HomeCarousel() {
             role="region"
             aria-roledescription="carousel"
             aria-label={t("home.carouselLabel")}
-            aria-live={reduceMotion ? "polite" : "off"}
+            aria-live="off"
             className="relative rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] border border-frost/10 bg-azure/10 group"
-            onMouseEnter={() => setPaused(true)}
-            onMouseLeave={() => setPaused(false)}
-            onFocus={() => setPaused(true)}
-            onBlur={() => setPaused(false)}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
@@ -178,48 +166,13 @@ export default function HomeCarousel() {
             </Link>
 
             {count > 1 && (
-                <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-abyss/55 backdrop-blur px-1.5 py-0.5">
-                    <button
-                        type="button"
-                        onClick={() => goTo(index - 1)}
-                        aria-label={t("home.carousel.prev")}
-                        className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
-                    >
-                        <span aria-hidden="true">‹</span>
-                    </button>
-                    {!reduceMotion && (
-                        <button
-                            type="button"
-                            onClick={() => setManualPause((p) => !p)}
-                            aria-label={manualPause ? t("home.carousel.play") : t("home.carousel.pause")}
-                            aria-pressed={manualPause}
-                            className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
-                        >
-                            <span aria-hidden="true" className="text-xs">{manualPause ? "▶" : "❚❚"}</span>
-                        </button>
-                    )}
-                    <div className="flex items-center" role="group" aria-label={t("home.carouselLabel")}>
-                        {slides.map((_, i) => (
-                            <button
-                                key={i}
-                                type="button"
-                                onClick={() => goTo(i)}
-                                aria-label={t("home.carousel.goTo", { n: i + 1 })}
-                                aria-current={i === index ? "true" : undefined}
-                                className="h-8 w-5 inline-flex items-center justify-center focus-ring rounded"
-                            >
-                                <span className={`block h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-frost" : "w-1.5 bg-frost/50"}`} />
-                            </button>
-                        ))}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => goTo(index + 1)}
-                        aria-label={t("home.carousel.next")}
-                        className="h-8 w-8 inline-flex items-center justify-center rounded-full text-frost hover:bg-frost/15 focus-ring"
-                    >
-                        <span aria-hidden="true">›</span>
-                    </button>
+                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-abyss/55 backdrop-blur px-2 py-1.5 pointer-events-none" aria-hidden="true">
+                    {slides.map((_, i) => (
+                        <span
+                            key={i}
+                            className={`block h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-frost" : "w-1.5 bg-frost/50"}`}
+                        />
+                    ))}
                 </div>
             )}
         </div>

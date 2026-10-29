@@ -1,8 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     plugins: [react()],
+    // Production bundles ship with zero console output (log/warn/error/info/
+    // debug) and no debugger statements. Errors still reach Sentry.
+    esbuild: mode === "production" ? { drop: ["console", "debugger"], legalComments: "none" } : {},
     server: {
         port: 5173
     },
@@ -141,4 +144,4 @@ export default defineConfig({
             ]
         }
     }
-});
+}));

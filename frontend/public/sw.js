@@ -5,7 +5,7 @@
 // Bumped on every SW logic change so stale, possibly-buggy service
 // workers still installed on returning visitors' devices are replaced
 // rather than continuing to run their old (broken) fetch handler.
-const CACHE_VERSION = "nexora-v5";
+const CACHE_VERSION = "nexora-v6";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -99,7 +99,7 @@ self.addEventListener("install", (event) => {
                 // A slow/flaky network during install shouldn't leave the
                 // whole activation in a broken state - log and move on;
                 // the app shell just won't have an offline copy yet.
-                console.warn("SW install: pre-cache failed", err);
+                void err;
             })
     );
 });
@@ -184,26 +184,13 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Cloudinary product/service/store images: cache-first (see
-    // isCacheableImageRequest above for why cache-first is safe here).
-    if (isCacheableImageRequest(request, url)) {
-        event.respondWith(
-            caches.match(request).then(
-                (cached) =>
-                    cached ||
-                    fetch(request).then((response) => {
-                        const clone = response.clone();
-                        caches
-                            .open(IMAGE_CACHE)
-                            .then((cache) => cache.put(request, clone))
-                            .then(trimImageCache)
-                            .catch(() => {});
-                        return response;
-                    })
-            )
-        );
-        return;
-    }
+    // Cloudinary images are deliberately NOT intercepted any more. A fetch()
+    // made from a service worker is checked against the page's CSP
+    // `connect-src`, not `img-src`, so re-fetching them here got every
+    // product image blocked ("Refused to connect ... Content Security
+    // Policy"). Letting the browser load them normally uses `img-src` and
+    // its own HTTP cache (Cloudinary URLs are immutable/long-cached).
+    if (isCacheableImageRequest(request, url)) return;
 
     // Cross-origin (fonts, etc. - Cloudinary images are handled above) -
     // let the browser handle these normally rather than trying to
@@ -280,7 +267,13 @@ self.addEventListener("fetch", (event) => {
                         }
                         return response;
                     })
-                    .catch(() => Response.error());
+                    .catch(
+                        () =>
+                            new Response("", {
+                                status: 504,
+                                statusText: "Gateway Timeout"
+                            })
+                    );
             })
         );
     }

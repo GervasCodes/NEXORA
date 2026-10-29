@@ -37,8 +37,8 @@ if (dsn) {
     // Loud, not silent - same reasoning as mobileMoney.provider.js's
     // simulate-mode banner: shipping production without error tracking
     // configured should be an unmissable choice, not an accident.
-    // eslint-disable-next-line no-console
-    console.warn("[sentry] SENTRY_DSN is not set - error tracking is disabled in production.");
+    // Required lazily so Sentry is initialised before pino is loaded.
+    require("../utils/logger").warn("[sentry] SENTRY_DSN is not set - error tracking is disabled in production.");
 }
 
 module.exports = Sentry;

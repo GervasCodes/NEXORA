@@ -18,6 +18,12 @@ export function useAgentShift() {
     // mount-time hydration effect below can safely call the same
     // start-watching logic without double-starting it.
     const watchingRef = useRef(false);
+    // Always-current socket/online for timers and callbacks, so a socket that
+    // connects (or reconnects) AFTER the shift started is still used.
+    const socketRef = useRef(socket);
+    const onlineRef = useRef(false);
+    useEffect(() => { socketRef.current = socket; }, [socket]);
+    useEffect(() => { onlineRef.current = online; }, [online]);
 
     const stopWatching = useCallback(() => {
         if (watchIdRef.current !== null) {
@@ -35,10 +41,10 @@ export function useAgentShift() {
         stopWatching();
         setOnline(false);
         setPushWarning("");
-        socket?.emit("agent:offline");
+        socketRef.current?.emit("agent:offline");
         try { await api.put("/delivery/online", { isOnline: false }); } catch { /* best effort */ }
         await disablePushNotifications().catch(() => {});
-    }, [socket, stopWatching]);
+    }, [stopWatching]);
 
     // The actual "start watching position + tell the server we're on
     // shift" logic - extracted so both the manual toggle (goOnline) and
@@ -64,21 +70,31 @@ export function useAgentShift() {
         );
 
         intervalRef.current = setInterval(() => {
-            if (lastCoordsRef.current && socket?.connected) {
-                socket.emit("agent:location", lastCoordsRef.current);
+            const sock = socketRef.current;
+            if (lastCoordsRef.current && sock?.connected) {
+                sock.emit("agent:location", lastCoordsRef.current);
             }
         }, LOCATION_PING_MS);
 
         setOnline(true);
 
         if (announce) {
-            socket?.emit("agent:online");
-            try { await api.put("/delivery/online", { isOnline: true }); } catch { /* best effort */ }
+            socketRef.current?.emit("agent:online");
+            try {
+                await api.put("/delivery/online", { isOnline: true });
+            } catch {
+                // The server never recorded the shift, so don't pretend it
+                // started - roll the switch back and say why.
+                stopWatching();
+                setOnline(false);
+                setLocationError("Couldn't start your shift — check your connection and try again.");
+                return;
+            }
         }
 
         const pushResult = await enablePushNotifications();
         setPushWarning(pushResult.success ? "" : pushResult.message);
-    }, [socket]);
+    }, [stopWatching]);
 
     const goOnline = useCallback(() => startShift({ announce: true }), [startShift]);
 
@@ -88,9 +104,9 @@ export function useAgentShift() {
     // if the agent was already on shift (including through the socket's
     // reconnect grace period - see backend/src/socket/socket.js), resume
     // watching/pinging without re-announcing (the server already knows).
+    // Restore the persisted shift on mount (works even before the socket is
+    // up - it's a plain REST call), so a refresh no longer shows "Off shift".
     useEffect(() => {
-        if (!connected) return;
-
         let cancelled = false;
 
         api.get("/delivery/online")
@@ -102,17 +118,17 @@ export function useAgentShift() {
             .catch(() => { /* best effort - falls back to manual toggle */ });
 
         return () => { cancelled = true; };
-        // Only re-run when the socket (re)connects, e.g. after a refresh
-        // or a login/logout session change - not on every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [connected]);
+    }, []);
 
+    // A dropped socket no longer flips the switch off (that made the button
+    // look broken whenever the connection blipped or was blocked). When the
+    // socket (re)connects during a shift, just re-announce presence.
     useEffect(() => {
-        if (!connected && online) {
-            stopWatching();
-            setOnline(false);
+        if (connected && onlineRef.current) {
+            socketRef.current?.emit("agent:online");
         }
-    }, [connected, online, stopWatching]);
+    }, [connected]);
 
     useEffect(() => stopWatching, [stopWatching]);
 

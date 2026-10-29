@@ -4,13 +4,14 @@
  * providers/efd.provider.js (mirrors payment/providers/simulate.provider.js).
  */
 
+const logger = require("../../../utils/logger");
 const crypto = require("crypto");
 
 exports.submitInvoice = ({ orderNumber }) => {
     const fiscalReceiptNumber = `SIM-${Date.now()}`;
     const verificationCode = crypto.randomBytes(6).toString("hex").toUpperCase();
 
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED EFD RECEIPT — not actually submitted to TRA.\n" +
@@ -33,7 +34,7 @@ exports.submitInvoice = ({ orderNumber }) => {
 exports.submitCreditNote = ({ fiscalReceiptNumber, orderNumber, reason }) => {
     const creditNoteNumber = `SIM-CN-${Date.now()}`;
 
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED EFD CREDIT NOTE — not actually submitted to TRA.\n" +

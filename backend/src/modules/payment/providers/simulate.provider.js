@@ -4,8 +4,9 @@
  * guard in mobileMoney.provider.js.
  */
 
+const logger = require("../../../utils/logger");
 exports.initiate = (phone, amount) => {
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED MOBILE MONEY PAYMENT — no real charge occurred.\n" +
@@ -22,7 +23,7 @@ exports.initiate = (phone, amount) => {
 };
 
 exports.disburse = (phone, amount) => {
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED MOBILE MONEY PAYOUT — no real transfer occurred.\n" +
@@ -37,7 +38,7 @@ exports.disburse = (phone, amount) => {
 };
 
 exports.refund = (phone, amount) => {
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED MOBILE MONEY REFUND — no real transfer occurred.\n" +

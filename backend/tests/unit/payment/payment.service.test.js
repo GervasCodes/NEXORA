@@ -7,8 +7,7 @@ jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/booking/booking.repository");
 jest.mock("../../../src/config/db", () => require("../../helpers/mockDb"));
 jest.mock("../../../src/modules/payment/providers/mobileMoney.provider");
-jest.mock("../../../src/modules/payment/providers/snippe.provider");
-jest.mock("../../../src/modules/payment/providers/malipopayCard.provider");
+jest.mock("../../../src/modules/payment/providers/card.provider");
 jest.mock("../../../src/modules/payment/providers/paypal.provider");
 jest.mock("../../../src/modules/wallet/wallet.service");
 jest.mock("../../../src/modules/settings/settings.service");
@@ -41,7 +40,7 @@ const orderRepository = require("../../../src/modules/order/order.repository");
 const bookingRepository = require("../../../src/modules/booking/booking.repository");
 const db = require("../../../src/config/db");
 const mobileMoneyProvider = require("../../../src/modules/payment/providers/mobileMoney.provider");
-const snippeProvider = require("../../../src/modules/payment/providers/snippe.provider");
+const cardProvider = require("../../../src/modules/payment/providers/card.provider");
 const paypalProvider = require("../../../src/modules/payment/providers/paypal.provider");
 const walletService = require("../../../src/modules/wallet/wallet.service");
 const settingsService = require("../../../src/modules/settings/settings.service");
@@ -80,7 +79,7 @@ describe("payment.service - initiateMobileMoneyPayment", () => {
     });
 
     it("throws when the order isn't set up for mobile money", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 1, payment_method: "snippe", payment_status: "unpaid" });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 1, payment_method: "card", payment_status: "unpaid" });
 
         await expect(paymentService.initiateMobileMoneyPayment(1, 1)).rejects.toThrow("not set up for mobile money");
     });
@@ -144,7 +143,7 @@ describe("payment.service - initiateMobileMoneyPayment", () => {
         expect(secondRef).toMatch(/^ORDER-7-[0-9A-F]{12}$/);
         expect(firstRef).not.toBe(secondRef);
         expect(mobileMoneyProvider.initiate.mock.calls[0][2].reference).toBe(firstRef);
-        expect(paymentRepository.markPending).toHaveBeenCalledWith(42, "TXN-1");
+        expect(paymentRepository.markPending).toHaveBeenCalledWith(42, "TXN-1", undefined);
         expect(paymentRepository.markCompleted).not.toHaveBeenCalled();
         expect(result.status).toBe("pending");
     });
@@ -342,7 +341,7 @@ describe("payment.service - _handleOrderPaymentWebhook", () => {
     // ---- Amount checks ----
     describe("amount check", () => {
         it("routes a mismatched charged amount to review instead of marking the order paid", async () => {
-            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "snippe", amount: 10000 });
+            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "card", amount: 10000 });
             orderRepository.findOrderById.mockResolvedValue({ id: 5, status: "pending", payment_status: "unpaid" });
 
             const result = await paymentService._handleOrderPaymentWebhook(5, true, "TXN", null, null, { reportedAmount: 4000, reportedCurrency: "TZS" });
@@ -354,7 +353,7 @@ describe("payment.service - _handleOrderPaymentWebhook", () => {
         });
 
         it("accepts an amount within the small tolerance", async () => {
-            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "snippe", amount: 10000 });
+            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "card", amount: 10000 });
             orderRepository.findOrderById.mockResolvedValue({ id: 5, is_parent: false, status: "pending", payment_status: "unpaid" });
 
             const result = await paymentService._handleOrderPaymentWebhook(5, true, "TXN", null, null, { reportedAmount: 10001, reportedCurrency: "TZS" });
@@ -363,7 +362,7 @@ describe("payment.service - _handleOrderPaymentWebhook", () => {
         });
 
         it("flags a wrong currency as a mismatch", async () => {
-            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "snippe", amount: 10000 });
+            paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "pending", method: "card", amount: 10000 });
             orderRepository.findOrderById.mockResolvedValue({ id: 5, status: "pending", payment_status: "unpaid" });
 
             const result = await paymentService._handleOrderPaymentWebhook(5, true, "TXN", null, null, { reportedAmount: 10000, reportedCurrency: "USD" });
@@ -651,66 +650,56 @@ describe("payment.service - booking payments", () => {
     });
 });
 
-describe("payment.service - hosted checkout events (Snippe / MalipoPay Card)", () => {
+describe("payment.service - handlePawapayDepositEvent", () => {
     const ref = "ORDER-12-0A1B2C3D4E5F";
-    const paymentRow = { id: 1, status: "pending", purpose: "order_payment", method: "snippe", amount: 10000 };
+    const paymentRow = { id: 1, status: "pending", purpose: "order_payment", method: "mobile_money", provider: "pawapay", amount: 10000, payment_reference: ref };
 
     beforeEach(() => {
-        paymentRepository.findByPaymentReference.mockResolvedValue(paymentRow);
+        paymentRepository.findByTransactionReference.mockResolvedValue(paymentRow);
         orderRepository.findOrderById.mockResolvedValue({ id: 12, is_parent: false, status: "pending", payment_status: "unpaid" });
     });
 
-    it("ignores unrelated event types", async () => {
-        expect(await paymentService.handleSnippeWebhookEvent({ type: "customer.updated" })).toEqual({ ignored: true });
-    });
-
-    it("applies a paid completed session and passes the reported amount to the amount check", async () => {
-        const result = await paymentService.handleSnippeWebhookEvent({
-            type: "checkout.session.completed",
-            data: { reference: ref, payment_status: "paid", payment_id: "sess_123", amount_total: 10000, currency: "TZS" }
+    it("finds the payment by deposit id and applies a completed deposit", async () => {
+        const result = await paymentService.handlePawapayDepositEvent({
+            depositId: "dep-1", success: true, reportedAmount: "10000.00", reportedCurrency: "TZS"
         });
 
+        expect(paymentRepository.findByTransactionReference).toHaveBeenCalledWith("dep-1");
         expect(result.orderId).toBe(12);
         expect(result.success).toBe(true);
-        expect(paymentRepository.claimCompleted).toHaveBeenCalledWith(1, "sess_123", expect.any(String), null, null);
+        expect(paymentRepository.claimCompleted).toHaveBeenCalledWith(1, "dep-1", expect.any(String), null, null);
     });
 
-    it("ignores a 'completed' session whose payment_status is not paid yet (never marks it failed)", async () => {
-        const result = await paymentService.handleSnippeWebhookEvent({
-            type: "checkout.session.completed",
-            data: { reference: ref, payment_status: "processing", id: "sess_1" }
-        });
-
-        expect(result).toEqual({ ignored: true });
-        expect(paymentRepository.markFailed).not.toHaveBeenCalled();
-    });
-
-    it("marks the payment failed on an expired session event", async () => {
-        const result = await paymentService.handleSnippeWebhookEvent({ type: "checkout.session.expired", data: { reference: ref, id: "sess_1" } });
+    it("marks the payment failed on a FAILED deposit", async () => {
+        const result = await paymentService.handlePawapayDepositEvent({ depositId: "dep-1", success: false });
 
         expect(result).toMatchObject({ orderId: 12, success: false });
         expect(paymentRepository.markFailed).toHaveBeenCalledWith(1);
     });
 
-    it("routes a mismatched charged amount to review", async () => {
-        const result = await paymentService.handleMalipopayCardWebhookEvent({
-            type: "checkout.session.completed",
-            data: { reference: ref, payment_status: "paid", id: "s", amount_total: 1 }
-        });
+    it("routes a mismatched amount to review instead of paying", async () => {
+        const result = await paymentService.handlePawapayDepositEvent({ depositId: "dep-1", success: true, reportedAmount: "1", reportedCurrency: "TZS" });
 
         expect(result.needsReview).toBe(true);
     });
 
-    it("hands dispute / chargeback events to the chargeback service", async () => {
-        chargebackService.processChargeback.mockResolvedValue({ chargeback: true });
+    it("falls back to the reference echoed in the metadata when the deposit id is not stored yet", async () => {
+        paymentRepository.findByTransactionReference.mockResolvedValue(undefined);
+        paymentRepository.findByPaymentReference.mockResolvedValue(paymentRow);
 
-        const result = await paymentService.handleSnippeWebhookEvent({
-            type: "payment.dispute.created",
-            data: { reference: ref, reason: "fraudulent" }
-        });
+        const result = await paymentService.handlePawapayDepositEvent({ depositId: "dep-1", success: true, reference: ref });
 
-        expect(chargebackService.processChargeback).toHaveBeenCalledWith(paymentRow, "fraudulent");
-        expect(result).toEqual({ chargeback: true });
+        expect(paymentRepository.findByPaymentReference).toHaveBeenCalledWith(ref);
+        expect(result.orderId).toBe(12);
+    });
+
+    it("throws a RETRYABLE error (not permanent) when no payment exists yet", async () => {
+        paymentRepository.findByTransactionReference.mockResolvedValue(undefined);
+
+        const error = await paymentService.handlePawapayDepositEvent({ depositId: "dep-x", success: true }).catch((e) => e);
+
+        expect(error.message).toMatch(/No payment found yet/);
+        expect(error.permanent).toBeUndefined();
     });
 });
 
@@ -782,32 +771,48 @@ describe("payment.service - stale sweep provider check", () => {
     });
 });
 
-describe("payment.service - initiateSnippeOrderPayment", () => {
-    it("throws when the order isn't set up for Snippe", async () => {
+describe("payment.service - initiateCardOrderPayment", () => {
+    it("throws when the order isn't set up for card", async () => {
         orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "paypal", payment_status: "unpaid" });
 
         await expect(
-            paymentService.initiateSnippeOrderPayment(1, 5, { successUrl: "https://x", cancelUrl: "https://x" })
-        ).rejects.toThrow("not set up for Snippe");
+            paymentService.initiateCardOrderPayment(1, 5, { successUrl: "https://x", cancelUrl: "https://x" })
+        ).rejects.toThrow("not set up for card");
     });
 
-    it("creates a checkout session with the attempt's own reference and marks the payment pending", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "snippe", payment_status: "unpaid", total_amount: 10000 });
+    it("creates a checkout session with the attempt's own reference and records which gateway took it", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "card", payment_status: "unpaid", total_amount: 10000, shipping_phone: "0712345678" });
         paymentRepository.create.mockResolvedValue(3);
-        snippeProvider.createCheckoutSession.mockResolvedValue({ sessionId: "sess_1", url: "https://snippe.co/checkout/sess_1" });
+        db.query.mockResolvedValue([[{ first_name: "Asha", last_name: "Juma", email: "a@x.com", phone: "0712345678" }]]);
+        cardProvider.createCheckoutSession.mockResolvedValue({ sessionId: "sess_1", url: "https://pay.example/sess_1", provider: "selcom" });
 
-        const result = await paymentService.initiateSnippeOrderPayment(1, 5, { successUrl: "https://x", cancelUrl: "https://x" });
+        const result = await paymentService.initiateCardOrderPayment(1, 5, { successUrl: "https://x", cancelUrl: "https://x" });
 
         const reference = paymentRepository.create.mock.calls[0][4];
-        expect(snippeProvider.createCheckoutSession.mock.calls[0][0].reference).toBe(reference);
-        expect(paymentRepository.markPending).toHaveBeenCalledWith(3, "sess_1");
-        expect(result).toEqual({ status: "redirect", url: "https://snippe.co/checkout/sess_1" });
+        expect(paymentRepository.create.mock.calls[0][1]).toBe("card");
+        const sent = cardProvider.createCheckoutSession.mock.calls[0][0];
+        expect(sent.reference).toBe(reference);
+        expect(sent.buyer).toMatchObject({ name: "Asha Juma", email: "a@x.com" });
+        expect(paymentRepository.markPending).toHaveBeenCalledWith(3, "sess_1", "selcom");
+        expect(result).toEqual({ status: "redirect", url: "https://pay.example/sess_1" });
+    });
+
+    it("marks the attempt failed when the gateway cannot create a checkout", async () => {
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "card", payment_status: "unpaid", total_amount: 10000 });
+        paymentRepository.create.mockResolvedValue(3);
+        db.query.mockResolvedValue([[{}]]);
+        cardProvider.createCheckoutSession.mockRejectedValue(new Error("Card payments are not configured"));
+
+        await expect(
+            paymentService.initiateCardOrderPayment(1, 5, { successUrl: "https://x", cancelUrl: "https://x" })
+        ).rejects.toThrow("not configured");
+        expect(paymentRepository.markFailed).toHaveBeenCalledWith(3);
     });
 });
 
 describe("payment.service - initiatePaypalOrderPayment", () => {
     it("throws when the order isn't set up for PayPal", async () => {
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "snippe", payment_status: "unpaid" });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 5, payment_method: "card", payment_status: "unpaid" });
 
         await expect(
             paymentService.initiatePaypalOrderPayment(1, 5, { returnUrl: "https://x", cancelUrl: "https://x" })

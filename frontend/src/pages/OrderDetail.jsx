@@ -94,7 +94,7 @@ export default function OrderDetail() {
     
     // Polls GET /orders/:id a few times as a fallback for the "payment:updated"
     // socket event below, in case the buyer's socket was still reconnecting
-    // (e.g. right after a Snippe/PayPal redirect back into the app) when the
+    // (e.g. right after a card/PayPal redirect back into the app) when the
     // provider's webhook actually landed. Never declares failure on its own -
     // a timeout just means "still waiting", not "it failed".
     const pollForPaymentConfirmation = (attempt = 0) => {
@@ -160,7 +160,7 @@ export default function OrderDetail() {
 
         } else if (payment === "success") {
             // The redirect only means the buyer finished the checkout step on
-            // Snippe's side - the actual confirmation is the provider's
+            // the gateway's side - the actual confirmation is the provider's
             // webhook, which may not have landed yet. Show a pending state
             // and wait for either the socket event or the poll fallback
             // below to confirm it before saying "successful".
@@ -181,7 +181,7 @@ export default function OrderDetail() {
 
     // Live confirmation from the backend once the provider's webhook is
     // actually processed - covers mobile money (buyer stays on this page
-    // entering their PIN) as well as being the fastest path for the Snippe/
+    // entering their PIN) as well as being the fastest path for the card/
     // PayPal redirect flows above.
     useEffect(() => {
         if (!socket || !connected) return;
@@ -351,30 +351,12 @@ export default function OrderDetail() {
         }
     };
 
-    const handleRetrySnippe = async () => {
+    const handleRetryCard = async () => {
         setBusy(true);
         setActionError("");
         try {
             const origin = window.location.origin;
-            const { data } = await api.post(`/payments/${id}/snippe/checkout`, {
-                successUrl: `${origin}/orders/${id}?payment=success`,
-                cancelUrl: `${origin}/orders/${id}?payment=cancelled`
-            });
-            window.location.href = data.data.url;
-        } catch (err) {
-            setActionError(extractErrorMessage(err));
-            setBusy(false);
-        }
-    };
-
-    // MalipoPay Card equivalent of handleRetrySnippe above - same
-    // hosted-checkout retry shape, different route/provider.
-    const handleRetryMalipopayCard = async () => {
-        setBusy(true);
-        setActionError("");
-        try {
-            const origin = window.location.origin;
-            const { data } = await api.post(`/payments/${id}/malipopay-card/checkout`, {
+            const { data } = await api.post(`/payments/${id}/card/checkout`, {
                 successUrl: `${origin}/orders/${id}?payment=success`,
                 cancelUrl: `${origin}/orders/${id}?payment=cancelled`
             });
@@ -621,14 +603,9 @@ export default function OrderDetail() {
                         {busy ? "Processing…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Mobile Money"}
                     </Button>
                 )}
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "snippe" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
-                    <Button onClick={handleRetrySnippe} disabled={busy}>
-                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Card (Snippe)"}
-                    </Button>
-                )}
-                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "malipopay_card" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
-                    <Button onClick={handleRetryMalipopayCard} disabled={busy}>
-                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Card (MalipoPay)"}
+                {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "card" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (
+                    <Button onClick={handleRetryCard} disabled={busy}>
+                        {busy ? "Redirecting…" : order.payment_status === "deposit_paid" ? "Pay Remaining Balance" : "Pay with Card"}
                     </Button>
                 )}
                 {!order.parent_order_id && order.status !== "cancelled" && order.payment_method === "paypal" && (order.payment_status === "unpaid" || order.payment_status === "deposit_paid") && (

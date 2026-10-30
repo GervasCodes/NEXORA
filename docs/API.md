@@ -253,19 +253,19 @@ delivery is inherently date-driven.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/webhooks/malipopay` | MalipoPay webhook (signature-verified) |
-| POST | `/webhooks/selcom` | Selcom webhook (signature-verified) |
-| POST | `/verification-fee/snippe/checkout` | Snippe checkout for the seller verification fee |
+| POST | `/webhooks/selcom` | Selcom webhook (bearer-token verified) |
+| POST | `/webhooks/azampay` | AzamPay webhook (shared-secret verified) |
+| POST | `/webhooks/pawapay` | PawaPay deposit callback (RFC 9421 signature, raw body — registered in `app.js`) |
 | POST | `/verification-fee/paypal/create` | PayPal order for the verification fee |
 | POST | `/paypal/capture` | Capture a PayPal payment |
 | GET | `/methods` | Configured payment rails and their capabilities (Phase 5 — `providers/registry.js`) |
-| POST | `/:orderId/initiate` | Start mobile-money payment (MalipoPay/Selcom/AzamPay, per `MOBILE_MONEY_PROVIDER`) for an order |
-| POST | `/:orderId/snippe/checkout` | Start Snippe hosted checkout for an order |
+| POST | `/:orderId/initiate` | Start mobile-money payment (AzamPay/Selcom/PawaPay, per `MOBILE_MONEY_PROVIDER`) for an order |
+| POST | `/:orderId/card/checkout` | Start hosted card checkout for an order (Selcom/AzamPay, per `CARD_PROVIDER`) |
 | POST | `/:orderId/paypal/create` | Start PayPal payment for an order |
 | GET | `/:orderId` | Payment status for an order |
 | PUT | `/:orderId/confirm-cod` | Confirm cash-on-delivery |
 | POST | `/booking/:bookingId/initiate` | Start mobile-money payment for a booking (Phase 3 — body: `{ phone }`) |
-| POST | `/booking/:bookingId/snippe/checkout` | Start Snippe hosted checkout for a booking (Phase 3) |
+| POST | `/booking/:bookingId/card/checkout` | Start hosted card checkout for a booking |
 | POST | `/booking/:bookingId/paypal/create` | Start PayPal payment for a booking (Phase 3) |
 | GET | `/booking/:bookingId` | Payment status for a booking — either party (Phase 3) |
 

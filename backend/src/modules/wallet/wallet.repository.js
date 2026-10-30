@@ -39,7 +39,7 @@ exports.incrementBalance = async (sellerId, delta, executor = db) => {
 };
 
 // Escrow earnings from orders paid by a platform-captured
-// method (mobile money / Snippe / PayPal) land here instead of `balance`
+// method (mobile money / card / PayPal) land here instead of `balance`
 // until Phase 9D's release job (or an admin/dispute action) moves them
 // over - see docs/ESCROW_ANALYSIS.md. Mirrors incrementBalance exactly,
 // just against the other column.
@@ -98,7 +98,7 @@ exports.findUncreditedItemsByOrder = async (orderId, executor = db) => {
 // `released`: TRUE for methods with no platform-held money to hold back
 // (Cash on Delivery - the seller already has the cash by the time this
 // runs; see wallet.service.js#creditSellersForOrder), FALSE for
-// platform-captured methods (mobile money / Snippe / PayPal), which
+// platform-captured methods (mobile money / card / PayPal), which
 // start out held and wait for  release job.
 exports.markItemCredited = async (itemId, commissionRate, commissionAmount, netAmount, released, executor = db) => {
     await executor.query(

@@ -29,8 +29,6 @@ const paymentRepository = require("../payment/payment.repository");
 const orderRepository = require("../order/order.repository");
 const auditService = require("../audit/audit.service");
 const mobileMoneyProvider = require("../payment/providers/mobileMoney.provider");
-const snippeProvider = require("../payment/providers/snippe.provider");
-const malipopayCardProvider = require("../payment/providers/malipopayCard.provider");
 const paypalProvider = require("../payment/providers/paypal.provider");
 
 const MAX_ATTEMPTS = 3;
@@ -122,55 +120,44 @@ const resolveMobileMoneyRefundPhone = async (refund, payment) => {
     return order?.shipping_phone || null;
 };
 
+// Gateways NEXORA no longer integrates with. Payments they took keep their
+// gateway name on payments.provider (migration 161), but there is no adapter
+// left to push a refund through - an admin refunds those from the old
+// gateway's own dashboard.
+const RETIRED_PROVIDERS = new Set(["snippe", "malipopay"]);
+
 const callProvider = async (refund, payment) => {
-    if (payment.method === "mobile_money") {
+    if (payment.provider && RETIRED_PROVIDERS.has(String(payment.provider).toLowerCase())) {
+        return {
+            success: false,
+            error: `This payment was taken through ${payment.provider}, which is no longer connected - refund it from that gateway's dashboard`
+        };
+    }
+
+    if (payment.method === "mobile_money" || payment.method === "card") {
         const phone = await resolveMobileMoneyRefundPhone(refund, payment);
         if (!phone) {
             return { success: false, error: "No phone number on file to refund to" };
         }
+
+        // Mobile money goes back through the gateway that collected it
+        // (payments.provider; the active one for older rows) and, where the
+        // gateway supports it (PawaPay), against the original deposit. The
+        // card gateways here (Selcom / AzamPay hosted checkout) expose no
+        // card-refund API, so a card refund is paid out to the buyer's mobile
+        // money number through the active mobile money gateway instead.
+        const isMobile = payment.method === "mobile_money";
         const result = await mobileMoneyProvider.refund(phone, refund.amount, {
             reference: `NEXORA-REFUND-${sourceSlug(refund).toUpperCase()}`,
-            description: `Refund for ${sourceLabel(refund)}`
+            description: `Refund for ${sourceLabel(refund)}`,
+            provider: isMobile ? payment.provider : null,
+            depositId: isMobile ? payment.transaction_reference : null
         });
         return {
             success: Boolean(result.success),
             reference: result.transactionReference,
-            error: result.success ? null : "Mobile money provider declined the refund"
+            error: result.success ? null : "Payment provider declined the refund"
         };
-    }
-
-    if (payment.method === "snippe") {
-        if (!payment.transaction_reference) {
-            return { success: false, error: "Payment has no Snippe transaction reference on file" };
-        }
-        const result = await snippeProvider.refundPayment({
-            transactionReference: payment.transaction_reference,
-            amountTzs: refund.amount,
-            reason: sourceSlug(refund)
-        });
-        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
-    }
-
-    if (payment.method === "malipopay_card") {
-        if (!payment.transaction_reference) {
-            return { success: false, error: "Payment has no MalipoPay Card transaction reference on file" };
-        }
-        // MalipoPay's real API has no dedicated card-refund endpoint (see
-        // malipopayCard.provider.js's comments) - a refund is issued as a
-        // mobile money disbursement back to the buyer instead, same as
-        // the mobile_money branch above, so it needs a phone number to
-        // pay out to rather than just the original transaction reference.
-        const phone = await resolveMobileMoneyRefundPhone(refund, payment);
-        if (!phone) {
-            return { success: false, error: "No phone number on file to refund to" };
-        }
-        const result = await malipopayCardProvider.refundPayment({
-            transactionReference: payment.transaction_reference,
-            phoneNumber: phone,
-            amountTzs: refund.amount,
-            reason: sourceSlug(refund)
-        });
-        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
     }
 
     if (payment.method === "paypal") {

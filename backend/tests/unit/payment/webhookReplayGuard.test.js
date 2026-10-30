@@ -18,7 +18,7 @@ describe("webhookReplayGuard.isTimestampFresh", () => {
         expect(replayGuard.isTimestampFresh(Date.now())).toBe(true);
     });
 
-    it("accepts MalipoPay's documented yyyyMMddHHmmss format for the current moment", () => {
+    it("accepts the documented yyyyMMddHHmmss format for the current moment", () => {
         const d = new Date();
         const pad = (n) => String(n).padStart(2, "0");
         const compact = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
@@ -43,11 +43,11 @@ describe("webhookReplayGuard.isTimestampFresh", () => {
 describe("webhookReplayGuard.recordDelivery", () => {
     it("returns true (fresh delivery) when the insert succeeds", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]);
-        const result = await replayGuard.recordDelivery("malipopay", "same bytes");
+        const result = await replayGuard.recordDelivery("azampay", "same bytes");
         expect(result).toBe(true);
         expect(db.query).toHaveBeenCalledWith(
             expect.stringContaining("INSERT INTO webhook_replay_guard"),
-            expect.arrayContaining(["malipopay", expect.any(String)])
+            expect.arrayContaining(["azampay", expect.any(String)])
         );
     });
 
@@ -62,16 +62,16 @@ describe("webhookReplayGuard.recordDelivery", () => {
 
     it("re-throws a non-duplicate database error rather than treating it as a replay", async () => {
         db.query.mockRejectedValueOnce(new Error("connection lost"));
-        await expect(replayGuard.recordDelivery("snippe", "bytes")).rejects.toThrow("connection lost");
+        await expect(replayGuard.recordDelivery("selcom", "bytes")).rejects.toThrow("connection lost");
     });
 
     it("produces a different hash for different payloads (so distinct deliveries never collide)", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]);
-        await replayGuard.recordDelivery("malipopay", "payload A");
+        await replayGuard.recordDelivery("azampay", "payload A");
         const [, paramsA] = db.query.mock.calls[0];
 
         db.query.mockResolvedValueOnce([{ insertId: 2 }]);
-        await replayGuard.recordDelivery("malipopay", "payload B");
+        await replayGuard.recordDelivery("azampay", "payload B");
         const [, paramsB] = db.query.mock.calls[1];
 
         expect(paramsA[1]).not.toBe(paramsB[1]);
@@ -79,11 +79,11 @@ describe("webhookReplayGuard.recordDelivery", () => {
 
     it("produces the same hash for the exact same (provider, payload) pair - the core replay-detection property", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]);
-        await replayGuard.recordDelivery("malipopay", "identical payload");
+        await replayGuard.recordDelivery("azampay", "identical payload");
         const [, paramsA] = db.query.mock.calls[0];
 
         db.query.mockResolvedValueOnce([{ insertId: 2 }]);
-        await replayGuard.recordDelivery("malipopay", "identical payload");
+        await replayGuard.recordDelivery("azampay", "identical payload");
         const [, paramsB] = db.query.mock.calls[1];
 
         expect(paramsA[1]).toBe(paramsB[1]);

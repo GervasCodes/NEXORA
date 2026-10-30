@@ -198,20 +198,20 @@ describe("Checkout page", () => {
         expect(api.post).toHaveBeenCalledTimes(1);
     });
 
-    it("redirects to the Snippe checkout URL and does not navigate to the order page", async () => {
+    it("redirects to the card checkout URL and does not navigate to the order page", async () => {
         mockUseCart.mockReturnValue(cartWithItems);
         api.post
             .mockResolvedValueOnce({ data: { data: { orderId: 57 } } })
-            .mockResolvedValueOnce({ data: { data: { url: "https://pay.snippe.sh/session/abc" } } });
+            .mockResolvedValueOnce({ data: { data: { url: "https://pay.gateway.example/session/abc" } } });
         const user = userEvent.setup();
         renderCheckout();
         await fillRequiredFields(user);
-        await user.click(screen.getByLabelText(/Card \(Snippe\)/));
+        await user.click(screen.getByLabelText(/^Card$/));
 
         await user.click(placeOrderButton());
 
-        await waitFor(() => expect(window.location.href).toBe("https://pay.snippe.sh/session/abc"));
-        expect(api.post).toHaveBeenNthCalledWith(2, "/payments/57/snippe/checkout", {
+        await waitFor(() => expect(window.location.href).toBe("https://pay.gateway.example/session/abc"));
+        expect(api.post).toHaveBeenNthCalledWith(2, "/payments/57/card/checkout", {
             successUrl: "https://nexora.tz/orders/57?payment=success",
             cancelUrl: "https://nexora.tz/orders/57?payment=cancelled"
         });
@@ -236,6 +236,29 @@ describe("Checkout page", () => {
             cancelUrl: "https://nexora.tz/orders/58?payment=cancelled"
         });
         expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it("during payments maintenance: shows the notice and offers only cash on delivery (no mobile money, card or PayPal)", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        api.get.mockImplementation((url) => (url === "/payments/methods"
+            ? Promise.resolve({ data: {
+                data: [
+                    { key: "mobile_money", type: undefined, configured: true },
+                    { key: "card", type: "card", configured: true },
+                    { key: "paypal", configured: true }
+                ],
+                maintenance: { active: true, message: "Payments are under maintenance." }
+            } })
+            : Promise.reject(new Error("not mocked"))));
+        renderCheckout();
+
+        expect(await screen.findByText("Payments are under maintenance.")).toBeInTheDocument();
+        expect(screen.getByLabelText(/Cash on Delivery/)).toBeInTheDocument();
+        expect(screen.queryByLabelText(/Mobile Money/)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^Card$/)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/PayPal/)).not.toBeInTheDocument();
+
+        api.get.mockImplementation(() => Promise.reject(new Error("not mocked")));
     });
 
     it("shows an error message and re-enables the submit button when order creation fails", async () => {

@@ -30,18 +30,22 @@ const has = (name) => Boolean(process.env[name]);
 const mark = (ok) => (ok ? "OK     " : "MISSING");
 
 const active = (process.env.MOBILE_MONEY_PROVIDER || "").toLowerCase();
+const activeCard = (process.env.CARD_PROVIDER || "").toLowerCase();
 
-const MOBILE_REQUIRED = {
-    malipopay: ["MOBILE_MONEY_API_BASE_URL", "MOBILE_MONEY_API_KEY"],
-    selcom: ["MOBILE_MONEY_API_BASE_URL", "MOBILE_MONEY_API_KEY", "MOBILE_MONEY_API_SECRET", "MOBILE_MONEY_VENDOR_ID", "SELCOM_WEBHOOK_SECRET"],
-    azampay: ["AZAMPAY_API_BASE_URL", "AZAMPAY_APP_NAME", "AZAMPAY_CLIENT_ID", "AZAMPAY_CLIENT_SECRET"]
+// Selcom accepts either its own SELCOM_* names or the legacy MOBILE_MONEY_* ones.
+const SELCOM_CREDS = ["SELCOM_API_BASE_URL", "SELCOM_API_KEY", "SELCOM_API_SECRET", "SELCOM_VENDOR_ID"].map((name) =>
+    has(name) ? name : name.replace("SELCOM_", "MOBILE_MONEY_"));
+
+const GATEWAY_REQUIRED = {
+    selcom: [...SELCOM_CREDS, "SELCOM_WEBHOOK_SECRET"],
+    azampay: ["AZAMPAY_API_BASE_URL", "AZAMPAY_APP_NAME", "AZAMPAY_CLIENT_ID", "AZAMPAY_CLIENT_SECRET", "AZAMPAY_WEBHOOK_SECRET"],
+    pawapay: ["PAWAPAY_API_TOKEN"]
 };
 
 const RAILS = [
-    { name: "Mobile Money (active: " + (active || "none set") + ")", required: MOBILE_REQUIRED[active] || ["MOBILE_MONEY_PROVIDER (malipopay | selcom | azampay)"], note: "Switch rail by changing MOBILE_MONEY_PROVIDER." },
-    { name: "MalipoPay Card", required: ["MALIPOPAY_CARD_SECRET_KEY", "MALIPOPAY_CARD_WEBHOOK_SECRET"], note: "Optional MALIPOPAY_CARD_API_BASE_URL / MALIPOPAY_CARD_ENVIRONMENT=uat for the test environment." },
-    { name: "Snippe", required: ["PAYMENT_ENABLE_SNIPPE=true", "SNIPPE_SECRET_KEY", "SNIPPE_WEBHOOK_SECRET"], note: "Off unless PAYMENT_ENABLE_SNIPPE=true." },
-    { name: "PayPal", required: ["PAYMENT_ENABLE_PAYPAL=true", "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID"], note: "Off unless PAYMENT_ENABLE_PAYPAL=true. PAYPAL_MODE=sandbox|live." }
+    { name: "Mobile Money (active: " + (active || "none set") + ")", required: GATEWAY_REQUIRED[active] || ["MOBILE_MONEY_PROVIDER (azampay | selcom | pawapay)"], note: "Switch gateway by changing MOBILE_MONEY_PROVIDER. PawaPay: enable signed callbacks, or set PAWAPAY_ALLOW_UNSIGNED_CALLBACKS=true." },
+    { name: "Card (active: " + (activeCard || "none set") + ")", required: activeCard === "azampay" ? [...GATEWAY_REQUIRED.azampay, "AZAMPAY_VENDOR_ID"] : GATEWAY_REQUIRED[activeCard === "pawapay" ? "none" : activeCard] || ["CARD_PROVIDER (selcom | azampay) - PawaPay cannot take cards"], note: "Switch gateway by changing CARD_PROVIDER." },
+    { name: "PayPal", required: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_WEBHOOK_ID"], note: "PAYPAL_MODE=sandbox|live." }
 ];
 
 const isSet = (req) => {
@@ -75,10 +79,17 @@ const probes = {
         });
         return res.ok ? { ok: true, detail: `token issued (${process.env.PAYPAL_MODE || "sandbox"})` } : { ok: false, detail: `HTTP ${res.status}` };
     },
+    async pawapay() {
+        if (!has("PAWAPAY_API_TOKEN")) return { skipped: "not configured" };
+        const base = process.env.PAWAPAY_API_BASE_URL || (String(process.env.PAWAPAY_MODE || "sandbox").toLowerCase() === "live" ? "https://api.pawapay.io" : "https://api.sandbox.pawapay.io");
+        const res = await fetch(`${base}/v2/public-key/http`, { headers: { Authorization: `Bearer ${process.env.PAWAPAY_API_TOKEN}` } });
+        return res.ok ? { ok: true, detail: "token accepted" } : { ok: false, detail: `HTTP ${res.status}` };
+    },
     async azampay() {
         const need = ["AZAMPAY_API_BASE_URL", "AZAMPAY_APP_NAME", "AZAMPAY_CLIENT_ID", "AZAMPAY_CLIENT_SECRET"];
         if (!need.every(has)) return { skipped: "not configured" };
-        const res = await fetch(`${process.env.AZAMPAY_API_BASE_URL}/AppRegistration/GenerateToken`, {
+        const authBase = process.env.AZAMPAY_AUTH_BASE_URL || process.env.AZAMPAY_API_BASE_URL;
+        const res = await fetch(`${authBase}/AppRegistration/GenerateToken`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ appName: process.env.AZAMPAY_APP_NAME, clientId: process.env.AZAMPAY_CLIENT_ID, clientSecret: process.env.AZAMPAY_CLIENT_SECRET })
@@ -89,7 +100,7 @@ const probes = {
 
 (async () => {
     if (!live) {
-        console.log("\nRun with --live to also test PayPal and AzamPay logins (no money moves).\n");
+        console.log("\nRun with --live to also test PayPal, AzamPay and PawaPay logins (no money moves).\n");
         return;
     }
     console.log("\nLive login checks (no charges):");
@@ -104,6 +115,6 @@ const probes = {
             failed = true;
         }
     }
-    console.log("   note   mobile money (MalipoPay/Selcom), MalipoPay Card and Snippe: no safe login-only probe - test with a sandbox payment.\n");
+    console.log("   note   Selcom: no safe login-only probe - test with a sandbox payment.\n");
     process.exit(failed ? 1 : 0);
 })();

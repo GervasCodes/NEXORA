@@ -34,14 +34,14 @@ reviewing.
 
 | Item | Status | Notes |
 |---|---|---|
-| Webhook authentication (MalipoPay/Selcom) | ✅ | Shared-secret header, fail-closed in production — `webhookAuth.middleware.js`; see `docs/WEBHOOK_VALIDATION.md` §1 |
-| Webhook authentication (Snippe) | ✅ | HMAC-SHA256 over raw body, constant-time comparison — `snippe.provider.js`; see `docs/WEBHOOK_VALIDATION.md` §2 |
+| Webhook authentication (Selcom/AzamPay) | ✅ | Shared-secret header, fail-closed in production — `webhookAuth.middleware.js`; see `docs/WEBHOOK_VALIDATION.md` §1 |
+| Webhook authentication (PawaPay) | ✅ | RFC 9421 signature over the raw body, public keys fetched from PawaPay — `pawapay.provider.js`; see `docs/WEBHOOK_VALIDATION.md` §3 |
 | PayPal capture trust boundary | ✅ | Capture confirmed server-side via PayPal's own API response, not the client redirect — `docs/WEBHOOK_VALIDATION.md` §3 |
 | Webhook idempotency (no double-credit on retry) | ✅ | `payment.status === 'completed' \|\| 'failed'` short-circuit in both `_handleOrderPaymentWebhook` and `_handleBookingPaymentWebhook` |
 | Open-redirect protection on payment return URLs | ✅ | `assertAllowedRedirect` in `payment.controller.js` validates `successUrl`/`cancelUrl`/`returnUrl` origins against `CORS_ORIGIN` |
 | Seller funds held until delivery + dispute window (escrow) | ✅ | `held_balance`/`balance` split, `escrowRelease.job.js` — see `docs/ESCROW_PAYMENT_FLOW.md` |
-| Webhook replay protection beyond idempotency (nonce/timestamp) | ✅ | Phase 2: timestamp-freshness check (where a provider supplies one) + SHA-256 payload-hash dedup against `webhook_replay_guard` (migration 072) for all three providers — `utils/webhookReplayGuard.js`, wired into `webhookAuth.middleware.js` (MalipoPay/Selcom) and `payment.controller.js#snippeWebhook` (Snippe) — see `PHASE2_SECURITY_CHANGELOG.md` |
-| Provider payload shape verified against live sandbox | ⚠️ | MalipoPay/Selcom field names follow commonly documented patterns, not confirmed against real provider docs/sandbox — see `docs/WEBHOOK_VALIDATION.md` §6 |
+| Webhook replay protection beyond idempotency (nonce/timestamp) | ✅ | Phase 2: timestamp-freshness check (where a provider supplies one) + SHA-256 payload-hash dedup against `webhook_replay_guard` (migration 072) for every gateway — `utils/webhookReplayGuard.js`, wired into `webhookAuth.middleware.js` (Selcom, AzamPay) and `payment.controller.js#pawapayWebhook` (PawaPay) — see `PHASE2_SECURITY_CHANGELOG.md` |
+| Provider payload shape verified against live sandbox | ⚠️ | AzamPay/Selcom/PawaPay field names follow commonly documented patterns, not confirmed against real provider docs/sandbox — see `docs/WEBHOOK_VALIDATION.md` §6 |
 | Withdrawal amount validated against available balance | ✅ | `requestWithdrawal` rejects `amount > wallet.balance`; `held_balance` isn't withdrawable by construction |
 
 ## 3. Input validation & injection

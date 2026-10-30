@@ -80,7 +80,8 @@ exports.getAvailablePaymentMethods = async (req, res) => {
 
         return res.json({
             success: true,
-            data: methods
+            data: methods,
+            maintenance: require("../../middleware/paymentsMaintenance.middleware").statusFor(req.user)
         });
     } catch (error) {
         return res.status(500).json({
@@ -110,65 +111,23 @@ exports.getPayment = async (req, res) => {
     }
 };
 
-// MalipoPay calls this URL directly (server-to-server) when a buyer's
-// payment on their phone completes, fails, or is cancelled. Give MalipoPay
-// this exact path in their dashboard's "Callback URL" setting:
-//   https://<your-domain>/api/v1/payments/webhooks/malipopay
-//
-// Signature verification happens BEFORE this handler runs - see
-// verifyMalipopayWebhook in webhookAuth.middleware.js (SHA256 of
-// reference+timestamp+amount+phoneNumber+secret, per
-// developers.malipopay.co.tz/integration/webhooks) wired in as this
-// route's middleware in payment.routes.js. This handler only needs to
-// shape-check the fields it reads, on top of that - see
-// docs/WEBHOOK_VALIDATION.md §1/§6 for the full verification writeup
-// and what's still unconfirmed against a live sandbox.
-exports.malipopayWebhook = async (req, res) => {
-    const payload = req.body || {};
-
-    // (Security) - the signature check upstream proves this request came
-    // from MalipoPay at some point; it doesn't prove `reference` is a
-    // well-formed reference we issued. A malformed or missing one is a
-    // clean "ignored", not an application error.
-    if (typeof payload.reference !== "string" || !payload.reference) {
-        logger.warn({ provider: "malipopay", reqId: req.id }, "[webhook] malipopay payload missing/invalid reference field");
-        return res.status(200).json({ success: false });
-    }
-
-    // PENDING / PROCESSING (and any status we do not recognise) mean "not
-    // finished" - acknowledge and ignore, never mark the payment failed.
-    const outcome = providerStatus.classifyMalipopay(payload);
-    if (outcome === "pending") {
-        return res.status(200).json({ success: true, ignored: true });
-    }
-
-    try {
-        await paymentService.handleProviderWebhook({
-            providerReference: payload.reference,
-            success: outcome === "success",
-            transactionReference: payload.transactionReference || payload.reference,
-            reportedAmount: payload.amount,
-            reportedCurrency: payload.currency
-        });
-
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        return answerProcessingFailure(req, res, error, "malipopay");
-    }
-};
-
-// Selcom's equivalent - give them:
+// Selcom calls this URL directly (server-to-server) when a payment - mobile
+// money push or hosted card checkout - completes, fails or is cancelled. Give
+// Selcom:
 //   https://<your-domain>/api/v1/payments/webhooks/selcom
-// Signature verification (Bearer token auth, per
-// developers.selcommobile.com's C2B Payment Notification API) happens
-// upstream in verifySelcomWebhook - see docs/WEBHOOK_VALIDATION.md §1/§6.
+// Authentication (static Bearer token, per developers.selcommobile.com's
+// Payment Notification API) happens upstream in verifySelcomWebhook - see
+// docs/WEBHOOK_VALIDATION.md.
 exports.selcomWebhook = async (req, res) => {
     const payload = req.body || {};
 
-    // Same reasoning as malipopayWebhook above - upstream auth proves
-    // provenance, not shape.
-    if (typeof payload.transid !== "string" || !payload.transid) {
-        logger.warn({ provider: "selcom", reqId: req.id }, "[webhook] selcom payload missing/invalid transid field");
+    // The order id we sent is our payment reference; Selcom echoes it as
+    // order_id (checkout) and/or transid. Upstream auth proves provenance,
+    // not shape, so a missing/odd reference is a clean "ignored".
+    const reference = [payload.order_id, payload.transid].find((value) => typeof value === "string" && value);
+
+    if (!reference) {
+        logger.warn({ provider: "selcom", reqId: req.id }, "[webhook] selcom payload missing order_id/transid");
         return res.status(200).json({ success: false });
     }
 
@@ -179,11 +138,10 @@ exports.selcomWebhook = async (req, res) => {
 
     try {
         await paymentService.handleProviderWebhook({
-            providerReference: payload.transid,
+            providerReference: reference,
             success: outcome === "success",
-            transactionReference: payload.reference || payload.transid,
-            // Selcom's notification may carry the amount; when it does it
-            // is checked against what we expected.
+            transactionReference: payload.reference || reference,
+            // When Selcom reports the amount it is checked against what we expected.
             reportedAmount: payload.amount
         });
 
@@ -193,108 +151,146 @@ exports.selcomWebhook = async (req, res) => {
     }
 };
 
-// --- Snippe ---------------------------------------------------------
+// AzamPay's callback URL (register it in the AzamPay dashboard, with the
+// shared secret - see verifyAzampayWebhook):
+//   https://<your-domain>/api/v1/payments/webhooks/azampay?secret=<AZAMPAY_WEBHOOK_SECRET>
+// The externalId we sent comes back as `utilityref`.
+exports.azampayWebhook = async (req, res) => {
+    const payload = req.body || {};
 
-exports.initiateSnippeOrderPayment = async (req, res) => {
+    const reference = [payload.utilityref, payload.externalId].find((value) => typeof value === "string" && value);
+
+    if (!reference) {
+        logger.warn({ provider: "azampay", reqId: req.id }, "[webhook] azampay payload missing utilityref");
+        return res.status(200).json({ success: false });
+    }
+
+    const outcome = providerStatus.classifyAzampay(payload);
+    if (outcome === "pending") {
+        return res.status(200).json({ success: true, ignored: true });
+    }
+
     try {
-        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
+        await paymentService.handleProviderWebhook({
+            providerReference: reference,
+            success: outcome === "success",
+            transactionReference: payload.reference || payload.transactionId || reference,
+            reportedAmount: payload.amount
+        });
 
-        const result = await paymentService.initiateSnippeOrderPayment(
-            req.params.orderId,
-            req.user.id,
-            { successUrl, cancelUrl }
-        );
-
-        return res.status(201).json({ success: true, data: result });
+        return res.status(200).json({ success: true });
     } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
+        return answerProcessingFailure(req, res, error, "azampay");
     }
 };
 
-// Snippe calls this URL directly (server-to-server), signed with
-// SNIPPE_WEBHOOK_SECRET. Give Snippe this exact path in their dashboard:
-//   https://<your-domain>/api/v1/payments/webhooks/snippe
+// PawaPay calls this URL for deposit (and payout / refund) results. Set it as
+// the deposit callback URL in the PawaPay dashboard:
+//   https://<your-domain>/api/v1/payments/webhooks/pawapay
 //
-// IMPORTANT: this route must receive the RAW request body (not JSON-
-// parsed) for signature verification to work - see the express.raw()
-// wiring in payment.routes.js.
-exports.snippeWebhook = async (req, res) => {
-    return handleHostedCheckoutWebhook(req, res, {
-        provider: "snippe",
-        constructEvent: () => require("./providers/snippe.provider").constructWebhookEvent(req.body, req.headers["snippe-signature"]),
-        handle: (event) => paymentService.handleSnippeWebhookEvent(event)
-    });
-};
-
-// Shared by the two hosted-checkout card rails. HMAC verification proves a
-// delivery came from the provider; the replay guard proves it is the first
-// time these exact bytes were seen. The delivery is recorded BEFORE
-// processing (so two concurrent deliveries cannot both run) and released
-// again if processing fails transiently (so the provider's retry is not
-// mistaken for a replay).
-async function handleHostedCheckoutWebhook(req, res, { provider, constructEvent, handle }) {
+// IMPORTANT: needs the RAW request body (the signature covers its digest) -
+// registered in app.js with express.raw(), like the PayPal webhook.
+//
+// Authenticity: signed callbacks (RFC 9421) are verified against PawaPay's
+// published public keys. An unsigned callback is only accepted when
+// PAWAPAY_ALLOW_UNSIGNED_CALLBACKS=true, and is then never trusted on its own:
+// the deposit's status is re-read from PawaPay's API before anything is applied.
+exports.pawapayWebhook = async (req, res) => {
+    const pawapay = require("./providers/pawapay.provider");
     const replayGuard = require("../../utils/webhookReplayGuard");
-    let event;
 
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+
+    let payload;
     try {
-        event = constructEvent();
+        payload = JSON.parse(rawBody.toString("utf8"));
     } catch (error) {
-        // An invalid signature means this request didn't come from the
-        // provider - a 4xx is what we want (it won't retry a request that
-        // can never become valid). Warning level, not an exception: this
-        // is usually a forgery or a misconfigured secret, not a bug.
-        logger.error({ err: error, provider, reqId: req.id }, `${provider} webhook rejected`);
-        Sentry.captureMessage(`${provider} webhook rejected`, {
-            level: "warning",
-            tags: { area: "payment-webhook", provider },
-            extra: { reason: error.message }
-        });
         return res.status(400).json({ success: false });
     }
 
-    if (!replayGuard.isTimestampFresh(event.created)) {
-        logger.warn({ provider, reqId: req.id }, `${provider} webhook rejected: stale/future event timestamp (possible replay)`);
-        Sentry.captureMessage(`${provider} webhook rejected`, {
-            level: "warning",
-            tags: { area: "payment-webhook", provider },
-            extra: { reason: "stale timestamp" }
-        });
-        return res.status(400).json({ success: false });
-    }
+    const signed = Boolean(req.headers.signature);
 
-    try {
-        const isFreshDelivery = await replayGuard.recordDelivery(provider, req.body);
-        if (!isFreshDelivery) {
+    if (signed) {
+        const verified = await pawapay.verifyCallbackSignature({
+            rawBody,
+            headers: req.headers,
+            method: req.method,
+            authority: process.env.PAWAPAY_CALLBACK_AUTHORITY || req.headers["x-forwarded-host"] || req.headers.host,
+            path: req.originalUrl.split("?")[0]
+        }).catch(() => false);
+
+        if (!verified) {
+            logger.warn({ provider: "pawapay", reqId: req.id, ip: req.ip }, "PawaPay webhook rejected: signature not verified");
+            Sentry.captureMessage("PawaPay webhook rejected", { level: "warning", tags: { area: "payment-webhook", provider: "pawapay" } });
             return res.status(400).json({ success: false });
         }
+    } else if (!pawapay.allowUnsignedCallbacks()) {
+        logger.warn({ provider: "pawapay", reqId: req.id, ip: req.ip }, "PawaPay webhook rejected: unsigned (enable signed callbacks in the PawaPay dashboard)");
+        return res.status(400).json({ success: false });
+    }
+
+    // Payout / refund results come to the same URL (a refund callback can also
+    // carry the original depositId, hence the refundId/payoutId checks); nothing
+    // here waits on them.
+    if (!payload.depositId || payload.refundId || payload.payoutId) {
+        logger.info({ provider: "pawapay", reqId: req.id, status: payload.status }, "pawapay non-deposit callback acknowledged");
+        return res.status(200).json({ success: true, ignored: true });
+    }
+
+    let deposit = payload;
+
+    if (!signed) {
+        try {
+            const lookup = await pawapay.getDeposit(payload.depositId);
+            if (!lookup.found) return res.status(200).json({ success: true, ignored: true });
+            deposit = lookup.deposit;
+        } catch (error) {
+            return answerProcessingFailure(req, res, error, "pawapay");
+        }
+    }
+
+    const outcome = providerStatus.classifyPawapay(deposit);
+    if (outcome === "pending") {
+        return res.status(200).json({ success: true, ignored: true });
+    }
+
+    try {
+        const isFreshDelivery = await replayGuard.recordDelivery("pawapay", rawBody);
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: true, duplicate: true });
+        }
     } catch (error) {
-        // The guard table itself is unavailable - transient.
-        logger.error({ err: error, provider, reqId: req.id }, "replay guard unavailable");
+        logger.error({ err: error, provider: "pawapay", reqId: req.id }, "replay guard unavailable");
         return res.status(500).json({ success: false });
     }
 
-    req.replayGuardKey = { provider, raw: req.body };
+    req.replayGuardKey = { provider: "pawapay", raw: rawBody };
 
     try {
-        await handle(event);
+        await paymentService.handlePawapayDepositEvent({
+            depositId: payload.depositId,
+            success: outcome === "success",
+            reportedAmount: deposit.amount,
+            reportedCurrency: deposit.currency,
+            reference: Array.isArray(deposit.metadata)
+                ? (deposit.metadata.find((item) => item && item.reference) || {}).reference
+                : deposit.metadata && deposit.metadata.reference
+        });
         return res.status(200).json({ success: true });
     } catch (error) {
-        return answerProcessingFailure(req, res, error, provider);
+        return answerProcessingFailure(req, res, error, "pawapay");
     }
-}
+};
 
-// --- MalipoPay Card ---------------------------------------------------
-// A separate card-checkout product from MalipoPay's mobile-money rail
-// (see malipopayWebhook above / malipopayCard.provider.js's header
-// comment) - own routes, own webhook, own credentials.
+// --- Card (hosted checkout) ----------------------------------------------
+// One card rail for every gateway: CARD_PROVIDER decides who takes the card.
 
-exports.initiateMalipopayCardOrderPayment = async (req, res) => {
+exports.initiateCardOrderPayment = async (req, res) => {
     try {
         const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
         const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
 
-        const result = await paymentService.initiateMalipopayCardOrderPayment(
+        const result = await paymentService.initiateCardOrderPayment(
             req.params.orderId,
             req.user.id,
             { successUrl, cancelUrl }
@@ -304,24 +300,6 @@ exports.initiateMalipopayCardOrderPayment = async (req, res) => {
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }
-};
-
-// MalipoPay calls this URL directly (server-to-server), signed with
-// MALIPOPAY_CARD_WEBHOOK_SECRET. Give MalipoPay this exact path in their
-// dashboard's card-product webhook setting:
-//   https://<your-domain>/api/v1/payments/webhooks/malipopay-card
-//
-// IMPORTANT: this route must receive the RAW request body (not JSON-
-// parsed) for signature verification to work - see the express.raw()
-// wiring in app.js, mirroring the Snippe webhook exactly.
-exports.malipopayCardWebhook = async (req, res) => {
-    // Real header name confirmed via MalipoPay's official malipopay-php
-    // SDK (X-Malipopay-Signature); Express lower-cases header names.
-    return handleHostedCheckoutWebhook(req, res, {
-        provider: "malipopay-card",
-        constructEvent: () => require("./providers/malipopayCard.provider").constructWebhookEvent(req.body, req.headers["x-malipopay-signature"]),
-        handle: (event) => paymentService.handleMalipopayCardWebhookEvent(event)
-    });
 };
 
 // --- PayPal ---------------------------------------------------------
@@ -453,29 +431,12 @@ exports.initiateMobileMoneyBookingPayment = async (req, res) => {
     }
 };
 
-exports.initiateSnippeBookingPayment = async (req, res) => {
+exports.initiateCardBookingPayment = async (req, res) => {
     try {
         const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
         const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
 
-        const result = await paymentService.initiateSnippeBookingPayment(
-            req.params.bookingId,
-            req.user.id,
-            { successUrl, cancelUrl }
-        );
-
-        return res.status(201).json({ success: true, data: result });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.initiateMalipopayCardBookingPayment = async (req, res) => {
-    try {
-        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
-
-        const result = await paymentService.initiateMalipopayCardBookingPayment(
+        const result = await paymentService.initiateCardBookingPayment(
             req.params.bookingId,
             req.user.id,
             { successUrl, cancelUrl }

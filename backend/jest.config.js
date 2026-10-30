@@ -23,7 +23,6 @@ module.exports = {
     collectCoverage: false, // enabled via --coverage (npm run test:coverage) to keep default `npm test` fast
     collectCoverageFrom: [
         "src/modules/payment/payment.service.js",
-        "src/modules/payment/providers/snippe.provider.js",
         "src/modules/wallet/wallet.service.js",
         "src/modules/fraud/fraud.service.js",
         "src/modules/auth/login.service.js",

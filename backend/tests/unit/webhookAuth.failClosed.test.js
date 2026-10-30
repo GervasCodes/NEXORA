@@ -9,7 +9,7 @@ describe("webhook verifiers fail closed when their secret is not configured", ()
     beforeEach(() => {
         process.env = { ...OLD_ENV, NODE_ENV: "production", ALLOW_UNSIGNED_WEBHOOKS: "true" };
         [
-            "MOBILE_MONEY_API_KEY", "SELCOM_WEBHOOK_SECRET", "SMS_GATEWAY_WEBHOOK_SECRET",
+            "AZAMPAY_WEBHOOK_SECRET", "SELCOM_WEBHOOK_SECRET", "SMS_GATEWAY_WEBHOOK_SECRET",
             "WHATSAPP_APP_SECRET", "TEST_WEBHOOK_SECRET"
         ].forEach((name) => delete process.env[name]);
     });
@@ -29,7 +29,7 @@ describe("webhook verifiers fail closed when their secret is not configured", ()
     };
 
     it.each([
-        ["malipopay", () => webhookAuth.verifyMalipopayWebhook],
+        ["azampay", () => webhookAuth.verifyAzampayWebhook],
         ["selcom", () => webhookAuth.verifySelcomWebhook],
         ["sms", () => webhookAuth.verifySmsWebhook],
         ["whatsapp", () => webhookAuth.verifyWhatsAppWebhook],

@@ -594,10 +594,10 @@ exports.findStaleUnpaidOrders = async ({ cutoffMinutes, hostedCutoffMinutes }) =
     const [rows] = await db.query(
         `SELECT o.id, o.buyer_id, o.order_number, o.is_parent FROM orders o
         WHERE o.status = 'pending' AND o.payment_status = 'unpaid'
-            AND o.payment_method IN ('mobile_money', 'snippe', 'malipopay_card', 'paypal', 'wallet')
+            AND o.payment_method IN ('mobile_money', 'card', 'paypal', 'wallet')
             AND o.parent_order_id IS NULL
             AND o.created_at < (NOW() - INTERVAL
-                CASE WHEN o.payment_method IN ('snippe', 'malipopay_card', 'paypal') THEN ? ELSE ? END MINUTE)
+                CASE WHEN o.payment_method IN ('card', 'paypal') THEN ? ELSE ? END MINUTE)
             AND NOT EXISTS (
                 SELECT 1 FROM payments p
                 WHERE p.order_id = o.id AND p.status IN ('pending', 'completed', 'chargeback')

@@ -1,49 +1,80 @@
 /**
- * AzamPay provider adapter.
+ * AzamPay provider adapter - mobile money (USSD push) AND hosted checkout
+ * (card / bank / mobile money on AzamPay's payment page).
  *
- * This is the third mobile-money rail invited by the comment at the top
- * of mobileMoney.provider.js ("Adding a third provider later e.g.
- * AzamPay"). It follows the exact same adapter shape as malipopay.provider.js
- * and selcom.provider.js so mobileMoney.provider.js's router can treat all
- * three identically.
+ * AzamPay authenticates with a short-lived bearer token fetched from a
+ * separate authenticator host (not a static header, not a per-request
+ * signature). Nothing outside this file ever sees the token.
  *
- * AzamPay's auth is a short-lived bearer token fetched from a separate
- * token endpoint (not a static header like MalipoPay, not a per-request
- * HMAC signature like Selcom) — one more shape of "how do I authenticate"
- * that the abstraction layer has to tolerate without leaking into
- * payment.service.js, which never sees any of this.
+ *   AZAMPAY_API_BASE_URL     checkout API host
+ *                            sandbox: https://sandbox.azampay.co.tz
+ *                            live:    https://checkout.azampay.co.tz
+ *   AZAMPAY_AUTH_BASE_URL    authenticator host (defaults to AZAMPAY_API_BASE_URL)
+ *                            sandbox: https://authenticator-sandbox.azampay.co.tz
+ *                            live:    https://authenticator.azampay.co.tz
+ *   AZAMPAY_APP_NAME         "App Name" from the AzamPay dashboard
+ *   AZAMPAY_CLIENT_ID        client id (used to fetch a token)
+ *   AZAMPAY_CLIENT_SECRET    client secret (used to fetch a token)
+ *   AZAMPAY_API_KEY          optional: sent as X-API-Key when your account has one
+ *   AZAMPAY_VENDOR_ID        vendor id (hosted checkout / card only)
+ *   AZAMPAY_VENDOR_NAME      vendor display name (hosted checkout, default "NEXORA")
+ *   AZAMPAY_WEBHOOK_SECRET   shared secret for the callback (see
+ *                            webhookAuth.middleware.js#verifyAzampayWebhook)
  *
- *   AZAMPAY_API_BASE_URL     -> AzamPay checkout/API base URL
- *   AZAMPAY_APP_NAME         -> AzamPay "App Name" (from their dashboard)
- *   AZAMPAY_CLIENT_ID        -> AzamPay client ID (used to fetch a token)
- *   AZAMPAY_CLIENT_SECRET    -> AzamPay client secret (used to fetch a token)
+ * Flows:
+ *   mobile money : POST /azampay/mno/checkout  (USSD push; network detected
+ *                  from the phone prefix unless meta.mno is passed)
+ *   card         : POST /api/v1/Partner/PostCheckout -> URL of AzamPay's
+ *                  hosted payment page; the buyer picks card (or any other
+ *                  method enabled on the account) there
+ *
+ * Endpoint paths and field names follow AzamPay's published API and client
+ * SDKs; confirm them in the AzamPay sandbox before going live.
  */
 
-const BASE_URL = process.env.AZAMPAY_API_BASE_URL;
-const APP_NAME = process.env.AZAMPAY_APP_NAME;
-const CLIENT_ID = process.env.AZAMPAY_CLIENT_ID;
-const CLIENT_SECRET = process.env.AZAMPAY_CLIENT_SECRET;
+const { detectNetwork } = require("../../../utils/tzMobileNetwork");
 
-exports.isConfigured = () => Boolean(BASE_URL && APP_NAME && CLIENT_ID && CLIENT_SECRET);
+const cfg = () => ({
+    baseUrl: (process.env.AZAMPAY_API_BASE_URL || "").replace(/\/+$/, ""),
+    authUrl: (process.env.AZAMPAY_AUTH_BASE_URL || process.env.AZAMPAY_API_BASE_URL || "").replace(/\/+$/, ""),
+    appName: process.env.AZAMPAY_APP_NAME,
+    clientId: process.env.AZAMPAY_CLIENT_ID,
+    clientSecret: process.env.AZAMPAY_CLIENT_SECRET,
+    apiKey: process.env.AZAMPAY_API_KEY,
+    vendorId: process.env.AZAMPAY_VENDOR_ID,
+    vendorName: process.env.AZAMPAY_VENDOR_NAME || "NEXORA"
+});
 
-// Token is short-lived and only ever needed inside this file — nothing
-// outside this adapter ever sees or handles an AzamPay bearer token.
+exports.isConfigured = () => {
+    const { baseUrl, appName, clientId, clientSecret } = cfg();
+    return Boolean(baseUrl && appName && clientId && clientSecret);
+};
+
+// Hosted checkout additionally needs the vendor id from the dashboard.
+exports.supportsCheckout = () => exports.isConfigured() && Boolean(cfg().vendorId);
+
 let cachedToken = null;
 let cachedTokenExpiresAt = 0;
+
+exports._resetTokenCache = () => {
+    cachedToken = null;
+    cachedTokenExpiresAt = 0;
+};
 
 const getAccessToken = async () => {
     if (cachedToken && Date.now() < cachedTokenExpiresAt) {
         return cachedToken;
     }
 
-    const response = await fetch(`${BASE_URL}/AppRegistration/GenerateToken`, {
+    const { authUrl, appName, clientId, clientSecret, apiKey } = cfg();
+
+    const response = await fetch(`${authUrl}/AppRegistration/GenerateToken`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            appName: APP_NAME,
-            clientId: CLIENT_ID,
-            clientSecret: CLIENT_SECRET
-        })
+        headers: {
+            "Content-Type": "application/json",
+            ...(apiKey ? { "X-API-Key": apiKey } : {})
+        },
+        body: JSON.stringify({ appName, clientId, clientSecret })
     });
 
     if (!response.ok) {
@@ -52,109 +83,116 @@ const getAccessToken = async () => {
 
     const data = await response.json();
     cachedToken = data.data?.accessToken || data.accessToken;
+    if (!cachedToken) {
+        throw new Error("AzamPay: token response carried no access token");
+    }
+
     // Refresh a little early rather than risk using a token that expires
-    // mid-request — 5 minutes of headroom on whatever lifetime is quoted.
-    const expiresInSeconds = Number(data.data?.expire || data.expiresIn || 3300);
-    cachedTokenExpiresAt = Date.now() + Math.max(expiresInSeconds - 300, 60) * 1000;
+    // mid-request. `expire` is an ISO timestamp in AzamPay's response; some
+    // responses give seconds instead - handle both.
+    const rawExpiry = data.data?.expire ?? data.expiresIn;
+    const expiryMs = Number.isFinite(Number(rawExpiry))
+        ? Date.now() + Number(rawExpiry) * 1000
+        : Date.parse(rawExpiry);
+    cachedTokenExpiresAt = (Number.isFinite(expiryMs) ? expiryMs : Date.now() + 3300 * 1000) - 5 * 60 * 1000;
 
     return cachedToken;
 };
 
-exports.initiate = async (phone, amount, meta = {}) => {
+const post = async (path, body) => {
+    const { baseUrl, apiKey } = cfg();
     const token = await getAccessToken();
 
-    const response = await fetch(`${BASE_URL}/azampay/mno/checkout`, {
+    const response = await fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            ...(apiKey ? { "X-API-Key": apiKey } : {})
         },
-        body: JSON.stringify({
-            accountNumber: phone,
-            amount,
-            currency: "TZS",
-            externalId: meta.reference || `NEXORA-${Date.now()}`,
-            provider: meta.mno || "Airtel"
-        })
+        body: JSON.stringify(body)
     });
 
-    if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    return { ok: response.ok, data };
+};
+
+const mnoName = (phone, override) => {
+    if (override) return override;
+
+    const network = detectNetwork(phone);
+    if (!network) throw new Error("Could not work out the mobile money network for this number");
+    return network.azampay;
+};
+
+const accountNumber = (phone) => String(phone || "").replace(/\D/g, "").replace(/^0/, "255");
+
+const mnoRequest = async (path, kind, phone, amount, meta) => {
+    const { ok, data } = await post(path, {
+        accountNumber: accountNumber(phone),
+        amount: String(Math.round(Number(amount))),
+        currency: "TZS",
+        externalId: meta.reference || `NEXORA-${kind}-${Date.now()}`,
+        provider: mnoName(phone, meta.mno)
+    });
+
+    if (!ok || !data) {
         return { success: false, transactionReference: null };
     }
 
-    const data = await response.json();
-
-    // AzamPay's checkout response shape — confirm exact field names
-    // against your dashboard/sandbox response before going live, same
-    // caveat as malipopay.provider.js and selcom.provider.js above.
     return {
-        success: Boolean(data.success ?? data.status === "success" ?? data.status === "Success"),
+        success: data.success === true || String(data.status || "").toLowerCase() === "success",
         transactionReference: data.transactionId || data.reference || data.data?.transactionId || null
     };
 };
 
-// Refund leg — like MalipoPay, AzamPay's commonly documented API has no
-// dedicated collection-reversal endpoint, so this is a disbursement back
-// to the buyer's own phone for the refunded amount (see the equivalent
-// note in malipopay.provider.js).
-exports.refund = async (phone, amount, meta = {}) => {
-    const token = await getAccessToken();
+exports.initiate = (phone, amount, meta = {}) => mnoRequest("/azampay/mno/checkout", "", phone, amount, meta);
 
-    const response = await fetch(`${BASE_URL}/azampay/mno/disburse`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-            accountNumber: phone,
-            amount,
-            currency: "TZS",
-            externalId: meta.reference || `NEXORA-REFUND-${Date.now()}`,
-            provider: meta.mno || "Airtel"
-        })
-    });
+// Refund leg - AzamPay's commonly documented API has no collection-reversal
+// endpoint, so this is a disbursement back to the buyer's own phone.
+exports.refund = (phone, amount, meta = {}) => mnoRequest("/azampay/mno/disburse", "REFUND", phone, amount, meta);
 
-    if (!response.ok) {
-        return { success: false, transactionReference: null };
+// Payout / seller-withdrawal leg - same disbursement endpoint.
+exports.disburse = (phone, amount, meta = {}) => mnoRequest("/azampay/mno/disburse", "PAYOUT", phone, amount, meta);
+
+// Hosted checkout: returns the URL of AzamPay's payment page. The
+// externalId (our payment reference) comes back in the callback as
+// `utilityref`. AzamPay limits externalId to 30 characters; our references
+// (e.g. ORDER-42-9F3A61C0D2B7) stay well inside that.
+exports.createCheckoutSession = async ({ amountTzs, reference, description, successUrl, cancelUrl }) => {
+    if (!exports.supportsCheckout()) {
+        throw new Error("AzamPay hosted checkout is not configured (AZAMPAY_VENDOR_ID is missing)");
     }
 
-    const data = await response.json();
+    const { appName, clientId, vendorId, vendorName } = cfg();
 
-    return {
-        success: Boolean(data.success ?? data.status === "success" ?? data.status === "Success"),
-        transactionReference: data.transactionId || data.reference || data.data?.transactionId || null
-    };
-};
-
-// Payout / seller-withdrawal leg — same disbursement endpoint, mirrors
-// malipopay.provider.js#disburse.
-exports.disburse = async (phone, amount, meta = {}) => {
-    const token = await getAccessToken();
-
-    const response = await fetch(`${BASE_URL}/azampay/mno/disburse`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-            accountNumber: phone,
-            amount,
-            currency: "TZS",
-            externalId: meta.reference || `NEXORA-PAYOUT-${Date.now()}`,
-            provider: meta.mno || "Airtel"
-        })
-    });
-
-    if (!response.ok) {
-        return { success: false, transactionReference: null };
+    let requestOrigin;
+    try {
+        requestOrigin = new URL(successUrl).origin;
+    } catch (error) {
+        requestOrigin = process.env.FRONTEND_URL || "";
     }
 
-    const data = await response.json();
+    const { ok, data } = await post("/api/v1/Partner/PostCheckout", {
+        appName,
+        clientId,
+        vendorId,
+        vendorName,
+        language: "en",
+        currency: "TZS",
+        externalId: reference,
+        requestOrigin,
+        redirectSuccessURL: successUrl,
+        redirectFailURL: cancelUrl,
+        amount: String(Math.round(Number(amountTzs))),
+        cart: { items: [{ name: description || "NEXORA payment" }] }
+    });
 
-    return {
-        success: Boolean(data.success ?? data.status === "success" ?? data.status === "Success"),
-        transactionReference: data.transactionId || data.reference || data.data?.transactionId || null
-    };
+    const url = typeof data?.data === "string" ? data.data : data?.data?.url;
+
+    if (!ok || !data || data.success === false || !url) {
+        throw new Error(data?.message || "AzamPay checkout could not be created");
+    }
+
+    return { success: true, sessionId: reference, url };
 };

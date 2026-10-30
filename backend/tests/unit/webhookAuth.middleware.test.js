@@ -6,7 +6,7 @@ const { verifySharedSecretHeader } = require("../../src/middleware/webhookAuth.m
 // docs. Not being live doesn't make an unsafe comparison in it harmless
 // forever: it's one route-wiring change away from handling real
 // traffic, so it's held to the same timing-safe-comparison standard as
-// verifyMalipopayWebhook/verifySelcomWebhook above it in the same file.
+// verifyAzampayWebhook/verifySelcomWebhook above it in the same file.
 describe("webhookAuth.middleware - verifySharedSecretHeader", () => {
     const OLD_ENV = process.env;
 

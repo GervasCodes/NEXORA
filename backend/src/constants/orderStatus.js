@@ -6,7 +6,7 @@ exports.ORDER_STATUSES = [
     "cancelled"
 ];
 
-exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "snippe", "malipopay_card", "paypal", "wallet"];
+exports.PAYMENT_METHODS = ["mobile_money", "cash_on_delivery", "card", "paypal", "wallet"];
 
 // Pre-order / made-to-order (Phase 8). A pre-order charges a deposit at
 // checkout and the remaining balance later, once the seller has the item

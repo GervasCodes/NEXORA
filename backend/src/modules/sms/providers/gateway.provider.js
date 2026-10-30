@@ -2,7 +2,7 @@
  * SMS gateway adapter - Beem Africa (apisms.beem.africa), the most
  * commonly used SMS API for Tanzania-focused apps and the natural fit
  * given every other provider already wired up in this codebase
- * (MalipoPay, AzamPay, Selcom) is TZ-specific too.
+ * (AzamPay, Selcom, PawaPay) is TZ-specific too.
  *
  * Auth: HTTP Basic, api_key as the username and secret_key as the
  * password (Beem's documented shape - see developers.beem.africa).
@@ -49,7 +49,7 @@ exports.sendText = async (to, body) => {
     // boolean and a request_id - confirm against your dashboard/sandbox
     // response before relying on this in production, same caveat every
     // other provider adapter in this codebase carries (see
-    // malipopay.provider.js's header comment).
+    // azampay.provider.js's header comment).
     return {
         success: Boolean(data.successful ?? data.code === 100),
         messageId: data.request_id || null

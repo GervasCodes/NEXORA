@@ -2,7 +2,7 @@
 // its own private copy of this check (assertAllowedRedirect) already
 // applied to every /payments/* endpoint that accepts a client-supplied
 // successUrl/cancelUrl/returnUrl. subscription.controller.js's PayPal/
-// Snippe/MalipoPay Card subscribe endpoints accept the exact same kind
+// card/PayPal subscribe endpoints accept the exact same kind
 // of client-supplied redirect but forwarded req.body.returnUrl /
 // req.body.successUrl / req.body.cancelUrl straight to the payment
 // provider with no check at all - a classic open-redirect: an attacker

@@ -7,11 +7,9 @@
 // constraint that guarantees "one automatic refund per dispute" actually
 // firing as expected).
 jest.mock("../../src/modules/payment/providers/mobileMoney.provider");
-jest.mock("../../src/modules/payment/providers/snippe.provider");
 jest.mock("../../src/modules/audit/audit.service");
 
 const mobileMoneyProvider = require("../../src/modules/payment/providers/mobileMoney.provider");
-const snippeProvider = require("../../src/modules/payment/providers/snippe.provider");
 
 const db = require("../../src/config/db");
 const refundService = require("../../src/modules/refund/refund.service");
@@ -108,11 +106,11 @@ describe("refund.service.autoRefundForDispute (real database)", () => {
         expect(mobileMoneyProvider.refund).toHaveBeenCalledTimes(1);
     });
 
-    it("snippe payments: dispatches to the snippe provider, not mobile money, and records its reference", async () => {
-        snippeProvider.refundPayment.mockResolvedValue({ success: true, refundReference: "SNIPPE-REF-9" });
+    it("card payments: go back through the gateway router without a mobile-money gateway/depositId, and record provider 'card'", async () => {
+        mobileMoneyProvider.refund.mockResolvedValue({ success: true, transactionReference: "CARD-REF-9" });
 
         const { dispute, order, buyer, seller } = await setUpDisputeWithPayment({
-            paymentOverrides: { method: "snippe", transaction_reference: "SNIPPE-TX-9" }
+            paymentOverrides: { method: "card", transaction_reference: "CARD-TX-9" }
         });
 
         await refundService.autoRefundForDispute({
@@ -122,10 +120,31 @@ describe("refund.service.autoRefundForDispute (real database)", () => {
         });
 
         const [[row]] = await db.query("SELECT * FROM refunds WHERE dispute_id = ?", [dispute.id]);
-        expect(row.provider).toBe("snippe");
-        expect(row.provider_reference).toBe("SNIPPE-REF-9");
-        expect(mobileMoneyProvider.refund).not.toHaveBeenCalled();
+        expect(row.provider).toBe("card");
+        expect(row.provider_reference).toBe("CARD-REF-9");
+        expect(mobileMoneyProvider.refund).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.anything(),
+            expect.objectContaining({ provider: null })
+        );
     });
+
+    it("payments taken through a retired gateway (snippe/malipopay legacy rows): never calls a provider and ends 'failed' with a manual-refund message", async () => {
+        const { dispute, order, buyer, seller } = await setUpDisputeWithPayment({
+            paymentOverrides: { method: "card", provider: "snippe", transaction_reference: "SNIPPE-TX-9" }
+        });
+
+        const result = await refundService.autoRefundForDispute({
+            dispute: { id: dispute.id, order_id: order.id, buyer_id: buyer.id, seller_id: seller.id },
+            amount: 1000,
+            requestedBy: null
+        });
+
+        expect(["failed", "manual_required"]).toContain(result.status);
+        const [[row]] = await db.query("SELECT * FROM refunds WHERE dispute_id = ?", [dispute.id]);
+        expect(row.last_error || "").toMatch(/no longer connected|manual/i);
+        expect(mobileMoneyProvider.refund).not.toHaveBeenCalled();
+    }, 20000);
 
     it("cash_on_delivery: writes a real 'manual_required' row instead of calling any provider", async () => {
         const { dispute, order, buyer, seller } = await setUpDisputeWithPayment({
@@ -143,7 +162,6 @@ describe("refund.service.autoRefundForDispute (real database)", () => {
         const [[row]] = await db.query("SELECT * FROM refunds WHERE dispute_id = ?", [dispute.id]);
         expect(row.status).toBe("manual_required");
         expect(mobileMoneyProvider.refund).not.toHaveBeenCalled();
-        expect(snippeProvider.refundPayment).not.toHaveBeenCalled();
     });
 
     it("no completed payment on the order: returns manual_required and writes no refunds row at all", async () => {

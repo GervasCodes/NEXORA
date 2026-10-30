@@ -48,7 +48,7 @@ export default function SellerSubscription() {
     useEffect(load, []);
     useEffect(() => () => clearInterval(pollRef.current), []);
 
-    // Handles landing back here after Snippe/PayPal.
+    // Handles landing back here after a card/PayPal payment.
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const payment = params.get("payment");
@@ -156,30 +156,12 @@ export default function SellerSubscription() {
         }
     };
 
-    const payWithSnippe = async () => {
+    const payWithCard = async () => {
         setError("");
-        setBusy("snippe");
+        setBusy("card");
         try {
             const origin = window.location.origin;
-            const { data } = await api.post("/subscriptions/subscribe/snippe", {
-                planCode: selectedPlan.code,
-                successUrl: `${origin}${returnPath}?payment=success`,
-                cancelUrl: `${origin}${returnPath}?payment=cancelled`
-            });
-            window.location.href = data.data.url;
-        } catch (err) {
-            setError(extractErrorMessage(err));
-            setBusy(null);
-        }
-    };
-
-    // MalipoPay Card equivalent of payWithSnippe above.
-    const payWithMalipopayCard = async () => {
-        setError("");
-        setBusy("malipopay_card");
-        try {
-            const origin = window.location.origin;
-            const { data } = await api.post("/subscriptions/subscribe/malipopay-card", {
+            const { data } = await api.post("/subscriptions/subscribe/card", {
                 planCode: selectedPlan.code,
                 successUrl: `${origin}${returnPath}?payment=success`,
                 cancelUrl: `${origin}${returnPath}?payment=cancelled`
@@ -348,13 +330,9 @@ export default function SellerSubscription() {
                     </div>
 
                     <div className="space-y-2">
-                        <button type="button" onClick={payWithSnippe} disabled={busy === "snippe" || awaitingConfirmation}
+                        <button type="button" onClick={payWithCard} disabled={busy === "card" || awaitingConfirmation}
                             className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
-                            {busy === "snippe" ? "Redirecting…" : "Pay with card (Snippe)"}
-                        </button>
-                        <button type="button" onClick={payWithMalipopayCard} disabled={busy === "malipopay_card" || awaitingConfirmation}
-                            className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">
-                            {busy === "malipopay_card" ? "Redirecting…" : "Pay with card (MalipoPay)"}
+                            {busy === "card" ? "Redirecting…" : "Pay with card"}
                         </button>
                         <button type="button" onClick={payWithPaypal} disabled={busy === "paypal" || awaitingConfirmation}
                             className="w-full border border-line px-4 py-2 rounded-md text-sm font-semibold hover:border-ink transition-colors disabled:opacity-60">

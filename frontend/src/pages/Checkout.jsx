@@ -58,8 +58,8 @@ const estimateBuyerProtectionFee = (subtotal) => {
 };
 
 // Non-card, non-provider-agnostic options - these keep their own fixed
-// label/checkout wiring below. Card providers (Snippe, MalipoPay Card,
-// and any future card rail) are NOT listed here - they're generated from
+// label/checkout wiring below. The card rail (one "card" entry; the gateway
+// behind it is configured on the server) are NOT listed here - they're generated from
 // GET /payments/methods at render time (see cardPaymentMethods below) so
 // checkout never needs a frontend change to pick up a newly-configured
 // card gateway. Split into "before" and "after" so the dynamic card
@@ -70,7 +70,7 @@ const estimateBuyerProtectionFee = (subtotal) => {
 const paymentLogosFor = (value) => {
     if (value === "mobile_money") return ["mpesa", "mixx", "airtel_money", "halopesa"];
     if (value === "paypal") return ["paypal"];
-    if (/card|snippe/i.test(value)) return ["visa", "mastercard"];
+    if (/card/i.test(value)) return ["visa", "mastercard"];
     return [];
 };
 
@@ -88,12 +88,15 @@ const PAYMENT_METHODS_AFTER_CARDS = [
 // are (card rails are filtered separately - see cardPaymentMethods).
 const PROVIDER_GATED_METHODS = new Set(["mobile_money", "paypal"]);
 
+// Methods that go through an external payment gateway - hidden while
+// payments are under maintenance. Cash on delivery and wallet stay available.
+const ONLINE_GATEWAY_METHODS = new Set(["mobile_money", "card", "paypal"]);
+
 // Human-friendly labels for known card provider keys - falls back to the
 // registry's own `label` for any key not listed here, so a brand-new
 // card rail still renders sensibly with zero frontend changes.
 const CARD_PROVIDER_LABELS = {
-    malipopay_card: "Card (MalipoPay)",
-    snippe: "Card (Snippe)"
+    card: "Card"
 };
 
 // Fail-open fallback for the card rails specifically. If GET
@@ -122,7 +125,7 @@ export default function Checkout() {
     const [pin, setPin] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // (Resilience & Growth), extended for MalipoPay Card: null =
+    // (Resilience & Growth), extended for the card rail: null =
     // still loading / endpoint unavailable - in either case every method
     // stays visible (fail-open), so this lookup can never make checkout
     // show FEWER options than it did before this phase if something's
@@ -131,6 +134,7 @@ export default function Checkout() {
     // reports, instead of a hardcoded card provider list.
     const [configuredProviders, setConfiguredProviders] = useState(null);
     const [providersFetchFailed, setProvidersFetchFailed] = useState(false);
+    const [paymentsMaintenance, setPaymentsMaintenance] = useState(null);
     const configuredKeys = configuredProviders && configuredProviders.map((provider) => provider.key);
 
     // Loyalty points redemption  - fetched once; the server
@@ -302,6 +306,9 @@ export default function Checkout() {
             .then(({ data }) => {
                 if (cancelled) return;
                 setConfiguredProviders(data.data);
+                // Set while the gateways are being tested: online payments are
+                // switched off for ordinary buyers (see paymentsMaintenance.middleware.js).
+                if (data.maintenance?.active) setPaymentsMaintenance(data.maintenance);
             })
             .catch(() => {
                 if (cancelled) return;
@@ -319,8 +326,7 @@ export default function Checkout() {
 
     // Card payment providers, loaded dynamically from the centralized
     // registry (GET /payments/methods) rather than hardcoded here - if
-    // both Snippe and MalipoPay Card are enabled/configured, both show
-    // up; if only one is, only that one does; a third card rail (added
+    // a card gateway is configured the card option shows up; another card rail (added
     // server-side per docs/PAYMENT_PROVIDERS.md §4) would appear with no
     // frontend change at all. While still loading, no card rows render
     // (rather than guessing) - they appear as soon as the registry
@@ -331,10 +337,8 @@ export default function Checkout() {
         .map((provider) => ({
             value: provider.key,
             label: CARD_PROVIDER_LABELS[provider.key] || provider.label,
-            // "malipopay_card" -> "malipopay-card" to match the route
-            // segments registered in payment.routes.js (POST
-            // /:orderId/<segment>/checkout) - Snippe's own key already
-            // matches its route segment with no translation needed.
+            // Matches the route segments registered in payment.routes.js
+            // (POST /:orderId/<segment>/checkout) - "card" -> /card/checkout.
             routeSegment: provider.key.replace(/_/g, "-")
         }));
 
@@ -349,7 +353,7 @@ export default function Checkout() {
         ...(walletBalance > 0 ? [{ value: "wallet", label: `Wallet balance (${format(walletBalance)})` }] : []),
         ...cardPaymentMethods,
         ...filterStatic(PAYMENT_METHODS_AFTER_CARDS)
-    ];
+    ].filter((method) => !(paymentsMaintenance && ONLINE_GATEWAY_METHODS.has(method.value)));
 
     // Preselect the method this buyer used last time, if it is still offered.
     useEffect(() => {
@@ -377,7 +381,7 @@ export default function Checkout() {
             setForm((current) => ({ ...current, payment_method: visiblePaymentMethods[0].value }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [configuredProviders]);
+    }, [configuredProviders, paymentsMaintenance]);
 
     const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -449,8 +453,7 @@ export default function Checkout() {
                 await api.post(`/payments/${orderId}/wallet`);
 
             } else if (selectedCardMethod) {
-                // Drives whichever card rail was selected (Snippe,
-                // MalipoPay Card, or any future one) through the same
+                // Drives the selected card rail through the same
                 // hosted-checkout request shape - no provider-specific
                 // branch needed here.
                 const origin = window.location.origin;
@@ -710,6 +713,12 @@ export default function Checkout() {
                         ) : (
                             <p className="text-xs text-ash mt-0.5">{t("checkout.deliveryEstimate.unknown")}</p>
                         )}
+                    </div>
+                )}
+
+                {paymentsMaintenance && (
+                    <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+                        {paymentsMaintenance.message}
                     </div>
                 )}
 

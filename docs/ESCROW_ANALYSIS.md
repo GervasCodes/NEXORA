@@ -12,7 +12,7 @@ agreed design instead of each improvising as it goes.
 Traced end-to-end from `payment.service.js`, `wallet.service.js`,
 `dispute.service.js` and the relevant migrations:
 
-1. Buyer pays (mobile money via Selcom/MalipoPay, card via Snippe, or
+1. Buyer pays (mobile money via AzamPay/Selcom/PawaPay, card via Selcom/AzamPay, or
    PayPal). The provider's webhook lands on
    `payment.service.js#_handleOrderPaymentWebhook`, which marks the
    `payments` row `completed` and the order `payment_status = 'paid'`.
@@ -61,7 +61,7 @@ seller's earnings somewhere the seller can't withdraw from until
 delivery has happened and the dispute window on it has passed**, then
 release automatically. This doesn't require a third-party escrow
 provider — the money is already platform-held from the moment a mobile
-money/Snippe/PayPal webhook confirms payment; the fix is entirely about
+money/card/PayPal webhook confirms payment; the fix is entirely about
 *when* `seller_wallets.balance` (the withdrawable figure) is credited,
 not about where the cash physically sits.
 
@@ -162,7 +162,7 @@ not a side effect of some other endpoint.
 ## 5. Non-goals of Phase 9
 
 - No third-party escrow provider integration. All four payment
-  providers (mobile money, Snippe, PayPal) already deposit into
+  providers (mobile money, card, PayPal) already deposit into
   platform-controlled flow; escrow here means changing *when* the
   platform's own ledger makes funds withdrawable, not adding a new
   money-transit path.

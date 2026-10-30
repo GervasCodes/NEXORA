@@ -71,7 +71,7 @@ export default function BookingDetail() {
 
     useEffect(load, [id]);
 
-    // Handles the buyer landing back on this page after a Snippe checkout
+    // Handles the buyer landing back on this page after a card checkout
     // or PayPal approval - mirrors OrderDetail.jsx's own ?payment= handling
     // exactly , just keyed to a booking instead of an order.
     const pollForPaymentConfirmation = (attempt = 0) => {
@@ -137,7 +137,7 @@ export default function BookingDetail() {
 
     // Live confirmation once the provider's webhook actually lands -
     // covers mobile money (buyer stays on this page entering their PIN)
-    // and is the fastest path for the Snippe/PayPal redirect flows above.
+    // and is the fastest path for the card/PayPal redirect flows above.
     useEffect(() => {
         if (!socket || !connected) return;
 
@@ -257,29 +257,12 @@ export default function BookingDetail() {
         }
     };
 
-    const handlePaySnippe = async () => {
+    const handlePayCard = async () => {
         setBusy(true);
         setError("");
         try {
             const origin = window.location.origin;
-            const { data } = await api.post(`/payments/booking/${id}/snippe/checkout`, {
-                successUrl: `${origin}/bookings/${id}?payment=success`,
-                cancelUrl: `${origin}/bookings/${id}?payment=cancelled`
-            });
-            window.location.href = data.data.url;
-        } catch (err) {
-            setError(extractErrorMessage(err));
-            setBusy(false);
-        }
-    };
-
-    // MalipoPay Card equivalent of handlePaySnippe above.
-    const handlePayMalipopayCard = async () => {
-        setBusy(true);
-        setError("");
-        try {
-            const origin = window.location.origin;
-            const { data } = await api.post(`/payments/booking/${id}/malipopay-card/checkout`, {
+            const { data } = await api.post(`/payments/booking/${id}/card/checkout`, {
                 successUrl: `${origin}/bookings/${id}?payment=success`,
                 cancelUrl: `${origin}/bookings/${id}?payment=cancelled`
             });
@@ -440,13 +423,9 @@ export default function BookingDetail() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                        <button onClick={handlePaySnippe} disabled={busy}
+                        <button onClick={handlePayCard} disabled={busy}
                             className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
                             {busy ? t("booking.payment.redirecting") : t("booking.payment.payCard")}
-                        </button>
-                        <button onClick={handlePayMalipopayCard} disabled={busy}
-                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
-                            {busy ? t("booking.payment.redirecting") : t("booking.payment.payCardMalipopay")}
                         </button>
                         <button onClick={handlePayPaypal} disabled={busy}
                             className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">

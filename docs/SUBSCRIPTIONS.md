@@ -28,9 +28,9 @@ bookings).
 ## Payment flow
 
 Subscription checkout reuses the platform's existing payment provider
-abstraction (mobile money / Snippe / PayPal) exactly the way seller
+abstraction (mobile money / card / PayPal) exactly the way seller
 verification fees already do - `payment.service.js` gained
-`initiateMobileMoneySubscriptionPayment`, `initiateSnippeSubscriptionPayment`,
+`initiateMobileMoneySubscriptionPayment`, `initiateCardSubscriptionPayment`,
 and `initiatePaypalSubscriptionPayment`, siblings of the `*VerificationFeePayment`
 functions. A payment references its subscription via a `SUB-<id>` provider
 reference, and `handleProviderWebhook`'s existing regex-routing gained one
@@ -68,7 +68,7 @@ Seller (`/api/v1/subscriptions`):
 - `GET /plans` - public, active plans only
 - `GET /me` - seller's current plan + active listing count
 - `POST /subscribe` `{ planCode, phone }` - mobile money
-- `POST /subscribe/snippe` / `POST /subscribe/paypal` - redirect checkout
+- `POST /subscribe/card` / `POST /subscribe/paypal` - redirect checkout
 - `POST /cancel` - turns off auto-renew (plan stays active until period end)
 
 Admin (`/api/v1/admin`):

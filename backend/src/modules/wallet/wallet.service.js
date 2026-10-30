@@ -19,7 +19,7 @@ const { buildPayout } = require("../../utils/payoutDetails");
 // more than once for the same order.
 //
 // Escrow  which wallet column gets credited depends on the
-// order's payment method. For mobile money / Snippe / PayPal, the
+// order's payment method. For mobile money / card / PayPal, the
 // platform actually holds the buyer's money from the moment the provider
 // webhook confirms payment - so the seller's earnings go into
 // `held_balance` (not withdrawable) and stay there until Phase 9D's
@@ -204,7 +204,7 @@ exports.creditSellersForOrder = async (orderId) => {
 // one provider credited from every uncredited booking_items row.
 //
 // Escrow: every booking payment goes through a platform-captured gateway
-// (mobile money / Snippe / PayPal) - there's no Cash-on-Delivery-shaped
+// (mobile money / card / PayPal) - there's no Cash-on-Delivery-shaped
 // concept for a service, so unlike creditSellersForOrder there's no
 // isEscrowed branch here at all; a provider's earnings always land in
 // held_balance and wait for releaseEligibleBookingEarnings below.

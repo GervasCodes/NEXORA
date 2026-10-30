@@ -3,7 +3,6 @@ jest.mock("../../../src/modules/payment/payment.repository");
 jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/audit/audit.service");
 jest.mock("../../../src/modules/payment/providers/mobileMoney.provider");
-jest.mock("../../../src/modules/payment/providers/snippe.provider");
 jest.mock("../../../src/modules/payment/providers/paypal.provider");
 
 const refundRepository = require("../../../src/modules/refund/refund.repository");
@@ -11,7 +10,6 @@ const paymentRepository = require("../../../src/modules/payment/payment.reposito
 const orderRepository = require("../../../src/modules/order/order.repository");
 const auditService = require("../../../src/modules/audit/audit.service");
 const mobileMoneyProvider = require("../../../src/modules/payment/providers/mobileMoney.provider");
-const snippeProvider = require("../../../src/modules/payment/providers/snippe.provider");
 const paypalProvider = require("../../../src/modules/payment/providers/paypal.provider");
 
 const refundService = require("../../../src/modules/refund/refund.service");
@@ -128,19 +126,47 @@ describe("refund.service.autoRefundForDispute", () => {
     });
 
     it("retries after a thrown provider error and succeeds on a later attempt", async () => {
-        paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "completed", method: "snippe", transaction_reference: "SNIPPE-1" });
+        paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "completed", method: "mobile_money", provider: "pawapay", transaction_reference: "DEP-1" });
         refundRepository.findByDisputeId.mockResolvedValue(undefined);
         refundRepository.create.mockResolvedValue(100);
-        refundRepository.findById.mockResolvedValue(baseRefundRow({ provider: "snippe" }));
-        snippeProvider.refundPayment
+        refundRepository.findById.mockResolvedValue(baseRefundRow({ provider: "mobile_money" }));
+        mobileMoneyProvider.refund
             .mockRejectedValueOnce(new Error("network timeout"))
-            .mockResolvedValueOnce({ success: true, refundReference: "SNIPPE-REFUND-1" });
+            .mockResolvedValueOnce({ success: true, transactionReference: "REFUND-1" });
 
         const result = await refundService.autoRefundForDispute({ dispute, amount: 5000, requestedBy: 1 });
 
         expect(result.status).toBe("completed");
-        expect(snippeProvider.refundPayment).toHaveBeenCalledTimes(2);
-        expect(refundRepository.markCompleted).toHaveBeenCalledWith(100, "SNIPPE-REFUND-1");
+        expect(mobileMoneyProvider.refund).toHaveBeenCalledTimes(2);
+        // the refund goes back through the gateway that took the payment, against its deposit
+        expect(mobileMoneyProvider.refund.mock.calls[1][2]).toMatchObject({ provider: "pawapay", depositId: "DEP-1" });
+        expect(refundRepository.markCompleted).toHaveBeenCalledWith(100, "REFUND-1");
+    });
+
+    it("sends a card refund as a mobile money payout to the order's phone", async () => {
+        paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "completed", method: "card", provider: "selcom", transaction_reference: "S-1" });
+        refundRepository.findByDisputeId.mockResolvedValue(undefined);
+        refundRepository.create.mockResolvedValue(100);
+        refundRepository.findById.mockResolvedValue(baseRefundRow({ provider: "card" }));
+        mobileMoneyProvider.refund.mockResolvedValue({ success: true, transactionReference: "R-2" });
+
+        const result = await refundService.autoRefundForDispute({ dispute, amount: 5000, requestedBy: 1 });
+
+        expect(result.status).toBe("completed");
+        expect(mobileMoneyProvider.refund.mock.calls[0][2]).toMatchObject({ provider: null, depositId: null });
+    });
+
+    it("does not try a retired gateway: Snippe / MalipoPay payments need a manual refund", async () => {
+        paymentRepository.findByOrderId.mockResolvedValue({ id: 1, status: "completed", method: "card", provider: "snippe", transaction_reference: "SN-1" });
+        refundRepository.findByDisputeId.mockResolvedValue(undefined);
+        refundRepository.create.mockResolvedValue(100);
+        refundRepository.findById.mockResolvedValue(baseRefundRow({ provider: "card" }));
+
+        const result = await refundService.autoRefundForDispute({ dispute, amount: 5000, requestedBy: 1 });
+
+        expect(result.status).toBe("failed");
+        expect(mobileMoneyProvider.refund).not.toHaveBeenCalled();
+        expect(refundRepository.markFailed).toHaveBeenCalledWith(100, expect.stringContaining("no longer connected"));
     });
 
     it("computes a proportional USD amount for a PayPal partial refund", async () => {

@@ -185,39 +185,26 @@ app.get("/ping", (req, res) => {
 // Structured per-request access logging (method/path/status/duration,
 // request id) - see middleware/requestLogger.middleware.js. Mounted this
 // early so the request id it generates (X-Request-Id) is available to
-// every handler below, including the raw-body Snippe webhook route.
+// every handler below, including the raw-body payment webhook routes.
 app.use(require("./middleware/requestLogger.middleware"));
 
-// Snippe webhook signature verification (snippe.provider.js ->
-// constructWebhookEvent) needs the exact raw request bytes - once
-// express.json() below parses the body into an object, that's gone for
-// good. So this one route is registered here, with its own
-// express.raw() parser, BEFORE the global express.json() - Express
-// handles a fully-matched route and never reaches the later json()
-// middleware for this path. Every other route (including the mobile
-// money webhooks, which verify a shared-secret header instead of a body
-// signature) is fine going through the normal JSON body parser below.
+// PawaPay and PayPal webhook verification needs the exact raw request bytes
+// (PawaPay's signature covers a digest of the body; PayPal's is checked
+// through its verify-webhook-signature API) - once express.json() below parses
+// the body into an object, that's gone for good. So these routes are
+// registered here, with their own express.raw() parser, BEFORE the global
+// express.json() - Express handles a fully-matched route and never reaches the
+// later json() middleware for these paths. Every other payment webhook
+// (Selcom, AzamPay) verifies a shared secret instead of a body signature and is
+// fine going through the normal JSON body parser below.
 app.post(
-    "/api/v1/payments/webhooks/snippe",
+    "/api/v1/payments/webhooks/pawapay",
     express.raw({ type: "application/json" }),
-    require("./modules/payment/payment.controller").snippeWebhook
+    require("./modules/payment/payment.controller").pawapayWebhook
 );
 
-// MalipoPay Card webhook signature verification (malipopayCard.provider.js
-// -> constructWebhookEvent) needs the exact raw request bytes too - same
-// reasoning and wiring as the Snippe route directly above. This is the
-// card-checkout product's webhook only; the mobile-money MalipoPay
-// webhook (POST /api/v1/payments/webhooks/malipopay) verifies a
-// shared-secret header instead and goes through the normal JSON body
-// parser below, unchanged.
-app.post(
-    "/api/v1/payments/webhooks/malipopay-card",
-    express.raw({ type: "application/json" }),
-    require("./modules/payment/payment.controller").malipopayCardWebhook
-);
-
-// PayPal webhook - raw body for the same reason as Snippe/MalipoPay Card;
-// verified through PayPal's verify-webhook-signature API (PAYPAL_WEBHOOK_ID).
+// PayPal webhook - verified through PayPal's verify-webhook-signature API
+// (PAYPAL_WEBHOOK_ID).
 app.post(
     "/api/v1/payments/webhooks/paypal",
     express.raw({ type: "application/json" }),
@@ -466,7 +453,7 @@ app.use("/api/v1/admin/affiliates", affiliateAdminRoutes);
 // (webhookAuth.middleware.js#verifySharedSecretHeader) - configure the
 // same value as a custom header on Brevo's webhook settings and as
 // BREVO_WEBHOOK_SECRET here. Placed after express.json() (unlike the
-// Snippe/MalipoPay Card/WhatsApp webhooks above) since Brevo doesn't
+// PawaPay/PayPal/WhatsApp webhooks above) since Brevo doesn't
 // sign the raw request body - the shared header is the whole check -
 // so there's no need for the raw-body parser those three require.
 app.post(

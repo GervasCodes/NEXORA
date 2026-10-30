@@ -13,8 +13,8 @@ both a local/dev environment and a production environment.
   non-production: the app degrades gracefully to "log and continue" if it
   isn't configured
 - Merchant/API credentials for whichever payment providers you intend to
-  accept live traffic on (Selcom and/or MalipoPay for direct mobile money,
-  Snippe for hosted card/mobile-money/QR checkout, PayPal) — see section 5
+  accept live traffic on (AzamPay, Selcom and/or PawaPay for mobile money; Selcom or
+  AzamPay for card; PayPal) — see section 5
 
 ## 2. Database setup
 
@@ -184,16 +184,18 @@ these up once per environment:
 **router**, not a placeholder: it dispatches to a real, complete provider
 implementation based on `MOBILE_MONEY_PROVIDER` in `.env`.
 
-- `MOBILE_MONEY_PROVIDER=selcom` → `selcom.provider.js` (needs
-  `MOBILE_MONEY_API_BASE_URL`, `MOBILE_MONEY_API_KEY`,
-  `MOBILE_MONEY_API_SECRET`, `MOBILE_MONEY_VENDOR_ID`)
-- `MOBILE_MONEY_PROVIDER=malipopay` → `malipopay.provider.js` (needs
-  `MOBILE_MONEY_API_BASE_URL`, `MOBILE_MONEY_API_KEY`)
-- Both providers implement `initiate`/`disburse`/webhook verification for
-  real, and each has a working inbound webhook route
-  (`POST /api/v1/payments/webhooks/selcom`,
-  `POST /api/v1/payments/webhooks/malipopay`), guarded by
-  `webhookAuth.middleware.js`.
+- `MOBILE_MONEY_PROVIDER=azampay` → `azampay.provider.js` (needs `AZAMPAY_API_BASE_URL`,
+  `AZAMPAY_AUTH_BASE_URL`, `AZAMPAY_APP_NAME`, `AZAMPAY_CLIENT_ID`, `AZAMPAY_CLIENT_SECRET`,
+  `AZAMPAY_WEBHOOK_SECRET`; `AZAMPAY_VENDOR_ID` for card)
+- `MOBILE_MONEY_PROVIDER=selcom` → `selcom.provider.js` (needs `SELCOM_API_BASE_URL`,
+  `SELCOM_API_KEY`, `SELCOM_API_SECRET`, `SELCOM_VENDOR_ID`, `SELCOM_WEBHOOK_SECRET`)
+- `MOBILE_MONEY_PROVIDER=pawapay` → `pawapay.provider.js` (needs `PAWAPAY_API_BASE_URL`,
+  `PAWAPAY_API_TOKEN`)
+- Card checkout is routed by `CARD_PROVIDER` (`selcom` or `azampay`) through `card.provider.js`.
+- Each gateway has an inbound webhook route
+  (`/api/v1/payments/webhooks/selcom`, `/azampay?secret=<AZAMPAY_WEBHOOK_SECRET>`, `/pawapay`),
+  guarded as described in `docs/WEBHOOK_VALIDATION.md`. In PawaPay's dashboard, enable
+  signed callbacks.
 - **Unconfigured + `NODE_ENV` not `production`** → falls back to
   `simulate.provider.js` (a loud, unmissable `SIMULATED-...` log banner) so
   you can build/test checkout without real credentials.
@@ -201,23 +203,32 @@ implementation based on `MOBILE_MONEY_PROVIDER` in `.env`.
   recorded as failed rather than silently succeeding — you cannot
   accidentally ship production still in "always succeeds" mode.
 
-Separately, `snippe.provider.js` and `paypal.provider.js` are independent,
-complete payment methods (Snippe is a hosted checkout covering
-card/mobile-money/QR; needs `SNIPPE_SECRET_KEY`, `SNIPPE_WEBHOOK_SECRET`,
-`SNIPPE_API_BASE_URL`; PayPal needs the standard PayPal REST credentials
-plus `PAYPAL_MODE=live` when you're ready). Both verify their own inbound
-webhooks with a raw-body signature check.
+Separately, `paypal.provider.js` is an independent, complete payment method
+(needs the standard PayPal REST credentials plus `PAYPAL_MODE=live` when you're
+ready); it verifies via server-side capture.
 
 Before going live:
 
-1. Pick a mobile money provider (Selcom and/or MalipoPay), get its
-   merchant/API credentials, and set the vars above in `backend/.env`.
-2. If you want Snippe and/or PayPal as additional checkout options, get
-   their credentials and set those vars too.
+1. Pick a mobile money gateway (`MOBILE_MONEY_PROVIDER`: azampay, selcom or
+   pawapay) and a card gateway (`CARD_PROVIDER`: selcom or azampay), get their
+   merchant/API credentials, and set the vars in `backend/.env`
+   (`.env.example` lists them all). PawaPay cannot take cards.
+2. If you want PayPal as an additional checkout option, get its credentials
+   and set those vars too.
 3. Point each provider's webhook URL (in their merchant dashboard) at your
    deployed `POST /api/v1/payments/webhooks/<provider>` route.
 4. Confirm `NODE_ENV=production` is set — this is what turns off payment
    simulation.
+
+**Testing gateways in sandbox before launch:** set `PAYMENTS_MAINTENANCE=true`.
+Buyers then see a "payments under maintenance" notice at checkout, only Cash on
+Delivery (and wallet) is offered, and the server answers `503 PAYMENTS_MAINTENANCE`
+to any attempt to start a mobile-money, card, PayPal, wallet top-up or
+subscription payment. Admins, and user ids listed in
+`PAYMENTS_MAINTENANCE_TESTER_IDS`, can still pay, so sandbox tests run through the
+real checkout. Webhooks and PayPal capture are never blocked, so a payment already
+in flight still completes. `PAYMENTS_MAINTENANCE_MESSAGE` customises the text.
+Set it back to `false` (or remove it) to go live.
 
 Cash on Delivery (`confirmCashOnDelivery`) doesn't depend on any of this and
 is safe to use as-is.
@@ -237,8 +248,12 @@ is safe to use as-is.
       `NODE_ENV=production` makes payments fail closed rather than silently
       simulate, but you should still disable/hide unconfigured methods at
       checkout
-- [ ] `MOBILE_MONEY_PROVIDER`, `SNIPPE_*`, `PAYPAL_*` env vars set for
-      whichever providers you enabled
+- [ ] `MOBILE_MONEY_PROVIDER`, `CARD_PROVIDER`, `SELCOM_*`, `AZAMPAY_*`, `PAWAPAY_*`,
+      `PAYPAL_*` env vars set for whichever gateways you enabled
+- [ ] Migration 161 applied (adds `payments.provider`, the `card` method, and
+      converts legacy Snippe/MalipoPay rows)
+- [ ] One sandbox payment per gateway completed end to end (adapters have not
+      been run against live sandboxes)
 - [ ] Regular database backups configured (`database/backups/` exists as a
       placeholder but nothing populates it automatically yet)
 - [x] Automated test coverage exists and passes: 1,423 backend unit tests,

@@ -15,7 +15,7 @@ the answers/thresholds differ by jurisdiction.
 
 1. **Order payment -> platform-side "escrow"** (`wallet.service.js`,
    `docs/ESCROW_ANALYSIS.md`, `docs/ESCROW_PAYMENT_FLOW.md`): once a
-   mobile money/Snippe/PayPal webhook confirms a buyer's payment, the
+   mobile money/card/PayPal webhook confirms a buyer's payment, the
    seller's net amount (after commission) is credited to a `held_balance`
    column in NEXORA's own MySQL database - not withdrawable yet. A
    scheduled job (`src/jobs/escrowRelease.job.js`) later moves it into a
@@ -65,10 +65,10 @@ Regulations are aimed at, even though NEXORA doesn't call itself an
 e-money issuer and doesn't accumulate float across unrelated
 transactions the way a wallet-top-up product would.
 
-## Questions worth getting a definitive answer on (from a lawyer, and from MalipoPay/Selcom/AzamPay directly)
+## Questions worth getting a definitive answer on (from a lawyer, and from AzamPay/Selcom/PawaPay directly)
 
 1. **Where does the money physically sit during the hold period?** If a
-   buyer's mobile money payment settles into MalipoPay/Selcom/AzamPay's
+   buyer's mobile money payment settles into AzamPay/Selcom/PawaPay's
    own licensed settlement account, and NEXORA's `held_balance` column is
    just a ledger entry against money the *provider* is holding (with
    NEXORA never taking custody), the licensing analysis is meaningfully
@@ -78,7 +78,7 @@ transactions the way a wallet-top-up product would.
    payment" product precisely so the platform never touches the money
    directly, which is the common way marketplaces avoid needing their
    own PSP license.
-2. **Does any of MalipoPay, Selcom, or AzamPay already hold a Bank of
+2. **Does any of AzamPay, Selcom, or PawaPay already hold a Bank of
    Tanzania PSP license covering this use case**, and does their
    merchant agreement with NEXORA account for the escrow/hold behavior
    (delayed release, not an ordinary immediate merchant settlement)?
@@ -105,7 +105,7 @@ Before this goes live with real money (not test/simulate-provider
 transactions): get a Tanzanian advocate with fintech/payments experience
 to review this document plus `docs/ESCROW_ANALYSIS.md` and
 `docs/ESCROW_PAYMENT_FLOW.md`, and separately raise the escrow/hold
-behavior directly with MalipoPay, Selcom, and AzamPay's own compliance
+behavior directly with AzamPay, Selcom, and PawaPay's own compliance
 teams - they will know definitively whether their existing license
 covers a marketplace holding funds this way, or whether NEXORA needs a
 different arrangement (e.g. a provider-side marketplace/split-payment

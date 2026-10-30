@@ -21,7 +21,7 @@ const HARD_CUTOFF_MINUTES = Number(process.env.STALE_PAYMENT_HARD_MINUTES) || 24
 const HOSTED_HARD_CUTOFF_MINUTES = Number(process.env.STALE_HOSTED_PAYMENT_HARD_MINUTES) || 72 * 60;
 const WALLET_STALE_AFTER_MINUTES = 60;
 
-const HOSTED_METHODS = new Set(["snippe", "malipopay_card", "paypal"]);
+const HOSTED_METHODS = new Set(["card", "paypal"]);
 
 const ageMinutes = (payment) => (Date.now() - new Date(payment.created_at).getTime()) / 60000;
 

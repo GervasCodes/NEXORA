@@ -48,7 +48,7 @@ flowchart TB
         DB[(MySQL)]
         Cloudinary[(Cloudinary<br/>media storage)]
         Brevo[Brevo<br/>transactional email]
-        Providers["Payment providers<br/>MalipoPay · Selcom · Snippe · PayPal"]
+        Providers["Payment providers<br/>AzamPay · Selcom · PawaPay · PayPal"]
         Sentry[Sentry<br/>error tracking]
         WebPush[Web Push<br/>delivery agent offers]
     end
@@ -134,7 +134,7 @@ reviewer assessing the runtime environment:
 | Authentication | `middleware/auth.middleware.js` | JWT, re-checks account status per-request |
 | Authorization | `middleware/authorize.middleware.js` | Role-based, applied per-route |
 | Rate limiting | `middleware/rateLimit.middleware.js` | Tiered: strict on auth, loose platform-wide |
-| Webhook auth | `middleware/webhookAuth.middleware.js` + `providers/snippe.provider.js` | See `docs/WEBHOOK_VALIDATION.md` |
+| Webhook auth | `middleware/webhookAuth.middleware.js` + `providers/pawapay.provider.js` | See `docs/WEBHOOK_VALIDATION.md` |
 | Error handling | `middleware/errorHandler.js` | Centralized; 4xx vs 5xx split for logging/Sentry severity |
 | Structured logging | `utils/logger.js` (Phase 2) | pino, redacts credentials |
 | Observability | `config/sentry.js` (Phase 2) | Conditional on `SENTRY_DSN` |

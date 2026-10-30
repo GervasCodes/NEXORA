@@ -185,8 +185,8 @@ file count dropped from 150+ to 91. All 198 existing frontend tests
 ## 5. Payment webhook integration/E2E test coverage
 
 `tests/integration/payment.webhooks.test.js` already covered, well,
-per-provider auth/signature verification (MalipoPay `payloadSignature`,
-Selcom bearer token, Snippe HMAC) plus one happy-path processing test
+per-provider auth/signature verification (AzamPay shared secret,
+Selcom bearer token, PawaPay signed callbacks) plus one happy-path processing test
 per provider. Added `tests/integration/payment.webhooks.resilience.test.js`
 to cover what runs *after* that check — the gaps were:
 

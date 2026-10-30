@@ -1,167 +1,114 @@
 # Payment Providers
 
-Phase 5 (Resilience & Growth) deliverable. Companion to
-`docs/ESCROW_PAYMENT_FLOW.md` (which covers the money-movement lifecycle)
-and `docs/WEBHOOK_VALIDATION.md` (which covers webhook auth) — this
-document covers the provider layer itself: what rails exist, how they're
-selected, and how to add a new one.
+Companion to `docs/ESCROW_PAYMENT_FLOW.md` (money-movement lifecycle) and
+`docs/WEBHOOK_VALIDATION.md` (webhook auth). This document covers the
+provider layer itself: which rails and gateways exist, how they are
+selected, and how to add another.
 
-## 1. The four rails today
+## 1. Rails and gateways
 
-| Rail | Module | Auth model | Style |
-|---|---|---|---|
-| Mobile Money | `providers/mobileMoney.provider.js` (router over `malipopay.provider.js` / `selcom.provider.js` / `azampay.provider.js`) | static API key (MalipoPay), HMAC-signed requests (Selcom), short-lived bearer token (AzamPay) | USSD push — `initiate(phone, amount, meta)` returns `pending`, buyer confirms on their phone, result arrives later via webhook |
-| Snippe | `providers/snippe.provider.js` | secret key + signed webhooks | hosted checkout session — `createCheckoutSession(...)` returns a redirect URL |
-| MalipoPay Card | `providers/malipopayCard.provider.js` | secret key + signed webhooks | hosted checkout session — `createCheckoutSession(...)` returns a redirect URL, same shape as Snippe. Supports Visa / Mastercard / American Express / UnionPay, each independently toggleable — see §6 |
-| PayPal | `providers/paypal.provider.js` | OAuth client id/secret | hosted order/capture — `createOrder(...)` returns an approve URL, `captureOrder(...)` finalizes |
+Buyers see three gateway rails. Which concrete gateway sits behind a rail is
+an environment setting, not a code change.
 
-Every mobile-money sub-provider (MalipoPay, Selcom, AzamPay) exports the
-same four functions — `isConfigured()`, `initiate()`, `refund()`,
-`disburse()` — so `mobileMoney.provider.js` can route between them purely
-on `MOBILE_MONEY_PROVIDER` in `.env` with no other file changing. Snippe,
-MalipoPay Card, and PayPal are structurally different enough
-(redirect-based, not USSD-push) that they're driven directly by
-`payment.service.js` rather than through that same router.
+| Rail (`payments.method`) | Router | Gateways | Selected by | Style |
+|---|---|---|---|---|
+| `mobile_money` | `providers/mobileMoney.provider.js` | AzamPay, Selcom, PawaPay | `MOBILE_MONEY_PROVIDER` | USSD push: `initiate(phone, amount, meta)` returns a pending reference |
+| `card` | `providers/card.provider.js` | Selcom, AzamPay | `CARD_PROVIDER` | Hosted checkout: `createCheckoutSession(...)` returns a redirect URL |
+| `paypal` | `providers/paypal.provider.js` | PayPal | credentials set | Hosted order/capture |
 
-**MalipoPay Card vs. the mobile-money MalipoPay rail:** these are two
-entirely separate MalipoPay products with separate credentials and
-separate `.env` variables. The mobile-money rail
-(`providers/malipopay.provider.js`) is configured via `MOBILE_MONEY_*`
-and is one of three interchangeable USSD-push sub-providers. MalipoPay
-Card (`providers/malipopayCard.provider.js`) is configured via
-`MALIPOPAY_CARD_*` and is a standalone hosted-checkout rail alongside
-Snippe. Enabling, disabling, or misconfiguring one has zero effect on
-the other.
+Cash on delivery and the buyer wallet are not external gateways.
 
-## 2. The registry (`providers/registry.js`)
+**PawaPay is mobile money only.** It collects from mobile-money wallets and
+has no card product, so `CARD_PROVIDER=pawapay` is rejected (reported by
+`validateRegistry` at boot, and the card rail stays off).
 
-Added in Phase 5. A read-only capability layer over all three rails —
-it does not replace any of `payment.service.js`'s existing initiate/
-refund/webhook functions (see the comment at the top of `registry.js`
-for why forcing all three rails through one generic call signature
-wasn't a change worth making without a test run backing it). What it
-adds:
+Every mobile-money gateway exports `isConfigured()`, `initiate()`,
+`refund()`, `disburse()` and (where the gateway has a lookup) `checkStatus()`.
+Every card gateway exports `isConfigured()` and `createCheckoutSession()`.
 
-- `getProvider(key)` / `listProviders()` — capability metadata (does
-  this rail support orders, bookings, verification fees, refunds,
-  disbursement, does it require a redirect) plus a live `configured`
-  flag per rail. Card-type rails (currently Snippe and MalipoPay Card)
-  also carry `type: "card"`, and MalipoPay Card additionally carries a
-  live `brands` array (whichever of Visa/Mastercard/Amex/UnionPay are
-  currently enabled) — see §6.
-- `listConfiguredProviders()` — the buyer-facing subset: only rails an
-  admin has actually set credentials for. Backs the new
-  `GET /payment/methods` endpoint, so a checkout screen can show only
-  what's real instead of hardcoding all three and finding out one 401s.
-- `validateRegistry(logger)` — called once at boot (`server.js`), warns
-  (never throws — an unconfigured rail is normal, not an error) if a
-  registered provider's shape is broken.
+`payments.provider` (migration 161) records which gateway took each payment.
+Status checks and refunds go back to that gateway even if the env setting is
+changed later. Legacy rows taken through the retired Snippe / MalipoPay
+gateways keep their old name there; refunds for them fail with a "refund
+manually from that gateway's dashboard" message.
 
-## 3. Adding a fourth mobile-money rail
+## 2. Environment
 
-This is the pattern `azampay.provider.js` followed, added in this same
-phase as the worked example:
+See `backend/.env.example` (payments section) for the full list.
 
-1. Create `providers/<name>.provider.js` exporting `isConfigured()`,
-   `initiate(phone, amount, meta)`, `refund(phone, amount, meta)`,
-   `disburse(phone, amount, meta)` — same shape as
-   `malipopay.provider.js`.
-2. Add one line to the `providers` map in `mobileMoney.provider.js`.
-3. Set `MOBILE_MONEY_PROVIDER=<name>` and that provider's credentials in
-   `.env` when ready to go live with it.
+| Gateway | Variables |
+|---|---|
+| Selcom | `SELCOM_API_BASE_URL`, `SELCOM_API_KEY`, `SELCOM_API_SECRET`, `SELCOM_VENDOR_ID`, `SELCOM_WEBHOOK_SECRET` (falls back to `MOBILE_MONEY_*` names) |
+| AzamPay | `AZAMPAY_API_BASE_URL`, `AZAMPAY_AUTH_BASE_URL`, `AZAMPAY_APP_NAME`, `AZAMPAY_CLIENT_ID`, `AZAMPAY_CLIENT_SECRET`, `AZAMPAY_VENDOR_ID` (card only), `AZAMPAY_WEBHOOK_SECRET` |
+| PawaPay | `PAWAPAY_API_BASE_URL`, `PAWAPAY_API_TOKEN`, `PAWAPAY_ALLOW_UNSIGNED_CALLBACKS` (dev only) |
+| PayPal | `PAYPAL_*` |
 
-Nothing in `payment.service.js`, `payment.controller.js`, or
-`payment.routes.js` needs to change — the router and the registry both
-pick the new rail up automatically. `registry.js`'s `mobile_money` entry
-already reflects "whichever rail `MOBILE_MONEY_PROVIDER` currently
-selects," so no registry edit is needed either.
+## 3. Gateway flows
 
-## 4. Adding a genuinely new kind of rail (redirect-based, card network, etc.)
+- **Selcom** — mobile: `create-order-minimal` then `wallet-payment` (USSD push).
+  Card: `create-order`, which returns a base64 `payment_gateway_url`. Requests
+  are HMAC-signed (timestamp first in the digest string); `Authorization` is
+  `SELCOM base64(key)`. Status lookup: `order-status`. Refund and payout use
+  `/v1/payout/process` — **confirm this against Selcom's docs before relying on it.**
+- **AzamPay** — a bearer token is fetched from a separate authenticator host.
+  Mobile: `/azampay/mno/checkout`, network detected from the phone prefix.
+  Card: `/api/v1/Partner/PostCheckout` returns AzamPay's hosted page. There is
+  no status-lookup endpoint wired up; stale payments rely on the webhook and
+  the age cutoff. Refunds are disbursements back to the buyer's phone.
+- **PawaPay** — `POST /v2/deposits` after a predict-provider call to find the
+  buyer's network. The `depositId` is a deterministic UUID derived from our
+  payment reference and stored as `transaction_reference`. Refunds use
+  `/v2/refunds` when the depositId is known, otherwise a payout.
 
-A rail that doesn't fit the mobile-money shape (e.g. a new hosted-
-checkout or card-network provider, similar in spirit to Snippe/PayPal)
-needs more than a drop-in file, since `payment.service.js` drives each
-redirect-based rail with rail-specific functions
-(`initiateSnippeOrderPayment`, `initiateMalipopayCardOrderPayment`,
-`initiatePaypalOrderPayment`, etc.) — not through a single generic entry
-point. Adding one means:
+Adapters were written from each gateway's public documentation and are covered
+by unit tests with mocked HTTP. **They have not been run against live
+sandboxes** — do that before go-live.
 
-1. A new `providers/<name>.provider.js` with whatever call shape that
-   provider's API actually needs (a checkout-session creator, an
-   order/capture pair, etc.) — don't force it into the mobile-money
-   shape if it isn't USSD-push.
-2. New `initiate<Name>OrderPayment` / `initiate<Name>BookingPayment` /
-   `initiate<Name>VerificationFeePayment` / `initiate<Name>SubscriptionPayment`
-   functions in `payment.service.js`, mirroring the existing
-   Snippe/MalipoPay Card ones, plus a `handle<Name>WebhookEvent` if the
-   rail uses a signed-body webhook (add the raw-body route in `app.js`
-   *before* `express.json()` — see the Snippe/MalipoPay Card routes
-   there for why).
-3. New routes in `payment.routes.js` (mind the literal-path-before-
-   `/:orderId` ordering rule already documented at the top of that
-   file) and, for subscriptions, `subscription.routes.js`.
-4. A new entry in `providers/registry.js`'s `PROVIDERS` array with
-   accurate `capabilities` (and `type: "card"` if it's a card-network
-   rail — the frontend checkout page reads this to build its card
-   options dynamically instead of hardcoding provider keys) — this is
-   what makes the new rail show up in `GET /payment/methods` once it's
-   configured.
-5. Add the new `payment_method` / `method` / `refunds.provider` ENUM
-   value via a migration (see `migrations/030_snippe_payment_gateway.sql`
-   and `migrations/077_malipopay_card_payment_gateway.sql` for the
-   pattern) and add it to `constants/orderStatus.js`'s
-   `PAYMENT_METHODS` array so `order.validator.js` accepts it.
-6. Add a refund branch in `refund.service.js#callProvider` and
-   `payment.service.js#refundBookingPayment` if the rail supports
-   `refund: true`.
+## 4. The registry (`providers/registry.js`)
 
-MalipoPay Card (`providers/malipopayCard.provider.js`) is the worked
-example of all six steps — added to run alongside Snippe without
-touching any existing Snippe code path.
+A read-only capability layer over the three rails:
 
-## 5. `GET /payment/methods`
+- `getProvider(key)` / `listProviders()` — capability metadata, the active
+  `gateway` name, and a live `configured` flag.
+- `listConfiguredProviders()` — the buyer-facing subset; backs
+  `GET /payment/methods`, so checkout only shows rails that are really set up.
+- `validateRegistry(logger)` — run at boot; warns (never throws) about a
+  malformed provider or an invalid `CARD_PROVIDER`.
 
-New in Phase 5. Requires auth (any logged-in role), takes no
-parameters, returns `providerRegistry.listConfiguredProviders()`:
+The `card` entry carries `type: "card"` and `primary: true`; `Checkout.jsx`
+reads these to build its card option instead of hardcoding gateway keys.
+
+## 5. Adding another gateway
+
+**Another mobile-money gateway:** create `providers/<name>.provider.js` with the
+mobile-money shape above, add one line to `providers` in
+`mobileMoney.provider.js`, add a status classifier in `providerStatus.js` and a
+webhook route/handler (with auth in `webhookAuth.middleware.js`), then set
+`MOBILE_MONEY_PROVIDER=<name>`.
+
+**Another card gateway:** create the adapter with `createCheckoutSession`, add
+it to `providers` in `card.provider.js`, plus a webhook route as above.
+
+**A new kind of rail** needs service functions in `payment.service.js`, routes
+in `payment.routes.js`, a registry entry, an ENUM migration (pattern:
+`migrations/161_gateways_azampay_selcom_pawapay.sql`), an entry in
+`constants/orderStatus.js#PAYMENT_METHODS`, and a refund branch in
+`refund.service.js#callProvider`.
+
+## 6. `GET /payment/methods`
+
+Requires auth, takes no parameters, returns the configured rails:
 
 ```json
 {
   "success": true,
   "data": [
+    { "key": "card", "label": "Card", "type": "card", "primary": true, "capabilities": { "...": "..." }, "configured": true },
     { "key": "mobile_money", "label": "Mobile Money", "capabilities": { "...": "..." }, "configured": true },
-    { "key": "snippe", "label": "Snippe (cards)", "type": "card", "capabilities": { "...": "..." }, "configured": true },
-    { "key": "malipopay_card", "label": "MalipoPay (cards)", "type": "card", "brands": ["visa", "mastercard", "amex", "unionpay"], "capabilities": { "...": "..." }, "configured": true }
+    { "key": "paypal", "label": "PayPal", "capabilities": { "...": "..." }, "configured": true }
   ]
 }
 ```
 
-Registered ahead of the existing `GET /:orderId` route in
-`payment.routes.js`, for the same reason the verification-fee routes
-above it are — Express matches route registration order, and
-`/methods` has the same single-segment shape as `/:orderId`.
-
-The frontend checkout page (`Checkout.jsx`) filters this list for
-`type === "card"` to build its card payment options dynamically — if
-both Snippe and MalipoPay Card are configured, both appear; if only one
-is, only that one does; if a third card rail is added following §4, it
-appears automatically with no frontend change required.
-
-## 6. MalipoPay Card brand toggles
-
-Unlike every other rail, MalipoPay Card has four independent per-brand
-toggles on top of its own gateway-level `isConfigured()` check
-(`MALIPOPAY_CARD_API_BASE_URL` + `MALIPOPAY_CARD_SECRET_KEY` both set):
-
-| Env var | Default | Effect |
-|---|---|---|
-| `MALIPOPAY_CARD_VISA_ENABLED` | enabled | Set to `false` to stop offering Visa |
-| `MALIPOPAY_CARD_MASTERCARD_ENABLED` | enabled | Set to `false` to stop offering Mastercard |
-| `MALIPOPAY_CARD_AMEX_ENABLED` | enabled | Set to `false` to stop offering American Express |
-| `MALIPOPAY_CARD_UNIONPAY_ENABLED` | enabled | Set to `false` to stop offering UnionPay |
-
-All four default to enabled (opt-out) once the base credentials are set,
-matching this codebase's usual boolean-flag convention. If every brand
-is disabled, `malipopayCard.provider.js#isConfigured()` returns `false`
-and the whole rail drops out of `GET /payment/methods` — a fully
-credentialed gateway with nothing to sell isn't a selectable checkout
-option. See `providers/malipopayCard.provider.js#getEnabledBrands()`.
+It is registered ahead of `GET /:orderId` for the same reason as the other
+literal paths: Express matches in registration order.

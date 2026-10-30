@@ -19,7 +19,7 @@ see `backend/.env.example`.
 
 ## Schema overview
 
-159 migrations as of this report (up from 130 at Phase RF6, API & Architecture
+161 migrations as of this report (up from 130 at Phase RF6, API & Architecture
 Docs — the detailed per-migration breakdown below was written as of RF6 and
 only covers `001`–`082` in full; migrations after `082` exist in
 `database/migrations/` but aren't individually described here), grouped by
@@ -77,6 +77,9 @@ Product videos, product audio (feature removed in Phase 4; table kept until `dat
 
 **Nexora Stock Management — Phase 8** (`159`)
 `stock_expenses` (category, amount, `expense_date` as a Dar es Salaam calendar DATE, note, receipt photo URL, idempotency key + payload hash, `voided_at` keeps a cancelled expense on record but out of every total), `stock_low_alert_state` (one row per item that is currently low, so a seller is told once per dip). `subscription_plans.entitlements` (JSON: `stock_pos`, `stock_reports`, `stock_cost_reports`, `stock_import_export`, `stock_staff_users`, `stock_low_alerts`, soft limit `stock_max_items`; the existing `features` column stays display copy; NULL = no Stock Management). `sales.is_offline`, `sales.stock_flagged`, `sales.client_created_at` for sales rung up offline and synced later, and index `idx_sales_report`. Seeds default entitlements per plan only where NULL, appends Stock Management lines to the pricing copy, and adds settings `stock_export_grace_days` (30), `stock_low_alert_channels` (`push`), `stock_offline_max_age_days` (30).
+
+**Payment gateways — AzamPay / Selcom / PawaPay** (`161`)
+`orders.payment_method` / `payments.method` / `refunds.provider` become `mobile_money`, `card`, `paypal`, `cash_on_delivery`, `wallet` (`snippe` and `malipopay_card` rows are moved to `card`). New `payments.provider` (`azampay`, `selcom`, `pawapay`, or legacy `snippe` / `malipopay`) records which gateway took each payment.
 
 **Seller branding — Phase 7** (`048`–`050`)
 Store theme, seller branding fields (logo/banner), seller collections.

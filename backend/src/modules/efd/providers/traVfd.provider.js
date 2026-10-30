@@ -5,7 +5,7 @@
  * TRA's actual VFD Web API (for taxpayers who don't have a physical
  * EFD) requires per-taxpayer enrollment before you get real endpoint
  * URLs and credentials - there is no generic sandbox to point at from
- * here the way MalipoPay/Selcom at least document a public developer
+ * here the way AzamPay/Selcom at least document a public developer
  * portal for (see payment/providers/selcom.provider.js's header
  * comment for the same situation with a payment provider). The request/
  * response shape below is this integration's best-effort structure

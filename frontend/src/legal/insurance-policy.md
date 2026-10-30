@@ -66,7 +66,7 @@ accident and third-party liability cover for delivery work.
 
 ## 6. Payment-processor-level protection
 
-Some payment methods offered at checkout (e.g. card payments processed through Snippe,
+Some payment methods offered at checkout (e.g. card payments processed through our payment gateways,
 or PayPal) carry their own buyer-protection programs independent of NEXORA. Where
 available, a Buyer may also have recourse directly through their payment provider;
 using that recourse instead of, or in addition to, NEXORA's dispute process is the

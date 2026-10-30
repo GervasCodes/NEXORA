@@ -343,7 +343,7 @@ export default function AdminSettings() {
                     />
                     <p className="text-xs text-ash mt-1">
                         Used only to convert a TZS amount to USD for PayPal, which doesn't support TZS directly.
-                        Snippe charges in TZS natively and doesn't use this. Keep this roughly in line with the real rate.
+                        The local gateways (AzamPay, Selcom, PawaPay) charge in TZS and don't use this. Keep this roughly in line with the real rate.
                     </p>
                 </div>
 

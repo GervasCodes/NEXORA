@@ -127,7 +127,7 @@ exports.findPendingSubscriptionPayment = async (subscriptionId) => {
 };
 
 // Looks up a payment by the reference stored when it was initiated
-// (Snippe Checkout Session id, or PayPal order id) - used when a
+// (gateway session / deposit id, or PayPal order id) - used when a
 // provider only gives us that id back (e.g. PayPal's capture response,
 // or a frontend return-URL query param) and we need to find our own
 // payment row and its order_id/seller_id/purpose.
@@ -175,13 +175,18 @@ exports.findByTransactionReference = async (transactionReference) => {
     return rows[0];
 };
 
-exports.markPending = async (paymentId, transactionReference) => {
+// `provider` (azampay | selcom | pawapay) records which gateway actually took
+// the payment, so status checks and refunds go back to the same one even if
+// MOBILE_MONEY_PROVIDER / CARD_PROVIDER are switched later. Omitted for PayPal
+// (the method already names it) and left untouched when not given.
+exports.markPending = async (paymentId, transactionReference, provider = null) => {
     await db.query(
         `UPDATE payments
         SET status = 'pending',
-            transaction_reference = ?
+            transaction_reference = ?,
+            provider = COALESCE(?, provider)
         WHERE id = ? AND status IN ('pending', 'failed')`,
-        [transactionReference, paymentId]
+        [transactionReference, provider, paymentId]
     );
 };
 
@@ -267,7 +272,7 @@ exports.findStalePending = async ({ cutoffMinutes, hostedCutoffMinutes, limit = 
         WHERE p.status = 'pending'
             AND p.method NOT IN ('cash_on_delivery', 'wallet')
             AND p.created_at < (NOW() - INTERVAL
-                CASE WHEN p.method IN ('snippe', 'malipopay_card', 'paypal') THEN ? ELSE ? END MINUTE)
+                CASE WHEN p.method IN ('card', 'paypal') THEN ? ELSE ? END MINUTE)
             AND NOT EXISTS (
                 SELECT 1 FROM payment_review_queue q WHERE q.payment_id = p.id AND q.status = 'open'
             )

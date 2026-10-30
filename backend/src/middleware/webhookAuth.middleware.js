@@ -1,30 +1,22 @@
-// Verifies a mobile money webhook actually came from the provider, not
-// from anyone who guessed the URL. Before the first version of this
-// file, malipopayWebhook and selcomWebhook accepted any POST with no
-// verification at all - a request like:
+// Verifies a payment webhook actually came from the provider, not from
+// anyone who guessed the URL. Without verification, a request like:
 //
-//   POST /api/v1/payments/webhooks/malipopay
-//   { "reference": "ORDER-123", "status": "SUCCESS" }
+//   POST /api/v1/payments/webhooks/selcom
+//   { "order_id": "ORDER-123-...", "result": "SUCCESS" }
 //
-// ...from ANYONE, not just MalipoPay's servers, would mark order #123 as
-// paid (or a seller's verification fee as paid) with no money having
-// actually moved. That's a critical hole for a payments feature.
+// ...from ANYONE would mark order #123 as paid with no money having moved -
+// a critical hole for a payments feature.
 //
-// This version verifies each provider's REAL documented mechanism
-// (confirmed against developers.malipopay.co.tz and
-// developers.selcommobile.com on 2026-08-02) instead of a generic
-// shared-secret header - the previous version's fallback, kept below as
-// verifySharedSecretHeader in case either provider's actual behavior in
-// your sandbox doesn't match their public docs and you need a portable
-// baseline while you sort that out with their support team.
+// Each provider's own mechanism is used:
+//   Selcom  - static bearer token (+ optional IP allow-list)
+//   AzamPay - shared secret in a header or the callback URL (+ optional IPs)
+//   PawaPay - RFC 9421 signed callbacks, verified in payment.controller.js
+//             because they need the raw body (see pawapay.provider.js)
 //
-// STILL VERIFY AGAINST A REAL SANDBOX BEFORE GOING LIVE. Docs and actual
-// server behavior can drift, especially for Selcom, where the C2B
-// Payment Notification API is described as requiring a static
-// "Authorization: Bearer $token" per developers.selcommobile.com, but
-// full access to that page requires a business relationship with Selcom
-// (see selcom.provider.js's header comment) - confirm the exact header
-// name/format they actually send once you're onboarded.
+// All of them fail CLOSED when their secret is not configured. STILL VERIFY
+// AGAINST A REAL SANDBOX BEFORE GOING LIVE: docs and actual server behavior
+// can drift. verifySharedSecretHeader below is a portable fallback if a
+// provider's real behavior differs from its docs.
 
 const crypto = require("crypto");
 const logger = require("../utils/logger");
@@ -44,80 +36,6 @@ const sourceIpAllowed = (req, envVarName) => {
     if (allowList.length === 0) return true;
     const ip = String(req.ip || "").replace(/^::ffff:/, "");
     return allowList.includes(ip);
-};
-
-// --- MalipoPay --------------------------------------------------------
-// Per developers.malipopay.co.tz/integration/webhooks: every callback
-// body includes a `payloadSignature` field, computed as
-//   SHA256(reference + timestamp + amount + phoneNumber + secret)
-// where `secret` is the same project API secret used as the `apiToken`
-// header on outbound requests (malipopay.provider.js's own header
-// comment: MalipoPay has one key, not a separate secret+key pair).
-exports.verifyMalipopayWebhook = async (req, res, next) => {
-    const secret = process.env.MOBILE_MONEY_API_KEY;
-    const payload = req.body || {};
-    const { reference, timestamp, amount, customer, payloadSignature } = payload;
-
-    if (!secret) {
-        if (allowUnsignedForLocalDev()) {
-            return next();
-        }
-        logger.error({ provider: "malipopay", reqId: req.id }, "[webhook auth] MOBILE_MONEY_API_KEY not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
-        return res.status(200).json({ success: false });
-    }
-
-    if (!payloadSignature || !customer?.phoneNumber) {
-        logger.warn({ provider: "malipopay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected malipopay webhook missing payloadSignature or customer.phoneNumber");
-        return res.status(200).json({ success: false });
-    }
-
-    const computed = crypto
-        .createHash("sha256")
-        .update(`${reference}${timestamp}${amount}${customer.phoneNumber}${secret}`)
-        .digest("hex");
-
-    const expected = Buffer.from(computed, "utf8");
-    const provided = Buffer.from(String(payloadSignature), "utf8");
-
-    if (expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
-        // Logged at warn, not error: an unmatched signature here is
-        // expected background noise (scanners/bots probing known webhook
-        // paths), not an application fault - see the same reasoning in
-        // errorHandler.js for the warn/error split.
-        logger.warn({ provider: "malipopay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected malipopay webhook with invalid payloadSignature");
-        // 200, not 401: a real provider retry-storms on non-2xx, and a
-        // rejected forgery doesn't need to look any different to the
-        // caller than a processed one.
-        return res.status(200).json({ success: false });
-    }
-
-    // (Security Hardening) - replay protection. Signature
-    // verification above proves this came from MalipoPay at some point;
-    // it doesn't prove this exact delivery hasn't already been consumed
-    // once (a captured, validly-signed payload replayed later would
-    // still pass the check above). MalipoPay's documented payload
-    // includes its own `timestamp`, so reject anything stale/outside the
-    // tolerance window before even checking for a duplicate. See
-    // utils/webhookReplayGuard.js for both halves of this.
-    if (!replayGuard.isTimestampFresh(timestamp)) {
-        logger.warn({ provider: "malipopay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected malipopay webhook with a stale/future timestamp (possible replay)");
-        return res.status(200).json({ success: false });
-    }
-
-    try {
-        const isFreshDelivery = await replayGuard.recordDelivery("malipopay", JSON.stringify(payload));
-        if (!isFreshDelivery) {
-            return res.status(200).json({ success: false });
-        }
-        // The controller releases this if processing fails transiently, so
-        // the provider's retry is not rejected as a replay.
-        req.replayGuardKey = { provider: "malipopay", raw: JSON.stringify(payload) };
-    } catch (error) {
-        logger.error({ err: error, provider: "malipopay", reqId: req.id }, "[webhook auth] replay-guard check failed");
-        return res.status(200).json({ success: false });
-    }
-
-    next();
 };
 
 // --- Selcom -------------------------------------------------------------
@@ -173,6 +91,66 @@ exports.verifySelcomWebhook = async (req, res, next) => {
     next();
 };
 
+// --- AzamPay ------------------------------------------------------------
+// AzamPay's callback carries no signature - authenticity rests on a shared
+// secret you embed in the callback URL / header when registering it in the
+// AzamPay dashboard. Any one of these is accepted:
+//   Authorization: Bearer <AZAMPAY_WEBHOOK_SECRET>
+//   x-webhook-secret: <AZAMPAY_WEBHOOK_SECRET>
+//   https://<api>/api/v1/payments/webhooks/azampay?secret=<AZAMPAY_WEBHOOK_SECRET>
+// Optionally restricted by source IP (AZAMPAY_WEBHOOK_ALLOWED_IPS). Fails
+// closed when the secret is not configured.
+const secretsEqual = (expected, provided) => {
+    const a = Buffer.from(String(expected), "utf8");
+    const b = Buffer.from(String(provided || ""), "utf8");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
+
+exports.verifyAzampayWebhook = async (req, res, next) => {
+    const configuredSecret = process.env.AZAMPAY_WEBHOOK_SECRET;
+
+    if (!configuredSecret) {
+        if (allowUnsignedForLocalDev()) {
+            return next();
+        }
+        logger.error({ provider: "azampay", reqId: req.id }, "[webhook auth] AZAMPAY_WEBHOOK_SECRET not configured - rejecting webhook (fail closed; set ALLOW_UNSIGNED_WEBHOOKS=true for local development only)");
+        return res.status(200).json({ success: false });
+    }
+
+    if (!sourceIpAllowed(req, "AZAMPAY_WEBHOOK_ALLOWED_IPS")) {
+        logger.warn({ provider: "azampay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected azampay webhook from an IP outside AZAMPAY_WEBHOOK_ALLOWED_IPS");
+        return res.status(200).json({ success: false });
+    }
+
+    const authHeader = req.headers.authorization || "";
+    const candidates = [
+        authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null,
+        req.headers["x-webhook-secret"],
+        req.query && req.query.secret
+    ];
+
+    if (!candidates.some((candidate) => candidate && secretsEqual(configuredSecret, candidate))) {
+        logger.warn({ provider: "azampay", reqId: req.id, ip: req.ip }, "[webhook auth] rejected azampay webhook with invalid/missing secret");
+        return res.status(200).json({ success: false });
+    }
+
+    // No timestamp/nonce in AzamPay's payload, so the payload-hash dedup is
+    // this route's guard against a captured request being replayed.
+    try {
+        const raw = JSON.stringify(req.body || {});
+        const isFreshDelivery = await replayGuard.recordDelivery("azampay", raw);
+        if (!isFreshDelivery) {
+            return res.status(200).json({ success: false });
+        }
+        req.replayGuardKey = { provider: "azampay", raw };
+    } catch (error) {
+        logger.error({ err: error, provider: "azampay", reqId: req.id }, "[webhook auth] replay-guard check failed");
+        return res.status(200).json({ success: false });
+    }
+
+    next();
+};
+
 // --- Fallback: generic shared-secret header ----------------------------
 // Not wired up to any route by default. Available if either provider's
 // real sandbox behavior turns out to differ from their public docs above
@@ -193,7 +171,7 @@ const verifyWebhookSecret = (envVarName, provider) => (req, res, next) => {
     }
 
     // Timing-safe, length-checked comparison - same pattern as
-    // verifyMalipopayWebhook/verifySelcomWebhook above, even though this
+    // verifySelcomWebhook/verifyAzampayWebhook above, even though this
     // fallback isn't currently wired to any route. A plain !== here
     // would be a landmine for whoever wires this up later without
     // noticing the difference.
@@ -212,7 +190,7 @@ exports.verifySharedSecretHeader = verifyWebhookSecret;
 
 // --- SMS gateway (Roadmap Phase 1: offer-accept-by-reply) ---------------
 // Most SMS gateways (Beem Africa included) don't document a per-request
-// body signature for inbound callbacks the way MalipoPay/WhatsApp do -
+// body signature for inbound callbacks the way WhatsApp does -
 // only a custom header/token you configure on their dashboard's callback
 // URL settings. This is the same shape as verifySelcomWebhook above (a
 // static shared secret, not a computed signature), plus the same
@@ -258,7 +236,7 @@ exports.verifySmsWebhook = async (req, res, next) => {
 // Per developers.facebook.com/docs/graph-api/webhooks/getting-started:
 // every webhook delivery includes an X-Hub-Signature-256 header, computed
 // as HMAC-SHA256(rawBody, appSecret) - same "hash the raw bytes" shape as
-// Snippe/MalipoPay Card below, so this route needs the same express.raw()
+// the PayPal/PawaPay webhooks, so this route needs the same express.raw()
 // wiring in app.js those two already use (see the comment there).
 exports.verifyWhatsAppWebhook = async (req, res, next) => {
     const appSecret = process.env.WHATSAPP_APP_SECRET;

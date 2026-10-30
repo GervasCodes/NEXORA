@@ -1,15 +1,15 @@
 // Webhook replay protection (Security Hardening).
 //
 // Signature/shared-secret verification (webhookAuth.middleware.js,
-// snippe.provider.js#constructWebhookEvent) proves a request really came
+// pawapay.provider.js#verifyCallbackSignature) proves a request really came
 // from the provider - it does NOT prove this is the first and only time
 // that exact request has been delivered. A captured, validly-signed
 // payload replayed later would still pass those checks (see
 // docs/WEBHOOK_VALIDATION.md #6). Two independent guards close that gap:
 //
 //   1. Timestamp freshness - if the provider's payload includes its own
-//      timestamp (MalipoPay does; Selcom/Snippe's documented shapes
-//      don't), reject anything outside a tolerance window of "now".
+//      timestamp (some providers send one; AzamPay/Selcom's
+//      documented shapes don't), reject anything outside a tolerance window of "now".
 //   2. Payload-hash dedup - SHA-256(provider + raw bytes) recorded in
 //      `webhook_replay_guard` (migration 072). A UNIQUE constraint means
 //      a second delivery of the exact same bytes is rejected regardless
@@ -31,7 +31,7 @@ const logger = require("./logger");
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
 // Accepts a unix timestamp in seconds, milliseconds, or an ISO/parsable
-// date string - MalipoPay's documented format is a compact
+// date string - some providers use a compact
 // "yyyyMMddHHmmss" string (see the integration test fixtures), so this
 // also tries that shape explicitly before falling back to Date.parse.
 const toEpochMs = (value) => {
@@ -45,7 +45,7 @@ const toEpochMs = (value) => {
 
     const str = String(value);
 
-    // yyyyMMddHHmmss (MalipoPay's documented webhook timestamp format)
+    // yyyyMMddHHmmss (compact webhook timestamp format)
     const compactMatch = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(str);
     if (compactMatch) {
         const [, year, month, day, hour, minute, second] = compactMatch;

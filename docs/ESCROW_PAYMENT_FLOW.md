@@ -20,7 +20,7 @@ sequenceDiagram
     participant Buyer
     participant Frontend
     participant API as NEXORA API
-    participant Provider as Payment Provider<br/>(MalipoPay / Selcom / Snippe / PayPal)
+    participant Provider as Payment Provider<br/>(AzamPay / Selcom / PawaPay / PayPal)
     participant Wallet as seller_wallets
     participant Job as escrowRelease job
 
@@ -87,7 +87,7 @@ sequenceDiagram
     participant Provider as Payment Provider
     participant Wallet as seller_wallets
 
-    Customer->>API: Initiate booking payment<br/>(mobile money / Snippe / PayPal)
+    Customer->>API: Initiate booking payment<br/>(mobile money / card / PayPal)
     API->>Provider: Create charge, reference = "BOOKING-{id}"
     Provider->>API: Webhook confirms payment
     API->>API: booking payment.status = completed
@@ -104,8 +104,8 @@ flowchart LR
     B -- No --> D[Process normally:<br/>mark payment, update order,<br/>credit wallet]
 ```
 
-This matters because every provider in this integration (MalipoPay,
-Selcom, Snippe, PayPal capture callbacks) can legitimately redeliver the
+This matters because every provider in this integration (AzamPay,
+Selcom, PawaPay, PayPal capture callbacks) can legitimately redeliver the
 same webhook (network retry, provider-side retry-storm on a slow
 response, etc.). The idempotency check in
 `_handleOrderPaymentWebhook`/`_handleBookingPaymentWebhook` is what

@@ -24,33 +24,28 @@ jest.mock("../../src/modules/wallet/wallet.service", () => ({
 jest.mock("../../src/modules/notification/notification.service", () => ({ notify: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("../../src/modules/audit/audit.service", () => ({ log: jest.fn(), logFromRequest: jest.fn() }));
 
-const crypto = require("crypto");
 const request = require("supertest");
 const db = require("../../src/config/db");
 const app = require("../../src/app");
 
-const nowAsMalipopayTimestamp = () => {
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
-};
-
-const signMalipopay = ({ reference, timestamp, amount, phoneNumber }) => crypto
-    .createHash("sha256")
-    .update(`${reference}${timestamp}${amount}${phoneNumber}${process.env.MOBILE_MONEY_API_KEY}`)
-    .digest("hex");
-
-const malipopayBasePayload = () => ({
-    reference: "ORDER-1",
-    timestamp: nowAsMalipopayTimestamp(),
-    amount: 10000,
-    status: "SUCCESS",
-    customer: { firstname: "John", lastname: "Doe", phoneNumber: "255655128812", mno: "Tigo" }
+// AzamPay's callback is authenticated by a shared secret (bearer header) and
+// carries { utilityref, transactionstatus, amount, reference }.
+const azampayBasePayload = () => ({
+    utilityref: "ORDER-1",
+    transactionstatus: "success",
+    amount: "10000",
+    reference: "AZ-TX-1",
+    msisdn: "255655128812"
 });
 
-const postMalipopay = (payload) => request(app)
-    .post("/api/v1/payments/webhooks/malipopay")
-    .send({ ...payload, payloadSignature: signMalipopay({ ...payload, phoneNumber: payload.customer.phoneNumber }) });
+const postAzampay = (payload) => request(app)
+    .post("/api/v1/payments/webhooks/azampay")
+    .set("Authorization", `Bearer ${process.env.AZAMPAY_WEBHOOK_SECRET}`)
+    .send(payload);
+
+// Test-side shorthand: (reference, status) -> posted payload.
+const hook = (reference, status = "success", extra = {}) =>
+    postAzampay({ ...azampayBasePayload(), utilityref: reference, transactionstatus: status, ...extra });
 
 describe("payment webhooks - idempotency (already-processed order)", () => {
     beforeEach(() => jest.clearAllMocks());
@@ -61,7 +56,7 @@ describe("payment webhooks - idempotency (already-processed order)", () => {
             .mockResolvedValueOnce([[{ id: 1, status: "completed" }]]) // findByOrderId - already completed
             .mockResolvedValueOnce([[{ id: 20, is_parent: 0, buyer_id: 1 }]]); // findOrderById (orderForNotify)
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-20" });
+        const res = await hook("ORDER-20", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
@@ -77,7 +72,7 @@ describe("payment webhooks - idempotency (already-processed order)", () => {
             .mockResolvedValueOnce([[{ id: 1, status: "failed", amount: 10000 }]])
             .mockResolvedValueOnce([[{ id: 21, is_parent: 0, buyer_id: 1 }]]);
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-21", status: "FAILED" });
+        const res = await hook("ORDER-21", "failure");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
@@ -93,7 +88,7 @@ describe("payment webhooks - idempotency (already-processed order)", () => {
             .mockResolvedValueOnce([{}]) // updatePaymentStatus
             .mockResolvedValueOnce([[{ id: 21, is_parent: 0, buyer_id: 1 }]]); // findOrderById (is_parent check)
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-21", status: "SUCCESS" });
+        const res = await hook("ORDER-21", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
@@ -115,7 +110,7 @@ describe("payment webhooks - failed/declined payment branch", () => {
             .mockResolvedValueOnce([[{ id: 22, is_parent: 0, buyer_id: 1 }]]) // findOrderById (orderForNotify)
             .mockResolvedValueOnce([{ affectedRows: 1 }]); // markFailed
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-22", status: "FAILED" });
+        const res = await hook("ORDER-22", "failure");
 
         expect(res.status).toBe(200);
         // The webhook itself was received/processed fine (still success:
@@ -143,14 +138,14 @@ describe("payment webhooks - booking payments (BOOKING-<id> reference)", () => {
             .mockResolvedValueOnce([[{ id: 30, status: "pending", payment_status: "unpaid", booking_reference: "BK-30", customer_id: 1, provider_id: 2 }]]) // bookingRepository.findById
             .mockResolvedValueOnce([{}]); // bookingRepository.updatePaymentStatus
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "BOOKING-30", status: "SUCCESS" });
+        const res = await hook("BOOKING-30", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(db.query).toHaveBeenNthCalledWith(
             3,
             expect.stringContaining("status = 'completed'"),
-            ["BOOKING-30", expect.any(String), null, null, 5]
+            ["AZ-TX-1", expect.any(String), null, null, 5]
         );
     });
 
@@ -160,7 +155,7 @@ describe("payment webhooks - booking payments (BOOKING-<id> reference)", () => {
             .mockResolvedValueOnce([[{ id: 6, status: "pending", amount: 10000 }]]) // findByBookingId
             .mockResolvedValueOnce([{ affectedRows: 1 }]); // markFailed
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "BOOKING-31", status: "FAILED" });
+        const res = await hook("BOOKING-31", "failure");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
@@ -174,7 +169,7 @@ describe("payment webhooks - booking payments (BOOKING-<id> reference)", () => {
             .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
             .mockResolvedValueOnce([[{ id: 7, status: "completed" }]]); // findByBookingId - already completed
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "BOOKING-32", status: "SUCCESS" });
+        const res = await hook("BOOKING-32", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
@@ -202,12 +197,12 @@ describe("payment webhooks - true duplicate delivery (replay-guard UNIQUE-constr
         expect(db.query).toHaveBeenCalledTimes(1);
     });
 
-    it("rejects a byte-for-byte replayed MalipoPay webhook the same way", async () => {
+    it("rejects a byte-for-byte replayed AzamPay webhook the same way", async () => {
         const dupError = new Error("Duplicate entry");
         dupError.code = "ER_DUP_ENTRY";
         db.query.mockRejectedValueOnce(dupError);
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-41" });
+        const res = await hook("ORDER-41", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(false);
@@ -221,7 +216,7 @@ describe("payment webhooks - unrecognized reference shape", () => {
     it("fails safely (200, not a 5xx) when the reference matches no known prefix (a permanent error - a retry can never help)", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]); // recordDelivery only - the throw happens right after
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "NOT-A-REAL-REFERENCE-SHAPE" });
+        const res = await hook("NOT-A-REAL-REFERENCE-SHAPE", "success");
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(false);
@@ -237,7 +232,7 @@ describe("payment webhooks - transient failures and non-terminal statuses", () =
             .mockRejectedValueOnce(new Error("db down")) // findByOrderId blows up
             .mockResolvedValueOnce([{}]); // forgetDelivery DELETE
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-50" });
+        const res = await hook("ORDER-50", "success");
 
         expect(res.status).toBe(500);
         expect(db.query).toHaveBeenLastCalledWith(
@@ -249,7 +244,7 @@ describe("payment webhooks - transient failures and non-terminal statuses", () =
     it("acknowledges and ignores a PENDING status (never marks the payment failed)", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]); // recordDelivery only
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-51", status: "PENDING" });
+        const res = await hook("ORDER-51", "pending");
 
         expect(res.status).toBe(200);
         expect(res.body).toMatchObject({ success: true, ignored: true });
@@ -259,7 +254,7 @@ describe("payment webhooks - transient failures and non-terminal statuses", () =
     it("ignores an unrecognised status word instead of treating it as a failure", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]);
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-52", status: "PROCESSING" });
+        const res = await hook("ORDER-52", "processing");
 
         expect(res.body.ignored).toBe(true);
         expect(db.query).toHaveBeenCalledTimes(1);
@@ -271,7 +266,7 @@ describe("payment webhooks - transient failures and non-terminal statuses", () =
             .mockResolvedValueOnce([[{ id: 1, status: "pending", amount: 50000, method: "mobile_money", purpose: "order_payment" }]]) // findByOrderId
             .mockResolvedValueOnce([[{ id: 53, is_parent: 0, buyer_id: 1 }]]); // findOrderById
 
-        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-53", amount: 10000 });
+        const res = await hook("ORDER-53", "success", { amount: "10000" });
 
         expect(res.status).toBe(200);
         // No claimCompleted UPDATE was ever issued.

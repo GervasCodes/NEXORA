@@ -3,8 +3,7 @@ const paymentRepository = require("./payment.repository");
 const orderRepository = require("../order/order.repository");
 const bookingRepository = require("../booking/booking.repository");
 const mobileMoneyProvider = require("./providers/mobileMoney.provider");
-const snippeProvider = require("./providers/snippe.provider");
-const malipopayCardProvider = require("./providers/malipopayCard.provider");
+const cardProvider = require("./providers/card.provider");
 const paypalProvider = require("./providers/paypal.provider");
 const providerRegistry = require("./providers/registry");
 const walletService = require("../wallet/wallet.service");
@@ -133,12 +132,33 @@ exports.initiateMobileMoneyPayment = async (orderId, buyerId) => {
     // PIN. The actual success/failure arrives later via the provider's
     // webhook (see handleProviderWebhook below), which is what marks the
     // payment completed and credits sellers.
-    await paymentRepository.markPending(payment.id, providerResult.transactionReference);
+    await paymentRepository.markPending(payment.id, providerResult.transactionReference, providerResult.provider);
 
     return {
         status: "pending",
         message: "Check your phone to complete the payment.",
         transactionReference: providerResult.transactionReference
+    };
+};
+
+// Buyer details a hosted card page asks for (name, email, phone and a billing
+// address). Taken from the user's account, with the order's shipping address
+// when there is one; any gap is filled with neutral defaults by the adapter.
+const loadCardBuyer = async (userId, order = null) => {
+    const db = require("../../config/db");
+    const [rows] = await db.query(
+        "SELECT first_name, last_name, email, phone FROM users WHERE id = ? LIMIT 1",
+        [userId]
+    );
+    const user = rows[0] || {};
+
+    return {
+        name: [user.first_name, user.last_name].filter(Boolean).join(" ") || undefined,
+        email: user.email || undefined,
+        phone: (order && order.shipping_phone) || user.phone || undefined,
+        address: (order && order.shipping_address) || undefined,
+        city: (order && order.shipping_city) || undefined,
+        region: (order && order.shipping_region) || undefined
     };
 };
 
@@ -207,7 +227,7 @@ exports.initiateWalletTopUp = async (buyerId, phone, amount) => {
         throw new Error("Top-up could not be initiated. Please try again");
     }
 
-    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference, providerResult.provider);
     await buyerWalletRepository.updateLastTopupPhone(buyerId, normalizedPhone);
 
     return {
@@ -594,7 +614,7 @@ exports.initiateMobileMoneySubscriptionPayment = async (sellerId, planId, phone)
         throw new Error("Payment could not be initiated. Please try again");
     }
 
-    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference, providerResult.provider);
 
     return {
         status: "pending",
@@ -603,7 +623,9 @@ exports.initiateMobileMoneySubscriptionPayment = async (sellerId, planId, phone)
     };
 };
 
-exports.initiateSnippeSubscriptionPayment = async (sellerId, planId, { successUrl, cancelUrl }) => {
+// Card checkout for a subscription - the gateway behind it is CARD_PROVIDER
+// (see providers/card.provider.js). The buyer is redirected to a hosted page.
+exports.initiateCardSubscriptionPayment = async (sellerId, planId, { successUrl, cancelUrl }) => {
     const subscriptionRepository = require("../subscription/subscription.repository");
     const plan = await subscriptionRepository.findPlanById(planId);
     if (!plan) throw new Error("Plan not found");
@@ -616,49 +638,24 @@ exports.initiateSnippeSubscriptionPayment = async (sellerId, planId, { successUr
     await subscriptionPaymentGuard.assertNoLivePendingSubscriptionPayment({ paymentRepository, subscriptionId });
 
     const reference = paymentReference.build("subscription", subscriptionId);
-    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "snippe", reference);
+    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "card", reference);
 
+    let session;
+    try {
+        session = await cardProvider.createCheckoutSession({
+            amountTzs: plan.price,
+            reference,
+            description: `NEXORA ${plan.name} subscription`,
+            successUrl,
+            cancelUrl,
+            buyer: await loadCardBuyer(sellerId)
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        throw error;
+    }
 
-    const session = await snippeProvider.createCheckoutSession({
-        amountTzs: plan.price,
-        reference,
-        description: `NEXORA ${plan.name} subscription`,
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
-
-    return { status: "redirect", url: session.url };
-};
-
-// MalipoPay Card equivalent of initiateSnippeSubscriptionPayment above -
-// same shape, different provider module/payment method string.
-exports.initiateMalipopayCardSubscriptionPayment = async (sellerId, planId, { successUrl, cancelUrl }) => {
-    const subscriptionRepository = require("../subscription/subscription.repository");
-    const plan = await subscriptionRepository.findPlanById(planId);
-    if (!plan) throw new Error("Plan not found");
-
-    let subscription = await subscriptionRepository.findPendingForSeller(sellerId, planId);
-    const subscriptionId = subscription
-        ? subscription.id
-        : await subscriptionRepository.createSubscription(sellerId, planId);
-
-    await subscriptionPaymentGuard.assertNoLivePendingSubscriptionPayment({ paymentRepository, subscriptionId });
-
-    const reference = paymentReference.build("subscription", subscriptionId);
-    const paymentId = await paymentRepository.createSubscriptionPayment(sellerId, subscriptionId, plan.price, "malipopay_card", reference);
-
-
-    const session = await malipopayCardProvider.createCheckoutSession({
-        amountTzs: plan.price,
-        reference,
-        description: `NEXORA ${plan.name} subscription`,
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
+    await paymentRepository.markPending(paymentId, session.sessionId, session.provider);
 
     return { status: "redirect", url: session.url };
 };
@@ -805,7 +802,7 @@ exports.initiateMobileMoneyBookingPayment = async (bookingId, buyerId, phone) =>
         throw new Error("Payment could not be initiated. Please try again");
     }
 
-    await paymentRepository.markPending(paymentId, providerResult.transactionReference);
+    await paymentRepository.markPending(paymentId, providerResult.transactionReference, providerResult.provider);
 
     return {
         status: "pending",
@@ -814,7 +811,8 @@ exports.initiateMobileMoneyBookingPayment = async (bookingId, buyerId, phone) =>
     };
 };
 
-exports.initiateSnippeBookingPayment = async (bookingId, buyerId, { successUrl, cancelUrl }) => {
+// Card checkout for a booking - gateway chosen by CARD_PROVIDER.
+exports.initiateCardBookingPayment = async (bookingId, buyerId, { successUrl, cancelUrl }) => {
     const booking = await bookingRepository.findById(bookingId);
 
     if (!booking || booking.customer_id !== buyerId) {
@@ -827,48 +825,24 @@ exports.initiateSnippeBookingPayment = async (bookingId, buyerId, { successUrl, 
 
     await assertNoRecentPendingAttempt({ bookingId });
     const reference = paymentReference.build("booking", bookingId);
-    const paymentId = await paymentRepository.createBookingPayment(bookingId, booking.amount, "snippe", reference);
+    const paymentId = await paymentRepository.createBookingPayment(bookingId, booking.amount, "card", reference);
 
-
-    const session = await snippeProvider.createCheckoutSession({
-        amountTzs: booking.amount,
-        reference,
-        description: `NEXORA booking ${booking.booking_reference}`,
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
-
-    return { status: "redirect", url: session.url };
-};
-
-// MalipoPay Card equivalent of initiateSnippeBookingPayment above.
-exports.initiateMalipopayCardBookingPayment = async (bookingId, buyerId, { successUrl, cancelUrl }) => {
-    const booking = await bookingRepository.findById(bookingId);
-
-    if (!booking || booking.customer_id !== buyerId) {
-        throw new Error("Booking not found");
+    let session;
+    try {
+        session = await cardProvider.createCheckoutSession({
+            amountTzs: booking.amount,
+            reference,
+            description: `NEXORA booking ${booking.booking_reference}`,
+            successUrl,
+            cancelUrl,
+            buyer: await loadCardBuyer(buyerId)
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(paymentId);
+        throw error;
     }
 
-    if (booking.payment_status === "paid") {
-        throw new Error("This booking has already been paid");
-    }
-
-    await assertNoRecentPendingAttempt({ bookingId });
-    const reference = paymentReference.build("booking", bookingId);
-    const paymentId = await paymentRepository.createBookingPayment(bookingId, booking.amount, "malipopay_card", reference);
-
-
-    const session = await malipopayCardProvider.createCheckoutSession({
-        amountTzs: booking.amount,
-        reference,
-        description: `NEXORA booking ${booking.booking_reference}`,
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(paymentId, session.sessionId);
+    await paymentRepository.markPending(paymentId, session.sessionId, session.provider);
 
     return { status: "redirect", url: session.url };
 };
@@ -923,8 +897,8 @@ exports.getBookingPayment = async (bookingId, userId) => {
     return payment;
 };
 
-// Called by payment.controller's webhook handlers once MalipoPay/Selcom/
-// Snippe/PayPal confirm the buyer/seller actually completed (or failed/
+// Called by payment.controller's webhook handlers once AzamPay/Selcom/
+// PawaPay/PayPal confirm the buyer/seller actually completed (or failed/
 // cancelled) the payment on their end, by our own PayPal capture flow, by
 // the stale sweep once it has asked the provider directly, and by the
 // admin "accept payment" action. `providerReference` is the reference WE
@@ -1142,28 +1116,15 @@ exports.refundBookingPayment = async (bookingId, amount) => {
         };
     }
 
-    if (payment.method === "snippe") {
-        if (!payment.transaction_reference) {
-            return { success: false, error: "Payment has no Snippe transaction reference on file" };
-        }
-        const result = await snippeProvider.refundPayment({
-            transactionReference: payment.transaction_reference,
-            amountTzs: amount,
-            reason: `booking_${bookingId}_cancelled`
-        });
-        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
-    }
-
-    if (payment.method === "malipopay_card") {
-        if (!payment.transaction_reference) {
-            return { success: false, error: "Payment has no MalipoPay Card transaction reference on file" };
-        }
-        const result = await malipopayCardProvider.refundPayment({
-            transactionReference: payment.transaction_reference,
-            amountTzs: amount,
-            reason: `booking_${bookingId}_cancelled`
-        });
-        return { success: Boolean(result.success), reference: result.refundReference, error: result.error };
+    if (payment.method === "card") {
+        // Hosted card checkouts keep no payer phone on file and the card
+        // gateways here expose no card-refund API, so this is a manual refund
+        // for an admin (same outcome the tracked refund flow reports).
+        return {
+            success: false,
+            error: "Card refunds are processed manually - please refund this payment from the gateway dashboard",
+            requiresManualHandling: true
+        };
     }
 
     if (payment.method === "paypal") {
@@ -1385,7 +1346,7 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     // return window - see rewardSettlement.service.js (Phase 6).
 
     if (orderForNotify) {
-        // Notify the buyer's own room too - Snippe/mobile-money redirects
+        // Notify the buyer's own room too - card redirects
         // and USSD prompts only mean "the buyer tried to pay", not "it
         // succeeded"; this is the actual confirmation the order page waits
         // on before showing anything as successful. For a parent order,
@@ -1405,19 +1366,23 @@ exports._handleOrderPaymentWebhook = async (orderId, success, transactionReferen
     return { orderId, success: true, receiptNumber };
 };
 
-// --- Snippe (card payments) --------------------------------------------
-// Used for order checkout. Amounts are sent to Snippe as decimal TZS, so
-// no currency conversion is needed (contrast with PayPal below).
+// --- Card (hosted checkout) ----------------------------------------------
+// The gateway behind a card payment is CARD_PROVIDER (selcom | azampay - see
+// providers/card.provider.js). The buyer is redirected to the gateway's hosted
+// page, so card data never touches NEXORA. Amounts are decimal TZS, so no
+// currency conversion is needed (contrast with PayPal below). The gateway's
+// confirmation arrives on its own webhook (see payment.controller.js), which
+// ends up in handleProviderWebhook like every other rail.
 
-exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
+exports.initiateCardOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
     const order = await orderRepository.findOrderById(orderId);
 
     if (!order || order.buyer_id !== buyerId) {
         throw new Error("Order not found");
     }
 
-    if (order.payment_method !== "snippe") {
-        throw new Error("This order is not set up for Snippe payment");
+    if (order.payment_method !== "card") {
+        throw new Error("This order is not set up for card payment");
     }
 
     if (order.payment_status === "paid") {
@@ -1428,110 +1393,62 @@ exports.initiateSnippeOrderPayment = async (orderId, buyerId, { successUrl, canc
         throw new Error("This order has been cancelled and can no longer be paid");
     }
 
-    const payment = await getOrCreateOrderPayment(order, "snippe");
+    const payment = await getOrCreateOrderPayment(order, "card");
     const chargeAmount = resolveChargeAmount(order);
 
     const reference = payment.payment_reference;
 
-    const session = await snippeProvider.createCheckoutSession({
-        amountTzs: chargeAmount,
-        reference,
-        description: `NEXORA order #${orderId}`,
-        successUrl,
-        cancelUrl
-    });
+    let session;
+    try {
+        session = await cardProvider.createCheckoutSession({
+            amountTzs: chargeAmount,
+            reference,
+            description: `NEXORA order #${orderId}`,
+            successUrl,
+            cancelUrl,
+            buyer: await loadCardBuyer(buyerId, order)
+        });
+    } catch (error) {
+        await paymentRepository.markFailed(payment.id);
+        throw error;
+    }
 
-    await paymentRepository.markPending(payment.id, session.sessionId);
+    await paymentRepository.markPending(payment.id, session.sessionId, session.provider);
 
     return { status: "redirect", url: session.url };
 };
 
-// Called from the Snippe / MalipoPay Card webhook controllers with an
-// already signature-verified event (see snippeProvider.constructWebhookEvent
-// / malipopayCardProvider.constructWebhookEvent). Both are hosted-checkout
-// products with the same event shape, so one classifier serves both.
-//   - a paid session          -> success
-//   - expired / failed events -> failed (only ever moves a pending payment)
-//   - dispute / chargeback    -> chargeback handling (see chargeback.service)
-//   - anything else, including a "completed" session that is not actually
-//     paid yet                -> ignored, never marked failed.
-// Same caveat as the providers themselves: confirm the real event names and
-// field names against the provider's docs / sandbox.
-exports.handleCheckoutWebhookEvent = async (event) => {
-    const classified = providerStatus.classifyCheckoutEvent(event);
+// --- PawaPay deposit callbacks ---------------------------------------------
+// A PawaPay deposit id is a UUID derived from our payment reference (see
+// pawapay.provider.js#depositIdFor) and stored as the payment's
+// transaction_reference when the deposit is accepted, so that is how the
+// callback finds its payment. A callback can in theory beat that write (a
+// failure that comes back within milliseconds), so the reference we echo in
+// the deposit's metadata is tried second. If neither matches the error is
+// deliberately NOT permanent: PawaPay retries, by which time the row exists.
+exports.handlePawapayDepositEvent = async ({ depositId, success, reportedAmount, reportedCurrency, reference }) => {
+    let payment = await paymentRepository.findByTransactionReference(depositId);
 
-    if (classified.kind === "ignore") {
-        return { ignored: true };
+    if (!payment && reference) {
+        const parsed = paymentReference.parse(reference);
+        if (parsed && parsed.suffix) {
+            payment = await paymentRepository.findByPaymentReference(parsed.reference);
+        }
     }
 
-    if (!classified.reference) {
-        throw permanentError("Checkout event carries no payment reference");
-    }
-
-    if (classified.kind === "chargeback") {
-        return exports.handleChargebackEvent({
-            providerReference: classified.reference,
-            transactionReference: classified.transactionReference,
-            reason: classified.reason
-        });
+    if (!payment) {
+        throw new Error(`No payment found yet for PawaPay deposit ${depositId}`);
     }
 
     return exports.handleProviderWebhook({
-        providerReference: classified.reference,
-        success: classified.kind === "success",
-        transactionReference: classified.transactionReference,
-        reportedAmount: classified.reportedAmount,
-        reportedCurrency: classified.reportedCurrency
+        providerReference: referenceForPayment(payment),
+        payment,
+        success,
+        transactionReference: depositId,
+        reportedAmount,
+        reportedCurrency
     });
 };
-
-
-// --- MalipoPay Card (card payments) -------------------------------------
-// A separate card-checkout product from MalipoPay - do not confuse with
-// the mobile_money rail's malipopay.provider.js (see that file's and
-// malipopayCard.provider.js's header comments). Used for order checkout
-// and the seller verification fee, same as Snippe above; amounts are
-// sent as decimal TZS, so no currency conversion is needed.
-
-exports.initiateMalipopayCardOrderPayment = async (orderId, buyerId, { successUrl, cancelUrl }) => {
-    const order = await orderRepository.findOrderById(orderId);
-
-    if (!order || order.buyer_id !== buyerId) {
-        throw new Error("Order not found");
-    }
-
-    if (order.payment_method !== "malipopay_card") {
-        throw new Error("This order is not set up for MalipoPay Card payment");
-    }
-
-    if (order.payment_status === "paid") {
-        throw new Error("This order has already been paid");
-    }
-
-    if (order.status === "cancelled") {
-        throw new Error("This order has been cancelled and can no longer be paid");
-    }
-
-    const payment = await getOrCreateOrderPayment(order, "malipopay_card");
-    const chargeAmount = resolveChargeAmount(order);
-
-    const reference = payment.payment_reference;
-
-    const session = await malipopayCardProvider.createCheckoutSession({
-        amountTzs: chargeAmount,
-        reference,
-        description: `NEXORA order #${orderId}`,
-        successUrl,
-        cancelUrl
-    });
-
-    await paymentRepository.markPending(payment.id, session.sessionId);
-
-    return { status: "redirect", url: session.url };
-};
-
-exports.handleSnippeWebhookEvent = exports.handleCheckoutWebhookEvent;
-exports.handleMalipopayCardWebhookEvent = exports.handleCheckoutWebhookEvent;
 
 // ---- Chargebacks / disputes ------------------------------------------------
 // Finds the payment a chargeback is about (by our reference, else by the
@@ -1765,7 +1682,7 @@ exports.handlePaypalWebhookEvent = async (event) => {
 // (Resilience & Growth). Purely additive - reads the registry's
 // capability metadata, doesn't touch any existing payment flow. Lets
 // checkout show only rails an admin has actually configured, instead of
-// hardcoding "mobile money, Snippe, PayPal" and finding out one of them
+// hardcoding "mobile money, card, PayPal" and finding out one of them
 // 401s when a buyer tries it.
 exports.getAvailablePaymentMethods = () => providerRegistry.listConfiguredProviders();
 
@@ -1899,25 +1816,13 @@ exports.checkProviderStatus = async (payment) => {
 
     try {
         if (payment.method === "mobile_money") {
-            const result = await mobileMoneyProvider.checkStatus(reference);
+            const result = await mobileMoneyProvider.checkStatus(reference, payment.provider);
             return result || { state: "unknown" };
         }
 
-        if (payment.method === "snippe") {
-            if (!payment.transaction_reference) return { state: "unknown" };
-            return await snippeProvider.getCheckoutSession(payment.transaction_reference);
-        }
-
-        if (payment.method === "malipopay_card") {
-            const verified = await malipopayCardProvider.verifyPaymentStatus(reference);
-            const raw = verified.raw || {};
-            return {
-                state: providerStatus.classifyStatus(verified.status),
-                providerStatus: verified.status,
-                transactionReference: raw.id || raw.reference || null,
-                amount: raw.amount ?? null,
-                currency: raw.currency || null
-            };
+        if (payment.method === "card") {
+            const result = await cardProvider.checkStatus(reference, payment.provider);
+            return result || { state: "unknown" };
         }
 
         if (payment.method === "paypal") {

@@ -59,7 +59,7 @@ tags:
   description: Product-side order lifecycle - checkout, multi-vendor splitting, buyer/seller views, receipt
     confirmation.
 - name: payment
-  description: Payment initiation/checkout across all providers (MalipoPay, Selcom, Snippe, PayPal) and
+  description: Payment initiation/checkout across all providers (AzamPay, Selcom, PawaPay card/mobile money, PayPal) and
     their webhooks, for both orders and bookings, plus the seller verification fee.
 - name: product
   description: Seller product listings - CRUD, media, activation, search/filter metadata.
@@ -6306,12 +6306,12 @@ paths:
                 $ref: '#/components/schemas/ApiResponse'
       security:
       - bearerAuth: []
-  /api/v1/payments/booking/{bookingId}/malipopay-card/checkout:
+  /api/v1/payments/booking/{bookingId}/card/checkout:
     post:
       tags:
       - payment
-      summary: initiateMalipopayCardBookingPayment (buyer)
-      operationId: payment_initiateMalipopayCardBookingPayment
+      summary: initiateCardBookingPayment (buyer)
+      operationId: payment_initiateCardBookingPayment
       parameters:
       - name: bookingId
         in: path
@@ -6351,45 +6351,6 @@ paths:
       - payment
       summary: initiatePaypalBookingPayment (buyer)
       operationId: payment_initiatePaypalBookingPayment
-      parameters:
-      - name: bookingId
-        in: path
-        required: true
-        schema:
-          type: integer
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          description: Bad request / validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '401':
-          description: Missing/invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '403':
-          description: Authenticated but not a permitted role (buyer)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearerAuth: []
-  /api/v1/payments/booking/{bookingId}/snippe/checkout:
-    post:
-      tags:
-      - payment
-      summary: initiateSnippeBookingPayment (buyer)
-      operationId: payment_initiateSnippeBookingPayment
       parameters:
       - name: bookingId
         in: path
@@ -6477,39 +6438,6 @@ paths:
                 $ref: '#/components/schemas/ApiResponse'
       security:
       - bearerAuth: []
-  /api/v1/payments/verification-fee/malipopay-card/checkout:
-    post:
-      tags:
-      - payment
-      summary: initiateMalipopayCardVerificationFeePayment (seller)
-      operationId: payment_initiateMalipopayCardVerificationFeePayment
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          description: Bad request / validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '401':
-          description: Missing/invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '403':
-          description: Authenticated but not a permitted role (seller)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearerAuth: []
   /api/v1/payments/verification-fee/paypal/create:
     post:
       tags:
@@ -6543,45 +6471,26 @@ paths:
                 $ref: '#/components/schemas/ApiResponse'
       security:
       - bearerAuth: []
-  /api/v1/payments/verification-fee/snippe/checkout:
+  /api/v1/payments/webhooks/azampay:
     post:
       tags:
       - payment
-      summary: initiateSnippeVerificationFeePayment (seller)
-      operationId: payment_initiateSnippeVerificationFeePayment
+      summary: azampayWebhook
+      operationId: payment_azampayWebhook
       responses:
-        '201':
-          description: Created
+        '200':
+          description: OK
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
-        '400':
-          description: Bad request / validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '401':
-          description: Missing/invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '403':
-          description: Authenticated but not a permitted role (seller)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearerAuth: []
-  /api/v1/payments/webhooks/malipopay:
+      security: []
+  /api/v1/payments/webhooks/pawapay:
     post:
       tags:
       - payment
-      summary: malipopayWebhook
-      operationId: payment_malipopayWebhook
+      summary: pawapayWebhook
+      operationId: payment_pawapayWebhook
       responses:
         '200':
           description: OK
@@ -6715,12 +6624,12 @@ paths:
                 $ref: '#/components/schemas/ApiResponse'
       security:
       - bearerAuth: []
-  /api/v1/payments/{orderId}/malipopay-card/checkout:
+  /api/v1/payments/{orderId}/card/checkout:
     post:
       tags:
       - payment
-      summary: initiateMalipopayCardOrderPayment (buyer)
-      operationId: payment_initiateMalipopayCardOrderPayment
+      summary: initiateCardOrderPayment (buyer)
+      operationId: payment_initiateCardOrderPayment
       parameters:
       - name: orderId
         in: path
@@ -6760,45 +6669,6 @@ paths:
       - payment
       summary: initiatePaypalOrderPayment (buyer)
       operationId: payment_initiatePaypalOrderPayment
-      parameters:
-      - name: orderId
-        in: path
-        required: true
-        schema:
-          type: integer
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          description: Bad request / validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '401':
-          description: Missing/invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '403':
-          description: Authenticated but not a permitted role (buyer)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearerAuth: []
-  /api/v1/payments/{orderId}/snippe/checkout:
-    post:
-      tags:
-      - payment
-      summary: initiateSnippeOrderPayment (buyer)
-      operationId: payment_initiateSnippeOrderPayment
       parameters:
       - name: orderId
         in: path
@@ -10976,12 +10846,12 @@ paths:
               - planCode
       security:
       - bearerAuth: []
-  /api/v1/subscriptions/subscribe/malipopay-card:
+  /api/v1/subscriptions/subscribe/card:
     post:
       tags:
       - subscription
-      summary: subscribeMalipopayCard (seller)
-      operationId: subscription_subscribeMalipopayCard
+      summary: subscribeCard (seller)
+      operationId: subscription_subscribeCard
       responses:
         '200':
           description: OK
@@ -11032,56 +10902,6 @@ paths:
       - subscription
       summary: subscribePaypal (seller)
       operationId: subscription_subscribePaypal
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          description: Bad request / validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '404':
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '401':
-          description: Missing/invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '403':
-          description: Authenticated but not a permitted role (seller)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                planCode:
-                  type: string
-              required:
-              - planCode
-      security:
-      - bearerAuth: []
-  /api/v1/subscriptions/subscribe/snippe:
-    post:
-      tags:
-      - subscription
-      summary: subscribeSnippe (seller)
-      operationId: subscription_subscribeSnippe
       responses:
         '200':
           description: OK

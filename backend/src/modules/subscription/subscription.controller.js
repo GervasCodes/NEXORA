@@ -2,7 +2,7 @@ const subscriptionService = require("./subscription.service");
 const subscriptionRepository = require("./subscription.repository");
 const trialService = require("./trial.service");
 const paymentService = require("../payment/payment.service");
-// (Security) - subscribeSnippe/subscribeMalipopayCard/subscribePaypal
+// (Security) - subscribeCard/subscribePaypal
 // below were forwarding req.body.successUrl/cancelUrl/returnUrl straight to
 // the payment provider with no validation at all, unlike every other
 // redirect-accepting endpoint in payment.controller.js. That's an open
@@ -61,7 +61,7 @@ exports.subscribeMobileMoney = async (req, res) => {
     }
 };
 
-exports.subscribeSnippe = async (req, res) => {
+exports.subscribeCard = async (req, res) => {
     try {
         const { planCode } = req.body;
         const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
@@ -74,27 +74,7 @@ exports.subscribeSnippe = async (req, res) => {
             return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
         }
 
-        const result = await paymentService.initiateSnippeSubscriptionPayment(req.user.id, plan.id, { successUrl, cancelUrl });
-        res.json({ success: true, data: result });
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.subscribeMalipopayCard = async (req, res) => {
-    try {
-        const { planCode } = req.body;
-        const successUrl = assertAllowedRedirect(req.body.successUrl, "successUrl");
-        const cancelUrl = assertAllowedRedirect(req.body.cancelUrl, "cancelUrl");
-        const plan = await subscriptionRepository.findPlanByCode(planCode);
-        if (!plan || !plan.is_active) {
-            return res.status(404).json({ success: false, message: "Plan not found" });
-        }
-        if (Number(plan.price) <= 0) {
-            return res.status(400).json({ success: false, message: "This plan is free and does not require payment" });
-        }
-
-        const result = await paymentService.initiateMalipopayCardSubscriptionPayment(req.user.id, plan.id, { successUrl, cancelUrl });
+        const result = await paymentService.initiateCardSubscriptionPayment(req.user.id, plan.id, { successUrl, cancelUrl });
         res.json({ success: true, data: result });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });

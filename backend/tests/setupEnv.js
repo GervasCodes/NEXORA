@@ -12,14 +12,11 @@ process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 // Webhook secrets - set to fixed values so signature/secret tests are
 // deterministic instead of depending on whatever a real .env happens to
 // contain.
-// MOBILE_MONEY_API_KEY doubles as MalipoPay's webhook payloadSignature
-// secret (see webhookAuth.middleware.js) - MalipoPay has one key, not a
-// separate secret+key pair.
-process.env.MOBILE_MONEY_API_KEY = process.env.MOBILE_MONEY_API_KEY || "test-malipopay-api-key";
-process.env.MALIPOPAY_WEBHOOK_SECRET = process.env.MALIPOPAY_WEBHOOK_SECRET || "test-malipopay-secret";
 process.env.SELCOM_WEBHOOK_SECRET = process.env.SELCOM_WEBHOOK_SECRET || "test-selcom-secret";
-process.env.SNIPPE_SECRET_KEY = process.env.SNIPPE_SECRET_KEY || "test-snippe-secret-key";
-process.env.SNIPPE_WEBHOOK_SECRET = process.env.SNIPPE_WEBHOOK_SECRET || "test-snippe-webhook-secret";
+process.env.AZAMPAY_WEBHOOK_SECRET = process.env.AZAMPAY_WEBHOOK_SECRET || "test-azampay-secret";
+// PawaPay callbacks are verified with public-key signatures (no static
+// secret); tests leave PAWAPAY_ALLOW_UNSIGNED_CALLBACKS unset unless a test
+// opts in.
 
 // DB env vars - for the mocked suite (jest.config.js) these are never
 // actually connected to (config/db.js's pool is always jest.mock()'d

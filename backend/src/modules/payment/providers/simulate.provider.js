@@ -12,7 +12,7 @@ exports.initiate = (phone, amount) => {
         "  SIMULATED MOBILE MONEY PAYMENT — no real charge occurred.\n" +
         `  phone=${phone} amount=${amount}\n` +
         "  Set MOBILE_MONEY_PROVIDER + matching credentials in .env to\n" +
-        "  use a real provider (malipopay or selcom).\n" +
+        "  use a real provider (azampay, selcom or pawapay).\n" +
         "=============================================================\n"
     );
 

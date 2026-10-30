@@ -20,8 +20,8 @@ dispute.service.js resolveDispute()
                 ├─ finds the completed payment for the order
                 ├─ creates (or reuses) one `refunds` row for this dispute
                 ├─ dispatches to the right provider:
-                │     mobile_money → malipopay/selcom .refund()
-                │     snippe       → snippe.provider.js refundPayment()
+                │     mobile_money → azampay/selcom/pawapay .refund() (gateway from payments.provider)
+                │     card         → same router, no depositId (payout back to buyer's phone)
                 │     paypal       → paypal.provider.js refundCapture()
                 │     cash_on_delivery → no online path, manual_required
                 └─ retries up to 3 times on failure/thrown error,
@@ -76,8 +76,9 @@ at the existing `GET /admin/audit-logs` endpoint.
 
 | Provider | Refund mechanism | Notes |
 |---|---|---|
-| Mobile money (MalipoPay / Selcom) | Payout (`disburse`-style call) back to the buyer's own phone number | Neither provider's public docs expose a dedicated "reverse this collection" endpoint distinct from a generic payout — confirm with your account rep whether one exists before high volume |
-| Snippe | `POST /payments/{reference}/refund` | Follows the same "commonly documented shape, confirm against your real onboarding docs" caveat already called out for `snippe.provider.js`'s checkout session code — **not verified against a live Snippe account** in this change |
+| Mobile money (AzamPay / Selcom / PawaPay) | AzamPay and Selcom: payout back to the buyer's own phone. PawaPay: `POST /v2/refunds` when the original `depositId` is known, otherwise a payout | AzamPay/Selcom expose no dedicated "reverse this collection" endpoint in their public docs, and the Selcom payout path (`/v1/payout/process`) is unconfirmed — verify with your account manager. Not tested against live sandboxes |
+| Card (Selcom / AzamPay hosted checkout) | Payout to the buyer's phone number on file | Not a true card reversal; if no phone is on file the refund is flagged for manual handling. Confirm refund terms with the gateway |
+| Retired gateways (Snippe / MalipoPay legacy rows) | None | `payments.provider` is `snippe`/`malipopay`; the refund fails with a message telling an admin to refund from that gateway's own dashboard |
 | PayPal | `POST /v2/payments/captures/{id}/refund` | This is PayPal's real, documented Payments v2 refund endpoint |
 | Cash on delivery | None (by definition) | Always routed to `manual_required` |
 | Stripe | Removed | `stripe.provider.js` was dead code (unreferenced by `payment.service.js`/`payment.controller.js`/`payment.routes.js`, no `stripe` npm dependency) and has been deleted as part of Phase 7's payment provider cleanup — `orders.payment_method` / `payments.method` haven't accepted `'stripe'` since migration 030 |
@@ -87,7 +88,7 @@ provider refund calls above could be exercised against a live sandbox.
 The unit tests (`tests/unit/refund/refund.service.test.js`) mock every
 provider call and verify the service's own logic (idempotency, retry
 count, dispatch-by-method, error handling) — they do **not** prove the
-Snippe/MalipoPay/Selcom request shapes match those providers' real APIs.
+AzamPay/Selcom/PawaPay request shapes match those providers' real APIs.
 Verify each against a sandbox account before relying on this in
 production, same as the existing checkout code these refund methods sit
 next to.

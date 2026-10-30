@@ -2,34 +2,27 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
+const { blockWhenPaymentsInMaintenance } = require("../../middleware/paymentsMaintenance.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
 const paymentController = require("./payment.controller");
 const { orderIdValidation, bookingIdValidation, bookingMobileMoneyPhoneValidation } = require("./payment.validator");
-const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middleware/webhookAuth.middleware");
+const { verifySelcomWebhook, verifyAzampayWebhook } = require("../../middleware/webhookAuth.middleware");
 
-// Provider webhooks - called directly by MalipoPay/Selcom's servers, not
-// by anyone logged into NEXORA. No authMiddleware (that's for logged-in
-// users), but verifyMalipopayWebhook/verifySelcomWebhook check a shared
-// secret header so this can't be forged by a random POST request - see
-// webhookAuth.middleware.js for why that mattered.
+// Provider webhooks - called directly by Selcom's / AzamPay's servers, not by
+// anyone logged into NEXORA. No authMiddleware (that's for logged-in users),
+// but verifySelcomWebhook / verifyAzampayWebhook check a shared secret so this
+// can't be forged by a random POST request - see webhookAuth.middleware.js.
 //
-// NOTE: the Snippe webhook (POST /webhooks/snippe) and the MalipoPay
-// Card webhook (POST /webhooks/malipopay-card) are NOT defined here -
-// they're registered directly in app.js, before the global JSON body
-// parser, because their signature verification needs the raw request
-// body. See the comment in app.js for why.
-//
-// "/webhooks/malipopay" below is the MOBILE MONEY MalipoPay rail's
-// webhook (shared-secret header, not HMAC-over-body) - a completely
-// separate integration/credentials from the MalipoPay Card webhook. Do
-// not merge these two; see malipopayCard.provider.js's header comment.
-router.post("/webhooks/malipopay", verifyMalipopayWebhook, paymentController.malipopayWebhook);
+// NOTE: the PawaPay webhook (POST /webhooks/pawapay) is NOT defined here -
+// like PayPal's it is registered directly in app.js, before the global JSON
+// body parser, because signature verification needs the raw request body.
 router.post("/webhooks/selcom", verifySelcomWebhook, paymentController.selcomWebhook);
+router.post("/webhooks/azampay", verifyAzampayWebhook, paymentController.azampayWebhook);
 
 // NOTE: the PayPal webhook (POST /webhooks/paypal) is registered in app.js
-// with the raw body parser, like the Snippe / MalipoPay Card webhooks.
+// with the raw body parser, like the PawaPay webhook.
 
 // Admin: payments that need a human decision (paid after cancel, amount
 // mismatch, duplicate payment, chargeback, completed-at-provider-but-not-
@@ -40,7 +33,7 @@ router.post("/review-queue/:reviewId/accept", authMiddleware, authorize("admin")
 
 // IMPORTANT: the "paypal/capture" literal-path route below MUST stay
 // registered before the "/:orderId/..." routes further down. Express
-// matches routes in registration order, and "/:orderId/snippe/checkout"
+// matches routes in registration order, and "/:orderId/card/checkout"
 // has the same segment count/shape as a literal path like
 // "/paypal/capture" - if a dynamic route were registered first, a
 // request for the literal path would match it instead, with orderId
@@ -67,6 +60,7 @@ router.post(
 router.post(
     "/booking/:bookingId/initiate",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     bookingIdValidation,
     bookingMobileMoneyPhoneValidation,
@@ -75,26 +69,19 @@ router.post(
 );
 
 router.post(
-    "/booking/:bookingId/snippe/checkout",
+    "/booking/:bookingId/card/checkout",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     bookingIdValidation,
     validationMiddleware,
-    paymentController.initiateSnippeBookingPayment
-);
-
-router.post(
-    "/booking/:bookingId/malipopay-card/checkout",
-    authMiddleware,
-    authorize("buyer"),
-    bookingIdValidation,
-    validationMiddleware,
-    paymentController.initiateMalipopayCardBookingPayment
+    paymentController.initiateCardBookingPayment
 );
 
 router.post(
     "/booking/:bookingId/paypal/create",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     bookingIdValidation,
     validationMiddleware,
@@ -115,6 +102,7 @@ router.get(
 router.post(
     "/:orderId/initiate",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     orderIdValidation,
     validationMiddleware,
@@ -122,26 +110,19 @@ router.post(
 );
 
 router.post(
-    "/:orderId/snippe/checkout",
+    "/:orderId/card/checkout",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     orderIdValidation,
     validationMiddleware,
-    paymentController.initiateSnippeOrderPayment
-);
-
-router.post(
-    "/:orderId/malipopay-card/checkout",
-    authMiddleware,
-    authorize("buyer"),
-    orderIdValidation,
-    validationMiddleware,
-    paymentController.initiateMalipopayCardOrderPayment
+    paymentController.initiateCardOrderPayment
 );
 
 router.post(
     "/:orderId/paypal/create",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     orderIdValidation,
     validationMiddleware,
@@ -163,6 +144,7 @@ router.get(
 router.post(
     "/wallet/topup",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("buyer"),
     paymentController.initiateWalletTopUp
 );

@@ -1,4 +1,4 @@
-const { classifyStatus, classifyMalipopay, classifySelcom, classifyCheckoutEvent, amountsMatch, usdAmountsMatch } = require("../../../src/modules/payment/providerStatus");
+const { classifyStatus, classifySelcom, classifyAzampay, classifyPawapay, amountsMatch, usdAmountsMatch } = require("../../../src/modules/payment/providerStatus");
 
 describe("providerStatus.classifyStatus", () => {
     it.each(["SUCCESS", "successful", "COMPLETED", "paid"])("%s is a success", (word) => {
@@ -15,12 +15,6 @@ describe("providerStatus.classifyStatus", () => {
 });
 
 describe("providerStatus - provider payload classifiers", () => {
-    it("malipopay: reads payload.status", () => {
-        expect(classifyMalipopay({ status: "SUCCESS" })).toBe("success");
-        expect(classifyMalipopay({ status: "PENDING" })).toBe("pending");
-        expect(classifyMalipopay({ status: "FAILED" })).toBe("failed");
-    });
-
     it("selcom: 000 / SUCCESS is success, anything not clearly failed stays pending", () => {
         expect(classifySelcom({ resultcode: "000" })).toBe("success");
         expect(classifySelcom({ result: "SUCCESS" })).toBe("success");
@@ -28,34 +22,26 @@ describe("providerStatus - provider payload classifiers", () => {
         expect(classifySelcom({ resultcode: "111", result: "PENDING" })).toBe("pending");
         expect(classifySelcom({})).toBe("pending");
     });
-});
 
-describe("providerStatus.classifyCheckoutEvent", () => {
-    const base = { reference: "ORDER-1-AAAAAAAAAAAA", id: "s1" };
-
-    it("paid completed session -> success, with the reported amount", () => {
-        const out = classifyCheckoutEvent({ type: "checkout.session.completed", data: { ...base, payment_status: "paid", amount_total: "5000", currency: "tzs" } });
-        expect(out).toMatchObject({ kind: "success", reference: base.reference, reportedAmount: 5000, reportedCurrency: "TZS" });
+    it("selcom checkout notifications: payment_status wins", () => {
+        expect(classifySelcom({ payment_status: "COMPLETED", resultcode: "000" })).toBe("success");
+        expect(classifySelcom({ payment_status: "USERCANCELLED" })).toBe("failed");
+        expect(classifySelcom({ payment_status: "PENDING", resultcode: "000" })).toBe("pending");
     });
 
-    it("completed session that is not paid yet -> ignore", () => {
-        expect(classifyCheckoutEvent({ type: "checkout.session.completed", data: { ...base, payment_status: "unpaid" } }).kind).toBe("ignore");
+    it("azampay: reads transactionstatus", () => {
+        expect(classifyAzampay({ transactionstatus: "success" })).toBe("success");
+        expect(classifyAzampay({ transactionstatus: "failure" })).toBe("failed");
+        expect(classifyAzampay({})).toBe("pending");
     });
 
-    it("expired / failed events -> failed", () => {
-        expect(classifyCheckoutEvent({ type: "checkout.session.expired", data: base }).kind).toBe("failed");
-        expect(classifyCheckoutEvent({ type: "payment.failed", data: base }).kind).toBe("failed");
-    });
-
-    it("dispute / chargeback events -> chargeback", () => {
-        expect(classifyCheckoutEvent({ type: "payment.dispute.created", data: { ...base, reason: "fraud" } })).toMatchObject({ kind: "chargeback", reason: "fraud" });
-        expect(classifyCheckoutEvent({ type: "charge.chargeback", data: base }).kind).toBe("chargeback");
-    });
-
-    it("unknown event types -> ignore", () => {
-        expect(classifyCheckoutEvent({ type: "customer.updated", data: base }).kind).toBe("ignore");
+    it("pawapay: COMPLETED / FAILED, anything else is still in flight", () => {
+        expect(classifyPawapay({ status: "COMPLETED" })).toBe("success");
+        expect(classifyPawapay({ status: "FAILED" })).toBe("failed");
+        expect(classifyPawapay({ status: "IN_RECONCILIATION" })).toBe("pending");
     });
 });
+
 
 describe("providerStatus - amount tolerance", () => {
     it("accepts exact and near-exact TZS amounts, rejects real differences", () => {

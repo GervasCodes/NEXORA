@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
+const { blockWhenPaymentsInMaintenance } = require("../../middleware/paymentsMaintenance.middleware");
 const authorize = require("../../middleware/authorize.middleware");
 const validationMiddleware = require("../../middleware/validation.middleware");
 
@@ -21,6 +22,7 @@ router.get("/access", authMiddleware, authorize("seller"), subscriptionControlle
 router.post(
     "/subscribe",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("seller"),
     subscribeMobileMoneyValidation,
     validationMiddleware,
@@ -28,26 +30,19 @@ router.post(
 );
 
 router.post(
-    "/subscribe/snippe",
+    "/subscribe/card",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("seller"),
     subscribeRedirectValidation,
     validationMiddleware,
-    subscriptionController.subscribeSnippe
-);
-
-router.post(
-    "/subscribe/malipopay-card",
-    authMiddleware,
-    authorize("seller"),
-    subscribeRedirectValidation,
-    validationMiddleware,
-    subscriptionController.subscribeMalipopayCard
+    subscriptionController.subscribeCard
 );
 
 router.post(
     "/subscribe/paypal",
     authMiddleware,
+    blockWhenPaymentsInMaintenance,
     authorize("seller"),
     subscribeRedirectValidation,
     validationMiddleware,

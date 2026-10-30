@@ -67,7 +67,7 @@ routes.
 | `notification` | `/api/v1/notifications` | Per-user notification feed (in-app + push fan-out). | `push` |
 | `order` | `/api/v1/orders` | Product-side order lifecycle — checkout, multi-vendor splitting, buyer/seller views, receipt confirmation. | `audit`, `cart`, `delivery`, `fraud`, `notification`, `seller` |
 | `otp` | _(no HTTP routes)_ | One-time-passcode generation/verification, used by `auth` (login) and `account` (password change). | _(none)_ |
-| `payment` | `/api/v1/payments` | Payment initiation/checkout across all providers (MalipoPay, Selcom, Snippe, PayPal) and their webhooks, for both orders and bookings, plus the seller verification fee. | `audit`, `booking`, `notification`, `order`, `seller`, `settings`, `subscription`, `wallet` |
+| `payment` | `/api/v1/payments` | Payment initiation/checkout across all providers (AzamPay, Selcom, PawaPay, PayPal) and their webhooks, for both orders and bookings, plus the seller verification fee. | `audit`, `booking`, `notification`, `order`, `seller`, `settings`, `subscription`, `wallet` |
 | `product` | `/api/v1/products` | Seller product listings — CRUD, media, activation, search/filter metadata. Reads may be served from the RF5 Redis cache (see §4). | `category`, `subscription` |
 | `push` | `/api/v1/push` | Web Push subscription registration, used by `notification`/`delivery`/`adminNotification`. | _(none)_ |
 | `recommendation` | `/api/v1/recommendations` | Buyer-facing "related/recommended products" surface. | `product` |

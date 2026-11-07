@@ -225,6 +225,40 @@ describe("AuthContext", () => {
         });
     });
 
+    it("register() forwards onUploadProgress for a FormData payload", async () => {
+        api.post.mockResolvedValue({});
+        let hookResult;
+        function Capture() {
+            hookResult = useAuth();
+            return null;
+        }
+        render(<AuthProvider><Capture /></AuthProvider>);
+
+        const formData = new FormData();
+        formData.append("email", "seller@nexora.tz");
+        const onUploadProgress = vi.fn();
+        await hookResult.register(formData, { onUploadProgress });
+
+        expect(api.post).toHaveBeenCalledWith("/auth/register", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+            onUploadProgress
+        });
+    });
+
+    it("register() ignores onUploadProgress for a plain JSON payload", async () => {
+        api.post.mockResolvedValue({});
+        let hookResult;
+        function Capture() {
+            hookResult = useAuth();
+            return null;
+        }
+        render(<AuthProvider><Capture /></AuthProvider>);
+
+        await hookResult.register({ email: "new@nexora.tz" }, { onUploadProgress: vi.fn() });
+
+        expect(api.post).toHaveBeenCalledWith("/auth/register", { email: "new@nexora.tz" }, undefined);
+    });
+
     it("register() returns a failure result when registration fails", async () => {
         api.post.mockRejectedValue({ response: { data: { message: "Email already in use" } } });
         let hookResult;

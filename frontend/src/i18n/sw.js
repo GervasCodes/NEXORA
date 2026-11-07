@@ -2578,5 +2578,21 @@ export default {
         "seller.serviceReviews.replyPlaceholder": "Andika jibu kwa tathmini hii…",
         "seller.serviceReviews.posting": "Inachapisha…",
         "seller.serviceReviews.postReply": "Tuma jibu",
-        "seller.serviceReviews.loadMore": "Pakia tathmini zaidi"
+        "seller.serviceReviews.loadMore": "Pakia tathmini zaidi",
+        "common.tryAgain": "Jaribu tena",
+        "loader.working": "Inashughulikia…",
+        "loader.progress": "Maendeleo",
+        "loader.slow": "Inachukua muda zaidi ya kawaida. Tafadhali acha skrini hii wazi.",
+        "infinite.loadMore": "Pakia zaidi",
+        "infinite.error": "Imeshindwa kupakia zaidi. Angalia mtandao wako kisha ujaribu tena.",
+        "infinite.end": "Umefika mwisho.",
+        "ptr.pull": "Vuta ili kuonyesha upya",
+        "ptr.release": "Achia ili kuonyesha upya",
+        "ptr.refreshing": "Inaonyesha upya…",
+        "ptr.updated": "Imesasishwa",
+        "ptr.refresh": "Onyesha upya",
+        "pulse.syncingQueue": "Inatuma masasisho yaliyohifadhiwa…",
+        "pulse.refreshing": "Inaonyesha upya…",
+        "upload.progress": "Maendeleo ya upakiaji",
+        "account.finishingSignIn": "Inakamilisha kuingia…"
 };

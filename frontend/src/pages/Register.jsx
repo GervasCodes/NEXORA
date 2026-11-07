@@ -4,12 +4,15 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 import Button from "../components/ui/Button";
+import FullScreenLoader from "../components/ui/FullScreenLoader";
 import Input from "../components/ui/Input";
+import ProgressBar from "../components/ui/ProgressBar";
 import PasswordStrengthMeter from "../components/ui/PasswordStrengthMeter";
 import PageMeta from "../components/PageMeta";
 import UsernameField from "../components/UsernameField";
 import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 import GoogleCompleteProfile from "../components/GoogleCompleteProfile";
+import useUploadProgress from "../hooks/useUploadProgress";
 import { isValidUsernameFormat, randomSuggestionDigits, suggestUsername } from "../utils/username";
 
 const initialForm = {
@@ -63,6 +66,7 @@ export default function Register() {
     const [step, setStep] = useState(STEP_ACCOUNT);
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const docUpload = useUploadProgress();
     const [usernameStatus, setUsernameStatus] = useState("idle");
     // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
     // finishing phone/username/terms; it can arrive from the Login page via
@@ -224,7 +228,10 @@ export default function Register() {
             payload = formData;
         }
 
-        const result = await register(payload);
+        const result = needsDocuments
+            ? await register(payload, { onUploadProgress: docUpload.onUploadProgress })
+            : await register(payload);
+        docUpload.reset();
         setSubmitting(false);
 
         if (result.success) {
@@ -264,6 +271,8 @@ export default function Register() {
     if (step === STEP_DOCUMENTS) {
         return (
             <div className="max-w-sm mx-auto px-4 py-16">
+            {/* Sellers and agents only prefill from Google (nothing is created), so only buyers get the blocking loader. */}
+            <FullScreenLoader open={googleBusy && form.role === "buyer"} message={t("account.finishingSignIn")} />
                 <h1 className="font-display text-2xl mb-1">{t("auth.verify.title")}</h1>
                 <p className="text-ash text-sm mb-8">
                     {form.role === "seller"
@@ -351,6 +360,10 @@ export default function Register() {
 
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
+                    {submitting && docUpload.progress !== null && (
+                        <ProgressBar value={docUpload.progress} label={t("upload.progress")} showValue />
+                    )}
+
                     <div className="flex gap-3 pt-2">
                         <Button
                             type="button"
@@ -360,12 +373,11 @@ export default function Register() {
                         >
                             {t("auth.verify.back")}
                         </Button>
-                        <Button
+                        <Button loading={submitting}
                             type="submit"
                             disabled={submitting}
                             className="flex-1 gap-2"
                         >
-                            {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                             {submitting ? t("auth.verify.submitting") : t("auth.verify.submitForReview")}
                         </Button>
                     </div>
@@ -540,8 +552,7 @@ export default function Register() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
-                    {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                <Button loading={submitting} type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </Button>
             </form>

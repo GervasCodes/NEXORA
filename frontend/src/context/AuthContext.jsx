@@ -262,11 +262,14 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const register = useCallback(async (payload) => {
+    // `options.onUploadProgress` (axios progress callback) is only forwarded
+    // for multipart payloads - the seller/agent document upload on Register.
+    const register = useCallback(async (payload, options = {}) => {
         try {
             const isFormData = payload instanceof FormData;
             await api.post("/auth/register", payload, isFormData ? {
-                headers: { "Content-Type": "multipart/form-data" }
+                headers: { "Content-Type": "multipart/form-data" },
+                ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {})
             } : undefined);
             return { success: true };
         } catch (error) {

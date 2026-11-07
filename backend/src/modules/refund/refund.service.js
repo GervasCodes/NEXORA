@@ -48,11 +48,14 @@ const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.
 // refund per source" at the DB layer (see findByDisputeId/findByReturnId
 // below) - this just recovers the existing row on a race/retry instead
 // of erroring.
-const findExistingForSource = async (source) => (
-    source.type === "dispute"
-        ? refundRepository.findByDisputeId(source.id)
-        : refundRepository.findByReturnId(source.id)
-);
+const findExistingForSource = async (source) => {
+    if (source.type === "dispute") return refundRepository.findByDisputeId(source.id);
+    if (source.type === "return") return refundRepository.findByReturnId(source.id);
+    if (source.type === "booking") return refundRepository.findByBookingId(source.id);
+    // "cancellation" (order.service.js#cancelOrder, Phase 3) - no dedicated
+    // FK column, see findByIdempotencyKey's comment.
+    return refundRepository.findByIdempotencyKey(`cancellation:${source.id}`);
+};
 
 const findOrCreateRefundRow = async ({ source, payment, amount, requestedBy }) => {
     const existing = await findExistingForSource(source);
@@ -64,8 +67,9 @@ const findOrCreateRefundRow = async ({ source, payment, amount, requestedBy }) =
         const id = await refundRepository.create({
             disputeId: source.type === "dispute" ? source.id : null,
             returnId: source.type === "return" ? source.id : null,
+            bookingId: source.type === "booking" ? source.id : null,
             paymentId: payment.id,
-            orderId: source.orderId,
+            orderId: source.orderId || null,
             buyerId: source.buyerId,
             sellerId: source.sellerId,
             provider: payment.method,
@@ -88,20 +92,43 @@ const findOrCreateRefundRow = async ({ source, payment, amount, requestedBy }) =
 // Refund rows come from either a dispute or a return  - this
 // just renders whichever source pointer is set, for provider references
 // and log/audit text.
-const sourceLabel = (refund) => (refund.dispute_id ? `dispute #${refund.dispute_id}` : `return #${refund.return_id}`);
-const sourceSlug = (refund) => (refund.dispute_id ? `dispute_${refund.dispute_id}` : `return_${refund.return_id}`);
+const sourceLabel = (refund) => {
+    if (refund.dispute_id) return `dispute #${refund.dispute_id}`;
+    if (refund.return_id) return `return #${refund.return_id}`;
+    if (refund.booking_id) return `booking #${refund.booking_id}`;
+    return `cancellation of order #${refund.order_id}`;
+};
+const sourceSlug = (refund) => {
+    if (refund.dispute_id) return `dispute_${refund.dispute_id}`;
+    if (refund.return_id) return `return_${refund.return_id}`;
+    if (refund.booking_id) return `booking_${refund.booking_id}`;
+    return `cancellation_${refund.order_id}`;
+};
 
 // Calls the actual payment provider for one refund attempt. Returns
 // { success, reference } on a completed call, or throws/returns
 // { success: false, error } otherwise - callers decide what to do with
 // a failure (retry vs give up).
+// Phone to refund a mobile-money payment back to - an order's own
+// shipping_phone for order-sourced refunds, or the payer phone stored
+// (encrypted) on the booking payment row itself for a booking refund,
+// since a booking has no shipping_phone of its own (Phase 5, P0).
+const resolveMobileMoneyRefundPhone = async (refund, payment) => {
+    if (refund.booking_id) {
+        const { decryptPhone } = require("../../utils/phoneEncryption");
+        return decryptPhone(payment.payer_phone_encrypted);
+    }
+    const order = await orderRepository.findOrderById(refund.order_id);
+    return order?.shipping_phone || null;
+};
+
 const callProvider = async (refund, payment) => {
     if (payment.method === "mobile_money") {
-        const order = await orderRepository.findOrderById(refund.order_id);
-        if (!order || !order.shipping_phone) {
-            return { success: false, error: "Order has no phone number on file to refund to" };
+        const phone = await resolveMobileMoneyRefundPhone(refund, payment);
+        if (!phone) {
+            return { success: false, error: "No phone number on file to refund to" };
         }
-        const result = await mobileMoneyProvider.refund(order.shipping_phone, refund.amount, {
+        const result = await mobileMoneyProvider.refund(phone, refund.amount, {
             reference: `NEXORA-REFUND-${sourceSlug(refund).toUpperCase()}`,
             description: `Refund for ${sourceLabel(refund)}`
         });
@@ -133,13 +160,13 @@ const callProvider = async (refund, payment) => {
         // mobile money disbursement back to the buyer instead, same as
         // the mobile_money branch above, so it needs a phone number to
         // pay out to rather than just the original transaction reference.
-        const order = await orderRepository.findOrderById(refund.order_id);
-        if (!order || !order.shipping_phone) {
-            return { success: false, error: "Order has no phone number on file to refund to" };
+        const phone = await resolveMobileMoneyRefundPhone(refund, payment);
+        if (!phone) {
+            return { success: false, error: "No phone number on file to refund to" };
         }
         const result = await malipopayCardProvider.refundPayment({
             transactionReference: payment.transaction_reference,
-            phoneNumber: order.shipping_phone,
+            phoneNumber: phone,
             amountTzs: refund.amount,
             reason: sourceSlug(refund)
         });
@@ -184,6 +211,16 @@ const attemptWithRetries = async (refund, payment) => {
                     // circular require at module-load time.
                     require("../return/return.service").markRefunded(refund.return_id).catch(() => {});
                 }
+                // EFD credit note (Phase 5, P1) - only for order-sourced
+                // refunds (dispute/return/cancellation all have refund.order_id;
+                // a booking refund has none, and bookings don't issue EFD
+                // receipts in the first place - see efd.service.js's own
+                // "called once per paid order" scoping). Lazy require for
+                // the same reason as return.service.js above.
+                if (refund.order_id) {
+                    require("../efd/efd.service").issueCreditNoteForOrder(refund.order_id, sourceLabel(refund))
+                        .catch(() => {});
+                }
                 auditService.log({
                     userId: refund.buyer_id,
                     eventType: "refund.completed",
@@ -222,16 +259,23 @@ const attemptWithRetries = async (refund, payment) => {
 // past "look up the payment" is identical regardless of which one
 // triggered it, only the audit-log text differs (via sourceType/label).
 const triggerRefund = async ({ source, label, amount, requestedBy }) => {
-    const payment = await paymentRepository.findByOrderId(source.orderId);
+    // Bookings (Phase 5, P0) - a booking payment has no order_id at all
+    // (payments.booking_id is its own FK, see payment.repository.js's
+    // createBookingPayment), so it needs its own lookup rather than
+    // paymentRepository.findByOrderId(source.orderId), which would just
+    // return nothing for a booking source.
+    const payment = source.type === "booking"
+        ? await paymentRepository.findByBookingId(source.id)
+        : await paymentRepository.findByOrderId(source.orderId);
 
     if (!payment || payment.status !== "completed") {
         auditService.log({
             userId: source.buyerId,
             eventType: "refund.manual_required",
-            description: `${label} resolved with a refund, but no completed payment was found on order #${source.orderId} - needs manual handling`,
-            metadata: { [`${source.type}Id`]: source.id, orderId: source.orderId }
+            description: `${label} resolved with a refund, but no completed payment was found${source.orderId ? ` on order #${source.orderId}` : ""} - needs manual handling`,
+            metadata: { [`${source.type}Id`]: source.id, orderId: source.orderId || null }
         });
-        return { status: "manual_required", reason: "No completed payment found for this order" };
+        return { status: "manual_required", reason: "No completed payment found" };
     }
 
     const { refund, alreadyExisted } = await findOrCreateRefundRow({ source, payment, amount, requestedBy });
@@ -284,6 +328,31 @@ exports.autoRefundForReturn = async ({ orderReturn, amount, requestedBy }) => tr
     requestedBy
 });
 
+// Called from order.service.js#cancelOrder (Phase 3) once a paid/deposit-
+// paid order is cancelled. `order` only needs id/buyer_id - unlike
+// dispute/return there's no seller_id carried on the order row itself
+// (it's per order_item on a multi-vendor order), so the refund row's
+// seller_id is left NULL; wallet reversal is handled separately in
+// order.service.js, grouped per seller, not through this refund row.
+// Booking refunds (Phase 5, P0) - called from booking.service.js#cancelBooking.
+// Gives bookings the same tracked pending/processing/completed/failed/
+// manual_required row, retry mechanics and admin queue every other
+// refund source already has, instead of the previous fire-and-forget
+// call with nothing persisted to show for it.
+exports.autoRefundForBooking = async ({ booking, amount, requestedBy }) => triggerRefund({
+    source: { type: "booking", id: booking.id, orderId: null, buyerId: booking.customer_id, sellerId: booking.provider_id },
+    label: `booking #${booking.id}`,
+    amount,
+    requestedBy
+});
+
+exports.autoRefundForCancellation = async ({ order, amount, requestedBy }) => triggerRefund({
+    source: { type: "cancellation", id: order.id, orderId: order.id, buyerId: order.buyer_id, sellerId: null },
+    label: `cancellation of order #${order.id}`,
+    amount,
+    requestedBy
+});
+
 // Admin-triggered manual retry of a 'failed' or 'manual_required' refund
 // (refund.controller.js -> POST /admin/refunds/:id/retry).
 exports.retryRefund = async (refundId, adminId) => {
@@ -293,16 +362,18 @@ exports.retryRefund = async (refundId, adminId) => {
         throw new Error(`Refund is already "${refund.status}" - nothing to retry`);
     }
 
-    const payment = await paymentRepository.findByOrderId(refund.order_id);
+    const payment = refund.booking_id
+        ? await paymentRepository.findByBookingId(refund.booking_id)
+        : await paymentRepository.findByOrderId(refund.order_id);
     if (!payment || payment.status !== "completed") {
-        throw new Error("No completed payment found for this order - cannot retry automatically");
+        throw new Error("No completed payment found - cannot retry automatically");
     }
 
     auditService.log({
         userId: adminId,
         eventType: "refund.manual_retry",
-        description: `Admin manually retried refund #${refund.id} (dispute #${refund.dispute_id})`,
-        metadata: { refundId: refund.id, disputeId: refund.dispute_id }
+        description: `Admin manually retried refund #${refund.id} (${sourceLabel(refund)})`,
+        metadata: { refundId: refund.id, disputeId: refund.dispute_id, returnId: refund.return_id, bookingId: refund.booking_id }
     });
 
     if (payment.method === "cash_on_delivery") {
@@ -317,5 +388,7 @@ exports.getRefund = async (refundId) => refundRepository.findById(refundId);
 exports.getRefundForDispute = async (disputeId) => refundRepository.findByDisputeId(disputeId);
 
 exports.getRefundForReturn = async (returnId) => refundRepository.findByReturnId(returnId);
+
+exports.getRefundForBooking = async (bookingId) => refundRepository.findByBookingId(bookingId);
 
 exports.listRefunds = async ({ status, limit } = {}) => refundRepository.findAll({ status, limit });

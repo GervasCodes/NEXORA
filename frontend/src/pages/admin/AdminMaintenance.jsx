@@ -4,6 +4,7 @@ import PageLoader from "../../components/PageLoader";
 import { formatDateTime } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import Spinner from "../../components/ui/Spinner";
 
 // Unified "Maintenance Management" screen. Departments and services keep
 // their own dedicated admin pages (AdminCategories.jsx,
@@ -90,11 +91,11 @@ function DeactivateConfirmPrompt({ open, onCancel, onConfirm, itemName }) {
                     <button onClick={onCancel} className="text-sm text-ash hover:text-ink px-3 py-2">
                         Cancel
                     </button>
-                    <button
+                    <button aria-busy={submitting || undefined}
                         onClick={submit}
                         disabled={submitting}
                         className="bg-coral text-frost px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Deactivating…" : "Deactivate"}
                     </button>
                 </div>
@@ -161,11 +162,11 @@ function MessagePrompt({ open, onCancel, onConfirm, itemName }) {
                     <button onClick={onCancel} className="text-sm text-ash hover:text-ink px-3 py-2">
                         Cancel
                     </button>
-                    <button
+                    <button aria-busy={submitting || undefined}
                         onClick={submit}
                         disabled={submitting}
                         className="bg-coral text-frost px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Saving…" : "Deactivate"}
                     </button>
                 </div>
@@ -252,11 +253,11 @@ function DepartmentSchedulePrompt({ open, onCancel, onConfirm, itemName }) {
                     <button onClick={onCancel} className="text-sm text-ash hover:text-ink px-3 py-2">
                         Cancel
                     </button>
-                    <button
+                    <button aria-busy={submitting || undefined}
                         onClick={submit}
                         disabled={submitting}
                         className="bg-coral text-frost px-4 py-2 rounded-md text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Saving…" : startAt ? "Schedule" : "Deactivate"}
                     </button>
                 </div>
@@ -341,11 +342,11 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestMa
                             <StatusBadge isActive={item.is_active} status={item.status} />
 
                             {showCancelSchedule && (
-                                <button
+                                <button aria-busy={busy || undefined}
                                     onClick={() => onCancelSchedule(sectionKey, item)}
                                     disabled={busy}
                                     className="text-xs px-3 py-1.5 rounded-md border border-line text-ash hover:text-ink transition-colors disabled:opacity-50"
-                                >
+                                >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Cancel schedule
                                 </button>
                             )}
@@ -353,35 +354,35 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestMa
                             {copy.hasStatus ? (
                                 <>
                                     {item.status !== "active" && (
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             onClick={() => onActivate(sectionKey, item)}
                                             disabled={busy}
                                             className="text-xs px-3 py-1.5 rounded-md border border-teal/40 text-teal hover:bg-teal/10 transition-colors disabled:opacity-50"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             {busy ? "Working…" : "Activate"}
                                         </button>
                                     )}
                                     {item.status !== "maintenance" && (
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             onClick={() => onRequestMaintenance(sectionKey, item)}
                                             disabled={busy}
                                             className="text-xs px-3 py-1.5 rounded-md border border-mango/40 text-mango-dark hover:bg-mango/10 transition-colors disabled:opacity-50"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             {busy ? "Working…" : "Put into maintenance"}
                                         </button>
                                     )}
                                     {item.status !== "deactivated" && (
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             onClick={() => onRequestDeactivate(sectionKey, item, true)}
                                             disabled={busy}
                                             className="text-xs px-3 py-1.5 rounded-md border border-coral/40 text-coral hover:bg-coral/10 transition-colors disabled:opacity-50"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             {busy ? "Working…" : "Deactivate"}
                                         </button>
                                     )}
                                 </>
                             ) : (
-                                <button
+                                <button aria-busy={busy || undefined}
                                     onClick={() => (item.is_active ? onRequestDeactivate(sectionKey, item, false) : onActivate(sectionKey, item))}
                                     disabled={busy}
                                     className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
@@ -389,7 +390,7 @@ function MaintenanceSection({ sectionKey, items, busyId, onActivate, onRequestMa
                                             ? "border border-coral/40 text-coral hover:bg-coral/10"
                                             : "border border-teal/40 text-teal hover:bg-teal/10"
                                     }`}
-                                >
+                                >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     {busy ? "Working…" : item.is_active ? "Deactivate" : "Activate"}
                                 </button>
                             )}
@@ -418,7 +419,7 @@ export default function AdminMaintenance() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const activate = async (sectionKey, item) => {
         const id = item.key || item.id;

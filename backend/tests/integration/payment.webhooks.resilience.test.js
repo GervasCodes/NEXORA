@@ -71,17 +71,37 @@ describe("payment webhooks - idempotency (already-processed order)", () => {
         expect(db.query).toHaveBeenCalledTimes(3);
     });
 
-    it("treats a webhook for an already-failed order the same way (no re-processing either direction)", async () => {
+    it("treats a FAILURE webhook for an already-failed order as a no-op", async () => {
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }])
-            .mockResolvedValueOnce([[{ id: 1, status: "failed" }]])
+            .mockResolvedValueOnce([[{ id: 1, status: "failed", amount: 10000 }]])
             .mockResolvedValueOnce([[{ id: 21, is_parent: 0, buyer_id: 1 }]]);
+
+        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-21", status: "FAILED" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(db.query).toHaveBeenCalledTimes(3);
+    });
+
+    it("treats a SUCCESS webhook for an order payment already marked failed as a real payment (late success), not a no-op", async () => {
+        db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
+            .mockResolvedValueOnce([[{ id: 1, status: "failed", amount: 10000, purpose: "order_payment" }]]) // findByOrderId
+            .mockResolvedValueOnce([[{ id: 21, is_parent: 0, buyer_id: 1, status: "pending", payment_status: "unpaid" }]]) // findOrderById
+            .mockResolvedValueOnce([{ affectedRows: 1 }]) // claimCompleted
+            .mockResolvedValueOnce([{}]) // updatePaymentStatus
+            .mockResolvedValueOnce([[{ id: 21, is_parent: 0, buyer_id: 1 }]]); // findOrderById (is_parent check)
 
         const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-21", status: "SUCCESS" });
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
-        expect(db.query).toHaveBeenCalledTimes(3);
+        expect(db.query).toHaveBeenNthCalledWith(
+            4,
+            expect.stringContaining("status IN ('pending', 'failed')"),
+            expect.any(Array)
+        );
     });
 });
 
@@ -91,9 +111,9 @@ describe("payment webhooks - failed/declined payment branch", () => {
     it("marks the order payment failed (not completed) when the provider reports failure", async () => {
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
-            .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // findByOrderId
+            .mockResolvedValueOnce([[{ id: 1, status: "pending", amount: 10000 }]]) // findByOrderId
             .mockResolvedValueOnce([[{ id: 22, is_parent: 0, buyer_id: 1 }]]) // findOrderById (orderForNotify)
-            .mockResolvedValueOnce([{}]); // markFailed
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // markFailed
 
         const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-22", status: "FAILED" });
 
@@ -106,7 +126,7 @@ describe("payment webhooks - failed/declined payment branch", () => {
         expect(db.query).toHaveBeenCalledTimes(4);
         expect(db.query).toHaveBeenNthCalledWith(
             4,
-            "UPDATE payments SET status = 'failed' WHERE id = ?",
+            "UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'pending'",
             [1]
         );
     });
@@ -118,10 +138,10 @@ describe("payment webhooks - booking payments (BOOKING-<id> reference)", () => {
     it("marks a booking payment completed on a successful booking webhook", async () => {
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
-            .mockResolvedValueOnce([[{ id: 5, status: "pending" }]]) // findByBookingId
-            .mockResolvedValueOnce([{}]) // markCompleted
-            .mockResolvedValueOnce([{}]) // bookingRepository.updatePaymentStatus
-            .mockResolvedValueOnce([[{ id: 30, booking_reference: "BK-30", customer_id: 1, provider_id: 2 }]]); // bookingRepository.findById
+            .mockResolvedValueOnce([[{ id: 5, status: "pending", amount: 10000 }]]) // findByBookingId
+            .mockResolvedValueOnce([{ affectedRows: 1 }]) // claimCompleted
+            .mockResolvedValueOnce([[{ id: 30, status: "pending", payment_status: "unpaid", booking_reference: "BK-30", customer_id: 1, provider_id: 2 }]]) // bookingRepository.findById
+            .mockResolvedValueOnce([{}]); // bookingRepository.updatePaymentStatus
 
         const res = await postMalipopay({ ...malipopayBasePayload(), reference: "BOOKING-30", status: "SUCCESS" });
 
@@ -137,8 +157,8 @@ describe("payment webhooks - booking payments (BOOKING-<id> reference)", () => {
     it("marks a booking payment failed on a declined booking webhook, without touching the booking row", async () => {
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
-            .mockResolvedValueOnce([[{ id: 6, status: "pending" }]]) // findByBookingId
-            .mockResolvedValueOnce([{}]); // markFailed
+            .mockResolvedValueOnce([[{ id: 6, status: "pending", amount: 10000 }]]) // findByBookingId
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // markFailed
 
         const res = await postMalipopay({ ...malipopayBasePayload(), reference: "BOOKING-31", status: "FAILED" });
 
@@ -198,12 +218,64 @@ describe("payment webhooks - true duplicate delivery (replay-guard UNIQUE-constr
 describe("payment webhooks - unrecognized reference shape", () => {
     beforeEach(() => jest.clearAllMocks());
 
-    it("fails safely (200, not a 5xx) when the reference matches no known prefix, so the provider doesn't retry-storm forever", async () => {
+    it("fails safely (200, not a 5xx) when the reference matches no known prefix (a permanent error - a retry can never help)", async () => {
         db.query.mockResolvedValueOnce([{ insertId: 1 }]); // recordDelivery only - the throw happens right after
 
         const res = await postMalipopay({ ...malipopayBasePayload(), reference: "NOT-A-REAL-REFERENCE-SHAPE" });
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(false);
+    });
+});
+
+describe("payment webhooks - transient failures and non-terminal statuses", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it("answers 5xx and RELEASES the replay-guard hash when processing fails transiently, so the provider's retry is processed", async () => {
+        db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
+            .mockRejectedValueOnce(new Error("db down")) // findByOrderId blows up
+            .mockResolvedValueOnce([{}]); // forgetDelivery DELETE
+
+        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-50" });
+
+        expect(res.status).toBe(500);
+        expect(db.query).toHaveBeenLastCalledWith(
+            expect.stringContaining("DELETE FROM webhook_replay_guard"),
+            expect.any(Array)
+        );
+    });
+
+    it("acknowledges and ignores a PENDING status (never marks the payment failed)", async () => {
+        db.query.mockResolvedValueOnce([{ insertId: 1 }]); // recordDelivery only
+
+        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-51", status: "PENDING" });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ success: true, ignored: true });
+        expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores an unrecognised status word instead of treating it as a failure", async () => {
+        db.query.mockResolvedValueOnce([{ insertId: 1 }]);
+
+        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-52", status: "PROCESSING" });
+
+        expect(res.body.ignored).toBe(true);
+        expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    it("routes a charged amount that does not match the expected amount to review instead of marking it paid", async () => {
+        db.query
+            .mockResolvedValueOnce([{ insertId: 1 }]) // recordDelivery
+            .mockResolvedValueOnce([[{ id: 1, status: "pending", amount: 50000, method: "mobile_money", purpose: "order_payment" }]]) // findByOrderId
+            .mockResolvedValueOnce([[{ id: 53, is_parent: 0, buyer_id: 1 }]]); // findOrderById
+
+        const res = await postMalipopay({ ...malipopayBasePayload(), reference: "ORDER-53", amount: 10000 });
+
+        expect(res.status).toBe(200);
+        // No claimCompleted UPDATE was ever issued.
+        const sqls = db.query.mock.calls.map((call) => String(call[0]));
+        expect(sqls.some((sql) => sql.includes("status = 'completed'"))).toBe(false);
     });
 });

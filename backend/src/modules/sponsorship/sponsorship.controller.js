@@ -2,7 +2,7 @@ const sponsorshipService = require("./sponsorship.service");
 
 exports.getPricing = async (req, res) => {
     try {
-        const pricing = await sponsorshipService.getPricing();
+        const pricing = await sponsorshipService.getPricing(req.user.id);
 
         return res.json({ success: true, data: pricing });
 
@@ -46,6 +46,17 @@ exports.cancelCampaign = async (req, res) => {
         const result = await sponsorshipService.cancelCampaign(req.user.id, req.params.id);
 
         return res.json({ success: true, message: "Campaign cancelled", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.previewCancelCampaign = async (req, res) => {
+    try {
+        const preview = await sponsorshipService.previewCancel(req.user.id, req.params.id);
+
+        return res.json({ success: true, data: preview });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

@@ -8,7 +8,9 @@ jest.mock("../../../src/modules/account/account.repository");
 jest.mock("../../../src/modules/audit/audit.service");
 jest.mock("../../../src/modules/adminNotification/adminNotification.service");
 jest.mock("../../../src/utils/cloudinaryDelete");
+jest.mock("../../../src/utils/privateDocuments");
 jest.mock("../../../src/utils/hashPassword");
+jest.mock("../../../src/modules/emailOutbox/emailOutbox.service");
 
 const db = require("../../../src/config/db");
 const adminRepository = require("../../../src/modules/admin/admin.repository");
@@ -20,7 +22,9 @@ const accountRepository = require("../../../src/modules/account/account.reposito
 const auditService = require("../../../src/modules/audit/audit.service");
 const adminNotificationService = require("../../../src/modules/adminNotification/adminNotification.service");
 const { deleteManyFromCloudinary } = require("../../../src/utils/cloudinaryDelete");
+const { deleteStoredDocument } = require("../../../src/utils/privateDocuments");
 const hashPassword = require("../../../src/utils/hashPassword");
+const emailOutboxService = require("../../../src/modules/emailOutbox/emailOutbox.service");
 
 const adminService = require("../../../src/modules/admin/admin.service");
 
@@ -183,6 +187,7 @@ describe("admin.service.bulkSetServiceActive (Phase A4)", () => {
 
 describe("admin.service.getDashboard", () => {
     it("coerces every stat to a number and defaults missing ones to 0", async () => {
+        emailOutboxService.countFailed.mockResolvedValue(4);
         adminRepository.getDashboardStats.mockResolvedValue({
             userCounts: { buyers: "10", sellers: "3", delivery_agents: undefined },
             orderCounts: { total_orders: "50", pending_orders: "5", delivered_orders: "40", cancelled_orders: "5" },
@@ -202,6 +207,7 @@ describe("admin.service.getDashboard", () => {
             products: { total: 20, active: 18 },
             bookings: { total: 12, pending: 2, completed: 9, cancelled: 0 },
             bookingRevenue: 300000,
+            email: { failed: 4 },
             services: { total: 7, active: 5 }
         });
     });
@@ -275,10 +281,15 @@ describe("admin.service.getAnalytics", () => {
 describe("admin.service settings & withdrawal passthroughs", () => {
     it("getSettings/updateSettings delegate to settingsService", async () => {
         settingsService.getAll.mockResolvedValue({ commissionRate: 10 });
-        await expect(adminService.getSettings()).resolves.toEqual({ commissionRate: 10 });
+        settingsService.getSettingsMeta.mockResolvedValue({ commissionRate: { changed_by: "Asha" } });
+        await expect(adminService.getSettings()).resolves.toMatchObject({
+            commissionRate: 10,
+            setting_meta: { commissionRate: { changed_by: "Asha" } },
+            settings_loaded_at: expect.any(String)
+        });
 
-        await adminService.updateSettings({ commissionRate: 12 });
-        expect(settingsService.updateSettings).toHaveBeenCalledWith({ commissionRate: 12 });
+        await adminService.updateSettings({ commissionRate: 12 }, 5);
+        expect(settingsService.updateSettings).toHaveBeenCalledWith({ commissionRate: 12 }, { actorId: 5 });
     });
 
     it("withdrawal actions delegate to walletService.processWithdrawal with the right action", async () => {
@@ -289,7 +300,7 @@ describe("admin.service settings & withdrawal passthroughs", () => {
         expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "reject", "insufficient docs");
 
         await adminService.markWithdrawalPaid(1, "paid via bank transfer");
-        expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "paid", "paid via bank transfer");
+        expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "paid", "paid via bank transfer", undefined);
     });
 
     it("releaseOrderEscrow (Phase 9D) delegates to walletService.releaseOrderEarnings", async () => {
@@ -591,10 +602,24 @@ describe("admin.service.permanentlyDeleteUser (Phase 4 - Permanent Account Remov
 
     beforeEach(() => {
         adminRepository.findAccountVerificationDocumentUrls.mockResolvedValue([]);
+        adminRepository.findPrivateVerificationDocuments.mockResolvedValue([]);
+        deleteStoredDocument.mockResolvedValue(true);
         adminRepository.findSellerLogoAndBanner.mockResolvedValue(null);
         adminRepository.findNeverOrderedProductIds.mockResolvedValue([]);
         adminRepository.findProductMediaUrls.mockResolvedValue([]);
         adminRepository.deleteWishlistItems.mockResolvedValue(undefined);
+    });
+
+    it("also deletes private (authenticated) verification documents by public_id after the commit", async () => {
+        const privateDoc = { file_public_id: "verification/national_id/abc", file_resource_type: "image", file_storage: "authenticated" };
+        adminRepository.findUserForPermanentDeletion.mockResolvedValue(targetUser);
+        adminRepository.findPrivateVerificationDocuments.mockResolvedValue([privateDoc]);
+        deleteManyFromCloudinary.mockResolvedValue([]);
+
+        await adminService.permanentlyDeleteUser(7, 1);
+
+        expect(deleteStoredDocument).toHaveBeenCalledWith(privateDoc);
+        expect(connection.commit.mock.invocationCallOrder[0]).toBeLessThan(deleteStoredDocument.mock.invocationCallOrder[0]);
     });
 
     it("rejects an unknown user", async () => {

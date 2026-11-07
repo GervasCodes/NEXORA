@@ -9,6 +9,7 @@ const upload = require("../../middleware/upload.middleware");
 const { authLimiter } = require("../../middleware/rateLimit.middleware");
 const {
     updateProfileValidation,
+    changeUsernameValidation,
     updateSettingsValidation,
     verifyPasswordChangeOtpValidation,
     changePasswordValidation,
@@ -19,6 +20,8 @@ router.use(authMiddleware);
 
 router.get("/", accountController.getProfile);
 router.put("/profile", updateProfileValidation, validationMiddleware, accountController.updateProfile);
+// Phase 6 (round 5): one change per 30 days, enforced in username.service.js.
+router.put("/username", changeUsernameValidation, validationMiddleware, accountController.changeUsername);
 router.put("/settings", updateSettingsValidation, validationMiddleware, accountController.updateSettings);
 
 // (Real Imagery & Avatars): one shared endpoint for every

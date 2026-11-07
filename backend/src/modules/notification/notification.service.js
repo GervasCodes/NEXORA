@@ -2,6 +2,7 @@ const notificationRepository = require("./notification.repository");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const logger = require("../../utils/logger").child({ module: "notification" });
 const sendEmail = require("../../utils/sendEmail");
+const { renderEmail, absoluteUrl } = require("../../utils/emailTemplate");
 const pushService = require("../push/push.service");
 const { t, resolveLocale } = require("../../i18n");
 
@@ -169,9 +170,18 @@ exports.notify = async ({
         })
         .catch((error) => logger.warn({ err: error }, "push send error (notify)"));
 
+    // Every notification email gets the same layout and one CTA carrying the
+    // resolved link (falls back to the notifications page when a caller gave
+    // no URL). See utils/emailTemplate.js renderEmail.
     if (withEmail && contact?.email) {
-        const body = `${resolvedMessage}\n\n${t(locale, "email.footer")}`;
-        await sendEmail(contact.email, resolvedTitle, body);
+        const email = renderEmail({
+            locale,
+            heading: resolvedTitle,
+            message: resolvedMessage,
+            ctaLabel: t(locale, "email.cta.view"),
+            ctaUrl: resolvedUrl || "/notifications"
+        });
+        await sendEmail(contact.email, resolvedTitle, email.text, email.html);
     }
 
     // opt-in only (contact.whatsapp_order_updates), and only
@@ -181,8 +191,21 @@ exports.notify = async ({
     // on by default the way the in-app notification itself is.
     if (withWhatsApp && contact?.whatsapp_order_updates && contact?.phone) {
         const whatsappProvider = require("../whatsapp/providers/whatsapp.provider");
-        whatsappProvider.sendText(contact.phone, `${resolvedTitle}\n${resolvedMessage}`)
-            .catch((error) => logger.warn({ err: error }, "whatsapp send error (notify)"));
+        // Approved template with a tracking-link button when WHATSAPP_ORDER_TEMPLATE_NAME
+        // is set. Otherwise plain text with the link in the body, which only reaches
+        // the buyer inside WhatsApp's 24-hour window.
+        const send = resolvedUrl && whatsappProvider.orderTemplateConfigured()
+            ? whatsappProvider.sendOrderTemplate(contact.phone, {
+                title: resolvedTitle,
+                message: resolvedMessage,
+                urlSuffix: resolvedUrl.replace(/^\//, "")
+            })
+            : whatsappProvider.sendText(
+                contact.phone,
+                `${resolvedTitle}\n${resolvedMessage}${resolvedUrl ? `\n${absoluteUrl(resolvedUrl)}` : ""}`
+            );
+
+        send.catch((error) => logger.warn({ err: error }, "whatsapp send error (notify)"));
     }
 };
 

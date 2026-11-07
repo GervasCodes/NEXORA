@@ -24,8 +24,9 @@ exports.createProduct = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(400).json({
+        return res.status(error.status || 400).json({
             success: false,
+            code: error.code,
             message: error.message
         });
     }
@@ -212,57 +213,6 @@ exports.reorderProductVideos = async (req, res) => {
     }
 };
 
-exports.uploadProductAudio = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: "An audio file is required"
-            });
-        }
-
-        const result = await productService.addProductAudio(
-            req.user.id,
-            req.params.id,
-            req.file
-        );
-
-        return res.status(201).json({
-            success: true,
-            message: "Audio uploaded",
-            data: result
-        });
-
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-exports.deleteProductAudio = async (req, res) => {
-    try {
-        await productService.deleteProductAudio(req.user.id, req.params.id, req.params.audioId);
-        return res.json({ success: true, message: "Audio removed" });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.reorderProductAudio = async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ success: false, errors: errors.array() });
-    }
-    try {
-        await productService.reorderProductAudio(req.user.id, req.params.id, req.body.ids);
-        return res.json({ success: true, message: "Audio order updated" });
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
 exports.getMyProducts = async (req, res) => {
     try {
         const result = await productService.getMyProducts(req.user.id, req.query);
@@ -382,5 +332,38 @@ exports.activateMyProduct = async (req, res) => {
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+const draftError = (res, error) => res.status(error.status || 400).json({
+    success: false,
+    code: error.code,
+    message: error.message
+});
+
+exports.createDraft = async (req, res) => {
+    try {
+        const result = await productService.createDraft(req.user.id, req.body);
+        return res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        return draftError(res, error);
+    }
+};
+
+exports.saveDraft = async (req, res) => {
+    try {
+        const result = await productService.saveDraft(req.user.id, Number(req.params.id), req.body);
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return draftError(res, error);
+    }
+};
+
+exports.publishDraft = async (req, res) => {
+    try {
+        const result = await productService.publishDraft(req.user.id, Number(req.params.id), req.body);
+        return res.json({ success: true, message: "Product published", data: result });
+    } catch (error) {
+        return draftError(res, error);
     }
 };

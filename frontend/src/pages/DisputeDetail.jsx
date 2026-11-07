@@ -10,14 +10,9 @@ import { useLanguage } from "../context/LanguageContext";
 import NexoraDisputeCopilot from "../components/ai/NexoraDisputeCopilot";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Avatar from "../components/ui/Avatar";
-
-const STATUS_STYLES = {
-    open: "bg-mango/20 text-mango-dark",
-    under_review: "bg-azure/10 text-azure",
-    resolved: "bg-teal text-white",
-    rejected: "bg-coral/10 text-coral",
-    withdrawn: "bg-line text-ash"
-};
+import StatusBadge from "../components/ui/StatusBadge";
+import useUploadProgress from "../hooks/useUploadProgress";
+import ProgressBar from "../components/ui/ProgressBar";
 
 const RESOLUTIONS = [
     { value: "refund_full", label: "Full refund" },
@@ -40,6 +35,7 @@ export default function DisputeDetail() {
 
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState("");
+    const evidenceUpload = useUploadProgress();
     const [error, setError] = useState("");
 
     const [resolution, setResolution] = useState("");
@@ -90,13 +86,15 @@ export default function DisputeDetail() {
             const formData = new FormData();
             formData.append("file", file);
             await api.post(`/disputes/${id}/evidence`, formData, {
-                headers: { "Content-Type": "multipart/form-data" }
+                headers: { "Content-Type": "multipart/form-data" },
+                onUploadProgress: evidenceUpload.onUploadProgress
             });
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setBusy("");
+            evidenceUpload.reset();
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };
@@ -193,9 +191,7 @@ export default function DisputeDetail() {
                     <p className="text-xs uppercase tracking-widest text-ash mb-1">{t("dispute.detail.eyebrow")}</p>
                     <h1 className="price font-display text-2xl">{dispute.dispute_number}</h1>
                 </div>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${STATUS_STYLES[dispute.status] || "bg-line text-ash"}`}>
-                    {t(`dispute.status.${dispute.status}`)}
-                </span>
+                <StatusBadge domain="dispute" status={dispute.status} />
             </div>
             <p className="text-sm text-ash mb-6">
                 {t("dispute.detail.onOrder")} <Link to={`/orders/${dispute.order_id}`} className="text-teal hover:underline">#{dispute.order_id}</Link> · {t("dispute.detail.filed")} {formatDate(dispute.created_at)}
@@ -209,17 +205,29 @@ export default function DisputeDetail() {
                 <p className="text-sm text-ink/80 whitespace-pre-wrap">{dispute.description}</p>
             </div>
 
-            {dispute.status === "resolved" && (
-                <div className="border border-teal/30 bg-teal/5 rounded-lg p-4 mb-6">
-                    <p className="text-sm font-medium text-teal mb-1">
-                        {t("dispute.detail.resolvedPrefix")}: {RESOLUTIONS.find((r) => r.value === dispute.resolution)?.label || dispute.resolution}
-                    </p>
-                    {dispute.refund_amount && (
-                        <p className="text-sm text-teal mb-1">{t("dispute.detail.refundAmount")}: {format(dispute.refund_amount)}</p>
-                    )}
-                    {dispute.resolution_note && <p className="text-sm text-ink/80">{dispute.resolution_note}</p>}
-                </div>
-            )}
+            {dispute.status === "resolved" && (() => {
+                // "resolved - refund pending" (Phase 5) - the dispute
+                // row flips to "resolved" the moment an admin picks a
+                // refund resolution, well before the actual provider
+                // refund call (fire-and-forget) succeeds or fails. Show
+                // the real state of that money, not just "resolved".
+                const refund = dispute.refund;
+                const refundPending = refund && !["completed"].includes(refund.status);
+                const refundFailed = refund && ["failed", "manual_required"].includes(refund.status);
+                return (
+                    <div className={`border rounded-lg p-4 mb-6 ${refundFailed ? "border-mango/30 bg-mango/5" : "border-teal/30 bg-teal/5"}`}>
+                        <p className={`text-sm font-medium mb-1 ${refundFailed ? "text-mango-dark" : "text-teal"}`}>
+                            {t("dispute.detail.resolvedPrefix")}: {RESOLUTIONS.find((r) => r.value === dispute.resolution)?.label || dispute.resolution}
+                            {refundPending && !refundFailed ? ` · ${t("dispute.detail.refundPending")}` : ""}
+                            {refundFailed ? ` · ${t("dispute.detail.refundNeedsAttention")}` : ""}
+                        </p>
+                        {dispute.refund_amount && (
+                            <p className="text-sm text-teal mb-1">{t("dispute.detail.refundAmount")}: {format(dispute.refund_amount)}</p>
+                        )}
+                        {dispute.resolution_note && <p className="text-sm text-ink/80">{dispute.resolution_note}</p>}
+                    </div>
+                );
+            })()}
 
             {dispute.status === "rejected" && (
                 <div className="border border-coral/30 bg-coral/5 rounded-lg p-4 mb-6">
@@ -234,7 +242,7 @@ export default function DisputeDetail() {
                     <p className="text-xs uppercase tracking-widest text-ash">{t("dispute.detail.evidence")}</p>
                     {(isBuyer || isSeller) && canAct && (
                         <label className="text-xs text-teal hover:underline cursor-pointer">
-                            {busy === "evidence" ? t("dispute.detail.uploading") : t("dispute.detail.addPhoto")}
+                            {busy === "evidence" ? (evidenceUpload.progress !== null ? t("upload.percent", { percent: evidenceUpload.progress }) : t("dispute.detail.uploading")) : t("dispute.detail.addPhoto")}
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -246,6 +254,7 @@ export default function DisputeDetail() {
                         </label>
                     )}
                 </div>
+                {busy === "evidence" && <ProgressBar value={evidenceUpload.progress ?? undefined} label={t("upload.progress")} className="mb-3 max-w-xs" />}
                 {dispute.evidence?.length === 0 ? (
                     <p className="text-sm text-ash">{t("dispute.detail.noPhotos")}</p>
                 ) : (

@@ -33,8 +33,33 @@ const EVENT_TYPE_GROUPS = {
         "data_reset.platform",
         "data_reset.platform_completed"
     ],
-    orders: ["order_created", "order_delivery_manually_assigned"],
+    orders: [
+        "order_created",
+        "order_delivery_manually_assigned",
+        "delivery_rate_card_created",
+        "delivery_fuel_cap_entered",
+        "delivery_rate_settings_changed",
+        "delivery_eta_adjustment_changed"
+    ],
     payments: ["payment_processed"],
+    // Nexora Stock Management (Phase 7): changes a seller can't undo silently.
+    stock: [
+        "stock.sale_voided",
+        "stock.sale_returned",
+        "stock.sale_backdated",
+        "stock.purchase_backdated",
+        "stock.debt_payment_received",
+        "stock.purchase_payment_made",
+        "stock.offline_sale_negative_stock",
+        "stock.expense_created",
+        "stock.expense_voided",
+        "stock.import_applied",
+        "stock.export_downloaded",
+        "stock.item_created",
+        "stock.item_updated",
+        "stock.item_archived",
+        "stock.stock_adjusted"
+    ],
     refunds: [
         "refund.completed",
         "refund.failed",

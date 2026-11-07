@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import LocationPicker from "../../components/LocationPicker";
 import PhoneInput from "../../components/PhoneInput";
 import { STORE_THEMES } from "../../utils/storeThemes";
+import { compressImage } from "../../utils/imageCompression";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
+import useUploadProgress from "../../hooks/useUploadProgress";
+import ProgressBar from "../../components/ui/ProgressBar";
 
 // Nexora Services (Merchant Type Switching) - reuses the same
 // PUT /seller/merchant-type endpoint SellerSetup (Phase 2 onboarding)
@@ -109,6 +112,7 @@ export default function SellerStore() {
         social_instagram: profile.social_instagram || "",
         social_facebook: profile.social_facebook || "",
         social_whatsapp: profile.social_whatsapp || "",
+        public_phone: profile.public_phone || "",
         accepts_preorders: Boolean(profile.accepts_preorders),
         preorder_deposit_percent: profile.preorder_deposit_percent ?? 30,
         preorder_default_lead_time_days: profile.preorder_default_lead_time_days ?? ""
@@ -121,21 +125,56 @@ export default function SellerStore() {
     const [error, setError] = useState("");
     const [saved, setSaved] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+
+    // Snapshot of what's saved on the server, so we can tell when the
+    // form has unsaved edits (warn before leaving, enable/disable Save).
+    const serialize = (f, pin) => JSON.stringify([f, pin?.lat ?? null, pin?.lng ?? null]);
+    const baseline = useRef(serialize(form, pickupPin));
+    const isDirty = useMemo(
+        () => serialize(form, pickupPin) !== baseline.current,
+        [form, pickupPin]
+    );
+
+    useEffect(() => {
+        if (!isDirty) return undefined;
+        const warn = (e) => {
+            e.preventDefault();
+            e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [isDirty]);
+
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [uploadingBanner, setUploadingBanner] = useState(false);
+    const logoUpload = useUploadProgress();
+    const bannerUpload = useUploadProgress();
 
     useEffect(() => {
         api.get("/store-types").then(({ data }) => setStoreTypes(data.data)).catch(() => {});
     }, []);
 
-    const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-    const updateChecked = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
+    const update = (field) => (e) => { setSaved(false); setForm({ ...form, [field]: e.target.value }); };
+    const updateChecked = (field) => (e) => { setSaved(false); setForm({ ...form, [field]: e.target.checked }); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError("");
         setSaved(false);
+
+        if (form.store_name.trim().length < 3) {
+            setError("Store name must be at least 3 characters.");
+            return;
+        }
+        if (form.accepts_preorders) {
+            const deposit = Number(form.preorder_deposit_percent);
+            if (!Number.isFinite(deposit) || deposit < 1 || deposit > 100) {
+                setError("Pre-order deposit must be between 1% and 100%.");
+                return;
+            }
+        }
+
+        setSubmitting(true);
         try {
             await api.put("/seller/profile", {
                 ...form,
@@ -143,6 +182,7 @@ export default function SellerStore() {
                 pickup_lat: pickupPin?.lat ?? null,
                 pickup_lng: pickupPin?.lng ?? null
             });
+            baseline.current = serialize(form, pickupPin);
             refreshProfile();
             setSaved(true);
         } catch (err) {
@@ -159,13 +199,14 @@ export default function SellerStore() {
         setError("");
         try {
             const body = new FormData();
-            body.append("logo", file);
-            await api.post("/seller/upload-logo", body);
+            body.append("logo", await compressImage(file));
+            await api.post("/seller/upload-logo", body, { onUploadProgress: logoUpload.onUploadProgress });
             refreshProfile();
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setUploadingLogo(false);
+            logoUpload.reset();
             e.target.value = "";
         }
     };
@@ -177,13 +218,14 @@ export default function SellerStore() {
         setError("");
         try {
             const body = new FormData();
-            body.append("banner", file);
-            await api.post("/seller/upload-banner", body);
+            body.append("banner", await compressImage(file));
+            await api.post("/seller/upload-banner", body, { onUploadProgress: bannerUpload.onUploadProgress });
             refreshProfile();
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
             setUploadingBanner(false);
+            bannerUpload.reset();
             e.target.value = "";
         }
     };
@@ -209,9 +251,10 @@ export default function SellerStore() {
                         {profile.store_logo && <img src={profile.store_logo} alt="" className="w-full h-full object-cover" />}
                     </div>
                     <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploadingLogo ? t("seller.store.uploading") : t("seller.store.changeLogo")}
+                        {uploadingLogo ? (logoUpload.progress !== null ? t("upload.percent", { percent: logoUpload.progress }) : t("seller.store.uploading")) : t("seller.store.changeLogo")}
                         <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
                     </label>
+                    {uploadingLogo && <ProgressBar value={logoUpload.progress ?? undefined} label={t("upload.progress")} className="mt-2 max-w-[8rem]" />}
                 </div>
 
                 <div>
@@ -220,9 +263,10 @@ export default function SellerStore() {
                         {profile.store_banner && <img src={profile.store_banner} alt="" className="w-full h-full object-cover" />}
                     </div>
                     <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploadingBanner ? t("seller.store.uploading") : t("seller.store.changeBanner")}
+                        {uploadingBanner ? (bannerUpload.progress !== null ? t("upload.percent", { percent: bannerUpload.progress }) : t("seller.store.uploading")) : t("seller.store.changeBanner")}
                         <input type="file" accept="image/*" onChange={handleBannerUpload} disabled={uploadingBanner} className="hidden" />
                     </label>
+                    {uploadingBanner && <ProgressBar value={bannerUpload.progress ?? undefined} label={t("upload.progress")} className="mt-2 max-w-xs" />}
                 </div>
             </div>
 
@@ -240,13 +284,17 @@ export default function SellerStore() {
                     <Input maxLength={150} value={form.store_tagline} onChange={update("store_tagline")}
                         placeholder={t("seller.store.optional")}
                     />
+                    <p className="text-xs text-ash text-right mt-1" aria-live="off">{form.store_tagline.length}/150</p>
                 </div>
 
-                <Input
-                    as="textarea"
-                    label={t("seller.store.storeDescription")}
-                    rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
-                />
+                <div>
+                    <Input
+                        as="textarea"
+                        label={t("seller.store.storeDescription")}
+                        rows={3} maxLength={1000} value={form.store_description} onChange={update("store_description")}
+                    />
+                    <p className="text-xs text-ash text-right mt-1" aria-live="off">{form.store_description.length}/1000</p>
+                </div>
 
                 <div>
                     <label className="block text-sm mb-1">{t("seller.store.storeType")}</label>
@@ -302,6 +350,12 @@ export default function SellerStore() {
                         <Input value={form.social_whatsapp} onChange={update("social_whatsapp")}
                             placeholder={t("seller.store.whatsappPlaceholder")} maxLength={20}
                         />
+                        <div className="sm:col-span-2">
+                            <Input value={form.public_phone} onChange={update("public_phone")}
+                                placeholder={t("seller.store.publicPhonePlaceholder")} maxLength={20}
+                            />
+                            <p className="text-xs text-ash mt-1">{t("seller.store.publicPhoneHelp")}</p>
+                        </div>
                     </div>
                 </div>
 
@@ -385,12 +439,16 @@ export default function SellerStore() {
                     />
                 </div>
 
+                {!pickupPin && <p role="alert" className="text-coral text-sm">{t("seller.pin.required")}</p>}
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                 {saved && <p className="text-teal text-sm">{t("seller.store.settingsSaved")}</p>}
 
-                <Button type="submit" disabled={submitting}>
-                    {submitting ? t("seller.store.saving") : t("seller.store.saveChanges")}
-                </Button>
+                <div className="sticky bottom-[var(--bottom-inset)] -mx-1 px-1 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center gap-3">
+                    <Button loading={submitting} type="submit" disabled={submitting || !isDirty}>
+                        {submitting ? t("seller.store.saving") : t("seller.store.saveChanges")}
+                    </Button>
+                    {isDirty && !submitting && <span className="text-xs text-ash">You have unsaved changes</span>}
+                </div>
             </form>
         </div>
     );

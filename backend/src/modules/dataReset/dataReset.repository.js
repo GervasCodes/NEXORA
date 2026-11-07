@@ -420,3 +420,90 @@ exports.findSeller = async (sellerId) => {
     );
     return row || null;
 };
+
+// ---- Preview samples and approvals (Phase 7) --------------------------------
+
+// A handful of the orders that would be deleted, so an admin can see real
+// order numbers and amounts before typing the confirmation phrase.
+exports.sampleOrders = async (orderIds, limit = 5) => {
+    if (!orderIds.length) return [];
+    const [rows] = await db.query(
+        `SELECT id, order_number, total_amount, status, is_test, created_at
+        FROM orders WHERE id IN (?) ORDER BY created_at DESC LIMIT ?`,
+        [orderIds.slice(0, 1000), limit]
+    );
+    return rows;
+};
+
+// In-scope orders that have a completed non-COD payment. A genuine test
+// order should not have one, so a non-zero count means the is_test marker
+// may be sitting on real money.
+exports.countPaidOrders = async (orderIds) => {
+    if (!orderIds.length) return 0;
+    let total = 0;
+    for (const batch of chunk(orderIds)) {
+        const [[row]] = await db.query(
+            `SELECT COUNT(DISTINCT order_id) AS n FROM payments
+            WHERE order_id IN (?) AND status = 'completed' AND method != 'cash_on_delivery'`,
+            [batch]
+        );
+        total += Number(row.n);
+    }
+    return total;
+};
+
+exports.countRealOrdersIn = async (orderIds) => {
+    if (!orderIds.length) return 0;
+    let total = 0;
+    for (const batch of chunk(orderIds)) {
+        const [[row]] = await db.query(
+            "SELECT COUNT(*) AS n FROM orders WHERE id IN (?) AND is_test = FALSE",
+            [batch]
+        );
+        total += Number(row.n);
+    }
+    return total;
+};
+
+exports.createApproval = async (requestedBy, testOnly, ttlMinutes) => {
+    const [result] = await db.query(
+        `INSERT INTO data_reset_approvals (requested_by, test_only, expires_at)
+        VALUES (?, ?, NOW() + INTERVAL ? MINUTE)`,
+        [requestedBy, testOnly ? 1 : 0, ttlMinutes]
+    );
+    return result.insertId;
+};
+
+exports.findApproval = async (id) => {
+    const [[row]] = await db.query("SELECT * FROM data_reset_approvals WHERE id = ?", [id]);
+    return row || null;
+};
+
+// Conditional so two approvers (or a double click) cannot both win.
+exports.approve = async (id, approverId) => {
+    const [result] = await db.query(
+        `UPDATE data_reset_approvals
+        SET approved_by = ?, approved_at = NOW()
+        WHERE id = ? AND approved_by IS NULL AND executed_at IS NULL
+          AND expires_at > NOW() AND requested_by != ?`,
+        [approverId, id, approverId]
+    );
+    return result.affectedRows;
+};
+
+// Single use: marks the approval executed before any delete runs.
+exports.consumeApproval = async (id, requestedBy, testOnly) => {
+    const [result] = await db.query(
+        `UPDATE data_reset_approvals
+        SET executed_at = NOW()
+        WHERE id = ? AND requested_by = ? AND test_only = ?
+          AND approved_by IS NOT NULL AND executed_at IS NULL AND expires_at > NOW()`,
+        [id, requestedBy, testOnly ? 1 : 0]
+    );
+    return result.affectedRows;
+};
+
+exports.findUserPasswordHash = async (userId) => {
+    const [[row]] = await db.query("SELECT password FROM users WHERE id = ?", [userId]);
+    return row ? row.password : null;
+};

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 const mockGet = vi.fn();
 vi.mock("../../src/api/client", () => ({
@@ -30,9 +31,12 @@ beforeEach(() => {
     mockGet.mockResolvedValue({ data: { data: [] } });
 });
 
+// ProductFilters calls useSearchParams(), which throws outside a Router.
+const renderFilters = (props) => render(<MemoryRouter><ProductFilters {...props} /></MemoryRouter>);
+
 describe("ProductFilters (Phase 3A-3C)", () => {
     it("fetches the seller and region dropdown options", async () => {
-        render(<ProductFilters onChange={() => {}} />);
+        renderFilters({ onChange: () => {} });
 
         await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/products/filters/sellers", { params: {} }));
         expect(mockGet).toHaveBeenCalledWith("/products/filters/regions", { params: {} });
@@ -43,7 +47,7 @@ describe("ProductFilters (Phase 3A-3C)", () => {
 
 describe("ProductFilters singleStore (Phase 5C)", () => {
     it("hides the store and location dropdowns", async () => {
-        render(<ProductFilters singleStore onChange={() => {}} />);
+        renderFilters({ singleStore: true, onChange: () => {} });
 
         expect(screen.getByLabelText("Rating")).toBeInTheDocument();
         expect(screen.queryByLabelText("Store")).not.toBeInTheDocument();
@@ -51,7 +55,7 @@ describe("ProductFilters singleStore (Phase 5C)", () => {
     });
 
     it("never fetches seller or region options", async () => {
-        render(<ProductFilters singleStore onChange={() => {}} />);
+        renderFilters({ singleStore: true, onChange: () => {} });
 
         // Give any stray effect a tick to fire before asserting it didn't.
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -60,7 +64,7 @@ describe("ProductFilters singleStore (Phase 5C)", () => {
 
     it("still reports price/rating/sort changes via onChange", async () => {
         const onChange = vi.fn();
-        render(<ProductFilters singleStore onChange={onChange} />);
+        renderFilters({ singleStore: true, onChange });
 
         fireEvent.change(screen.getByLabelText("Rating"), { target: { value: "4" } });
 

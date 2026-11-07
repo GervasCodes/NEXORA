@@ -8,6 +8,10 @@ const db = require("../../config/db");
 // same reasoning as findById in product.repository.js.
 const dbRead = require("../../config/dbRead");
 
+// Round 5 (phase 6): every review listing below identifies the author by
+// username only. Buyers' first/last names are never selected here, so they
+// can't leak through any public (or seller-facing) review response.
+
 // Whether this buyer has a delivered order containing this product
 // (i.e. are they actually allowed to review it)
 exports.hasDeliveredPurchase = async (buyerId, productId) => {
@@ -119,7 +123,7 @@ const resolveSortClause = (sortBy) => REVIEW_SORT_CLAUSES[sortBy] || REVIEW_SORT
 exports.findByProduct = async (productId, sortBy) => {
     const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
-                u.first_name, u.last_name, u.photo_url
+                u.username, u.photo_url
         FROM reviews r
         JOIN users u ON u.id = r.buyer_id
         WHERE r.product_id = ?
@@ -161,7 +165,7 @@ exports.getProductRatingBreakdown = async (productId) => {
 exports.findByService = async (serviceId, sortBy) => {
     const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
-                u.first_name, u.last_name
+                u.username
         FROM reviews r
         JOIN bookings b ON b.id = r.booking_id
         JOIN users u ON u.id = r.buyer_id
@@ -202,7 +206,7 @@ exports.getServiceRatingBreakdown = async (serviceId) => {
 exports.findByProvider = async (providerId, limit, offset, sortBy) => {
     const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
-                u.first_name, u.last_name,
+                u.username,
                 s.id AS service_id, s.title AS service_title, s.slug AS service_slug
         FROM reviews r
         JOIN users u ON u.id = r.buyer_id
@@ -249,7 +253,7 @@ exports.getProviderRatingBreakdown = async (providerId) => {
 exports.findBySeller = async (sellerId, limit, offset, sortBy) => {
     const [rows] = await dbRead.query(
         `SELECT r.id, r.rating, r.comment, r.seller_reply, r.seller_reply_at, r.created_at,
-                u.first_name, u.last_name,
+                u.username,
                 p.id AS product_id, p.name AS product_name, p.slug AS product_slug
         FROM reviews r
         JOIN users u ON u.id = r.buyer_id

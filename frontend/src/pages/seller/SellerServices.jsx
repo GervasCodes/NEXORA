@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
+import { SkeletonPage } from "../../components/Skeleton";
 
 // Shown when the seller's merchant_type is still 'product' - Nexora
 // Services (migration 062) is opt-in, so nothing changes for an existing
@@ -106,7 +107,7 @@ export default function SellerServices() {
         return <MerchantTypeGate onSwitch={handleSwitch} switching={switching} t={t} />;
     }
 
-    if (loading) return <PageLoader />;
+    if (loading) return <SkeletonPage rows={4} />;
 
     return (
         <div>
@@ -152,19 +153,19 @@ export default function SellerServices() {
                                 {t("common.edit")}
                             </Link>
 
-                            <button
+                            <button aria-busy={busyId === s.id || undefined}
                                 onClick={() => togglePublish(s)}
                                 disabled={busyId === s.id}
                                 className="text-xs text-ash hover:text-ink disabled:opacity-50"
-                            >
+                            >{busyId === s.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {s.status === "published" ? t("seller.services.unpublish") : t("seller.services.publish")}
                             </button>
 
-                            <button
+                            <button aria-busy={busyId === s.id || undefined}
                                 onClick={() => toggleActive(s)}
                                 disabled={busyId === s.id}
                                 className="text-xs text-ash hover:text-ink disabled:opacity-50"
-                            >
+                            >{busyId === s.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {s.is_active ? t("seller.services.deactivate") : t("seller.services.activate")}
                             </button>
                         </div>

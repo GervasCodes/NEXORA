@@ -24,6 +24,18 @@ const asEventList = (body) => {
     return [body];
 };
 
+// Brevo echoes the tags sent with a message back as `tags` (array) and/or
+// `tag` (string, first tag). sendBroadcast tags every email `broadcast-<id>`.
+const BROADCAST_TAG = /^broadcast-(\d+)$/;
+const extractBroadcastId = (event) => {
+    const tags = [...(Array.isArray(event.tags) ? event.tags : []), event.tag];
+    for (const tag of tags) {
+        const match = typeof tag === "string" ? BROADCAST_TAG.exec(tag) : null;
+        if (match) return Number(match[1]);
+    }
+    return null;
+};
+
 exports.handleEvent = async (req, res) => {
     const events = asEventList(req.body);
 
@@ -37,6 +49,7 @@ exports.handleEvent = async (req, res) => {
                 eventType,
                 recipientEmail: event.email,
                 brevoMessageId: event["message-id"] || event.messageId || null,
+                broadcastId: extractBroadcastId(event),
                 rawEvent: event
             });
         } catch (error) {

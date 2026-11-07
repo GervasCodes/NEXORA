@@ -19,6 +19,18 @@
   ],
   "shortcuts": [
     {
+      "name": "Shop products",
+      "short_name": "Products",
+      "url": "/products",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Book services",
+      "short_name": "Services",
+      "url": "/services",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
       "name": "My Orders",
       "short_name": "Orders",
       "url": "/orders",

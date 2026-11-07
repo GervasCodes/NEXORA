@@ -2,10 +2,15 @@ const productRepository = require("./product.repository");
 const categoryRepository = require("../category/category.repository");
 const productVariantService = require("../productVariant/productVariant.service");
 const productAlertService = require("../productAlert/productAlert.service");
-const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../../utils/cloudinaryUpload");
+const { stripImageMetadata } = require("../../utils/imageSanitize");
+const { MAX_IMAGES_PER_PRODUCT, MAX_VIDEOS_PER_PRODUCT } = require("../../config/mediaLimits");
 const { parsePriceRange, parseSellerId, parseLocation, parseMinRating } = require("../../utils/productFilters");
 const { parseSort } = require("../../utils/productSort");
+const stockLedger = require("../stock/stock.ledger");
 const cache = require("../../utils/cache");
+const sellerRepository = require("../seller/seller.repository");
+const { assertSellerHasPin } = require("../../utils/pickupPin");
 
 // namespace for cached browse/search reads below (listProducts
 // + the two filter-dropdown endpoints). Deliberately excludes
@@ -58,6 +63,10 @@ const assertSellerAcceptsPreorders = async (sellerId) => {
 };
 
 exports.createProduct = async (sellerId, data) => {
+    // Phase 2: a listing is only useful if a driver can find the shop, so
+    // publishing requires a store location. (Drafts can still be saved.)
+    assertSellerHasPin(await sellerRepository.findByUserId(sellerId));
+
     await assertCategoryIsActive(data.category_id);
 
     if (data.is_preorder) {
@@ -132,6 +141,9 @@ exports.listProducts = async (query) => {
         region: parseLocation(query.region),
         minRating: parseMinRating(query.min_rating),
         sort: parseSort(query.sort),
+        inStock: query.in_stock === "1" || query.in_stock === "true",
+        onSale: query.on_sale === "1" || query.on_sale === "true",
+        verifiedOnly: query.verified === "1" || query.verified === "true",
         page,
         limit
     };
@@ -182,12 +194,11 @@ exports.getProductBySlug = async (slug) => {
         throw new Error("Product not found");
     }
 
-    // Images, videos , and audio  all load together
-    // since the product-detail page needs all three on first render.
-    const [images, videos, audio] = await Promise.all([
+    // Images and videos load together since the product-detail page needs
+    // both on first render.
+    const [images, videos] = await Promise.all([
         productRepository.findImagesByProductId(product.id),
-        productRepository.findVideosByProductId(product.id),
-        productRepository.findAudioByProductId(product.id)
+        productRepository.findVideosByProductId(product.id)
     ]);
 
     // Variants ( UI/UX remediation) - only queried for products
@@ -198,7 +209,7 @@ exports.getProductBySlug = async (slug) => {
         ? await productVariantService.getForProduct(product.id)
         : { options: [], variants: [] };
 
-    return { ...product, images, videos, audio, ...variantData };
+    return { ...product, images, videos, ...variantData };
 };
 
 exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
@@ -210,7 +221,14 @@ exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
 
     const existingCount = await productRepository.countExistingImages(productId);
 
-    const result = await uploadToCloudinary(file.buffer, "products");
+    if (existingCount >= MAX_IMAGES_PER_PRODUCT) {
+        throw new Error(`A product can have at most ${MAX_IMAGES_PER_PRODUCT} photos`);
+    }
+
+    // Strip EXIF/GPS before the photo leaves our server.
+    const cleanBuffer = await stripImageMetadata(file.buffer);
+    const result = await uploadToCloudinary(cleanBuffer, "products");
+    const displayOrder = await productRepository.nextImageOrder(productId);
 
     // First image uploaded for a product is automatically the primary one
     const primary = existingCount === 0 ? true : Boolean(isPrimary);
@@ -219,8 +237,10 @@ exports.addProductImage = async (sellerId, productId, file, isPrimary) => {
         productId,
         result.secure_url,
         primary,
-        existingCount
+        displayOrder
     );
+
+    await cache.bumpVersion(CACHE_NAMESPACE);
 
     return { id: imageId, imageUrl: result.secure_url, isPrimary: primary };
 };
@@ -245,6 +265,8 @@ exports.deleteProductImage = async (sellerId, productId, imageId) => {
     }
 
     await productRepository.deleteProductImage(productId, imageId);
+    // Best effort - never fails the request.
+    deleteFromCloudinary(image.image_url, "image");
 
     // Deleting the primary photo would otherwise leave the product with
     // no primary image at all (browse cards / product-detail hero both
@@ -284,7 +306,6 @@ exports.reorderProductImages = async (sellerId, productId, orderedIds) => {
 // video is the most storage/bandwidth-expensive media type a seller can
 // upload here, so a hard ceiling keeps one listing from growing an
 // unbounded video library.
-const MAX_VIDEOS_PER_PRODUCT = 3;
 
 exports.addProductVideo = async (sellerId, productId, file) => {
     const product = await productRepository.findById(productId);
@@ -301,62 +322,28 @@ exports.addProductVideo = async (sellerId, productId, file) => {
 
     const result = await uploadToCloudinary(file.buffer, "products/videos", "video");
 
-    const videoId = await productRepository.addProductVideo(productId, result.secure_url, existingCount);
+    const displayOrder = await productRepository.nextVideoOrder(productId);
+    const videoId = await productRepository.addProductVideo(productId, result.secure_url, displayOrder);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 
     return { id: videoId, videoUrl: result.secure_url };
 };
 
 exports.deleteProductVideo = async (sellerId, productId, videoId) => {
     await assertOwnsProduct(sellerId, productId);
+    const video = await productRepository.findVideoById(productId, videoId);
     const deleted = await productRepository.deleteProductVideo(productId, videoId);
     if (!deleted) {
         throw new Error("Video not found");
     }
+    if (video) deleteFromCloudinary(video.video_url, "video");
+    await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
 exports.reorderProductVideos = async (sellerId, productId, orderedIds) => {
     await assertOwnsProduct(sellerId, productId);
     await productRepository.reorderProductVideos(productId, orderedIds);
-};
-
-// Product Audio. Same ownership check and per-product cap
-// pattern as addProductVideo. Cloudinary has no separate "audio"
-// resource type of its own - audio files are uploaded as resourceType
-// "video" too (Cloudinary's own docs: audio is handled by the same
-// video pipeline), so this reuses uploadToCloudinary exactly as-is.
-const MAX_AUDIO_PER_PRODUCT = 3;
-
-exports.addProductAudio = async (sellerId, productId, file) => {
-    const product = await productRepository.findById(productId);
-
-    if (!product || product.seller_id !== sellerId) {
-        throw new Error("Product not found");
-    }
-
-    const existingCount = await productRepository.countExistingAudio(productId);
-
-    if (existingCount >= MAX_AUDIO_PER_PRODUCT) {
-        throw new Error(`A product can have at most ${MAX_AUDIO_PER_PRODUCT} audio clips`);
-    }
-
-    const result = await uploadToCloudinary(file.buffer, "products/audio", "video");
-
-    const audioId = await productRepository.addProductAudio(productId, result.secure_url, existingCount);
-
-    return { id: audioId, audioUrl: result.secure_url };
-};
-
-exports.deleteProductAudio = async (sellerId, productId, audioId) => {
-    await assertOwnsProduct(sellerId, productId);
-    const deleted = await productRepository.deleteProductAudio(productId, audioId);
-    if (!deleted) {
-        throw new Error("Audio clip not found");
-    }
-};
-
-exports.reorderProductAudio = async (sellerId, productId, orderedIds) => {
-    await assertOwnsProduct(sellerId, productId);
-    await productRepository.reorderProductAudio(productId, orderedIds);
+    await cache.bumpVersion(CACHE_NAMESPACE);
 };
 
 exports.getMyProducts = async (sellerId, query = {}) => {
@@ -431,13 +418,12 @@ exports.getMyProductById = async (sellerId, productId) => {
         throw new Error("Product not found");
     }
 
-    const [images, videos, audio] = await Promise.all([
+    const [images, videos] = await Promise.all([
         productRepository.findImagesByProductId(productId),
-        productRepository.findVideosByProductId(productId),
-        productRepository.findAudioByProductId(productId)
+        productRepository.findVideosByProductId(productId)
     ]);
 
-    return { ...product, images, videos, audio };
+    return { ...product, images, videos };
 };
 
 exports.updateProduct = async (sellerId, productId, data) => {
@@ -459,7 +445,23 @@ exports.updateProduct = async (sellerId, productId, data) => {
         await assertSellerAcceptsPreorders(sellerId);
     }
 
-    await productRepository.update(productId, data);
+    // Stock edits go through the stock ledger (locked relative delta + a ledger
+    // row), never a raw overwrite. Variant products keep stock on the variants.
+    const { stock: requestedStock, stock_baseline: stockBaseline, ...fields } = data;
+    if (requestedStock !== undefined && requestedStock !== "" && !product.has_variants) {
+        await stockLedger.withTransaction(async (connection) => {
+            const target = await stockLedger.lockByProduct(connection, sellerId, Number(productId), null, { createdBy: sellerId });
+            await stockLedger.setStock(connection, target, requestedStock, {
+                baseline: stockBaseline,
+                type: "correction",
+                reason: "Product edit",
+                refType: "product_edit",
+                createdBy: sellerId
+            });
+        });
+    }
+
+    await productRepository.update(productId, fields);
 
     const cacheBumps = [cache.bumpVersion(CACHE_NAMESPACE)];
     // Only bump the categories namespace when the edit could actually
@@ -507,4 +509,152 @@ exports.setProductActiveBySeller = async (sellerId, productId, isActive) => {
         cache.bumpVersion(CACHE_NAMESPACE),
         cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
     ]);
+};
+
+// Drafts (Phase 13a). A draft is a product row with is_draft = TRUE and
+// is_active = FALSE, so buyer queries and the listing-limit count never see
+// it. Publishing re-runs the same gates createProduct uses.
+const DRAFT_FIELDS = [
+    "name", "description", "price", "discount_price", "stock", "brand",
+    "product_condition", "category_id", "is_preorder", "preorder_lead_time_days"
+];
+// Empty strings in these clear the column; in the rest they mean "not sent".
+const NULLABLE_DRAFT_FIELDS = new Set([
+    "description", "discount_price", "brand", "category_id", "preorder_lead_time_days"
+]);
+
+const pickDraftFields = (data) => {
+    const picked = {};
+    for (const key of DRAFT_FIELDS) {
+        const value = data[key];
+        if (value === undefined) continue;
+        if (value === "") {
+            if (NULLABLE_DRAFT_FIELDS.has(key)) picked[key] = null;
+            continue;
+        }
+        picked[key] = value;
+    }
+    return picked;
+};
+
+const slugifyName = (name) => name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "");
+
+const loadOwnedDraft = async (sellerId, productId) => {
+    const product = await productRepository.findById(productId);
+    if (!product || product.seller_id !== sellerId) {
+        throw Object.assign(new Error("Product not found"), { status: 404 });
+    }
+    if (!product.is_draft) {
+        throw Object.assign(new Error("This product is already published - edit it from your product list"), {
+            code: "NOT_A_DRAFT",
+            status: 409
+        });
+    }
+    return product;
+};
+
+exports.createDraft = async (sellerId, data) => {
+    const name = typeof data.name === "string" ? data.name.trim() : "";
+    if (name.length < 3) {
+        throw Object.assign(new Error("Enter a product name (at least 3 characters) to start saving"), {
+            code: "DRAFT_NAME_REQUIRED",
+            status: 400
+        });
+    }
+    const picked = pickDraftFields({ ...data, name });
+    if (picked.category_id) {
+        await assertCategoryIsActive(picked.category_id);
+    }
+
+    // Placeholder slug: the real one is derived from the name at publish
+    // time, so a draft never collides with a live product's slug.
+    const productId = await productRepository.createDraft({
+        seller_id: sellerId,
+        category_id: picked.category_id ?? null,
+        name,
+        slug: `draft-${require("crypto").randomBytes(8).toString("hex")}`
+    });
+
+    return { productId };
+};
+
+exports.saveDraft = async (sellerId, productId, data) => {
+    await loadOwnedDraft(sellerId, productId);
+    const picked = pickDraftFields(data);
+    if (picked.name !== undefined) {
+        picked.name = picked.name.trim();
+    }
+    if (picked.category_id) {
+        await assertCategoryIsActive(picked.category_id);
+    }
+    await productRepository.updateDraftFields(productId, picked);
+    return { productId };
+};
+
+exports.publishDraft = async (sellerId, productId, data) => {
+    const draft = await loadOwnedDraft(sellerId, productId);
+    const merged = { ...draft, ...pickDraftFields(data) };
+
+    const name = typeof merged.name === "string" ? merged.name.trim() : "";
+    if (name.length < 3) {
+        throw Object.assign(new Error("Product name is too short"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    const price = Number(merged.price);
+    if (merged.price === null || merged.price === "" || Number.isNaN(price) || price < 0) {
+        throw Object.assign(new Error("Enter a valid price"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    if (!merged.category_id) {
+        throw Object.assign(new Error("Choose a category"), { code: "PRODUCT_INCOMPLETE", status: 400 });
+    }
+    await assertCategoryIsActive(merged.category_id);
+
+    // Phase 2: publishing needs a store location (see createProduct).
+    assertSellerHasPin(await sellerRepository.findByUserId(sellerId));
+
+    if (merged.is_preorder) {
+        await assertSellerAcceptsPreorders(sellerId);
+    }
+
+    // Same listing cap as createProduct. Drafts are not counted, so this is
+    // the first point where a draft starts using a listing slot.
+    const subscriptionService = require("../subscription/subscription.service");
+    const listingCheck = await subscriptionService.canCreateListing(sellerId);
+    if (!listingCheck.allowed) {
+        throw Object.assign(new Error(listingCheck.message), {
+            code: "LISTING_LIMIT_REACHED",
+            status: 403
+        });
+    }
+
+    const fields = { ...pickDraftFields(merged), name, slug: slugifyName(name) };
+
+    let published;
+    try {
+        published = await productRepository.publishDraft(productId, fields);
+    } catch (error) {
+        if (error && error.code === "ER_DUP_ENTRY") {
+            throw Object.assign(new Error("Another product already uses this name - change the name and try again"), {
+                code: "SLUG_TAKEN",
+                status: 409
+            });
+        }
+        throw error;
+    }
+    if (!published) {
+        throw Object.assign(new Error("This product was already published"), { code: "NOT_A_DRAFT", status: 409 });
+    }
+
+    await Promise.all([
+        cache.bumpVersion(CACHE_NAMESPACE),
+        cache.bumpVersion(CATEGORY_CACHE_NAMESPACE)
+    ]);
+
+    const storeService = require("../store/store.service");
+    storeService.notifyFollowersOfNewListing(sellerId, { name, slug: fields.slug }).catch(() => {});
+
+    return { productId, slug: fields.slug };
 };

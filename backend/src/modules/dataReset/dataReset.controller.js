@@ -37,6 +37,31 @@ exports.resetSeller = async (req, res) => {
     }
 };
 
+exports.requestPlatformApproval = async (req, res) => {
+    try {
+        const data = await dataResetService.requestPlatformResetApproval(
+            { testOnly: readTestOnly(req.body.test_only) },
+            { actorId: req.user.id }
+        );
+        return res.status(201).json({ success: true, data });
+    } catch (error) {
+        return respondWithError(res, error);
+    }
+};
+
+exports.approvePlatformReset = async (req, res) => {
+    try {
+        const data = await dataResetService.approvePlatformReset(req.params.approvalId, {
+            actorId: req.user.id,
+            password: req.body.password,
+            req
+        });
+        return res.json({ success: true, data });
+    } catch (error) {
+        return respondWithError(res, error);
+    }
+};
+
 exports.previewPlatformReset = async (req, res) => {
     try {
         const preview = await dataResetService.previewPlatformReset({
@@ -53,7 +78,12 @@ exports.previewPlatformReset = async (req, res) => {
 exports.resetPlatform = async (req, res) => {
     try {
         const result = await dataResetService.resetPlatform(
-            { testOnly: readTestOnly(req.body.test_only), confirmation: req.body.confirmation },
+            {
+                testOnly: readTestOnly(req.body.test_only),
+                confirmation: req.body.confirmation,
+                password: req.body.password,
+                approvalId: req.body.approval_id
+            },
             { actorId: req.user.id, req }
         );
 

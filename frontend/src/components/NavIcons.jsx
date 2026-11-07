@@ -53,6 +53,17 @@ export function ServicesIcon({ className }) {
     );
 }
 
+// "Sell on NEXORA" - a storefront awning, used by the guest bottom bar.
+export function StoreIcon({ className }) {
+    return (
+        <svg {...base} className={className}>
+            <path d="M4 9.5 5.5 4h13L20 9.5" />
+            <path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0" />
+            <path d="M5 12.5V20h14v-7.5M10 20v-4.5h4V20" />
+        </svg>
+    );
+}
+
 export function DashboardIcon({ className }) {
     return (
         <svg {...base} className={className}>
@@ -159,10 +170,8 @@ export function AccountIcon({ className }) {
     );
 }
 
-// Wallet / earnings - used by the seller Wallet tab and the delivery
-// agent Earnings tab in MobileBottomNav.jsx (Phase 6: Mobile Navigation
-// Unification). Distinct from CartIcon (a shopping cart) since these
-// represent a running balance, not items to purchase.
+// Wallet / earnings. Distinct from CartIcon (a shopping cart) since
+// these represent a running balance, not items to purchase.
 export function WalletIcon({ className }) {
     return (
         <svg {...base} className={className}>

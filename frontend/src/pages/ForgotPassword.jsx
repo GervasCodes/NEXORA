@@ -4,13 +4,14 @@ import api, { extractErrorMessage } from "../api/client";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+import { useLanguage } from "../context/LanguageContext";
+import Spinner from "../components/ui/Spinner";
 
 // Phase 5 (OTP resend/expiry UX) - same fallback/cooldown values as
 // Login.jsx's OTP step, mirroring otp.service.js's real
-// EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES. This file doesn't use the
-// i18n t() system (it never has - unlike Login.jsx, it wasn't part of
-// the earlier i18n rollout), so these stay plain English strings to
-// match the rest of the page.
+// EXPIRY_MINUTES/RESEND_THROTTLE_MINUTES.
+// Phase 10 (Swahili for remaining pages): this page now goes through the
+// same i18n t() system as Login.jsx instead of staying plain English.
 const OTP_EXPIRY_FALLBACK_SECONDS = 300;
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -22,6 +23,7 @@ const formatCountdown = (totalSeconds) => {
 };
 
 export default function ForgotPassword() {
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const [step, setStep] = useState("email"); // 'email' | 'reset'
     const [email, setEmail] = useState("");
@@ -56,7 +58,7 @@ export default function ForgotPassword() {
         try {
             const { data } = await api.post("/auth/forgot-password", { email });
 
-            setNotice("If an account exists for that email, a reset code is on its way.");
+            setNotice(t("forgotPassword.codeOnWay"));
             setExpiresIn(data.data?.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
             setStep("reset");
         } catch (err) {
@@ -71,15 +73,22 @@ export default function ForgotPassword() {
     // login's /auth/login/resend-otp). The anti-enumeration behavior is
     // unaffected: this always responds success regardless of whether the
     // account exists, same as the first call.
-    const handleResend = async () => {
+    const handleResend = async (channel = "email") => {
         if (resendCooldown > 0 || resending) return;
         setResending(true);
         setError("");
         setNotice("");
         try {
-            const { data } = await api.post("/auth/forgot-password", { email });
+            const { data } = await api.post("/auth/forgot-password", { email, channel });
 
-            setNotice("A new code is on its way.");
+            // Global setup check only (never per-account), so this can't reveal
+            // whether the email is registered.
+            if (data.data?.channelUnavailable) {
+                setError(t("forgotPassword.channelUnavailable"));
+                return;
+            }
+
+            setNotice(t("forgotPassword.resent", { channel: t(`forgotPassword.channel.${channel}`) }));
             setExpiresIn(data.data?.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
             setResendCooldown(RESEND_COOLDOWN_SECONDS);
         } catch (err) {
@@ -105,38 +114,40 @@ export default function ForgotPassword() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
-            <PageMeta title="Reset Password" />
-            <h1 className="font-display text-2xl mb-1">Reset your password</h1>
+            <PageMeta title={t("forgotPassword.title")} noIndexFollow />
+            <h1 className="font-display text-2xl mb-1">{t("forgotPassword.title")}</h1>
             <p className="text-ash text-sm mb-8">
                 {step === "email"
-                    ? "Enter your account email and we'll send you a reset code."
-                    : `Enter the code sent to ${email}, and choose a new password.`}
+                    ? t("forgotPassword.intro.email")
+                    : t("forgotPassword.intro.reset", { email })}
             </p>
 
             {step === "email" ? (
                 <form onSubmit={handleRequest} className="space-y-4">
                     <Input
-                        label="Email"
+                        label={t("forgotPassword.emailLabel")}
                         type="email"
                         required
+                        autoComplete="email"
+                        inputMode="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />
 
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                    <Button
+                    <Button loading={submitting}
                         type="submit"
                         disabled={submitting}
                         fullWidth
                     >
-                        {submitting ? "Sending…" : "Send reset code"}
+                        {submitting ? t("forgotPassword.sending") : t("forgotPassword.sendCode")}
                     </Button>
                 </form>
             ) : (
                 <form onSubmit={handleReset} className="space-y-4">
                     <div>
-                        <label htmlFor="resetCode" className="block text-sm mb-1">Verification code</label>
+                        <label htmlFor="resetCode" className="block text-sm mb-1">{t("forgotPassword.codeLabel")}</label>
                         <input
                             id="resetCode"
                             type="text"
@@ -151,31 +162,32 @@ export default function ForgotPassword() {
                         />
                     </div>
                     <Input
-                        label="New password"
+                        label={t("forgotPassword.newPasswordLabel")}
                         type="password"
                         required
                         minLength={8}
+                        autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        showPasswordLabel="Show password"
-                        hidePasswordLabel="Hide password"
+                        showPasswordLabel={t("forgotPassword.showPassword")}
+                        hidePasswordLabel={t("forgotPassword.hidePassword")}
                     />
 
                     <p className={`text-xs ${expiresIn > 0 ? "text-ash" : "text-coral"}`}>
                         {expiresIn > 0
-                            ? `Code expires in ${formatCountdown(expiresIn)}`
-                            : "Your code has expired. Request a new one below."}
+                            ? t("forgotPassword.expiresIn", { time: formatCountdown(expiresIn) })
+                            : t("forgotPassword.expired")}
                     </p>
 
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                    <Button
+                    <Button loading={submitting}
                         type="submit"
                         disabled={submitting || code.length !== 6}
                         fullWidth
                     >
-                        {submitting ? "Resetting…" : "Reset password"}
+                        {submitting ? t("forgotPassword.resetting") : t("forgotPassword.resetButton")}
                     </Button>
 
                     <div className="flex items-center justify-between text-sm">
@@ -184,22 +196,31 @@ export default function ForgotPassword() {
                             onClick={() => { setStep("email"); setError(""); setNotice(""); }}
                             className="text-ash hover:text-ink transition-colors"
                         >
-                            ← Use a different email
+                            ← {t("forgotPassword.useDifferentEmail")}
                         </button>
-                        <button
-                            type="button"
-                            onClick={handleResend}
-                            disabled={resendCooldown > 0 || resending}
-                            className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
-                        >
-                            {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
-                        </button>
+                        <div className="text-right">
+                            <p className="text-xs text-ash mb-1">{t("forgotPassword.sendBy")}</p>
+                            <div className="flex gap-3 justify-end">
+                                {["email", "sms", "whatsapp"].map((channel) => (
+                                    <button aria-busy={resending || undefined}
+                                        key={channel}
+                                        type="button"
+                                        onClick={() => handleResend(channel)}
+                                        disabled={resendCooldown > 0 || resending}
+                                        className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                                    >{resending && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                        {t(`forgotPassword.channel.${channel}`)}
+                                    </button>
+                                ))}
+                            </div>
+                            {resendCooldown > 0 && <p className="text-xs text-ash mt-1">{t("forgotPassword.resendIn", { seconds: resendCooldown })}</p>}
+                        </div>
                     </div>
                 </form>
             )}
 
             <p className="text-sm text-ash mt-6">
-                <Link to="/login" className="text-teal hover:underline">Back to sign in</Link>
+                <Link to="/login" className="text-teal hover:underline">{t("forgotPassword.backToSignIn")}</Link>
             </p>
         </div>
     );

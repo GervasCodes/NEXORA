@@ -138,3 +138,117 @@ describe("order.repository.findOrdersByBuyer sorting", () => {
         expect(sql).toContain("ORDER BY o.status ASC, o.created_at DESC");
     });
 });
+
+// Cancel a paid order (Phase 3, P0) - conditional status flips. The real
+// safety here is the SQL shape itself (status IN (...) in the WHERE
+// clause, affectedRows as the return value) - see order.service.js's
+// cancelOrder/autoCancelStaleOrder for how the boolean/count return is
+// used to gate stock restoration and the refund/reversal flow.
+describe("order.repository.cancelOrderIfCancellable / cancelChildOrdersIfCancellable", () => {
+    beforeEach(() => db.query.mockReset());
+
+    it("cancelOrderIfCancellable returns true only when a row actually changed", async () => {
+        db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+        await expect(orderRepository.cancelOrderIfCancellable(1, ["pending", "processing"])).resolves.toBe(true);
+
+        const [sql, params] = db.query.mock.calls[0];
+        expect(sql).toContain("UPDATE orders SET status = 'cancelled'");
+        expect(sql).toContain("status IN (?)");
+        expect(params).toEqual([1, ["pending", "processing"]]);
+
+        db.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+        await expect(orderRepository.cancelOrderIfCancellable(1, ["pending", "processing"])).resolves.toBe(false);
+    });
+
+    it("cancelChildOrdersIfCancellable returns the number of children actually changed", async () => {
+        db.query.mockResolvedValueOnce([{ affectedRows: 2 }]);
+        await expect(orderRepository.cancelChildOrdersIfCancellable(1, ["pending", "processing"])).resolves.toBe(2);
+
+        const [sql, params] = db.query.mock.calls[0];
+        expect(sql).toContain("WHERE parent_order_id = ? AND status IN (?)");
+        expect(params).toEqual([1, ["pending", "processing"]]);
+    });
+});
+
+// Checkout idempotency (Phase 3, P1) - createOrder/createSplitOrder lock
+// exactly the cart rows the checkout was quoted against before writing
+// anything, so a double-submit / retried request can't create a second
+// order from the same cart. Both paths covered here only need the lock
+// query's result mocked, since a mismatch is rejected before any further
+// query runs (the order row is never inserted) - see
+// order.repository.js#lockAndValidateCartRows.
+describe("order.repository.createOrder - checkout idempotency (Phase 3)", () => {
+    beforeEach(() => {
+        db.query.mockReset();
+        db.getConnection.mockClear();
+        const conn = db.__mockConnection;
+        conn.beginTransaction.mockClear();
+        conn.commit.mockClear();
+        conn.rollback.mockClear();
+        conn.release.mockClear();
+        conn.query.mockReset();
+    });
+
+    const cartItems = [{ cart_item_id: 101, product_id: 1, quantity: 2, unit_price: 1000, subtotal: 2000, seller_id: 10 }];
+
+    it("locks the cart rows this checkout was quoted against with FOR UPDATE", async () => {
+        const conn = db.__mockConnection;
+        // Lock query returns a row matching what was quoted - this test
+        // only cares that the lock query itself ran correctly, so a
+        // second call failing isn't an issue: the surrounding try/catch
+        // in createOrder rolls back and the thrown error is asserted on
+        // instead of needing the rest of the insert chain mocked too.
+        conn.query.mockResolvedValueOnce([[{ id: 101, quantity: 2 }]]);
+
+        await orderRepository.createOrder(5, "ORD-1", {}, cartItems, 2000).catch(() => {});
+
+        const [sql, params] = conn.query.mock.calls[0];
+        expect(sql).toContain("SELECT id, quantity FROM cart_items WHERE id IN (?)");
+        expect(sql).toContain("FOR UPDATE");
+        expect(params).toEqual([[101]]);
+        expect(conn.beginTransaction).toHaveBeenCalled();
+    });
+
+    it("rejects and rolls back when a locked cart row's quantity no longer matches what was quoted", async () => {
+        const conn = db.__mockConnection;
+        // Stock changed (or a double-submit already consumed this cart
+        // row) between quoting and this checkout attempt actually running.
+        conn.query.mockResolvedValueOnce([[{ id: 101, quantity: 5 }]]);
+
+        await expect(orderRepository.createOrder(5, "ORD-1", {}, cartItems, 2000))
+            .rejects.toThrow("Your cart changed - please review it and try again");
+
+        expect(conn.rollback).toHaveBeenCalled();
+        expect(conn.commit).not.toHaveBeenCalled();
+    });
+
+    it("rejects when a locked cart row is missing entirely (already consumed by another checkout)", async () => {
+        const conn = db.__mockConnection;
+        conn.query.mockResolvedValueOnce([[]]); // the row is gone
+
+        await expect(orderRepository.createOrder(5, "ORD-1", {}, cartItems, 2000))
+            .rejects.toThrow("Your cart changed - please review it and try again");
+
+        expect(conn.rollback).toHaveBeenCalled();
+    });
+
+    it("skips the cart lock entirely for cart items with no cart_item_id (the groupBuy.service.js#claim path)", async () => {
+        const conn = db.__mockConnection;
+        // insertOrderRow's INSERT, then insertOrderItems' query/queries -
+        // not the focus of this test, just needs to resolve so the
+        // transaction can reach commit. Any shape of resolved value with
+        // an insertId works for insertOrderRow; subsequent calls default
+        // to undefined results which insertOrderItems is expected to
+        // handle for a single-item array in whatever shape it uses.
+        conn.query.mockResolvedValue([{ insertId: 1 }]);
+
+        const groupBuyLineItem = [{ product_id: 1, seller_id: 10, quantity: 1, unit_price: 5000, subtotal: 5000 }];
+
+        await orderRepository.createOrder(5, "GRP-1", {}, groupBuyLineItem, 5000).catch(() => {});
+
+        // No "WHERE id IN" cart lock query at all among the calls made -
+        // the very first call is straight to insertOrderRow's INSERT.
+        const lockCalls = conn.query.mock.calls.filter(([sql]) => sql.includes("FOR UPDATE"));
+        expect(lockCalls).toHaveLength(0);
+    });
+});

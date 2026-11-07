@@ -55,11 +55,13 @@ exports.createFromWhatsApp = async ({ userId, contactPhone, body }) => {
     });
     await supportRepository.addMessage({ ticketId, senderId: userId, senderRole: "user", body });
 
-    adminNotificationService.notifyAdmins({
+    adminNotificationService.notify({
         type: "support_ticket",
+        category: "moderation",
+        severity: "info",
         title: "New support ticket (WhatsApp)",
         message: body,
-        url: `/admin/support/${ticketId}`
+        metadata: { ticket_id: ticketId }
     }).catch((err) => logger.warn({ err, ticketId }, "admin notify error (whatsapp ticket)"));
 
     return getFullTicket(ticketId);

@@ -18,6 +18,7 @@ const authMiddleware = require("./middleware/auth.middleware");
 const sellerRoutes = require("./modules/seller/seller.routes");
 const productRoutes = require("./modules/product/product.routes");
 const categoryRoutes = require("./modules/category/category.routes");
+const searchRoutes = require("./modules/search/search.routes");
 const storeTypeRoutes = require("./modules/storeType/storeType.routes");
 const serviceCategoryRoutes = require("./modules/serviceCategory/serviceCategory.routes");
 const serviceRoutes = require("./modules/service/service.routes");
@@ -32,11 +33,12 @@ const reviewRoutes = require("./modules/review/review.routes");
 const notificationRoutes = require("./modules/notification/notification.routes");
 const chatRoutes = require("./modules/chat/chat.routes");
 const pushRoutes = require("./modules/push/push.routes");
-const settingsRoutes = require("./modules/settings/settings.routes");
 const adminRoutes = require("./modules/admin/admin.routes");
 const adminNotificationRoutes = require("./modules/adminNotification/adminNotification.routes");
 const dataResetRoutes = require("./modules/dataReset/dataReset.routes");
-const broadcastRoutes = require("./modules/broadcast/broadcast.routes");const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
+const broadcastRoutes = require("./modules/broadcast/broadcast.routes");
+const deliveryRatesRoutes = require("./modules/delivery/deliveryRates.routes");const accountVerificationRoutes = require("./modules/accountVerification/accountVerification.routes");
+const accountVerificationSellerRoutes = require("./modules/accountVerification/accountVerification.seller.routes");
 const walletRoutes = require("./modules/wallet/wallet.routes");
 const earningsRoutes = require("./modules/earnings/earnings.routes");
 const accountRoutes = require("./modules/account/account.routes");
@@ -49,7 +51,9 @@ const productAlertRoutes = require("./modules/productAlert/productAlert.routes")
 const sellerSavedFilterRoutes = require("./modules/sellerSavedFilter/sellerSavedFilter.routes");
 const disputeRoutes = require("./modules/dispute/dispute.routes");
 const returnRoutes = require("./modules/return/return.routes");
+const refundRoutes = require("./modules/refund/refund.routes");
 const kycRoutes = require("./modules/kyc/kyc.routes");
+const documentAccessRoutes = require("./modules/documentAccess/documentAccess.routes");
 const buyerWalletRoutes = require("./modules/buyerWallet/buyerWallet.routes");
 const supportRoutes = require("./modules/support/support.routes");
 const whatsappRoutes = require("./modules/whatsapp/whatsapp.routes");
@@ -60,14 +64,19 @@ const referralRoutes = require("./modules/referral/referral.routes");
 const groupBuyRoutes = require("./modules/groupBuy/groupBuy.routes");
 const liveSellingRoutes = require("./modules/liveSelling/liveSelling.routes");
 const businessRoutes = require("./modules/business/business.routes");
+const posRoutes = require("./modules/pos/pos.routes");
+const stockRoutes = require("./modules/stock/stock.routes");
+const deliveryBusinessRoutes = require("./modules/deliveryBusiness/deliveryBusiness.routes");
+const businessToolsRoutes = require("./modules/businessTools/businessTools.routes");
 const affiliateRoutes = require("./modules/affiliate/affiliate.routes");
+const affiliateAdminRoutes = require("./modules/affiliate/affiliate.admin.routes");
 const sponsorshipRoutes = require("./modules/sponsorship/sponsorship.routes");
 const featuredStoreRoutes = require("./modules/featuredStore/featuredStore.routes");
-const departmentSponsorshipRoutes = require("./modules/departmentSponsorship/departmentSponsorship.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const subscriptionRoutes = require("./modules/subscription/subscription.routes");
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
 const statusRoutes = require("./modules/status/status.routes");
+const seoMetricsRoutes = require("./modules/seoMetrics/seoMetrics.routes");
 const aiRoutes = require("./modules/ai/ai.routes");
 // Phase 1 (SEO Critical). Controller only - this is a single public
 // GET mounted directly below, not a full router, since /sitemap.xml is
@@ -85,10 +94,23 @@ const app = express();
 // Without it, express-rate-limit below keys its rate limits off that one
 // shared proxy IP for EVERY user, meaning normal combined traffic from
 // real visitors could trip the limiter and lock out the whole site
-// within minutes of going live. `1` = trust exactly one hop (Render's
-// own proxy) rather than blindly trusting the whole X-Forwarded-For
-// chain, which would let a malicious client spoof their own IP.
-app.set("trust proxy", 1);
+// within minutes of going live. The number here must equal the exact
+// count of proxy hops in front of the app (Express trusts that many
+// entries from the right of X-Forwarded-For and treats the next one as
+// the real client) - trusting too few hops leaks a proxy's own IP as
+// "the client" (the original bug), but trusting too many lets a client
+// spoof its own IP by padding X-Forwarded-For with fake entries, which
+// would silently defeat both express-rate-limit above and the
+// IP-allowlist check in webhookAuth.middleware.js (SELCOM_WEBHOOK_ALLOWED_IPS).
+// Only Render's own proxy sits in front of the app by default (1 hop).
+// If/when this API's domain is also proxied through Cloudflare (orange
+// cloud), Cloudflare becomes an additional hop in front of Render's own
+// proxy, and this must become 2 - but only once that domain is
+// confirmed actually proxied end-to-end, hence the env override rather
+// than a hardcoded bump: flipping this before the DNS/Cloudflare side
+// is live would under-trust real traffic; flipping it never would
+// over-trust (and under-protect webhooks) once Cloudflare is live.
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS) || 1);
 
 // Middlewares
 // CORS_ORIGIN can be a single origin or a comma-separated list. Falls back
@@ -120,6 +142,16 @@ app.use((req, res, next) => {
 // almost everything is locked to 'none', with 'self' only where a JSON
 // API response might plausibly be fetched by its own frontend.
 app.use(helmet({
+    // Helmet's own default (Cross-Origin-Resource-Policy: same-origin) sits
+    // underneath the cors() middleware above and is checked independently
+    // by the browser - it was silently blocking every cross-subdomain
+    // fetch of this API (api.nexoramarketplace.online) from the frontend
+    // (nexoramarketplace.online) with net::ERR_BLOCKED_BY_RESPONSE, /ping
+    // included, even though CORS itself explicitly allows the origin.
+    // "same-site" (not "cross-origin") is the correct, tighter setting
+    // here: both are subdomains of the same registrable domain, so this
+    // still blocks a true third-party site from loading these responses.
+    crossOriginResourcePolicy: { policy: "same-site" },
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'none'"],
@@ -139,6 +171,17 @@ app.use(helmet({
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
+// Lightweight keep-alive endpoint (Reliability phase). Unlike /health it
+// never touches MySQL, so the frontend can ping it every few minutes
+// while a tab is open - keeping a free-tier host from going to sleep
+// mid-session - without costing a database round trip each time. Mounted
+// before the request logger and the /api/ rate limiter on purpose, so
+// these pings neither flood the access log nor eat a visitor's request
+// budget. CORS above still applies.
+app.get("/ping", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.status(200).json({ ok: true });
+});
 // Structured per-request access logging (method/path/status/duration,
 // request id) - see middleware/requestLogger.middleware.js. Mounted this
 // early so the request id it generates (X-Request-Id) is available to
@@ -171,6 +214,14 @@ app.post(
     "/api/v1/payments/webhooks/malipopay-card",
     express.raw({ type: "application/json" }),
     require("./modules/payment/payment.controller").malipopayCardWebhook
+);
+
+// PayPal webhook - raw body for the same reason as Snippe/MalipoPay Card;
+// verified through PayPal's verify-webhook-signature API (PAYPAL_WEBHOOK_ID).
+app.post(
+    "/api/v1/payments/webhooks/paypal",
+    express.raw({ type: "application/json" }),
+    require("./modules/payment/payment.controller").paypalWebhook
 );
 
 // WhatsApp Cloud API inbound webhook  - same raw-body
@@ -318,6 +369,14 @@ app.get("/", (req, res) => {
 // and this frontend proxies its own /sitemap.xml straight through to
 // it (see frontend/public/_redirects) rather than to any API route.
 app.get("/sitemap.xml", sitemapController.getSitemap);
+app.get(/^\/sitemap-(\d+)\.xml$/, sitemapController.getSitemapPart);
+
+// Round 6 Phase 2 (SEO - dynamic-route prerendering). Same reasoning as
+// the sitemap routes above (public, unversioned, crawler/build-tooling
+// consumer) - frontend/scripts/prerender-shells.mjs fetches this at
+// build time to generate a real shell for every product/service/store
+// page, the same way it already does for static routes.
+app.get("/seo/prerender-shells.json", sitemapController.getPrerenderShells);
 
 app.use("/api/v1/auth", authRoutes);
 // Must be mounted BEFORE /api/v1/seller: it is a more specific prefix
@@ -333,14 +392,23 @@ app.use("/api/v1/seller/sponsorship", sponsorshipRoutes);
 // in this module already requires authorize("seller") +
 // requireApprovedSeller itself (featuredStore.routes.js).
 app.use("/api/v1/seller/featured-store", featuredStoreRoutes);
-// Same reasoning as the two mounts immediately above: a more specific
-// prefix of /api/v1/seller must be mounted first. Every route in this
-// module already requires authorize("seller") + requireApprovedSeller
-// itself (departmentSponsorship.routes.js).
-app.use("/api/v1/seller/department-sponsorship", departmentSponsorshipRoutes);
+// Same more-specific-prefix-first reasoning as the mounts above. Every
+// route here already requires authorize("seller") + requireApprovedSeller.
+app.use("/api/v1/seller/business-verification", accountVerificationSellerRoutes);
+// Seller POS (stock ledger + off-platform sales): more specific prefix of
+// /api/v1/seller, so it must be mounted before sellerRoutes. Gated by
+// authorize("seller") + requireApprovedSeller + requireSubscriptionTier
+// inside pos.routes.js.
+app.use("/api/v1/seller/pos", posRoutes);
+app.use("/api/v1/seller/stock", stockRoutes);
 app.use("/api/v1/seller", sellerRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/categories", categoryRoutes);
+// Trending-search read + fire-and-forget search-term logging backing
+// SearchBox.jsx's empty-input dropdown. Its own top-level namespace since
+// it spans products/services/stores/content rather than belonging to any
+// one of them - same reasoning as /service-categories vs /categories.
+app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/store-types", storeTypeRoutes);
 // Nexora Services - (Foundation). Separate top-level namespaces
 // from /categories and /products, matching CHANGES.md's own framing of
@@ -364,11 +432,15 @@ app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/delivery", deliveryRoutes);
+// Delivery business-management (roster, fleet overview, independent jobs).
+// Gated inside the router: approved delivery_agent who owns a business.
+app.use("/api/v1/delivery-business", deliveryBusinessRoutes);
+// "Business tools only" accounts: upgrade to marketplace seller.
+app.use("/api/v1/business-tools", businessToolsRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/push", pushRoutes);
-app.use("/api/v1/settings", settingsRoutes);
 // Must be mounted BEFORE /api/v1/admin: it's a more specific prefix of
 // that path, and Express falls through an unmatched router to the next
 // app.use() rather than stopping - so with the general /admin mount
@@ -378,11 +450,14 @@ app.use("/api/v1/settings", settingsRoutes);
 // route accidentally added to admin.routes.js matching this path would
 // silently shadow this router entirely.
 app.use("/api/v1/admin/account-verifications", accountVerificationRoutes);
+app.use("/api/v1/admin/documents", documentAccessRoutes);
 app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 app.use("/api/v1/admin/maintenance", maintenanceRoutes);
 // Same more-specific-prefix-first reasoning as the two mounts above.
 app.use("/api/v1/admin/data-reset", dataResetRoutes);
 app.use("/api/v1/admin/broadcasts", broadcastRoutes);
+app.use("/api/v1/admin/delivery-rates", deliveryRatesRoutes);
+app.use("/api/v1/admin/affiliates", affiliateAdminRoutes);
 // Brevo delivery-status webhook (Phase 5, production error fixes) -
 // intentionally NOT under the admin-authenticated broadcastRoutes above
 // (Brevo's own servers call this, not a signed-in admin) and not
@@ -417,6 +492,7 @@ app.use("/api/v1", productAlertRoutes);
 app.use("/api/v1/seller-filters", sellerSavedFilterRoutes);
 app.use("/api/v1/disputes", disputeRoutes);
 app.use("/api/v1/returns", returnRoutes);
+app.use("/api/v1/admin/refunds", refundRoutes);
 app.use("/api/v1/kyc", kycRoutes);
 // Deliberately NOT nested under "/api/v1/wallet" (the seller wallet
 // module's mount) - that router's own auth/role middleware runs on
@@ -441,6 +517,7 @@ app.use("/api/v1/affiliate", affiliateRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);
+app.use("/api/v1/seo", seoMetricsRoutes);
 // Nexora AI  - see modules/ai/ai.service.js's header comment
 // for the safety/grounding rules every route here shares.
 app.use("/api/v1/ai", aiRoutes);

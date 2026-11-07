@@ -1,18 +1,21 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useLanguage } from "./context/LanguageContext";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import CompareTray from "./components/CompareTray";
-import SplashScreen from "./components/SplashScreen";
 import SuspendedScreen from "./components/SuspendedScreen";
-import PageLoader from "./components/PageLoader";
+import RouteFallback from "./components/RouteFallback";
 import PageTransition from "./components/PageTransition";
 import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
+import SocketStatusBar from "./components/SocketStatusBar";
 import InstallPrompt from "./components/InstallPrompt";
 import CookieConsentBanner from "./components/CookieConsentBanner";
+import AnalyticsTracker from "./components/AnalyticsTracker";
 import SupportWidget from "./components/SupportWidget";
+import FloatingActions from "./components/FloatingActions";
+import { COOKIE_NOTICE_KEY } from "./components/CookieConsentBanner";
 import OnboardingTour from "./components/OnboardingTour";
 import AffiliateClickTracker from "./components/AffiliateClickTracker";
 import DepartmentMaintenanceListener from "./components/DepartmentMaintenanceListener";
@@ -23,6 +26,7 @@ import { useAuth } from "./context/AuthContext";
 import { useToast } from "./context/ToastContext";
 import RequireBuyer from "./components/RequireBuyer";
 import RequireSeller from "./components/RequireSeller";
+import BusinessToolsLayout from "./components/BusinessToolsLayout";
 import RequireAuth from "./components/RequireAuth";
 import RequireDeliveryAgent from "./components/RequireDeliveryAgent";
 import RequireAdmin from "./components/RequireAdmin";
@@ -32,8 +36,14 @@ import AdminLayout from "./components/AdminLayout";
 
 
 const Home = lazy(() => import("./pages/Home"));
+const SearchResults = lazy(() => import("./pages/SearchResults"));
+const SellOnNexora = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.SellOnNexora })));
+const HowItWorks = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.HowItWorks })));
+const About = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.About })));
+const Contact = lazy(() => import("./pages/Marketing").then((m) => ({ default: m.Contact })));
 const DepartmentPage = lazy(() => import("./pages/DepartmentPage"));
 const BrowseProducts = lazy(() => import("./pages/BrowseProducts"));
+const ProductFeed = lazy(() => import("./pages/ProductFeed"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const ServicesBrowse = lazy(() => import("./pages/ServicesBrowse"));
 const ServiceCategoryPage = lazy(() => import("./pages/ServiceCategoryPage"));
@@ -53,7 +63,6 @@ const Messages = lazy(() => import("./pages/Messages"));
 const ConversationThread = lazy(() => import("./pages/ConversationThread"));
 const Account = lazy(() => import("./pages/Account"));
 const Saved = lazy(() => import("./pages/Saved"));
-const ComparePage = lazy(() => import("./pages/ComparePage"));
 const Disputes = lazy(() => import("./pages/Disputes"));
 const NewDispute = lazy(() => import("./pages/NewDispute"));
 const DisputeDetail = lazy(() => import("./pages/DisputeDetail"));
@@ -70,17 +79,20 @@ const GroupBuyDetail = lazy(() => import("./pages/GroupBuyDetail"));
 const Affiliate = lazy(() => import("./pages/Affiliate"));
 const LiveSelling = lazy(() => import("./pages/LiveSelling"));
 const LegalPage = lazy(() => import("./pages/legal/LegalPage"));
+const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const SellerSetup = lazy(() => import("./pages/seller/SellerSetup"));
 const SellerOverview = lazy(() => import("./pages/seller/SellerOverview"));
 const SellerProducts = lazy(() => import("./pages/seller/SellerProducts"));
-const SellerProductForm = lazy(() => import("./pages/seller/SellerProductForm"));
+const SellerProductEntry = lazy(() => import("./pages/seller/SellerProductEntry"));
 const SellerServices = lazy(() => import("./pages/seller/SellerServices"));
 const SellerServiceForm = lazy(() => import("./pages/seller/SellerServiceForm"));
 const SellerAvailability = lazy(() => import("./pages/seller/SellerAvailability"));
 const SellerPricing = lazy(() => import("./pages/seller/SellerPricing"));
+const BusinessToolsPricing = lazy(() => import("./pages/BusinessToolsPricing"));
+const BusinessToolsUpgrade = lazy(() => import("./pages/BusinessToolsUpgrade"));
 const SellerBookings = lazy(() => import("./pages/seller/SellerBookings"));
 const SellerCollections = lazy(() => import("./pages/seller/SellerCollections"));
 const SellerOrders = lazy(() => import("./pages/seller/SellerOrders"));
@@ -89,12 +101,29 @@ const SellerServiceReviews = lazy(() => import("./pages/seller/SellerServiceRevi
 const SellerDeliveryTeam = lazy(() => import("./pages/seller/SellerDeliveryTeam"));
 const SellerStore = lazy(() => import("./pages/seller/SellerStore"));
 const SellerAnalytics = lazy(() => import("./pages/seller/SellerAnalytics"));
+const SellerBusinessTools = lazy(() => import("./pages/seller/SellerBusinessTools"));
+const StockLayout = lazy(() => import("./pages/seller/stock/StockLayout"));
+const StockItems = lazy(() => import("./pages/seller/stock/StockItems"));
+const StockItemForm = lazy(() => import("./pages/seller/stock/StockItemForm"));
+const StockMovements = lazy(() => import("./pages/seller/stock/StockMovements"));
+const StockExpenses = lazy(() => import("./pages/seller/stock/StockExpenses"));
+const StockReports = lazy(() => import("./pages/seller/stock/StockReports"));
+const StockImportExport = lazy(() => import("./pages/seller/stock/StockImportExport"));
+const QuickSale = lazy(() => import("./pages/seller/stock/QuickSale"));
+const SalesList = lazy(() => import("./pages/seller/stock/SalesList"));
+const SaleDetail = lazy(() => import("./pages/seller/stock/SaleDetail"));
+const PurchasesList = lazy(() => import("./pages/seller/stock/PurchasesList"));
+const PurchaseNew = lazy(() => import("./pages/seller/stock/PurchaseNew"));
+const PurchaseDetail = lazy(() => import("./pages/seller/stock/PurchaseDetail"));
+const StockCustomers = lazy(() => import("./pages/seller/stock/StockCustomers"));
+const StockSuppliers = lazy(() => import("./pages/seller/stock/StockSuppliers"));
 const SellerWallet = lazy(() => import("./pages/seller/SellerWallet"));
 const SellerSubscription = lazy(() => import("./pages/seller/SellerSubscription"));
 const SellerPromote = lazy(() => import("./pages/seller/SellerPromote"));
 const SellerDisputes = lazy(() => import("./pages/seller/SellerDisputes"));
 const SellerReturns = lazy(() => import("./pages/seller/SellerReturns"));
 const SellerTaxInfo = lazy(() => import("./pages/seller/SellerTaxInfo"));
+const SellerVerification = lazy(() => import("./pages/seller/SellerVerification"));
 const SellerGroupBuys = lazy(() => import("./pages/seller/SellerGroupBuys"));
 const SellerLiveSelling = lazy(() => import("./pages/seller/SellerLiveSelling"));
 
@@ -102,6 +131,7 @@ const DeliveryAvailable = lazy(() => import("./pages/delivery/DeliveryAvailable"
 const DeliveryMine = lazy(() => import("./pages/delivery/DeliveryMine"));
 const DeliveryEarnings = lazy(() => import("./pages/delivery/DeliveryEarnings"));
 const DeliveryRatings = lazy(() => import("./pages/delivery/DeliveryRatings"));
+const DeliveryBusiness = lazy(() => import("./pages/delivery/DeliveryBusiness"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminDispatch = lazy(() => import("./pages/admin/AdminDispatch"));
@@ -119,12 +149,10 @@ const AdminServices = lazy(() => import("./pages/admin/AdminServices"));
 const AdminStoreTypes = lazy(() => import("./pages/admin/AdminStoreTypes"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
-const AdminBillingControl = lazy(() => import("./pages/admin/AdminBillingControl"));
 const AdminWithdrawals = lazy(() => import("./pages/admin/AdminWithdrawals"));
 const AdminSponsorship = lazy(() => import("./pages/admin/AdminSponsorship"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminFeaturedStores = lazy(() => import("./pages/admin/AdminFeaturedStores"));
-const AdminDepartmentSponsorship = lazy(() => import("./pages/admin/AdminDepartmentSponsorship"));
 const AdminAccountVerifications = lazy(() => import("./pages/admin/AdminAccountVerifications"));
 const AdminManageAdmins = lazy(() => import("./pages/admin/AdminManageAdmins"));
 const AdminFraud = lazy(() => import("./pages/admin/AdminFraud"));
@@ -138,14 +166,56 @@ const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminDataReset = lazy(() => import("./pages/admin/AdminDataReset"));
 const AdminBroadcast = lazy(() => import("./pages/admin/AdminBroadcast"));
+const AdminDeliveryRates = lazy(() => import("./pages/admin/AdminDeliveryRates"));
 
 export default function App() {
-    const [showSplash, setShowSplash] = useState(
-        () => !sessionStorage.getItem("nexora_splash_shown")
-    );
-    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired, sessionReady } = useAuth();
+    const { t } = useLanguage();
+    const { suspension, clearSuspension, user, sessionExpired, clearSessionExpired, csrfExpired } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const toast = useToast();
+
+    // Phase 1 (Admin chrome fix): the Control room is its own shell
+    // (AdminLayout.jsx) with its own nav, back-to-home link, and now its
+    // own notification bell - it never needs the consumer storefront's
+    // Header (search box, Home/Browse icons, cart) or Footer (payment
+    // badges, install-app prompt, social links, legal index). Rendering
+    // both unconditionally used to mean every admin page carried that
+    // chrome underneath/around the Control room UI, and - since Header
+    // also renders its own mobile hamburger drawer - an admin on a phone
+    // saw two stacked drawers (Header's plus AdminLayout's own). Gating
+    // on the route rather than on role keeps this working correctly if
+    // an admin account ever browses the public storefront directly
+    // (e.g. "Back to Home" from AdminLayout) - only /admin/* itself
+    // drops the storefront chrome.
+    const isAdminRoute = location.pathname.startsWith("/admin");
+    const isFeedRoute = location.pathname === "/feed";
+    // An open conversation is a full-screen view with its own top bar:
+    // no storefront header, footer or floating buttons.
+    const isThreadRoute = /^\/messages\/[^/]+\/?$/.test(location.pathname);
+    // Checkout and the auth forms are focused, single-task flows - the
+    // footer's nav/legal/social links are a distraction there, same
+    // reasoning AppBottomNav already applied to hide itself on these
+    // routes (see its old HIDDEN_ROUTE regex, now folded in here too).
+    const isCheckoutRoute = location.pathname === "/checkout";
+    const isAuthFormRoute = location.pathname === "/login" || location.pathname === "/register";
+
+    // Banner queue: cookie notice first, then install and update banners.
+    const [updateVisible, setUpdateVisible] = useState(false);
+    const [cookieAcknowledged, setCookieAcknowledged] = useState(() => {
+        try { return localStorage.getItem(COOKIE_NOTICE_KEY) === "1"; } catch { return false; }
+    });
+
+    // Phase 3 (splash/cookie-banner/install-banner placement): these two
+    // used to render globally on every route. The brief asked for them to
+    // only show on "the login/landing screen" - which route that actually
+    // meant was ambiguous (the dedicated /login form, vs. the public "/"
+    // homepage a guest lands on first). Per the phase brief's own
+    // fallback, this defaults to the unauthenticated landing/home view
+    // (`/` while signed out) rather than guessing /login specifically -
+    // see PHASE_3_NOTES.md for that assumption and how to repoint it if
+    // /login was actually meant.
+    const isGuestLandingRoute = !user && location.pathname === "/";
 
     // Session expiry. Fires for either an idle-timeout (see
     // AuthContext.jsx's isIdleExpired check on load) or a session that
@@ -160,18 +230,13 @@ export default function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionExpired]);
 
-    // Roles that get a fixed mobile bottom nav (Header.jsx for buyer,
-    // SellerLayout.jsx for seller, DeliveryLayout.jsx for delivery_agent)
-    // need their page content to clear it, or the bar covers whatever's
-    // at the bottom of the page - matched to MobileBottomNav's own
-    // min-h-[52px] tab height plus a little breathing room.
-    const hasMobileBottomNav = ["buyer", "seller", "delivery_agent"].includes(user?.role);
-
     // Nexora AI is buyer-facing/advisory only - a guest
     // (user is null, not yet logged in) or a signed-in buyer gets it;
     // seller/delivery_agent/admin roles get their own AI entry points
     // in later phases (B2/B3), not this one.
-    const showNexoraAI = !user || user.role === "buyer";
+    // Visible to every role. The AI routes gate their own features by role
+    // (for example seller analytics), so the general chat is open to all.
+    const showNexoraAI = true;
 
     // when a push notification is clicked and it focuses an
     // already-open tab (see sw.js#notificationclick), that only brings the
@@ -189,9 +254,6 @@ export default function App() {
         return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
     }, [navigate]);
 
-    if (showSplash) {
-        return <SplashScreen appReady={sessionReady} onDone={() => setShowSplash(false)} />;
-    }
 
     // CSRF cookie expired while the session cookie was still alive. The
     // only recovery is a page reload which causes the browser to re-issue
@@ -231,28 +293,33 @@ export default function App() {
 
     return (
         <div className="min-h-screen flex flex-col">
-            <UpdateAvailableBanner />
+            {cookieAcknowledged && <UpdateAvailableBanner onVisibilityChange={setUpdateVisible} />}
             <NetworkStatusNotice />
-            <InstallPrompt />
-            <CookieConsentBanner />
+            <SocketStatusBar />
+            {cookieAcknowledged && !updateVisible && <InstallPrompt guestLanding={isGuestLandingRoute} />}
+            <AnalyticsTracker />
+            {!isAdminRoute && <CookieConsentBanner onAcknowledged={() => setCookieAcknowledged(true)} />}
             <DepartmentMaintenanceListener />
             <LocationSharingListener />
 
-            <Header />
-            <SupportWidget />
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[var(--z-modal)] focus:bg-paper focus:text-ink focus:px-4 focus:py-2 focus:rounded-md focus:shadow-md focus-ring">
+                {t("a11y.skipToContent")}
+            </a>
+            {!isAdminRoute && !isThreadRoute && <Header />}
             <OnboardingTour />
             <AffiliateClickTracker />
 
             <RouteProgressBar />
 
-            <main className={`flex-1 ${hasMobileBottomNav ? "pb-16 md:pb-0" : ""}`}>
-                <Suspense fallback={<PageLoader />}>
+            <main id="main-content" tabIndex={-1} className="flex-1">
+                <Suspense fallback={<RouteFallback />}>
                     <PageTransition>
                         <Routes>
                         <Route path="/" element={<Home />} />
                         <Route path="/departments/:slug" element={<DepartmentPage />} />
                         <Route path="/products" element={<BrowseProducts />} />
                         <Route path="/products/:slug" element={<ProductDetail />} />
+                        <Route path="/feed" element={<ProductFeed />} />
                         <Route path="/services" element={<ServicesBrowse />} />
                         <Route path="/services/category/:slug" element={<ServiceCategoryPage />} />
                         <Route path="/services/:slug" element={<ServiceDetail />} />
@@ -269,10 +336,10 @@ export default function App() {
                         <Route path="/bookings" element={<RequireBuyer><Bookings /></RequireBuyer>} />
                         {/* Shared: buyer or provider - booking.service.js#getBookingById enforces per-booking access */}
                         <Route path="/bookings/:id" element={<RequireAuth><BookingDetail /></RequireAuth>} />
+                        <Route path="/terms" element={<TermsPage />} />
                         <Route path="/legal/:slug" element={<LegalPage />} />
                         <Route path="/status" element={<StatusPage />} />
                         <Route path="/saved" element={<RequireBuyer><Saved /></RequireBuyer>} />
-                        <Route path="/compare" element={<ComparePage />} />
                         <Route path="/disputes" element={<RequireBuyer><Disputes /></RequireBuyer>} />
                         <Route path="/disputes/new" element={<RequireBuyer><NewDispute /></RequireBuyer>} />
                         {/* Shared: buyer, seller, or admin - dispute.service.js enforces per-dispute access */}
@@ -285,6 +352,11 @@ export default function App() {
 
                         <Route path="/account/kyc" element={<RequireBuyer><KycStatus /></RequireBuyer>} />
                         <Route path="/account/wallet" element={<RequireBuyer><WalletPage /></RequireBuyer>} />
+                        <Route path="/search" element={<SearchResults />} />
+                        <Route path="/sell" element={<SellOnNexora />} />
+                        <Route path="/how-it-works" element={<HowItWorks />} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/contact" element={<Contact />} />
                         <Route path="/guides" element={<Guides />} />
                         <Route path="/guides/:slug" element={<GuideDetail />} />
                         <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
@@ -297,12 +369,38 @@ export default function App() {
                         <Route path="/messages/:id" element={<RequireAuth><ConversationThread /></RequireAuth>} />
                         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
 
+                        <Route path="/business-tools" element={<BusinessToolsPricing />} />
+
+                        <Route path="/business" element={<RequireSeller><BusinessToolsLayout /></RequireSeller>}>
+                            <Route index element={<Navigate to="/business/stock" replace />} />
+                            <Route path="stock" element={<StockLayout />}>
+                                <Route index element={<StockItems />} />
+                                <Route path="items/new" element={<StockItemForm />} />
+                                <Route path="items/:id" element={<StockItemForm />} />
+                                <Route path="movements" element={<StockMovements />} />
+                                <Route path="expenses" element={<StockExpenses />} />
+                                <Route path="reports" element={<StockReports />} />
+                                <Route path="import-export" element={<StockImportExport />} />
+                                <Route path="sell" element={<QuickSale />} />
+                                <Route path="sales" element={<SalesList />} />
+                                <Route path="sales/:id" element={<SaleDetail />} />
+                                <Route path="purchases" element={<PurchasesList />} />
+                                <Route path="purchases/new" element={<PurchaseNew />} />
+                                <Route path="purchases/:id" element={<PurchaseDetail />} />
+                                <Route path="customers" element={<StockCustomers />} />
+                                <Route path="suppliers" element={<StockSuppliers />} />
+                            </Route>
+                            <Route path="classic" element={<SellerBusinessTools />} />
+                            <Route path="plan" element={<SellerSubscription />} />
+                            <Route path="upgrade" element={<BusinessToolsUpgrade />} />
+                        </Route>
+
                         <Route path="/seller" element={<RequireSeller><SellerLayout /></RequireSeller>}>
                             <Route path="setup" element={<SellerSetup />} />
                             <Route index element={<SellerOverview />} />
                             <Route path="products" element={<SellerProducts />} />
-                            <Route path="products/new" element={<SellerProductForm />} />
-                            <Route path="products/:id/edit" element={<SellerProductForm />} />
+                            <Route path="products/new" element={<SellerProductEntry />} />
+                            <Route path="products/:id/edit" element={<SellerProductEntry />} />
                             <Route path="services" element={<SellerServices />} />
                             <Route path="services/new" element={<SellerServiceForm />} />
                             <Route path="services/:id/edit" element={<SellerServiceForm />} />
@@ -316,16 +414,36 @@ export default function App() {
                             <Route path="delivery-team" element={<SellerDeliveryTeam />} />
                             <Route path="store" element={<SellerStore />} />
                             <Route path="analytics" element={<SellerAnalytics />} />
+                            <Route path="stock" element={<StockLayout />}>
+                                <Route index element={<StockItems />} />
+                                <Route path="items/new" element={<StockItemForm />} />
+                                <Route path="items/:id" element={<StockItemForm />} />
+                                <Route path="movements" element={<StockMovements />} />
+                                <Route path="expenses" element={<StockExpenses />} />
+                                <Route path="reports" element={<StockReports />} />
+                                <Route path="import-export" element={<StockImportExport />} />
+                                <Route path="sell" element={<QuickSale />} />
+                                <Route path="sales" element={<SalesList />} />
+                                <Route path="sales/:id" element={<SaleDetail />} />
+                                <Route path="purchases" element={<PurchasesList />} />
+                                <Route path="purchases/new" element={<PurchaseNew />} />
+                                <Route path="purchases/:id" element={<PurchaseDetail />} />
+                                <Route path="customers" element={<StockCustomers />} />
+                                <Route path="suppliers" element={<StockSuppliers />} />
+                            </Route>
+                            <Route path="pos" element={<SellerBusinessTools />} />
                             <Route path="wallet" element={<SellerWallet />} />
                             <Route path="promote" element={<SellerPromote />} />
-                            {/* sponsorship/featured-store/department-sponsorship
-                                are now tabs on the "Promote" hub above - these three keep the
-                                old URLs working (bookmarks, old links) by redirecting into the
-                                matching tab instead of rendering their own separate page. */}
+                            {/* sponsorship/featured-store are now tabs on the "Promote" hub
+                                above - these keep the old URLs working (bookmarks, old links)
+                                by redirecting into the matching tab instead of rendering
+                                their own separate page. department-sponsorship was retired as
+                                a product; its old URL lands on the hub's first tab. */}
                             <Route path="sponsorship" element={<Navigate to="/seller/promote?tab=sponsorship" replace />} />
                             <Route path="featured-store" element={<Navigate to="/seller/promote?tab=featured-store" replace />} />
-                            <Route path="department-sponsorship" element={<Navigate to="/seller/promote?tab=department-sponsorship" replace />} />
+                            <Route path="department-sponsorship" element={<Navigate to="/seller/promote" replace />} />
                             <Route path="subscription" element={<SellerSubscription />} />
+                            <Route path="verification" element={<SellerVerification />} />
                             <Route path="disputes" element={<SellerDisputes />} />
                             <Route path="returns" element={<SellerReturns />} />
                             <Route path="tax-info" element={<SellerTaxInfo />} />
@@ -338,6 +456,7 @@ export default function App() {
                             <Route path="mine" element={<DeliveryMine />} />
                             <Route path="earnings" element={<DeliveryEarnings />} />
                             <Route path="ratings" element={<DeliveryRatings />} />
+                            <Route path="business" element={<DeliveryBusiness />} />
                         </Route>
 
                         <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
@@ -357,12 +476,11 @@ export default function App() {
                             <Route path="store-types" element={<AdminStoreTypes />} />
                             <Route path="orders" element={<AdminOrders />} />
                             <Route path="settings" element={<AdminSettings />} />
-                            <Route path="billing-control" element={<AdminBillingControl />} />
                             <Route path="withdrawals" element={<AdminWithdrawals />} />
                             <Route path="sponsorship" element={<AdminSponsorship />} />
                             <Route path="subscriptions" element={<AdminSubscriptions />} />
                             <Route path="featured-stores" element={<AdminFeaturedStores />} />
-                            <Route path="department-sponsorship" element={<AdminDepartmentSponsorship />} />
+                            <Route path="department-sponsorship" element={<Navigate to="/admin/sponsorship" replace />} />
                             <Route path="account-verifications" element={<AdminAccountVerifications />} />
                             <Route path="admins" element={<AdminManageAdmins />} />
                             <Route path="fraud" element={<AdminFraud />} />
@@ -376,6 +494,7 @@ export default function App() {
                             <Route path="audit-logs" element={<AdminAuditLogs />} />
                             <Route path="data-reset" element={<AdminDataReset />} />
                             <Route path="broadcast" element={<AdminBroadcast />} />
+                            <Route path="delivery-rates" element={<AdminDeliveryRates />} />
                         </Route>
 
                         <Route path="*" element={<NotFound />} />
@@ -384,15 +503,14 @@ export default function App() {
                 </Suspense>
             </main>
 
-            <Footer />
+            {!isAdminRoute && !isThreadRoute && !isCheckoutRoute && !isAuthFormRoute && <Footer />}
 
-            <CompareTray />
-
-            {showNexoraAI && (
-                <>
-                    <NexoraAIButton />
-                    <NexoraAIDrawer />
-                </>
+            {showNexoraAI && <NexoraAIDrawer />}
+            {!isAdminRoute && !isFeedRoute && !isThreadRoute && (
+                <FloatingActions>
+                    {showNexoraAI && <NexoraAIButton />}
+                    <SupportWidget />
+                </FloatingActions>
             )}
         </div>
     );

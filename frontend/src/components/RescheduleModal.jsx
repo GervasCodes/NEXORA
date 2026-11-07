@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import AvailabilityCalendar from "./AvailabilityCalendar";
 import Button from "./ui/Button";
+import { useCurrency } from "../context/CurrencyContext";
 
 // Same inclusive-date-range helper ServiceDetail.jsx's booking widget
 // uses, duplicated here rather than imported since it's a few lines and
@@ -28,6 +29,7 @@ const inclusiveDateRange = (start, end) => {
  * POST /bookings.
  */
 export default function RescheduleModal({ booking, onClose, onRescheduled }) {
+    const { format } = useCurrency();
     const isPerNight = booking.pricing_model === "per_night";
 
     const [startDate, setStartDate] = useState(null);
@@ -59,6 +61,15 @@ export default function RescheduleModal({ booking, onClose, onRescheduled }) {
         if (!endDate || startDate === endDate) return [startDate];
         return inclusiveDateRange(startDate, endDate);
     }, [startDate, endDate]);
+
+    // Same estimated-total calc as ServiceDetail.jsx's own booking widget
+    // (per_night excludes the checkout day); priceByDate was being tracked
+    // here but never surfaced, so a buyer rescheduling to pricier/cheaper
+    // dates had no way to see the new total before confirming.
+    const estimatedTotal = useMemo(() => {
+        const chargeableDates = isPerNight ? selectedDates.slice(0, -1) : selectedDates;
+        return chargeableDates.reduce((sum, date) => sum + (priceByDate[date] || 0) * (booking.quantity || 1), 0);
+    }, [selectedDates, priceByDate, isPerNight, booking.quantity]);
 
     const handleDateClick = (dateKey, info) => {
         setError("");
@@ -108,7 +119,7 @@ export default function RescheduleModal({ booking, onClose, onRescheduled }) {
     return (
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- click-outside-to-dismiss backdrop; keyboard users dismiss via the Escape handler above and the Close button
         <div
-            className="fixed inset-0 z-[1200] bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-[var(--z-modal)] bg-abyss/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-4"
             onClick={onClose}
         >
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, so a click inside the dialog doesn't reach the dismiss backdrop */}
@@ -139,13 +150,17 @@ export default function RescheduleModal({ booking, onClose, onRescheduled }) {
                     <p className="text-xs text-ash mt-2">Check-in: {startDate} - now pick a check-out date.</p>
                 )}
 
+                {canSubmit && estimatedTotal > 0 && (
+                    <p className="text-sm mt-3">New total: <span className="font-medium">{format(estimatedTotal)}</span></p>
+                )}
+
                 {error && <p role="alert" className="text-coral text-sm mt-3">{error}</p>}
 
                 <div className="flex gap-3 mt-5">
                     <Button onClick={onClose} variant="secondary" className="flex-1 hover:border-ash">
                         Cancel
                     </Button>
-                    <Button onClick={handleSubmit} disabled={!canSubmit || submitting} className="flex-1">
+                    <Button loading={submitting} onClick={handleSubmit} disabled={!canSubmit || submitting} className="flex-1">
                         {submitting ? "Saving…" : "Confirm new date"}
                     </Button>
                 </div>

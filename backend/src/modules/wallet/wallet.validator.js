@@ -1,23 +1,19 @@
 const { body } = require("express-validator");
+const { buildPayout } = require("../../utils/payoutDetails");
 
 exports.requestWithdrawalValidation = [
     body("amount")
         .isFloat({ gt: 0 })
         .withMessage("Enter a valid withdrawal amount"),
 
+    // Structured payout destination: method + (network, phone) or
+    // (bank name, account number, account name). One custom check runs the
+    // same buildPayout() the service uses, so both layers agree.
     body("payout_method")
-        .trim()
-        .notEmpty()
-        .withMessage("Select a payout method")
-        .isLength({ max: 50 })
-        .withMessage("Payout method is too long"),
-
-    body("payout_details")
-        .trim()
-        .notEmpty()
-        .withMessage("Payout details (e.g. mobile money number) are required")
-        .isLength({ max: 255 })
-        .withMessage("Payout details are too long"),
+        .custom((value, { req }) => {
+            buildPayout(req.body);
+            return true;
+        }),
 
     body("payout_currency")
         .optional()

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
+import { getVerificationTier, VERIFICATION_LABEL_KEYS } from "../utils/verificationTier";
 import { useWishlist } from "../context/WishlistContext";
 import { useToast } from "../context/ToastContext";
 import { useAIAssistant } from "../context/AIAssistantContext";
@@ -16,11 +18,17 @@ import RecommendedProducts from "../components/RecommendedProducts";
 import ProductRow from "../components/ProductRow";
 import ProductQA from "../components/ProductQA";
 import PageMeta from "../components/PageMeta";
+import { SITE_URL, normalizePath } from "../utils/seo";
 import ImageLightbox from "../components/chat/ImageLightbox";
 import Avatar from "../components/ui/Avatar";
 import Breadcrumbs from "../components/ui/Breadcrumbs";
 import { BellIcon, ChatIcon } from "../components/Icons";
 import Skeleton from "../components/Skeleton";
+import ShareButtons from "../components/ShareButtons";
+import { recordRecentlyViewed } from "../utils/recentlyViewed";
+import { deliveryEstimate } from "../utils/deliveryEstimate";
+import useUploadProgress from "../hooks/useUploadProgress";
+import ProgressBar from "../components/ui/ProgressBar";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -79,6 +87,7 @@ export default function ProductDetail() {
     const [reviewError, setReviewError] = useState("");
     const [justSubmittedId, setJustSubmittedId] = useState(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const photoUpload = useUploadProgress();
 
     
     const MAX_REVIEW_PHOTOS = 5;
@@ -90,6 +99,17 @@ export default function ProductDetail() {
             .catch(() => setProduct(null))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    // Feeds the "Recently viewed" rail on Home.
+    useEffect(() => {
+        if (!product?.id) return;
+        recordRecentlyViewed({
+            id: product.id,
+            slug: product.slug,
+            name: product.name,
+            image_url: product.images?.[0]?.image_url || product.image_url || null,
+        });
+    }, [product?.id]);
 
     useEffect(() => {
         if (!product?.seller_id) {
@@ -176,14 +196,24 @@ export default function ProductDetail() {
         try {
             const body = new FormData();
             body.append("photo", file);
-            await api.post(`/reviews/${justSubmittedId}/photos`, body);
+            await api.post(`/reviews/${justSubmittedId}/photos`, body, { onUploadProgress: photoUpload.onUploadProgress });
             loadReviews();
         } catch (err) {
             setReviewError(extractErrorMessage(err));
         } finally {
             setUploadingPhoto(false);
+            photoUpload.reset();
             e.target.value = "";
         }
+    };
+
+    // Gallery swipe and arrow keys. Wraps at both ends.
+    const swipeStart = useRef(null);
+    const goImage = (delta) => {
+        setActiveImage((i) => {
+            const count = images.length;
+            return (i + delta + count) % count;
+        });
     };
 
     const handleAddToCart = async () => {
@@ -279,6 +309,7 @@ export default function ProductDetail() {
     if (!product) {
         return (
             <div className="max-w-6xl mx-auto px-6 py-16 text-center">
+                <PageMeta title={t("product.notFoundTitle")} noIndex />
                 <p className="font-display text-2xl mb-2">{t("product.notFoundTitle")}</p>
                 <Link to="/" className="text-teal hover:underline text-sm">{t("common.browseMarketplace")}</Link>
             </div>
@@ -319,7 +350,7 @@ export default function ProductDetail() {
         { label: product.name }
     ];
 
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = SITE_URL;
     const breadcrumbJsonLd = {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
@@ -345,6 +376,9 @@ export default function ProductDetail() {
         description: product.description || undefined,
         image: images.filter((img) => img.image_url).map((img) => img.image_url),
         sku: String(product.id),
+        itemCondition: product.product_condition === "used"
+            ? "https://schema.org/UsedCondition"
+            : "https://schema.org/NewCondition",
         brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
         ...(product.review_count > 0
             ? {
@@ -355,9 +389,35 @@ export default function ProductDetail() {
                 }
             }
             : {}),
+        // Individual reviews already shown on the page (first name + last
+        // initial, as displayed). Only emitted when there are real reviews.
+        ...(reviews?.reviews?.length
+            ? {
+                review: reviews.reviews.slice(0, 5).map((r) => ({
+                    "@type": "Review",
+                    reviewRating: { "@type": "Rating", ratingValue: r.rating, bestRating: 5, worstRating: 1 },
+                    author: { "@type": "Person", name: publicName(r) },
+                    ...(r.comment ? { reviewBody: r.comment } : {}),
+                    ...(r.created_at ? { datePublished: new Date(r.created_at).toISOString().slice(0, 10) } : {})
+                }))
+            }
+            : {}),
         offers: {
             "@type": "Offer",
-            url: typeof window !== "undefined" ? window.location.href : undefined,
+            url: `${SITE_URL}/products/${product.slug || slug}`,
+            // Points at the real refund policy page; no return window or
+            // fee is claimed because that varies by order.
+            hasMerchantReturnPolicy: {
+                "@type": "MerchantReturnPolicy",
+                merchantReturnLink: `${SITE_URL}/terms#refund-policy`,
+                applicableCountry: "TZ"
+            },
+            // Destination only - no rate or transit time is claimed,
+            // because delivery fees are calculated per order at checkout.
+            shippingDetails: {
+                "@type": "OfferShippingDetails",
+                shippingDestination: { "@type": "DefinedRegion", addressCountry: "TZ" }
+            },
             priceCurrency: "TZS",
             price: String(hasDiscount ? product.discount_price : product.price),
             availability: product.stock > 0
@@ -379,7 +439,28 @@ export default function ProductDetail() {
             <Breadcrumbs items={breadcrumbItems} />
             <div className="grid md:grid-cols-2 gap-10">
                 <div>
-                    <div className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-3">
+                    {/* Accessible carousel region: keyboard arrows + swipe are the interaction model. */}
+                    {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+                    <div
+                        className="aspect-square bg-line/40 rounded-lg overflow-hidden mb-1 relative touch-pan-y focus-ring"
+                        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                        tabIndex={0}
+                        role="group"
+                        aria-roledescription="carousel"
+                        aria-label={t("product.gallery")}
+                        onKeyDown={(e) => {
+                            if (e.key === "ArrowRight") goImage(1);
+                            if (e.key === "ArrowLeft") goImage(-1);
+                        }}
+                        onTouchStart={(e) => { swipeStart.current = e.touches[0].clientX; }}
+                        onTouchEnd={(e) => {
+                            const start = swipeStart.current;
+                            swipeStart.current = null;
+                            if (start == null || images.length < 2) return;
+                            const dx = e.changedTouches[0].clientX - start;
+                            if (Math.abs(dx) > 40) goImage(dx < 0 ? 1 : -1);
+                        }}
+                    >
                         {images[activeImage]?.image_url ? (
                             <button
                                 type="button"
@@ -387,12 +468,17 @@ export default function ProductDetail() {
                                 className="w-full h-full cursor-zoom-in focus-ring"
                                 aria-label={t("product.openFullImage")}
                             >
-                                <img src={images[activeImage].image_url} alt={product.name} className="w-full h-full object-cover" />
+                                <img src={images[activeImage].image_url} alt={product.name} fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
                             </button>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-ash text-sm">{t("product.noImage")}</div>
                         )}
                     </div>
+                    {images.length > 1 && (
+                        <p className="text-xs text-ash mb-3" aria-live="polite">
+                            {activeImage + 1} / {images.length}
+                        </p>
+                    )}
                     {images.length > 1 && (
                         <div className="flex gap-2">
                             {images.map((img, i) => (
@@ -420,17 +506,6 @@ export default function ProductDetail() {
                             </div>
                         </div>
                     )}
-                    {product.audio?.length > 0 && (
-                        <div className="mt-6">
-                            <h2 className="font-display text-lg mb-3">{t("product.audioTitle")}</h2>
-                            <div className="space-y-3">
-                                {product.audio.map((clip) => (
-                                    // eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded audio clip, no caption track available
-                                    <audio key={clip.id} src={clip.audio_url} controls className="w-full" />
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <div>
@@ -438,7 +513,7 @@ export default function ProductDetail() {
                         <Link to={`/stores/${product.store_slug}`} className="hover:underline hover:text-ink">
                             {product.store_name}
                         </Link>
-                        {product.is_verified ? ` · ✓ ${t("product.verifiedStore")}` : ""}
+                        {getVerificationTier(product) ? ` · ✓ ${t(VERIFICATION_LABEL_KEYS[getVerificationTier(product)])}` : ""}
                     </p>
                     <div className="flex items-start justify-between gap-3 mb-3">
                         <h1 className="font-display text-3xl">{product.name}</h1>
@@ -463,6 +538,7 @@ export default function ProductDetail() {
                                     </svg>
                                 </button>
                             )}
+                            <ShareButtons url={`${window.location.origin}/products/${product.slug}`} title={product.name} />
                             <button
                                 type="button"
                                 onClick={handleShare}
@@ -572,6 +648,15 @@ export default function ProductDetail() {
                             {allOptionsSelected && effectiveStock === 0 && (
                                 <p className="text-coral font-medium mb-2">{t("product.outOfStock")}</p>
                             )}
+                            <p className="text-sm text-ash mb-3">
+                                {(() => {
+                                    const region = product.region;
+                                    const { min, max } = deliveryEstimate(region);
+                                    return region
+                                        ? t("product.deliveryEstimate", { min, max, region })
+                                        : t("product.deliveryEstimateNoRegion", { min, max });
+                                })()}
+                            </p>
                             <div className="flex items-center gap-3">
                                 <QuantityStepper
                                     value={quantity}
@@ -679,7 +764,7 @@ export default function ProductDetail() {
                         />
                         {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
                         <div className="flex gap-3">
-                            <Button
+                            <Button loading={submittingReview}
                                 type="submit"
                                 disabled={submittingReview}
                                 size="sm"
@@ -704,10 +789,13 @@ export default function ProductDetail() {
                             const submitted = reviews?.reviews?.find((r) => r.id === justSubmittedId);
                             const photoCount = submitted?.photos?.length || 0;
                             return photoCount < MAX_REVIEW_PHOTOS ? (
+                                <>
                                 <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                                    {uploadingPhoto ? t("reviews.uploading") : t("reviews.addPhoto")}
+                                    {uploadingPhoto ? (photoUpload.progress !== null ? t("upload.percent", { percent: photoUpload.progress }) : t("reviews.uploading")) : t("reviews.addPhoto")}
                                     <input type="file" accept="image/*" onChange={handleReviewPhotoUpload} disabled={uploadingPhoto} className="hidden" />
                                 </label>
+                                {uploadingPhoto && <ProgressBar value={photoUpload.progress ?? undefined} label={t("upload.progress")} className="mt-2 max-w-xs" />}
+                                </>
                             ) : (
                                 <p className="text-ash text-xs">{t("reviews.maxPhotos", { count: MAX_REVIEW_PHOTOS })}</p>
                             );
@@ -721,9 +809,9 @@ export default function ProductDetail() {
                     {reviews?.reviews?.map((r) => (
                         <li key={r.id} className="border-b border-line pb-4">
                             <div className="flex items-center gap-2 mb-1">
-                                <Avatar firstName={r.first_name} lastName={r.last_name} src={r.photo_url} size="sm" />
+                                <Avatar name={publicName(r, t("username.anonymous"))} src={r.photo_url} size="sm" />
                                 <div className="flex-1 flex justify-between items-baseline">
-                                    <p className="font-medium text-sm">{r.first_name} {r.last_name}</p>
+                                    <p className="font-medium text-sm">{publicName(r, t("username.anonymous"))}</p>
                                     <p className="text-xs text-ash">{formatDate(r.created_at)}</p>
                                 </div>
                             </div>
@@ -758,6 +846,31 @@ export default function ProductDetail() {
             <ProductRow title={product.store_name ? `More from ${product.store_name}` : "More from this store"} products={storeProducts} />
 
             <RecommendedProducts endpoint={`/recommendations/related/${slug}`} title={t("product.youMayAlsoLike")} />
+
+            {/* Mobile buy bar: price and add-to-cart stay in reach while scrolling. */}
+            {user?.role !== "seller" && user?.role !== "admin" && (
+                <>
+                    <div className="h-20 md:hidden" aria-hidden="true" />
+                    <div className="md:hidden fixed inset-x-0 bottom-[var(--bottom-inset)] z-[var(--z-float)] bg-paper/95 backdrop-blur border-t border-line px-4 py-3 flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xs text-ash">{t("product.mobileBuyPrice")}</p>
+                            <p className="price font-medium">{format(product.discount_price && Number(product.discount_price) < Number(product.price) ? product.discount_price : product.price)}</p>
+                        </div>
+                        {user ? (
+                            <Button onClick={handleAddToCart} disabled={effectiveStock === 0}>
+                                {t("product.addToCart")}
+                            </Button>
+                        ) : (
+                            <Link
+                                to={`/login?returnTo=${encodeURIComponent(`/products/${slug}`)}&intent=add-to-cart`}
+                                className="inline-flex h-11 items-center justify-center rounded-md border border-ink px-4 text-sm font-medium"
+                            >
+                                {t("products.feedAddToCart")}
+                            </Link>
+                        )}
+                    </div>
+                </>
+            )}
 
             <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
         </div>

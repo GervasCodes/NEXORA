@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
 
 const EMPTY_FORM = { name: "", address: "", city: "", region: "", contactPhone: "", operatingHours: "" };
 
@@ -71,11 +72,11 @@ export default function AdminPickupPoints() {
 
                 {error && <p className="text-sm text-coral">{error}</p>}
 
-                <button
+                <button aria-busy={creating || undefined}
                     type="submit"
                     disabled={creating}
                     className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
+                >{creating && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                     {creating ? "Adding…" : "Add pickup point"}
                 </button>
             </form>
@@ -92,11 +93,11 @@ export default function AdminPickupPoints() {
                                 <p className="text-ash text-xs">{p.address}, {p.city}, {p.region}</p>
                                 {p.operating_hours && <p className="text-ash text-xs">{p.operating_hours}</p>}
                             </div>
-                            <button
+                            <button aria-busy={busyId === p.id || undefined}
                                 disabled={busyId === p.id}
                                 onClick={() => toggleActive(p)}
                                 className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-60 ${p.is_active ? "border-teal text-teal" : "border-line text-ash"}`}
-                            >
+                            >{busyId === p.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {p.is_active ? "Active" : "Inactive"}
                             </button>
                         </li>

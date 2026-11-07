@@ -32,4 +32,22 @@ exports.sellerResetValidation = [
 
 exports.platformResetPreviewValidation = [testOnlyQuery];
 
-exports.platformResetValidation = [testOnlyBody, confirmation];
+const password = body("password")
+    .isString().withMessage("Your password is required")
+    .bail()
+    .notEmpty().withMessage("Your password is required")
+    .isLength({ max: 200 });
+
+exports.platformResetValidation = [
+    testOnlyBody,
+    confirmation,
+    password,
+    body("approval_id").optional().isInt({ gt: 0 }).withMessage("Invalid approval")
+];
+
+exports.platformApprovalRequestValidation = [testOnlyBody];
+
+exports.platformApprovalApproveValidation = [
+    param("approvalId").isInt({ gt: 0 }).withMessage("Invalid approval"),
+    password
+];

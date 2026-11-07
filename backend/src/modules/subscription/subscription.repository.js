@@ -2,9 +2,12 @@ const db = require("../../config/db");
 
 // ---- Plans (public + admin) -------------------------------------------
 
-exports.listActivePlans = async () => {
+// `audience` keeps the two pricing pages apart (migration 146): marketplace
+// tiers by default, the business-tools tier only when asked for.
+exports.listActivePlans = async (audience = "marketplace") => {
     const [rows] = await db.query(
-        "SELECT * FROM subscription_plans WHERE is_active = TRUE ORDER BY sort_order ASC, id ASC"
+        "SELECT * FROM subscription_plans WHERE is_active = TRUE AND audience = ? ORDER BY sort_order ASC, id ASC",
+        [audience]
     );
     return rows;
 };
@@ -35,12 +38,14 @@ exports.findPlanByCode = async (code) => {
 exports.createPlan = async (data) => {
     const [result] = await db.query(
         `INSERT INTO subscription_plans
-            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, features, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (code, name, description, price, billing_cycle, commission_rate_override, max_active_listings, sponsorship_credits_per_month, features, sort_order, entitlements)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             data.code, data.name, data.description || null, data.price, data.billingCycle || "monthly",
             data.commissionRateOverride ?? null, data.maxActiveListings ?? null,
-            data.features ? JSON.stringify(data.features) : null, data.sortOrder ?? 0
+            data.sponsorshipCreditsPerMonth ?? 0,
+            data.features ? JSON.stringify(data.features) : null, data.sortOrder ?? 0,
+            data.entitlements ? JSON.stringify(data.entitlements) : null
         ]
     );
     return result.insertId;
@@ -63,9 +68,14 @@ exports.updatePlan = async (planId, data) => {
     setIfPresent("billing_cycle", data.billingCycle);
     setIfPresent("commission_rate_override", data.commissionRateOverride);
     setIfPresent("max_active_listings", data.maxActiveListings);
+    setIfPresent("sponsorship_credits_per_month", data.sponsorshipCreditsPerMonth);
     if (data.features !== undefined) {
         fields.push("features = ?");
         values.push(data.features ? JSON.stringify(data.features) : null);
+    }
+    if (data.entitlements !== undefined) {
+        fields.push("entitlements = ?");
+        values.push(data.entitlements ? JSON.stringify(data.entitlements) : null);
     }
     setIfPresent("sort_order", data.sortOrder);
     setIfPresent("is_active", data.isActive);
@@ -85,7 +95,7 @@ exports.updatePlan = async (planId, data) => {
 exports.findCurrentForSeller = async (sellerId) => {
     const [activeRows] = await db.query(
         `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
-                sp.commission_rate_override, sp.max_active_listings, sp.features
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features
         FROM seller_subscriptions ss
         JOIN subscription_plans sp ON sp.id = ss.plan_id
         WHERE ss.seller_id = ? AND ss.status = 'active'
@@ -97,7 +107,7 @@ exports.findCurrentForSeller = async (sellerId) => {
 
     const [rows] = await db.query(
         `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
-                sp.commission_rate_override, sp.max_active_listings, sp.features
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features
         FROM seller_subscriptions ss
         JOIN subscription_plans sp ON sp.id = ss.plan_id
         WHERE ss.seller_id = ?
@@ -117,7 +127,21 @@ exports.findPendingForSeller = async (sellerId, planId) => {
     return rows[0];
 };
 
+// Single choke point for every payment/free-subscribe path: a plan is only
+// sold to the kind of account it is for (plan audience = account seller_mode),
+// so a marketplace seller can't buy the tools tier and a tools-only account
+// can't buy a commission tier.
 exports.createSubscription = async (sellerId, planId, connection = db) => {
+    const [[fit]] = await connection.query(
+        `SELECT p.audience, u.seller_mode
+         FROM subscription_plans p, users u
+         WHERE p.id = ? AND u.id = ?`,
+        [planId, sellerId]
+    );
+    if (!fit || fit.audience !== fit.seller_mode) {
+        throw new Error("That plan isn't available for your account type.");
+    }
+
     const [result] = await connection.query(
         `INSERT INTO seller_subscriptions (seller_id, plan_id, status, auto_renew)
         VALUES (?, ?, 'pending', TRUE)`,
@@ -134,28 +158,118 @@ exports.findById = async (subscriptionId, connection = db) => {
     return rows[0];
 };
 
+// The one row that grants benefits right now: status active or past_due
+// (grace window) AND still inside its period or grace window, judged
+// against NOW() rather than the status column alone. Every entitlement
+// check (commission rate, listing limit, plan display) goes through this,
+// so a job that runs late can never extend or cut a benefit by itself.
+exports.findEntitledForSeller = async (sellerId, connection = db) => {
+    const [rows] = await connection.query(
+        `SELECT ss.*, sp.code AS plan_code, sp.name AS plan_name, sp.price, sp.billing_cycle,
+                sp.commission_rate_override, sp.max_active_listings, sp.sponsorship_credits_per_month, sp.features, sp.entitlements
+        FROM seller_subscriptions ss
+        JOIN subscription_plans sp ON sp.id = ss.plan_id
+        WHERE ss.seller_id = ?
+            AND (
+                (ss.status = 'active' AND (ss.current_period_end IS NULL OR ss.current_period_end >= NOW()))
+                OR (ss.status = 'past_due' AND ss.grace_ends_at IS NOT NULL AND ss.grace_ends_at >= NOW())
+            )
+        ORDER BY ss.created_at DESC LIMIT 1`,
+        [sellerId]
+    );
+    return rows[0] || null;
+};
+
 // Called once payment for a subscription is confirmed. Activates it for
-// one billing period from now, and supersedes any other active
+// one billing period from now, and supersedes any other entitled
 // subscription the seller had (a seller has exactly one effective plan
-// at a time - upgrading/downgrading closes the old row rather than
-// leaving two "active" rows to reconcile).
+// at a time). Returns false when the row was already active, so the
+// caller can skip the period reset and the credit grant on a replayed
+// webhook or a double-submitted free-launch request.
 exports.activateSubscription = async (subscriptionId, sellerId, billingCycle, connection = db) => {
     const periodDays = billingCycle === "annual" ? 365 : 30;
+
+    const [result] = await connection.query(
+        `UPDATE seller_subscriptions
+        SET status = 'active', current_period_start = NOW(),
+            current_period_end = DATE_ADD(NOW(), INTERVAL ${periodDays} DAY),
+            grace_ends_at = NULL, expiry_reminder_sent_at = NULL
+        WHERE id = ? AND status <> 'active'`,
+        [subscriptionId]
+    );
+    if (result.affectedRows === 0) return false;
 
     await connection.query(
         `UPDATE seller_subscriptions
         SET status = 'cancelled', cancelled_at = NOW()
-        WHERE seller_id = ? AND status = 'active' AND id != ?`,
+        WHERE seller_id = ? AND status IN ('active', 'past_due') AND id != ?`,
         [sellerId, subscriptionId]
     );
+    return true;
+};
 
-    await connection.query(
+// Lifecycle sweeps used by subscriptionLifecycle.job.js. Each statement
+// is conditional on the status it moves from, so a second run is a no-op.
+exports.findPeriodEnded = async () => {
+    const [rows] = await db.query(
+        `SELECT id, auto_renew FROM seller_subscriptions
+        WHERE status = 'active' AND current_period_end IS NOT NULL AND current_period_end < NOW()`
+    );
+    return rows;
+};
+
+exports.markPastDue = async (subscriptionId, graceDays) => {
+    const [result] = await db.query(
         `UPDATE seller_subscriptions
-        SET status = 'active', current_period_start = NOW(),
-            current_period_end = DATE_ADD(NOW(), INTERVAL ${periodDays} DAY)
-        WHERE id = ?`,
+        SET status = 'past_due', grace_ends_at = DATE_ADD(current_period_end, INTERVAL ? DAY)
+        WHERE id = ? AND status = 'active'`,
+        [graceDays, subscriptionId]
+    );
+    return result.affectedRows > 0;
+};
+
+exports.markExpired = async (subscriptionId) => {
+    const [result] = await db.query(
+        `UPDATE seller_subscriptions SET status = 'expired'
+        WHERE id = ? AND status IN ('active', 'past_due')`,
         [subscriptionId]
     );
+    return result.affectedRows > 0;
+};
+
+exports.findGraceEnded = async () => {
+    const [rows] = await db.query(
+        `SELECT id FROM seller_subscriptions
+        WHERE status = 'past_due' AND grace_ends_at IS NOT NULL AND grace_ends_at < NOW()`
+    );
+    return rows;
+};
+
+// Active rows inside the reminder window whose reminder has not been sent
+// for this period. Applies to auto-renew and cancelled plans alike, since
+// no renewal runs automatically yet (see Phase 6 renewal decision). Claimed with a conditional update below so a
+// reminder is sent once per period.
+exports.findExpiringSoon = async (withinDays) => {
+    const [rows] = await db.query(
+        `SELECT ss.id, ss.seller_id, ss.auto_renew, sp.name AS plan_name, ss.current_period_end
+        FROM seller_subscriptions ss
+        JOIN subscription_plans sp ON sp.id = ss.plan_id
+        WHERE ss.status = 'active'
+            AND ss.expiry_reminder_sent_at IS NULL
+            AND ss.current_period_end IS NOT NULL
+            AND ss.current_period_end BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ? DAY)`,
+        [withinDays]
+    );
+    return rows;
+};
+
+exports.claimExpiryReminder = async (subscriptionId) => {
+    const [result] = await db.query(
+        `UPDATE seller_subscriptions SET expiry_reminder_sent_at = NOW()
+        WHERE id = ? AND expiry_reminder_sent_at IS NULL`,
+        [subscriptionId]
+    );
+    return result.affectedRows > 0;
 };
 
 exports.cancelSubscription = async (subscriptionId) => {

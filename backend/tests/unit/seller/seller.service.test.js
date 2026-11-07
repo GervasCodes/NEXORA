@@ -275,78 +275,9 @@ describe("seller.service.getAnalytics", () => {
     });
 });
 
-describe("seller.service verification fee / badge sync", () => {
-    it("payVerificationFee rejects when there's no seller profile yet", async () => {
-        sellerRepository.findByUserId.mockResolvedValue(undefined);
-        await expect(sellerService.payVerificationFee(1, "0700000000")).rejects.toThrow(
-            "Seller profile not found. Set up your store first."
-        );
-    });
-
-    it("payVerificationFee rejects when the fee was already paid", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ verification_fee_paid: 1 });
-        await expect(sellerService.payVerificationFee(1, "0700000000")).rejects.toThrow(
-            "The verification fee has already been paid."
-        );
-    });
-
-    it("payVerificationFee rejects without a phone number", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ verification_fee_paid: 0 });
-        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(true);
-        await expect(sellerService.payVerificationFee(1, null)).rejects.toThrow(
-            "A mobile money phone number is required."
-        );
-    });
-
-    it("payVerificationFee looks up the fee and kicks off payment via payment.service", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ verification_fee_paid: 0 });
-        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(true);
-        settingsService.getVerificationFee.mockResolvedValue(20000);
-        paymentService.initiateVerificationFeePayment.mockResolvedValue({ status: "pending" });
-
-        const result = await sellerService.payVerificationFee(1, "0700000000");
-
-        expect(paymentService.initiateVerificationFeePayment).toHaveBeenCalledWith(1, "0700000000", 20000);
-        expect(result).toEqual({ status: "pending" });
-    });
-
-    // Monetization Master Switch : when verification-fee
-    // monetization is off, payVerificationFee skips payment entirely
-    // and waives the fee immediately instead of requiring a phone
-    // number or calling payment.service at all.
-    it("payVerificationFee waives the fee instantly when verification-fee monetization is disabled", async () => {
-        settingsService.isVerificationFeeMonetizationEnabled.mockResolvedValue(false);
-        sellerRepository.setVerificationFeePaid.mockResolvedValue(undefined);
-        authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
-        // First call is payVerificationFee's own lookup (fee not yet
-        // paid); second is the one syncBadge makes internally after
-        // confirmVerificationFeePaid marks it waived.
-        sellerRepository.findByUserId
-            .mockResolvedValueOnce({ verification_fee_paid: 0 })
-            .mockResolvedValueOnce({ verification_fee_paid: 1, is_verified: 0 });
-
-        const result = await sellerService.payVerificationFee(1, null);
-
-        expect(sellerRepository.setVerificationFeePaid).toHaveBeenCalledWith(1, 0, "waived_free_launch");
-        expect(paymentService.initiateVerificationFeePayment).not.toHaveBeenCalled();
-        expect(result).toEqual({
-            status: "waived",
-            message: "Verification is free during launch - your badge is now active."
-        });
-    });
-
-    it("confirmVerificationFeePaid marks the fee paid then syncs the badge", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0, verification_fee_paid: 1 });
-        authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
-
-        await sellerService.confirmVerificationFeePaid(1, 20000, "TXN-1");
-
-        expect(sellerRepository.setVerificationFeePaid).toHaveBeenCalledWith(1, 20000, "TXN-1");
-        expect(sellerRepository.setBadge).toHaveBeenCalledWith(1, true);
-    });
-
-    it("syncBadgeForSeller flips the badge on only when both approval AND fee payment are true", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0, verification_fee_paid: 1 });
+describe("seller.service badge sync (verification fee retired)", () => {
+    it("syncBadgeForSeller flips the badge on once account verification is approved, with no fee involved", async () => {
+        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0 });
         authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
 
         const result = await sellerService.syncBadgeForSeller(1);
@@ -358,18 +289,8 @@ describe("seller.service verification fee / badge sync", () => {
         expect(result).toBe(true);
     });
 
-    it("syncBadgeForSeller does not flip the badge when approved but the fee is unpaid", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0, verification_fee_paid: 0 });
-        authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
-
-        const result = await sellerService.syncBadgeForSeller(1);
-
-        expect(sellerRepository.setBadge).not.toHaveBeenCalled();
-        expect(result).toBe(false);
-    });
-
-    it("syncBadgeForSeller does not flip the badge when fee is paid but account isn't approved", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0, verification_fee_paid: 1 });
+    it("syncBadgeForSeller does not flip the badge when account verification isn't approved", async () => {
+        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 0 });
         authRepository.findById.mockResolvedValue({ account_verification_status: "pending" });
 
         const result = await sellerService.syncBadgeForSeller(1);
@@ -379,7 +300,7 @@ describe("seller.service verification fee / badge sync", () => {
     });
 
     it("syncBadgeForSeller is a no-op when the badge already matches the target state", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 1, verification_fee_paid: 1 });
+        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 1 });
         authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
 
         const result = await sellerService.syncBadgeForSeller(1);
@@ -389,14 +310,21 @@ describe("seller.service verification fee / badge sync", () => {
         expect(result).toBe(true);
     });
 
-    it("syncBadgeForSeller revokes an already-on badge when it no longer qualifies, without notifying", async () => {
-        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 1, verification_fee_paid: 0 });
-        authRepository.findById.mockResolvedValue({ account_verification_status: "approved" });
+    it("syncBadgeForSeller revokes an already-on badge when account verification no longer qualifies (e.g. rejected on reappeal), without notifying", async () => {
+        sellerRepository.findByUserId.mockResolvedValue({ is_verified: 1 });
+        authRepository.findById.mockResolvedValue({ account_verification_status: "rejected" });
 
         const result = await sellerService.syncBadgeForSeller(1);
 
         expect(sellerRepository.setBadge).toHaveBeenCalledWith(1, false);
         expect(notificationService.notify).not.toHaveBeenCalled();
         expect(result).toBe(false);
+    });
+
+    // Confirms the retired fee flow is actually gone, not just unused -
+    // guards against it quietly coming back via a merge/rebase.
+    it("no longer exposes payVerificationFee or confirmVerificationFeePaid", () => {
+        expect(sellerService.payVerificationFee).toBeUndefined();
+        expect(sellerService.confirmVerificationFeePaid).toBeUndefined();
     });
 });

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
 import Input from "./ui/Input";
@@ -20,6 +21,7 @@ const RATING_OPTIONS = [4, 3, 2, 1];
 // StarIcon used everywhere else star ratings appear.
 
 export default function ServiceFilters({ categoryId, onChange }) {
+    const { t } = useLanguage();
     const { currency, toTzs } = useCurrency();
 
     const [minInput, setMinInput] = useState("");
@@ -29,6 +31,11 @@ export default function ServiceFilters({ categoryId, onChange }) {
     const [regionsError, setRegionsError] = useState(false);
     const [minRating, setMinRating] = useState("");
     const [sort, setSort] = useState("newest");
+    // Near me: only after an explicit tap, never on page load. Declined or
+    // unsupported geolocation hides the control.
+    const [near, setNear] = useState(null);
+    const [nearStatus, setNearStatus] = useState("idle");
+    const nearRef = useRef(null);
 
     // feeds the Location dropdown, same shape as
     // ProductFilters.jsx's own regions effect.
@@ -61,6 +68,7 @@ export default function ServiceFilters({ categoryId, onChange }) {
         // omitted key would leave a stale filter behind after "Clear";
         // an explicit `undefined` overwrites it.
         onChange({
+            ...(nearRef.current ? { near_lat: nearRef.current.lat, near_lng: nearRef.current.lng, near_radius: 25 } : {}),
             min_price: minTzs !== null ? minTzs : undefined,
             max_price: maxTzs !== null ? maxTzs : undefined,
             region: nextRegion || undefined,
@@ -95,6 +103,32 @@ export default function ServiceFilters({ categoryId, onChange }) {
         setRegion("");
         setMinRating("");
         emit("", "", "", "", sort);
+    };
+
+    const toggleNear = () => {
+        if (near) {
+            nearRef.current = null;
+            setNear(null);
+            setNearStatus("idle");
+            emit(minInput, maxInput, region, minRating, sort);
+            return;
+        }
+        if (!navigator.geolocation) {
+            setNearStatus("unsupported");
+            return;
+        }
+        setNearStatus("locating");
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                nearRef.current = next;
+                setNear(next);
+                setNearStatus("idle");
+                emit(minInput, maxInput, region, minRating, sort);
+            },
+            () => setNearStatus("denied"),
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+        );
     };
 
     const hasActiveFilters = minInput !== "" || maxInput !== "" || region !== "" || minRating !== "";
@@ -181,6 +215,20 @@ export default function ServiceFilters({ categoryId, onChange }) {
                     ))}
                 </select>
             </div>
+
+            {nearStatus !== "denied" && nearStatus !== "unsupported" && (
+                <button
+                    type="button"
+                    onClick={toggleNear}
+                    disabled={nearStatus === "locating"}
+                    aria-pressed={!!near}
+                    className={`h-11 px-4 rounded-full border text-sm transition-colors disabled:opacity-50 ${
+                        near ? "border-ink bg-ink text-paper" : "border-line text-ash hover:border-ink"
+                    }`}
+                >
+                    {nearStatus === "locating" ? t("services.nearMeLocating") : near ? t("services.nearMeClear") : t("services.nearMe")}
+                </button>
+            )}
 
             {hasActiveFilters && (
                 <button

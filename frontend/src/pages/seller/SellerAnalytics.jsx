@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatShortDate } from "../../utils/format";
 import BarChart from "../../components/BarChart";
 import LineChart from "../../components/LineChart";
 import PeriodComparisonCard from "../../components/PeriodComparisonCard";
-import VerificationFeeGate from "../../components/VerificationFeeGate";
 import NexoraAnalyticsSummary from "../../components/ai/NexoraAnalyticsSummary";
 import NexoraDemandForecast from "../../components/ai/NexoraDemandForecast";
 import Skeleton from "../../components/Skeleton";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
+import ErrorState from "../../components/ui/ErrorState";
+import { useToast } from "../../context/ToastContext";
+import Spinner from "../../components/ui/Spinner";
 
 function useStatusLabels(t) {
     return {
@@ -24,8 +26,8 @@ function useStatusLabels(t) {
 }
 
 // Merchant-Type-Aware Dashboard  - GET /seller/analytics stays
-// the single source of truth for the paid Verified Seller fee gate
-// (requireVerificationFeePaid isn't merchant-type-specific, so every
+// the single source of truth for the subscription-tier gate
+// (requireSubscriptionTier isn't merchant-type-specific, so every
 // merchant type still needs it called once to know whether analytics is
 // unlocked at all). What changes is what's rendered/fetched once it is
 // unlocked: the existing order/product breakdown only for
@@ -72,7 +74,8 @@ function summarizeBookings(bookings) {
 export default function SellerAnalytics() {
     const { t } = useLanguage();
     const STATUS_LABELS = useStatusLabels(t);
-    const { profile, refreshProfile } = useOutletContext();
+    const { profile } = useOutletContext();
+    const toast = useToast();
     const merchantType = profile?.merchant_type || "product";
     const showProducts = merchantType === "product" || merchantType === "hybrid";
     const showServices = merchantType === "service" || merchantType === "hybrid";
@@ -84,7 +87,7 @@ export default function SellerAnalytics() {
     const [advancedAnalytics, setAdvancedAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [feeRequired, setFeeRequired] = useState(null); // required_fee amount, or null if not locked
+    const [subscriptionRequired, setSubscriptionRequired] = useState(false);
     const [exportingType, setExportingType] = useState(null);
     // Trend view toggle - Bar/Line render the exact same dailySales data,
     // this just swaps which of the two chart components draws it.
@@ -99,7 +102,7 @@ export default function SellerAnalytics() {
     const load = () => {
         setLoading(true);
         setError("");
-        setFeeRequired(null);
+        setSubscriptionRequired(false);
         api.get("/seller/analytics")
             .then(({ data }) => {
                 setAnalytics(data.data);
@@ -113,8 +116,8 @@ export default function SellerAnalytics() {
                 if (advancedRes) setAdvancedAnalytics(advancedRes.data.data);
             })
             .catch((err) => {
-                if (err.response?.data?.code === "VERIFICATION_FEE_REQUIRED") {
-                    setFeeRequired(err.response.data.required_fee);
+                if (err.response?.data?.code === "SUBSCRIPTION_REQUIRED") {
+                    setSubscriptionRequired(true);
                 } else {
                     setError(extractErrorMessage(err));
                 }
@@ -158,8 +161,9 @@ export default function SellerAnalytics() {
                 link.remove();
                 window.URL.revokeObjectURL(url);
             })
+            .catch((err) => toast?.error(extractErrorMessage(err) || "Couldn't export that report. Try again."))
             .finally(() => setExportingType(null));
-    }, []);
+    }, [toast]);
 
     // Skeleton mirrors the real dashboard's shape (stat cards, chart,
     // two product/service lists) rather than a full-page blocking
@@ -198,26 +202,28 @@ export default function SellerAnalytics() {
         );
     }
 
-    if (feeRequired !== null) {
+    if (subscriptionRequired) {
         return (
             <div>
                 <h1 className="font-display text-2xl mb-1">{t("seller.analytics.title")}</h1>
                 <p className="text-ash text-sm mb-8">
                     {t("seller.analytics.feeGateDescription")}
                 </p>
-                <VerificationFeeGate
-                    requiredFee={feeRequired}
-                    returnPath="/seller/analytics"
-                    onPaid={() => {
-                        refreshProfile?.();
-                        load();
-                    }}
-                />
+                <div className="max-w-md glass-strong rounded-lg p-5">
+                    <h2 className="font-display text-lg mb-1">{t("trial.gate.analyticsTitle")}</h2>
+                    <p className="text-sm text-ash mb-4">{t("trial.gate.analyticsBody")}</p>
+                    <Link
+                        to="/seller/subscription"
+                        className="inline-block w-full text-center bg-ink text-white px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity"
+                    >
+                        {t("seller.pos.gateCta")}
+                    </Link>
+                </div>
             </div>
         );
     }
 
-    if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
+    if (error) return <ErrorState title="Couldn't load analytics" hint={error} onRetry={load} />;
     if (!analytics) return null;
 
     const { totals, commissionRate, statusBreakdown, dailySales, topProducts, repeatCustomers } = analytics;
@@ -330,12 +336,12 @@ export default function SellerAnalytics() {
                                             onChange={(e) => setCustomEnd(e.target.value)}
                                         />
                                     </label>
-                                    <button
+                                    <button aria-busy={loadingCustomRange || undefined}
                                         type="button"
                                         onClick={applyCustomRange}
                                         disabled={loadingCustomRange}
                                         className="text-sm bg-azure text-paper px-3 py-1.5 rounded-md hover:bg-azure-deep transition-colors disabled:opacity-50"
-                                    >
+                                    >{loadingCustomRange && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                         {loadingCustomRange ? t("common.loading") : t("seller.analytics.apply")}
                                     </button>
                                     {advancedAnalytics.periodComparison.custom && !loadingCustomRange && (

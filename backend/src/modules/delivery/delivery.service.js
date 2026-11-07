@@ -1,5 +1,7 @@
 const deliveryRepository = require("./delivery.repository");
 const deliveryPricingService = require("./deliveryPricing.service");
+const deliveryRatesService = require("./deliveryRates.service");
+const deliveryRatesRepository = require("./deliveryRates.repository");
 const orderRepository = require("../order/order.repository");
 const sellerRepository = require("../seller/seller.repository");
 const notificationService = require("../notification/notification.service");
@@ -11,6 +13,7 @@ const earningsService = require("../earnings/earnings.service");
 const { haversineKm } = require("../../utils/geo");
 const routingService = require("../../services/routing/routing.service");
 const agentScoring = require("./agentScoring");
+const { hasUsablePin } = require("../../utils/pickupPin");
 const dispatchQueue = require("../../queues/dispatchQueue");
 const { DELIVERY_STATUS_TRANSITIONS } = require("../../constants/orderStatus");
 // Roadmap Phase 1 (WhatsApp/SMS as an Offer-Accept Channel).
@@ -26,8 +29,22 @@ const socket = () => require("../../socket/socket");
 // module's isDuplicateKeyError comment).
 const isDuplicateKeyError = (err) => err && (err.code === "ER_DUP_ENTRY" || err.errno === 1062);
 
+// Own payout, not the order total (Phase 5, P0) - this list previously
+// showed order.total_amount on each card, which is what the *buyer*
+// paid for the whole order, not what the agent earns for delivering it;
+// an agent picking between offers had no way to actually compare them
+// by what matters to them. Each card now carries `agent_payout`,
+// computed the same way (deliveryPricing.service.js) the amount
+// actually credited to the agent on delivery is derived, so the number
+// shown here is the real one, not an estimate that could drift from it.
 exports.getAvailableForPickup = async () => {
-    return deliveryRepository.findAvailableForPickup();
+    const orders = await deliveryRepository.findAvailableForPickup();
+
+    return Promise.all(orders.map(async (row) => {
+        const order = await orderRepository.findOrderById(row.order_id);
+        const pricing = order ? await deliveryPricingService.calculateDeliveryFee(order) : null;
+        return { ...row, agent_payout: pricing?.fee ?? null, agent_payout_distance_km: pricing?.distanceKm ?? null };
+    }));
 };
 
 exports.claimDelivery = async (orderId, agentId) => {
@@ -47,7 +64,7 @@ exports.claimDelivery = async (orderId, agentId) => {
     }
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
-        await deliveryPricingService.calculateDeliveryFee(order);
+        await deliveryPricingService.calculateDeliveryFee(order, await deliveryRatesRepository.findAgentVehicleType(agentId));
 
     // The findByOrderId check above is check-then-act: two agents racing to
     // claim the same order can both pass it before either has inserted a
@@ -70,6 +87,8 @@ exports.claimDelivery = async (orderId, agentId) => {
     // let the admin dispatch dashboard know a new delivery just
     // entered the active pool, without waiting for its next poll/refresh.
     socket().emitToAdmins("dispatch:delivery_assigned", { orderId, deliveryId, agentId });
+    // The order left the shared pool - other agents' lists drop it.
+    socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "claimed" });
 
     return { deliveryId, orderId };
 };
@@ -113,7 +132,7 @@ exports.adminAssignDelivery = async (orderId, agentId) => {
     }
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } =
-        await deliveryPricingService.calculateDeliveryFee(order);
+        await deliveryPricingService.calculateDeliveryFee(order, agent.vehicle_type);
 
     // Same check-then-act race as claimDelivery above - the UNIQUE
     // constraint on deliveries.order_id is the real guard.
@@ -216,7 +235,7 @@ exports.getDelivery = async (orderId, userId) => {
 // of `updateAgentLocation` (every live "agent:location" ping)
 // and `updateDeliveryStatus` (every status transition) - one place
 // computes the road-routing ETA, every caller gets the same shape back.
-const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType }) => {
+const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType, region }) => {
     const hasDestination = destLat != null && destLng != null;
     const hasFromPoint = fromLat != null && fromLng != null;
 
@@ -237,9 +256,18 @@ const computeRouteEta = async ({ fromLat, fromLng, destLat, destLng, vehicleType
         vehicleType
     });
 
+    // Round 5, Phase 5 - tracking shows the same peak-hour-adjusted ETA the
+    // buyer saw at checkout (admin-configured windows; see
+    // deliveryRates.service.js#adjustEta). The pickup handling buffer is not
+    // added here: tracking measures from the agent's current position.
+    const etaMinutes = await deliveryRatesService.adjustEta(
+        route.durationMinutes != null ? Math.round(route.durationMinutes) : null,
+        { region }
+    );
+
     return {
         distance_remaining_km: Number(route.distanceKm.toFixed(2)),
-        eta_minutes: route.durationMinutes != null ? Math.round(route.durationMinutes) : null,
+        eta_minutes: etaMinutes,
         routing_provider: route.provider,
         degraded: route.degraded
     };
@@ -268,7 +296,8 @@ const buildTrackingSummary = async (delivery, order) => {
         fromLng,
         destLat,
         destLng,
-        vehicleType: delivery.agent_vehicle_type
+        vehicleType: delivery.agent_vehicle_type,
+        region: order.shipping_region
     });
 
     return {
@@ -282,7 +311,15 @@ const buildTrackingSummary = async (delivery, order) => {
     };
 };
 
-exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
+// Proof-of-delivery distance threshold (Phase 5, P0) - a dropoff photo
+// taken more than this far from the order's own delivery pin is flagged
+// for review rather than silently accepted; it doesn't block the
+// delivery from completing (a rider might legitimately be a bit off a
+// building's exact pin), just surfaces it to admins as a signal worth a
+// second look.
+const DROPOFF_FLAG_DISTANCE_M = 300;
+
+exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes, proofInput = {}) => {
     const delivery = await deliveryRepository.findByOrderId(orderId);
 
     if (!delivery || delivery.agent_id !== agentId) {
@@ -297,7 +334,56 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
         );
     }
 
-    await deliveryRepository.updateStatus(delivery.id, newStatus, notes);
+    let proof = {};
+
+    // Delivery proof (Phase 5, P0) - a rider can no longer just tap
+    // "delivered" with nothing backing it up. Two ways to prove it:
+    // 1) the buyer's handover code (the normal case - told to the buyer
+    //    by SMS/WhatsApp at order time, see order.service.js), or
+    // 2) a dropoff photo + the rider's GPS position, when the buyer
+    //    can't/won't give the code (phone off, code lost, etc.) - this
+    //    doesn't block completion but is flagged for review if the
+    //    photo's GPS position is far from the order's delivery pin.
+    if (newStatus === "delivered") {
+        const order = await orderRepository.findOrderById(orderId);
+        const { handoverCode, deliveryLat, deliveryLng, dropoffPhotoFile } = proofInput;
+
+        if (handoverCode && order?.delivery_handover_code && handoverCode === order.delivery_handover_code) {
+            proof = { handoverVerified: true, handoverMethod: "code" };
+        } else if (dropoffPhotoFile) {
+            const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+            const uploaded = await uploadToCloudinary(dropoffPhotoFile.buffer, "nexora/delivery-proof", "image");
+
+            let distanceM = null;
+            let flagged = false;
+            if (deliveryLat && deliveryLng && order?.delivery_lat && order?.delivery_lng) {
+                distanceM = Math.round(haversineKm(deliveryLat, deliveryLng, order.delivery_lat, order.delivery_lng) * 1000);
+                flagged = distanceM > DROPOFF_FLAG_DISTANCE_M;
+            }
+
+            proof = {
+                handoverVerified: true,
+                handoverMethod: "photo_gps",
+                dropoffPhotoUrl: uploaded.secure_url,
+                dropoffDistanceM: distanceM,
+                dropoffFlagged: flagged
+            };
+
+            if (flagged) {
+                Sentry.captureMessage("Delivery dropoff photo far from delivery pin", {
+                    level: "warning",
+                    tags: { area: "delivery", stage: "dropoff-proof" },
+                    extra: { orderId, distanceM }
+                });
+            }
+        } else if (handoverCode) {
+            throw new Error("That handover code doesn't match this order - ask the buyer to check it, or use a photo instead");
+        } else {
+            throw new Error("A handover code or a dropoff photo is required to complete this delivery");
+        }
+    }
+
+    await deliveryRepository.updateStatus(delivery.id, newStatus, notes, proof);
 
     // Keep the order's own status in sync with the delivery outcome
     if (newStatus === "delivered") {
@@ -307,6 +393,24 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             logger.error({ err, orderId }, "rider earnings credit error");
             Sentry.captureException(err, { tags: { area: "delivery", stage: "earnings-credit" }, extra: { orderId } });
         });
+    }
+
+    // Refused-delivery strikes (Phase 2, P1) - a Cash on Delivery order the
+    // agent could not deliver (refused, buyer unreachable, wrong address,
+    // etc.) counts against the buyer's account. Past
+    // settings.cod_block_after_refused_count, kyc.service.js#enforceCodNotBlocked
+    // switches Cash on Delivery off for that buyer at checkout. Only counted
+    // for Cash on Delivery - a failed prepaid delivery is a logistics
+    // problem, not a payment-risk signal about the buyer.
+    if (newStatus === "failed") {
+        const failedOrder = await orderRepository.findOrderById(orderId);
+        if (failedOrder && failedOrder.payment_method === "cash_on_delivery") {
+            const kycRepository = require("../kyc/kyc.repository");
+            kycRepository.incrementRefusedCodCount(failedOrder.buyer_id).catch((err) => {
+                logger.error({ err, orderId }, "refused Cash on Delivery strike increment error");
+                Sentry.captureException(err, { tags: { area: "delivery", stage: "cod-strike" }, extra: { orderId } });
+            });
+        }
     }
 
     const order = await orderRepository.findOrderById(orderId);
@@ -353,6 +457,18 @@ exports.updateDeliveryStatus = async (orderId, agentId, newStatus, notes) => {
             status: newStatus
         });
     }
+};
+
+// Pickup confirmation photo (Phase 5, P1).
+exports.confirmPickupPhoto = async (orderId, agentId, photoFile) => {
+    const delivery = await deliveryRepository.findByOrderId(orderId);
+    if (!delivery || delivery.agent_id !== agentId) {
+        throw new Error("Delivery not found");
+    }
+
+    const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+    const uploaded = await uploadToCloudinary(photoFile.buffer, "nexora/delivery-proof", "image");
+    await deliveryRepository.recordPickupPhoto(delivery.id, uploaded.secure_url);
 };
 
 // ---- Agent presence & location -------------------------------------------
@@ -459,7 +575,9 @@ const getSellerPickupPoint = async (order) => {
     if (!sellerId) return null;
 
     const seller = await sellerRepository.findByUserId(sellerId);
-    if (!seller || seller.pickup_lat == null || seller.pickup_lng == null) return null;
+    // Phase 2: a pin that is missing or outside Tanzania can't be matched
+    // against, so it is treated as "no pin" (manual pool + seller nudge).
+    if (!hasUsablePin(seller)) return null;
 
     return {
         lat: Number(seller.pickup_lat),
@@ -493,17 +611,28 @@ exports.startMatching = async (orderId) => {
     const order = await orderRepository.findOrderById(orderId);
     if (!order) return;
 
+    // Phase 2: a made-to-order item that is still being made (or whose
+    // seller hasn't marked it ready) is never offered to drivers - no
+    // offers, no expiry timers, no manual-pool entry.
+    if (order.order_type === "pre_order" && !order.ready_at) {
+        logger.info({ orderId }, "made-to-order item not marked ready - dispatch not started");
+        return;
+    }
+
     const pickup = await getSellerPickupPoint(order);
 
     // No seller pickup pin yet (seller hasn't set one in Store settings) —
     // fall back to the manual "available for pickup" pool instead of
     // matching.
-    if (!pickup) return;
+    if (!pickup) {
+        socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "added" });
+        return;
+    }
 
     await offerToNextCandidate(orderId, pickup, 0);
 };
 
-// Ranks candidates by straight-line distance to the shop first (cheap,
+// Ranks candidates (see rankCandidates below) by straight-line distance to the shop first (cheap,
 // no network calls), then asks the routing layer for a real travel-time
 // ETA on just the closest few (see ETA_CANDIDATE_POOL_SIZE) and, within
 // that same small pool, scores each candidate on ETA plus historical
@@ -515,7 +644,13 @@ exports.startMatching = async (orderId) => {
 // lookup fails for some agent (the routing layer's own fallback
 // provider means that's effectively never, but this keeps dispatch
 // working either way).
-const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
+// Phase 2: now also drop-off aware. `dropoff` is { lat, lng } of the buyer's
+// destination (or null when the order has no coordinates, in which case the
+// score ignores the drop-off and ranks exactly as before). Every candidate
+// in the ETA pool also gets a `dropoffFit` (see agentScoring.dropoffFit) and
+// the final `score` is kept on the returned agent so it can be stored with
+// the offer.
+const rankCandidates = async (candidates, pickup, dropoff, radiusKm) => {
     const inRange = candidates
         .map((agent) => ({
             ...agent,
@@ -527,6 +662,7 @@ const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
     if (inRange.length === 0) return [];
 
     const etaPool = inRange.slice(0, ETA_CANDIDATE_POOL_SIZE);
+    const pickupToDropKm = dropoff ? haversineKm(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : null;
 
     const withEta = await Promise.all(
         etaPool.map(async (agent) => {
@@ -540,25 +676,32 @@ const rankCandidatesBySellerEta = async (candidates, pickup, radiusKm) => {
                 });
                 return { ...agent, etaMinutesToSeller: route.durationMinutes };
             } catch {
-                // Unknown ETA — keep the agent, just don't let a routing
+                // Unknown ETA - keep the agent, just don't let a routing
                 // hiccup drop them from consideration.
                 return { ...agent, etaMinutesToSeller: null };
             }
         })
     );
 
-    // Roadmap pull acceptance/completion history for just this
-    // small pool (one batched query each, not one per agent - see
-    // delivery.repository.js#findAgentPerformanceStats) and fold it
-    // into a single weighted score per candidate, instead of sorting by
-    // etaMinutesToSeller alone.
+    // Pull acceptance/completion history for just this small pool (one
+    // batched query each, see delivery.repository.js#findAgentPerformanceStats).
     const performanceStats = await deliveryRepository.findAgentPerformanceStats(
         withEta.map((agent) => agent.id)
     );
 
     const scored = withEta.map((agent) => {
         const stats = performanceStats[agent.id] || { acceptanceRate: null, completionRate: null };
-        const withStats = { ...agent, ...stats };
+        const agentToDropKm = dropoff
+            ? haversineKm(agent.current_lat, agent.current_lng, dropoff.lat, dropoff.lng)
+            : null;
+        const dropoffFit = dropoff
+            ? agentScoring.dropoffFit({
+                agentToPickupKm: agent.distanceKm,
+                pickupToDropKm,
+                agentToDropKm
+            })
+            : null;
+        const withStats = { ...agent, ...stats, agentToDropKm, dropoffFit };
         return { ...withStats, score: agentScoring.scoreCandidate(withStats) };
     });
 
@@ -633,16 +776,33 @@ const scheduleOfferExpiry = async (offerId, orderId, pickup, radiusIndex, timeou
 //     picked up either by a human claiming it, or by the periodic
 //     re-check job (jobs/deliveryRematch.job.js) retrying matching from
 //     radiusIndex 0 again on its next tick.
-const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
+const offerToNextCandidate = async (orderId, queuedPickup, radiusIndex) => {
     // Someone may have manually claimed it while offers were in flight.
     const existingDelivery = await deliveryRepository.findByOrderId(orderId);
     if (existingDelivery) return;
 
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order) return;
+
+    // Phase 2: never offer a made-to-order item that isn't marked ready.
+    if (order.order_type === "pre_order" && !order.ready_at) return;
+
+    // Phase 2: use the seller's CURRENT pin, not the copy that rode along in
+    // the queued job payload (the seller may have corrected it since).
+    const pickup = (await getSellerPickupPoint(order)) || queuedPickup;
+    const dropoff = order.delivery_lat != null && order.delivery_lng != null
+        ? { lat: Number(order.delivery_lat), lng: Number(order.delivery_lng) }
+        : null;
+
     const radiusSteps = await settingsService.getDeliveryOfferRadiusStepsKm();
     const radiusKm = radiusSteps[Math.min(radiusIndex, radiusSteps.length - 1)];
 
-    const candidates = await deliveryRepository.findCandidateAgents(orderId);
-    const ranked = await rankCandidatesBySellerEta(candidates, pickup, radiusKm);
+    const [maxAgeSeconds, cooldownSeconds] = await Promise.all([
+        settingsService.getDeliveryLocationMaxAgeSeconds(),
+        settingsService.getDeliveryOfferCooldownSeconds()
+    ]);
+    const candidates = await deliveryRepository.findCandidateAgents(orderId, { maxAgeSeconds, cooldownSeconds });
+    const ranked = await rankCandidates(candidates, pickup, dropoff, radiusKm);
 
     if (ranked.length === 0) {
         const nextRadiusIndex = radiusIndex + 1;
@@ -674,6 +834,8 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
             phase: "exhausted",
             radiusStepsKm: radiusSteps
         });
+        // No agent could be offered the order: it now sits in the manual pool.
+        socket().emitToAgents?.("delivery:pool_updated", { orderId, reason: "added" });
         return;
     }
 
@@ -694,26 +856,53 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
         ? "whatsapp"
         : (smsProvider.isConfigured() ? "sms" : null);
 
+    // Phase 2: what the whole job is worth to this agent - pay, how far the
+    // customer is from the shop, and the total trip time - so they can judge
+    // it before accepting. A quote failure never blocks the offer.
+    let jobSummary = { payout: null, dropoffKm: null, tripMinutes: null };
+    try {
+        const quote = await deliveryPricingService.calculateDeliveryFee(order, nearest.vehicle_type);
+        jobSummary = {
+            payout: quote?.fee ?? null,
+            dropoffKm: quote?.distanceKm ?? null,
+            tripMinutes: quote?.durationMinutes ?? null
+        };
+    } catch (err) {
+        logger.warn({ err, orderId }, "could not price offer for dispatch payload");
+    }
+    if (jobSummary.dropoffKm == null && dropoff) {
+        jobSummary.dropoffKm = Math.round(haversineKm(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) * 10) / 10;
+    }
+
     const offerId = await deliveryRepository.createOffer(
         orderId,
         nearest.id,
         nearest.distanceKm,
         expiresAt,
-        externalChannel
+        externalChannel,
+        {
+            dropoffDistanceKm: jobSummary.dropoffKm,
+            tripMinutes: jobSummary.tripMinutes,
+            payoutQuote: jobSummary.payout,
+            score: nearest.score ?? null,
+            radiusIndex
+        }
     );
-
-    const order = await orderRepository.findOrderById(orderId);
 
     socket().emitToUser(nearest.id, "delivery:offer", {
         offerId,
         orderId,
         orderNumber: order.order_number,
-        // Shop details the agent needs to go collect the order from —
-        // the buyer's address matters once it's in hand, not before.
+        // Shop details the agent needs to go collect the order from.
         pickupStoreName: pickup.storeName,
         pickupAddress: pickup.address,
         distanceToSellerKm: Math.round(nearest.distanceKm * 10) / 10,
         etaToSellerMinutes: nearest.etaMinutesToSeller ?? null,
+        // Phase 2: the other half of the job.
+        dropoffArea: [order.shipping_city, order.shipping_region].filter(Boolean).join(", ") || null,
+        dropoffDistanceKm: jobSummary.dropoffKm,
+        tripMinutes: jobSummary.tripMinutes,
+        payoutAmount: jobSummary.payout,
         expiresInMs: timeoutMs
     });
 
@@ -740,7 +929,10 @@ const offerToNextCandidate = async (orderId, pickup, radiusIndex) => {
         const offerText =
             `New pickup offer - ${order.order_number}\n` +
             `Shop: ${pickup.storeName || "NEXORA seller"}\n` +
-            `${etaLine} to the shop\n\n` +
+            `${etaLine} to the shop` +
+            (jobSummary.dropoffKm != null ? `, then ${jobSummary.dropoffKm} km to the customer` : "") +
+            (jobSummary.payout != null ? `\nPay: ${Math.round(jobSummary.payout)} TZS` : "") +
+            `\n\n` +
             `Reply YES ${offerId} to accept, or NO ${offerId} to decline. ` +
             `Expires in ${Math.round(timeoutMs / 60000)} min.`;
 
@@ -764,6 +956,8 @@ const handleOfferExpiryJob = async ({ offerId, orderId, pickup, radiusIndex }) =
     const stillPending = await deliveryRepository.expireOffer(offerId);
     if (!stillPending) return; // already accepted/declined
 
+    // Phase 2: the queued payload carries the pin as it was when the offer
+    // was made; if the seller has moved it since, use the current one.
     await offerToNextCandidate(orderId, pickup, radiusIndex);
 };
 exports.handleOfferExpiryJob = handleOfferExpiryJob;
@@ -805,9 +999,26 @@ exports.acceptOffer = async (offerId, agentId, responseChannel = "app") => {
     const order = await orderRepository.findOrderById(offer.order_id);
 
     const { fee: deliveryFee, distanceKm, durationMinutes, routingProvider } = order
-        ? await deliveryPricingService.calculateDeliveryFee(order)
+        ? await deliveryPricingService.calculateDeliveryFee(order, await deliveryRatesRepository.findAgentVehicleType(agentId))
         : { fee: await settingsService.getRiderDeliveryFee(), distanceKm: null, durationMinutes: null, routingProvider: null };
-    await deliveryRepository.create(offer.order_id, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider);
+    // Phase 2: the offer is accepted first (an atomic conditional UPDATE),
+    // then the delivery row is inserted. deliveries.order_id is UNIQUE, so if
+    // a manual claim slipped in between the check above and this insert, the
+    // insert loses - translate that into the friendly message (same as
+    // claimDelivery) and put the offer back to "expired" so it isn't left
+    // "accepted" with no delivery behind it. Any other failure also rolls the
+    // offer back and is rethrown; the re-match sweep will pick the order up.
+    try {
+        await deliveryRepository.create(offer.order_id, agentId, deliveryFee, distanceKm, durationMinutes, routingProvider);
+    } catch (err) {
+        await deliveryRepository.revertAcceptedOffer(offerId).catch((revertErr) => {
+            logger.error({ err: revertErr, offerId }, "failed to revert accepted offer after delivery insert failure");
+        });
+        if (isDuplicateKeyError(err)) {
+            throw new Error("This order has already been claimed");
+        }
+        throw err;
+    }
 
     if (order) {
         await notificationService.notify({
@@ -908,7 +1119,9 @@ exports.declineOffer = async (offerId, agentId, responseChannel = "app") => {
             // rather than resetting to the smallest step - see
             // resolveRadiusIndexForDistance.
             const radiusSteps = await settingsService.getDeliveryOfferRadiusStepsKm();
-            const radiusIndex = resolveRadiusIndexForDistance(offer.distance_km, radiusSteps);
+            const radiusIndex = offer.radius_index != null
+                ? Math.min(Number(offer.radius_index), radiusSteps.length - 1)
+                : resolveRadiusIndexForDistance(offer.distance_km, radiusSteps);
             await offerToNextCandidate(offer.order_id, pickup, radiusIndex);
         }
     }

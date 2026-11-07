@@ -2,16 +2,15 @@ const db = require("../../config/db");
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
-const monetizationScheduleService = require("../monetizationSchedule/monetizationSchedule.service");
 const logger = require("../../utils/logger").child({ module: "admin" });
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
 const featuredStoreService = require("../featuredStore/featuredStore.service");
-const departmentSponsorshipService = require("../departmentSponsorship/departmentSponsorship.service");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const accountRepository = require("../account/account.repository");
 const { deleteManyFromCloudinary } = require("../../utils/cloudinaryDelete");
+const { deleteStoredDocument } = require("../../utils/privateDocuments");
 // (Admin Manual Override & Ops Visibility) - manualAssignDelivery
 // below delegates the actual delivery-row creation to delivery.service.js
 // so manual admin assignment goes through the same hardened path
@@ -89,7 +88,7 @@ exports.listDeletedUsers = async () => {
 //   - orders, order_items, payments, wallet_transactions,
 //     withdrawal_requests, agent_earnings, disputes + evidence/messages,
 //     reviews + review_photos, delivery_ratings, audit_logs, fraud_flags,
-//     sponsorship/featured-store/department-sponsorship campaigns
+//     sponsorship/featured-store campaigns
 //   - conversations (kept for the other participant); the deleted
 //     account's own messages are tombstoned via the existing "delete
 //     message" mechanism (is_deleted/deleted_at), not removed
@@ -119,6 +118,7 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
     // deleted from the database - once the account_verification_documents
     // /product rows are gone, there's no way to look their URLs back up.
     const verificationDocUrls = await adminRepository.findAccountVerificationDocumentUrls(userId);
+    const privateVerificationDocs = await adminRepository.findPrivateVerificationDocuments(userId);
 
     const sellerAssets = await adminRepository.findSellerLogoAndBanner(userId);
     const sellerAssetUrls = sellerAssets
@@ -194,6 +194,12 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         connection.release();
     }
 
+    // Round 6 Phase 3 - account is gone or anonymized either way (hard
+    // delete or scrubUserPII), so kick any socket that's still open for
+    // it right now rather than leaving it connected. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
+
     // Cloudinary cleanup happens after the transaction commits, not
     // inside it - Cloudinary isn't transactional, and the DB state (the
     // part that actually matters for correctness/re-running this safely)
@@ -205,6 +211,10 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
         ...sellerAssetUrls,
         ...productMediaUrls
     ]);
+    for (const doc of privateVerificationDocs) {
+        const ok = await deleteStoredDocument(doc);
+        if (!ok) failedDeletes.push(doc.file_public_id);
+    }
 
     auditService.log({
         userId: actorAdminId,
@@ -216,7 +226,7 @@ exports.permanentlyDeleteUser = async (userId, actorAdminId) => {
             hard_deleted: hardDeleted,
             products_deleted: neverOrderedProductIds.length,
             cloudinary_assets_deleted:
-                verificationDocUrls.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
+                verificationDocUrls.length + privateVerificationDocs.length + sellerAssetUrls.length + productMediaUrls.length - failedDeletes.length,
             cloudinary_assets_failed: failedDeletes.length
         }
     });
@@ -281,6 +291,11 @@ exports.suspendUser = async (userId, reason, adminId) => {
     }
 
     await adminRepository.suspendUser(userId, reason.trim(), adminId);
+
+    // Round 6 Phase 3 - kick any already-open socket now, don't wait for
+    // its token's natural 7-day expiry or a reconnect. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
 
     await notificationService.notify({
         userId,
@@ -587,7 +602,10 @@ exports.manualAssignDelivery = async (orderId, agentId, adminId) => {
     return result;
 };
 
+const emailOutboxService = require("../emailOutbox/emailOutbox.service");
+
 exports.getDashboard = async () => {
+    const failedEmails = await emailOutboxService.countFailed();
     const { userCounts, orderCounts, revenue, productCounts, bookingCounts, bookingRevenue, serviceCounts } =
         await adminRepository.getDashboardStats();
 
@@ -617,6 +635,7 @@ exports.getDashboard = async () => {
             cancelled: Number(bookingCounts.cancelled_bookings) || 0
         },
         bookingRevenue: Number(bookingRevenue.total_booking_revenue) || 0,
+        email: { failed: failedEmails },
         services: {
             total: Number(serviceCounts.total_services) || 0,
             active: Number(serviceCounts.active_services) || 0
@@ -1033,12 +1052,15 @@ exports.exportAdvancedAnalyticsCsv = async (type) => {
 };
 
 exports.getSettings = async () => {
-    return settingsService.getAll();
+    const [settings, meta] = await Promise.all([settingsService.getAll(), settingsService.getSettingsMeta()]);
+    return { ...settings, setting_meta: meta, settings_loaded_at: new Date().toISOString() };
 };
 
-exports.updateSettings = async (data) => {
-    return settingsService.updateSettings(data);
+exports.updateSettings = async (data, actorId) => {
+    return settingsService.updateSettings(data, { actorId });
 };
+
+exports.getSettingHistory = async (key) => settingsService.getSettingHistory(key);
 
 // Read-only Nexora Assistant token usage (today/this month, global) for
 // the Admin Settings page's usage panel . Lazily required
@@ -1059,28 +1081,6 @@ exports.getAiQualitySummary = async () => {
     return aiService.getQualityOverview();
 };
 
-// --- Monetization Master Switch (Admin Billing Control Center) ---
-
-exports.getMonetizationStatus = async () => {
-    return settingsService.getMonetizationStatus();
-};
-
-exports.updateMonetizationSettings = async (data, adminId) => {
-    return settingsService.updateMonetizationSettings(data, adminId);
-};
-
-exports.listMonetizationSchedule = async () => {
-    return monetizationScheduleService.listPending();
-};
-
-exports.createMonetizationSchedule = async (settingKey, enabled, scheduledAt, adminId) => {
-    return monetizationScheduleService.schedule(settingKey, enabled, scheduledAt, adminId);
-};
-
-exports.cancelMonetizationSchedule = async (scheduleId, adminId) => {
-    return monetizationScheduleService.cancel(scheduleId, adminId);
-};
-
 // --- Sponsorship campaigns (Phase 8A - read-only oversight; the manual
 // sponsor/unsponsor toggle above stays the separate, free lever for
 // admin curation) ---
@@ -1096,18 +1096,14 @@ exports.listFeaturedStoreCampaigns = async () => {
     return featuredStoreService.listAllCampaigns();
 };
 
-// --- Department sponsorship campaigns (read-only oversight;
-// same reasoning as Featured Stores above - a department's homepage
-// placement is derived live from this table, see
-// category.repository.js#findAllActiveWithSponsorship) ---
-exports.listDepartmentSponsorshipCampaigns = async () => {
-    return departmentSponsorshipService.listAllCampaigns();
-};
-
 // --- Seller withdrawal requests ---
 
 exports.listWithdrawals = async () => {
     return walletService.listAllWithdrawals();
+};
+
+exports.revealWithdrawalPayoutDetails = async (withdrawalId, adminId, req) => {
+    return walletService.getWithdrawalPayoutDetails(withdrawalId, { adminId, req });
 };
 
 exports.approveWithdrawal = async (withdrawalId, adminNote) => {
@@ -1118,8 +1114,14 @@ exports.rejectWithdrawal = async (withdrawalId, adminNote) => {
     return walletService.processWithdrawal(withdrawalId, "reject", adminNote);
 };
 
-exports.markWithdrawalPaid = async (withdrawalId, adminNote) => {
-    return walletService.processWithdrawal(withdrawalId, "paid", adminNote);
+exports.markWithdrawalPaid = async (withdrawalId, adminNote, payoutReference) => {
+    return walletService.processWithdrawal(withdrawalId, "paid", adminNote, payoutReference);
+};
+
+// Negative seller balances (Phase 2) - purely informational, see
+// wallet.repository.js#findNegativeBalanceSellers.
+exports.listNegativeBalanceSellers = async () => {
+    return walletService.listNegativeBalanceSellers();
 };
 
 // --- Escrow manual release (docs/ESCROW_ANALYSIS.md section
@@ -1171,13 +1173,17 @@ exports.addAdmin = async (data, actorAdminId) => {
     const hashedPassword = await hashPassword(password);
     const resolvedLevel = admin_level === "super_admin" ? "super_admin" : "admin";
 
+    // Round 5 (phase 6): every account gets a username.
+    const username = await require("../account/username.service").generateUnique(first_name);
+
     const userId = await adminRepository.createAdmin({
         first_name,
         last_name,
         email,
         phone,
         password: hashedPassword,
-        admin_level: resolvedLevel
+        admin_level: resolvedLevel,
+        username
     });
 
     // (Audit Logs) - a new admin account is itself a permission
@@ -1223,6 +1229,14 @@ exports.updateAdminPermissions = async (userId, adminLevel, actorAdminId) => {
 
     await adminRepository.updateAdminLevel(userId, adminLevel);
 
+    // Round 6 Phase 3 - updateAdminLevel bumps token_version whenever
+    // the level actually changes, so any socket this admin already has
+    // open is carrying stale claims from the moment this commits. See
+    // socket.js#disconnectUser.
+    if (previousLevel !== resolvedLevel) {
+        require("../../socket/socket").disconnectUser(userId);
+    }
+
     // (Audit Logs) - permission changes weren't tracked at all
     // before this; every promotion/demotion between admin and super_admin
     // now leaves a record of who changed it and what it changed from/to.
@@ -1267,6 +1281,11 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
 
     await adminRepository.revokeAdmin(userId);
 
+    // Round 6 Phase 3 - revokeAdmin bumps token_version too, same
+    // reasoning as updateAdminPermissions above. See
+    // socket.js#disconnectUser.
+    require("../../socket/socket").disconnectUser(userId);
+
     // This revokes admin access (demotes the row back to an ordinary
     // role - see adminRepository.revokeAdmin) rather than deleting the
     // account outright; permanentlyDeleteUser above is the separate,
@@ -1301,6 +1320,31 @@ exports.removeAdmin = async (userId, requestingAdminId) => {
 // (7-day, more responsive to a recent shift in patterns) lookback
 // without a redeploy.
 const DEFAULT_HEATMAP_WINDOW_DAYS = 28;
+
+// Phase 2: sellers drivers can't reliably be dispatched to. "missing" have no
+// pin (or one outside Tanzania); "unverified" have a pin that was placed by
+// hand instead of confirmed from a GPS fix.
+exports.getSellersWithoutVerifiedPin = async () => {
+    const { isValidTanzaniaPin } = require("../../utils/pickupPin");
+    const deliveryRepository = require("../delivery/delivery.repository");
+    const rows = await deliveryRepository.findSellersWithoutVerifiedPin({ limit: 500 });
+
+    const sellers = rows.map((row) => ({
+        seller_id: row.seller_id,
+        store_name: row.store_name,
+        city: row.city,
+        region: row.region,
+        business_phone: row.business_phone,
+        pickup_accuracy_m: row.pickup_accuracy_m,
+        status: isValidTanzaniaPin(row.pickup_lat, row.pickup_lng) ? "unverified" : "missing"
+    }));
+
+    return {
+        missingCount: sellers.filter((s) => s.status === "missing").length,
+        unverifiedCount: sellers.filter((s) => s.status === "unverified").length,
+        sellers
+    };
+};
 
 exports.getCoverageHeatmap = async (windowDays = DEFAULT_HEATMAP_WINDOW_DAYS) => {
     const days = Number.isFinite(Number(windowDays)) && Number(windowDays) > 0
@@ -1355,3 +1399,74 @@ exports.getCoverageHeatmap = async (windowDays = DEFAULT_HEATMAP_WINDOW_DAYS) =>
 
     return { windowDays: days, grid };
 };
+
+// --- Phase 8: paged + searchable lists (opt-in, see utils/adminListQuery) ---
+
+exports.listUsersPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await adminRepository.findUsersPage({
+        q: params.q,
+        role: params.role,
+        status: params.status,
+        limit: params.pageSize,
+        offset: params.offset
+    });
+    const socket = require("../../socket/socket");
+    return {
+        items: rows.map((u) => ({ ...u, is_online: socket.isUserOnline(u.id) })),
+        meta: buildMeta(total, params)
+    };
+};
+
+exports.listAllOrdersPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await adminRepository.findOrdersPage({
+        q: params.q,
+        status: params.status,
+        paymentStatus: params.paymentStatus,
+        sort: query.sort || null,
+        limit: params.pageSize,
+        offset: params.offset
+    });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+exports.listWithdrawalsPaged = async (query = {}) => {
+    return walletService.listAllWithdrawalsPaged(query);
+};
+
+// --- Phase 8: paged lists for sellers, agents, deleted accounts, admins, fraud ---
+
+const pagedList = (fetch) => async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const { rows, total } = await fetch({ q: params.q, status: params.status, limit: params.pageSize, offset: params.offset });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+exports.listSellersPaged = pagedList((args) => adminRepository.findSellersPage(args));
+exports.listDeliveryAgentsPaged = pagedList((args) => adminRepository.findDeliveryAgentsPage(args));
+exports.listDeletedUsersPaged = pagedList((args) => adminRepository.findDeletedUsersPage(args));
+exports.listAdminsPaged = pagedList((args) => adminRepository.findAdminsPage(args));
+exports.listFraudFlagsPaged = async (query = {}) => {
+    const { parseListQuery, buildMeta } = require("../../utils/adminListQuery");
+    const params = parseListQuery(query);
+    const fraudRepository = require("../fraud/fraud.repository");
+    const { rows, total } = await fraudRepository.findOpenPage({ q: params.q, limit: params.pageSize, offset: params.offset });
+    return { items: rows, meta: buildMeta(total, params) };
+};
+
+// --- Phase 8: withdrawal context and queue badges ---
+exports.getWithdrawalContext = async (withdrawalId) => {
+    const context = await adminRepository.findWithdrawalContext(withdrawalId);
+    if (!context) {
+        const error = new Error("Withdrawal not found.");
+        error.status = 404;
+        throw error;
+    }
+    return context;
+};
+
+exports.getQueueCounts = async () => adminRepository.findQueueCounts();

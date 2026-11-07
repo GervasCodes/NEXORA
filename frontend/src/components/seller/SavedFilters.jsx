@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import { useToast } from "../../context/ToastContext";
+import Spinner from "../../components/ui/Spinner";
 
 /**
  * SavedFilters - Phase 11 (UI/UX remediation).
@@ -97,7 +98,7 @@ export default function SavedFilters({ pageKey, currentFilters, onApply }) {
                         maxLength={60}
                         className="border border-line rounded-md px-2 py-1 text-xs w-36 focus-ring"
                     />
-                    <button type="submit" disabled={busy || !name.trim()} className="text-xs text-teal hover:underline disabled:opacity-50">
+                    <button aria-busy={busy || undefined} type="submit" disabled={busy || !name.trim()} className="text-xs text-teal hover:underline disabled:opacity-50">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         Save
                     </button>
                     <button type="button" onClick={() => { setNaming(false); setName(""); }} className="text-xs text-ash hover:underline">

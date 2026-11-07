@@ -130,7 +130,53 @@ linger alongside the new ones (see `docs/SCALABILITY_REPORT.md` §4 for
 the bug this guards against).
 
 Serve `frontend/dist` behind your usual static host / reverse proxy (Nginx,
-Vercel, Netlify, etc.), pointed at the backend's public URL.
+Vercel, Render, etc.), pointed at the backend's public URL.
+
+NEXORA's own frontend runs as a Render **Static Site** (base directory
+`frontend`, build command `npm run build`, publish directory `dist`).
+Render Static Sites don't read a `_redirects`/`_headers` file from the
+publish directory the way Netlify does - these are configured in the
+Render Dashboard instead (dashboard-configured, deliberately not
+committed as infra-as-code in this repo - see `docs/ROLLBACK.md`). Set
+these up once per environment:
+
+- **Settings -> Redirects/Rewrites** (both Rewrite rules, not Redirect -
+  the app must keep showing its own URL, just serve different content):
+  - Source `/sitemap.xml` -> Destination
+    `https://api.nexoramarketplace.online/sitemap.xml` (proxies the
+    backend-generated sitemap so it appears same-origin to crawlers -
+    see `backend/src/modules/sitemap`)
+  - Source `/sitemap-:n.xml` -> Destination
+    `https://api.nexoramarketplace.online/sitemap-:n.xml` (only needed once
+    the catalog outgrows one sitemap file; the backend then serves
+    `/sitemap-1.xml`, `/sitemap-2.xml`, ...). Put it **above** the `/*` rule,
+    and verify `https://nexoramarketplace.online/sitemap.xml` returns XML
+    (not the app's HTML) before submitting it in Search Console.
+  - Source `/*` -> Destination `/index.html` (SPA fallback - without
+    this, refreshing any client-side route like `/products/some-slug`
+    404s instead of mounting the React app)
+- **Settings -> Headers**: the CSP, security headers (`X-Content-Type-
+  Options`, `Referrer-Policy`, `Permissions-Policy`), and long-lived
+  `Cache-Control: public, max-age=31536000, immutable` on `/assets/*`
+  and the static brand/icon files are no longer in a committed
+  `_headers` file - add them as Custom Response Headers in the
+  Dashboard. The CSP's `connect-src` must list your real deployed
+  backend API/Socket.IO origin(s).
+- **Google Analytics (optional)**: set `VITE_GA_MEASUREMENT_ID` on the static
+  site and rebuild. Then extend the dashboard CSP: `script-src` +
+  `https://www.googletagmanager.com`; `connect-src` +
+  `https://*.google-analytics.com https://*.analytics.google.com
+  https://*.googletagmanager.com`; `img-src` + `https://*.google-analytics.com
+  https://*.googletagmanager.com`. GA only loads after a visitor presses
+  Accept on the cookie banner.
+- **Prerendered page content**: `npm run build` now writes real text
+  (heading, price, description, links) into each prerendered shell. Set
+  `PRERENDER_BODY=0` in the build environment to switch that off.
+- **www -> non-www canonical redirect**: not expressible as a path-only
+  Redirects/Rewrites rule (those match request path, not hostname) -
+  add both `nexoramarketplace.online` and `www.nexoramarketplace.online`
+  as Custom Domains on the static site and set the non-www one as
+  primary; Render redirects the other to it automatically.
 
 ## 5. Before accepting real payments
 
@@ -195,8 +241,8 @@ is safe to use as-is.
       whichever providers you enabled
 - [ ] Regular database backups configured (`database/backups/` exists as a
       placeholder but nothing populates it automatically yet)
-- [x] Automated test coverage exists and passes: 390 backend unit tests, 15
-      backend integration tests, and 101 frontend tests as of this report
+- [x] Automated test coverage exists and passes: 1,423 backend unit tests,
+      96 backend integration tests, and 339 frontend tests as of this report
       (`cd backend && npm test`, `cd frontend && npm test`) — still
       recommended to add the DB-integration suite (`npm run test:db`)
       against a real MySQL instance in CI before each deploy

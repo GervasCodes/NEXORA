@@ -1,4 +1,26 @@
 const db = require("../../config/db");
+// Coupon/points integrity (Phase 3, P0) - redemption is now committed
+// INSIDE the order's own creation transaction (see commitDiscountRedemptions
+// below), not as a separate post-creation step in order.service.js, so a
+// checkout that fails after the order row exists rolls the redemption back
+// too instead of having already burned the buyer's code/points for an
+// order that was never actually placed.
+const couponService = require("../coupon/coupon.service");
+const referralService = require("../referral/referral.service");
+const stockLedger = require("../stock/stock.ledger");
+const logger = require("../../utils/logger").child({ module: "order.repository" });
+
+// Nexora Stock Management (Phase 6): checkout deductions and cancellation
+// restores are written to the stock ledger in the same transaction as the stock
+// change. A bookkeeping failure must never block a sale or a refund, so errors
+// are logged (and surface in the seller's ledger reconcile check) instead of thrown.
+const recordLedger = async (connection, rows, type) => {
+    try {
+        await stockLedger.recordOrderMovements(connection, rows, type);
+    } catch (error) {
+        logger.error({ err: error, type }, "stock ledger write failed");
+    }
+};
 
 // Phase 2 (Legal & Consumer Trust): the version of the consent bundle
 // (Terms of Service + Privacy Policy + Refund Policy) a buyer agrees to
@@ -8,7 +30,7 @@ const db = require("../../config/db");
 //
 // Lives here rather than in order.service.js purely to respect Phase 2's
 // file-scope list (order.service.js isn't in it). See PHASE_2_NOTES.md.
-const CURRENT_CHECKOUT_TERMS_VERSION = "2026-09-18";
+const { CHECKOUT_TERMS_VERSION: CURRENT_CHECKOUT_TERMS_VERSION } = require("../../config/termsVersions");
 
 // Shared by createOrder/createSplitOrder below: insert one `orders` row
 // (optionally as a child of `parentOrderId`) and return its insertId.
@@ -32,23 +54,11 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
     const consentGiven = shippingInfo.checkout_terms_accepted === true
         || shippingInfo.checkout_terms_accepted === "true";
 
-    // Deliberately STAMPS rather than ENFORCES. Enforcement lives in
-    // order.validator.js#checkoutValidation, at the HTTP layer.
-    //
-    // Why no belt-and-suspenders throw here (unlike auth.service.js's
-    // re-check of signup consent): insertOrderRow is shared by a SECOND
-    // purchase path that legitimately has no consent field -
-    // groupBuy.service.js#claim calls createOrder directly with its own
-    // shippingInfo, built from GroupBuyDetail.jsx's claim form, which has
-    // no consent checkbox. Throwing here would break group-buy claims
-    // outright, and both groupBuy.service.js and order.service.js are
-    // outside Phase 2's file list, so neither can be given a consent gate
-    // in this phase.
-    //
-    // A group-buy-claimed order therefore stores NULL in both columns -
-    // honestly recording "no consent was captured on this path" rather
-    // than fabricating one. **That gap is real and is flagged as a
-    // follow-up in PHASE_2_NOTES.md.**
+    // STAMPS rather than ENFORCES: enforcement lives in the callers' own
+    // gates - order.validator.js#checkoutValidation (regular checkout) and
+    // groupBuy.validator.js#claimValidation + groupBuy.service.js#claim
+    // (group-buy claims). Both paths send checkout_terms_accepted, so every
+    // top-level order carries a real consent record.
     const checkoutTermsVersion = isTopLevel && consentGiven ? CURRENT_CHECKOUT_TERMS_VERSION : null;
 
     // Timestamped server-side rather than trusted from the client, for
@@ -65,6 +75,15 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
     // gets the column defaults ('standard' order_type, NULL deposit).
     const orderType = preorder ? "pre_order" : "standard";
 
+    // Delivery proof handover code (Phase 5, P0) - generated at order
+    // creation time (not at agent assignment) so the buyer can be told
+    // it as soon as they place the order, before a rider is even
+    // matched. A parent order (multi-vendor cart) doesn't itself get
+    // delivered - its children do - but giving it a code too is
+    // harmless and keeps this one code path simple rather than special-
+    // casing is_parent here.
+    const deliveryHandoverCode = String(Math.floor(100000 + Math.random() * 900000));
+
     const [orderResult] = await connection.query(
         `INSERT INTO orders
         (order_number, buyer_id, parent_order_id, is_parent, status, payment_status, payment_method,
@@ -72,9 +91,9 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
          delivery_lat, delivery_lng, total_amount, buyer_protection_addon, buyer_protection_fee,
          loyalty_points_redeemed, loyalty_discount_amount, coupon_id, coupon_discount_amount,
          order_type, preorder_lead_time_days, preorder_ready_by, deposit_amount, balance_amount,
-         checkout_terms_accepted_at, checkout_terms_version)
+         checkout_terms_accepted_at, checkout_terms_version, delivery_handover_code)
         VALUES (?, ?, ?, ?, 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?)`,
+                ?, ?, ?)`,
         [
             orderNumber,
             buyerId,
@@ -102,9 +121,26 @@ const insertOrderRow = async (connection, { buyerId, parentOrderId, isParent, or
             preorder ? preorder.depositAmount : null,
             preorder ? preorder.balanceAmount : null,
             checkoutTermsAcceptedAt,
-            checkoutTermsVersion
+            checkoutTermsVersion,
+            deliveryHandoverCode
         ]
     );
+
+    // Return shape deliberately unchanged (still a bare insertId, not
+    // { insertId, ... }) - insertOrderRow has three call sites below and
+    // this phase doesn't need the code at creation time itself; a caller
+    // that wants to notify the buyer with it (order.service.js) reads it
+    // back via orderRepository.findOrderById(id).delivery_handover_code
+    // instead, which avoids rippling a shape change through every call
+    // site and their own callers for one notification step.
+    // Phase 2: made-to-order orders start "awaiting_ready" - the seller must
+    // mark the item ready before the order can ship / be dispatched.
+    if (preorder) {
+        await connection.query(
+            "UPDATE orders SET fulfilment_state = 'awaiting_ready' WHERE id = ?",
+            [orderResult.insertId]
+        );
+    }
 
     return orderResult.insertId;
 };
@@ -135,14 +171,22 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
         return;
     }
 
+    // Commission at checkout (Phase 2) - order.service.js#checkout attaches
+    // commission_rate/commission_amount/seller_net_amount to every cart item
+    // before this runs, so they're snapshotted here alongside everything
+    // else. Falls back to NULL (exactly the pre-Phase-2 shape) if a caller
+    // somehow skips that step, and wallet.service.js#creditSellersForOrder
+    // still computes it fresh in that case - see that function's comment.
     const insertValues = cartItems.map((item) => [
         orderId, item.product_id, item.variant_id || 0, item.variant_label || null,
-        item.seller_id, item.quantity, item.unit_price, item.subtotal
+        item.seller_id, item.quantity, item.unit_price, item.subtotal,
+        item.commission_rate ?? null, item.commission_amount ?? null, item.seller_net_amount ?? null
     ]);
 
     await connection.query(
         `INSERT INTO order_items
-        (order_id, product_id, variant_id, variant_label, seller_id, quantity, unit_price, subtotal)
+        (order_id, product_id, variant_id, variant_label, seller_id, quantity, unit_price, subtotal,
+         commission_rate, commission_amount, seller_net_amount)
         VALUES ?`,
         [insertValues]
     );
@@ -211,6 +255,57 @@ const insertOrderItems = async (connection, orderId, cartItems) => {
             }
         }
     }
+    await recordLedger(connection, cartItems.map((item) => ({
+        order_id: orderId,
+        seller_id: item.seller_id,
+        product_id: item.product_id,
+        variant_id: item.variant_id || null,
+        quantity: item.quantity
+    })), "order_deduct");
+};
+
+// Checkout idempotency (Phase 3) - locks exactly the cart rows this
+// checkout was quoted against before anything else runs in the
+// transaction. A second concurrent checkout attempt for the same buyer
+// (double submit, a retried request after a slow response) blocks on this
+// FOR UPDATE until the first attempt commits (and the DELETE at the end of
+// this function removes these very rows) or rolls back; once this
+// attempt's rows are gone, the second attempt's lock query comes back
+// short and is rejected instead of silently creating a second order from
+// the same cart. `cartItems` with no `cart_item_id` at all (the
+// groupBuy.service.js#claim path - no real cart involved, see its own
+// claim-lock instead) skips this entirely rather than locking nothing.
+const lockAndValidateCartRows = async (connection, cartItems) => {
+    const cartItemIds = cartItems.map((item) => item.cart_item_id).filter(Boolean);
+    if (!cartItemIds.length) return [];
+
+    const [lockedRows] = await connection.query(
+        "SELECT id, quantity FROM cart_items WHERE id IN (?) FOR UPDATE",
+        [cartItemIds]
+    );
+    const quantityById = new Map(lockedRows.map((row) => [row.id, row.quantity]));
+
+    for (const item of cartItems) {
+        if (quantityById.get(item.cart_item_id) !== item.quantity) {
+            throw new Error("Your cart changed - please review it and try again");
+        }
+    }
+
+    return cartItemIds;
+};
+
+// Coupon and points integrity (Phase 3, P0) - commits both redemptions
+// inside the caller's own order-creation transaction (connection), after
+// the order row exists (orderId) but before commit, so a checkout that
+// fails anywhere in the transaction rolls these back along with the order
+// and stock changes instead of having already burned the buyer's code or
+// points. Both services' own race guards (coupon max_redemptions /
+// uq_coupon_redemptions_user, loyalty_points >= ?) are what make this safe
+// under concurrent checkouts - see coupon.repository.js#recordRedemption
+// and referral.repository.js#addPoints.
+const commitDiscountRedemptions = async (connection, { buyerId, orderId, loyalty = {}, coupon = {} }) => {
+    await referralService.commitRedemption(buyerId, loyalty.pointsRedeemed, orderId, connection);
+    await couponService.commitRedemption(coupon.couponId, buyerId, orderId, coupon.discountAmount, connection);
 };
 
 // Create a single (non-split) order + its items + decrement stock, all in
@@ -221,6 +316,8 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
 
     try {
         await connection.beginTransaction();
+
+        const cartItemIds = await lockAndValidateCartRows(connection, cartItems);
 
         const orderId = await insertOrderRow(connection, {
             buyerId, parentOrderId: null, isParent: false, orderNumber, shippingInfo, totalAmount,
@@ -233,10 +330,18 @@ exports.createOrder = async (buyerId, orderNumber, shippingInfo, cartItems, tota
 
         await insertOrderItems(connection, orderId, cartItems);
 
-        await connection.query(
-            "DELETE FROM cart_items WHERE user_id = ?",
-            [buyerId]
-        );
+        await commitDiscountRedemptions(connection, { buyerId, orderId, loyalty, coupon });
+
+        // Scoped to exactly the rows this checkout locked above, not a
+        // blanket "everything this buyer currently has in cart" delete -
+        // the old shape also meant groupBuy.service.js#claim (which calls
+        // this function directly with no real cart involved at all, see
+        // its own header comment) was silently wiping the buyer's
+        // unrelated shopping cart as a side effect of claiming a group
+        // buy. cartItemIds is empty on that path, so this is a no-op there.
+        if (cartItemIds.length) {
+            await connection.query("DELETE FROM cart_items WHERE id IN (?)", [cartItemIds]);
+        }
 
         await connection.commit();
 
@@ -265,6 +370,9 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
     try {
         await connection.beginTransaction();
 
+        const allItems = sellerGroups.flatMap((group) => group.items);
+        const cartItemIds = await lockAndValidateCartRows(connection, allItems);
+
         const parentOrderId = await insertOrderRow(connection, {
             buyerId, parentOrderId: null, isParent: true, orderNumber: parentOrderNumber, shippingInfo, totalAmount,
             buyerProtectionAddon: buyerProtection.addon, buyerProtectionFee: buyerProtection.fee, pickupPointId,
@@ -273,11 +381,46 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
             couponId: coupon.couponId, couponDiscountAmount: coupon.discountAmount
         });
 
+        // Discount funding (Phase 3) - a coupon/loyalty discount applied at
+        // the whole-cart level previously vanished entirely from a split
+        // cart's per-vendor child rows (only the parent carried it), which
+        // understated what each vendor's own order actually reflects once
+        // a buyer-protection fee or a per-vendor refund needs to reference
+        // it. Recorded here pro-rata to each vendor's share of the
+        // pre-discount cart subtotal, purely for accounting/display on the
+        // child row - the parent row remains the authoritative total the
+        // buyer actually paid and the one coupon_redemptions/loyalty ledger
+        // entries are keyed against (see commitDiscountRedemptions below,
+        // still called once against parentOrderId, not per child).
+        // Whether this split is seller-funded (reduces seller payout) or
+        // platform-funded (seller is paid as if full price) is a separate,
+        // open policy question - see this phase's "Decision needed" note;
+        // the figures recorded here don't yet feed into wallet crediting
+        // either way.
+        const totalCouponDiscount = Number(coupon.discountAmount) || 0;
+        const totalLoyaltyDiscount = Number(loyalty.discountAmount) || 0;
+        const preDiscountSubtotal = sellerGroups.reduce((sum, group) => sum + Number(group.subtotal), 0);
+
         const childOrders = [];
         let vendorIndex = 1;
 
         for (const group of sellerGroups) {
             const childOrderNumber = `${parentOrderNumber}-V${vendorIndex}`;
+            const share = preDiscountSubtotal > 0 ? Number(group.subtotal) / preDiscountSubtotal : 0;
+            const isLastGroup = vendorIndex === sellerGroups.length;
+
+            // The last vendor absorbs whatever rounding remainder is left
+            // over so the sum of child discount amounts always matches the
+            // parent's total exactly, rather than drifting by a cent or
+            // two across several vendors' independent roundings.
+            const runningCoupon = childOrders.reduce((sum, child) => sum + child.couponDiscountShare, 0);
+            const runningLoyalty = childOrders.reduce((sum, child) => sum + child.loyaltyDiscountShare, 0);
+            const couponDiscountShare = isLastGroup
+                ? Number((totalCouponDiscount - runningCoupon).toFixed(2))
+                : Number((totalCouponDiscount * share).toFixed(2));
+            const loyaltyDiscountShare = isLastGroup
+                ? Number((totalLoyaltyDiscount - runningLoyalty).toFixed(2))
+                : Number((totalLoyaltyDiscount * share).toFixed(2));
 
             const childOrderId = await insertOrderRow(connection, {
                 buyerId,
@@ -286,7 +429,10 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
                 orderNumber: childOrderNumber,
                 shippingInfo,
                 totalAmount: group.subtotal,
-                pickupPointId
+                pickupPointId,
+                couponId: coupon.couponId,
+                couponDiscountAmount: couponDiscountShare,
+                loyaltyDiscountAmount: loyaltyDiscountShare
             });
 
             await insertOrderItems(connection, childOrderId, group.items);
@@ -294,16 +440,19 @@ exports.createSplitOrder = async (buyerId, parentOrderNumber, shippingInfo, sell
             childOrders.push({
                 sellerId: group.sellerId,
                 orderId: childOrderId,
-                orderNumber: childOrderNumber
+                orderNumber: childOrderNumber,
+                couponDiscountShare,
+                loyaltyDiscountShare
             });
 
             vendorIndex += 1;
         }
 
-        await connection.query(
-            "DELETE FROM cart_items WHERE user_id = ?",
-            [buyerId]
-        );
+        await commitDiscountRedemptions(connection, { buyerId, orderId: parentOrderId, loyalty, coupon });
+
+        if (cartItemIds.length) {
+            await connection.query("DELETE FROM cart_items WHERE id IN (?)", [cartItemIds]);
+        }
 
         await connection.commit();
 
@@ -376,15 +525,31 @@ const applyStockIncrease = async (executor, rows) => {
     }
 };
 
+// The stock increase and its ledger rows commit together.
+const restoreWithLedger = async (rows) => {
+    if (!rows.length) return;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        await applyStockIncrease(connection, rows);
+        await recordLedger(connection, rows, "order_restore");
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 // Restores stock for a single standalone or child order's items. Safe to
 // call even for an order with no items (no-op).
 exports.restoreStockForOrder = async (orderId) => {
     const [rows] = await db.query(
-        "SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?",
+        "SELECT order_id, seller_id, product_id, variant_id, quantity FROM order_items WHERE order_id = ?",
         [orderId]
     );
-
-    await applyStockIncrease(db, rows);
+    await restoreWithLedger(rows);
 };
 
 // Restores stock for every child order under a parent in one pass -
@@ -392,14 +557,13 @@ exports.restoreStockForOrder = async (orderId) => {
 // rather than looping restoreStockForOrder per child.
 exports.restoreStockForChildOrders = async (parentOrderId) => {
     const [rows] = await db.query(
-        `SELECT oi.product_id, oi.variant_id, oi.quantity
+        `SELECT oi.order_id, oi.seller_id, oi.product_id, oi.variant_id, oi.quantity
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         WHERE o.parent_order_id = ?`,
         [parentOrderId]
     );
-
-    await applyStockIncrease(db, rows);
+    await restoreWithLedger(rows);
 };
 
 // Orders placed via mobile money that never got a payment confirmation
@@ -417,6 +581,28 @@ exports.findStalePendingMobileMoneyOrders = async (olderThanMinutes) => {
         AND parent_order_id IS NULL
         AND created_at < (NOW() - INTERVAL ? MINUTE)`,
         [olderThanMinutes]
+    );
+    return rows;
+};
+
+// Unpaid non-COD orders (mobile money, card, PayPal, wallet) that have sat
+// past their cutoff (hosted checkout sessions get a longer one) AND have no
+// payment attempt still in flight or already completed. A payment that is
+// still 'pending' is settled first by the stale-payment sweep (which asks
+// the provider); only an order with nothing pending is cancelled here.
+exports.findStaleUnpaidOrders = async ({ cutoffMinutes, hostedCutoffMinutes }) => {
+    const [rows] = await db.query(
+        `SELECT o.id, o.buyer_id, o.order_number, o.is_parent FROM orders o
+        WHERE o.status = 'pending' AND o.payment_status = 'unpaid'
+            AND o.payment_method IN ('mobile_money', 'snippe', 'malipopay_card', 'paypal', 'wallet')
+            AND o.parent_order_id IS NULL
+            AND o.created_at < (NOW() - INTERVAL
+                CASE WHEN o.payment_method IN ('snippe', 'malipopay_card', 'paypal') THEN ? ELSE ? END MINUTE)
+            AND NOT EXISTS (
+                SELECT 1 FROM payments p
+                WHERE p.order_id = o.id AND p.status IN ('pending', 'completed', 'chargeback')
+            )`,
+        [hostedCutoffMinutes, cutoffMinutes]
     );
     return rows;
 };
@@ -512,9 +698,22 @@ exports.findChildOrders = async (parentOrderId) => {
     return rows;
 };
 
-exports.findOrderById = async (orderId) => {
-    const [rows] = await db.query(
+exports.findOrderById = async (orderId, executor = db) => {
+    const [rows] = await executor.query(
         "SELECT * FROM orders WHERE id = ?",
+        [orderId]
+    );
+    return rows[0];
+};
+
+// Wallet order payment atomic (Phase 2, P0) - locks the order row for the
+// whole "check it's still payable, debit the wallet, mark it paid"
+// sequence in payment.service.js#initiateWalletOrderPayment, so a second
+// concurrent wallet-payment attempt for the same order blocks here instead
+// of racing the debit.
+exports.findOrderByIdForUpdate = async (orderId, executor) => {
+    const [rows] = await executor.query(
+        "SELECT * FROM orders WHERE id = ? FOR UPDATE",
         [orderId]
     );
     return rows[0];
@@ -538,6 +737,35 @@ exports.updateOrderStatus = async (orderId, status) => {
     );
 };
 
+// Cancel a paid order (Phase 3, P0) - conditional status flip, not a plain
+// UPDATE. Returns whether a row actually changed so callers (cancelOrder,
+// autoCancelStaleOrder) know whether to go on to restore stock / reverse
+// earnings / refund, or whether another request already did - a buyer
+// cancel racing the stale-order sweep job for the same order (or a
+// retried request hitting this twice) previously could both "succeed" and
+// each restore the same stock, double-crediting it back.
+exports.cancelOrderIfCancellable = async (orderId, cancellableStatuses, executor = db) => {
+    const [result] = await executor.query(
+        "UPDATE orders SET status = 'cancelled' WHERE id = ? AND status IN (?)",
+        [orderId, cancellableStatuses]
+    );
+    return result.affectedRows > 0;
+};
+
+// Same conditional shape as cancelOrderIfCancellable above, for every
+// child order under a parent at once (mirrors updateOrderStatusForChildren's
+// batched-not-N shape). Returns how many children actually changed, so the
+// caller can tell "every child was still cancellable and got cancelled"
+// from "some/all of them had already moved on (or were already cancelled
+// by a race) and this is a partial/no-op".
+exports.cancelChildOrdersIfCancellable = async (parentOrderId, cancellableStatuses, executor = db) => {
+    const [result] = await executor.query(
+        "UPDATE orders SET status = 'cancelled' WHERE parent_order_id = ? AND status IN (?)",
+        [parentOrderId, cancellableStatuses]
+    );
+    return result.affectedRows;
+};
+
 // Buyer confirms they actually received the order - separate from
 // `status` (which just means "seller/agent marked it handed off"). See
 // migration 061 and payment.service.js#confirmDeliveryReceipt.
@@ -546,6 +774,30 @@ exports.markBuyerConfirmed = async (orderId) => {
         "UPDATE orders SET buyer_confirmed_at = NOW() WHERE id = ?",
         [orderId]
     );
+};
+
+// Cash on Delivery auto-confirm (Phase 2, P0) - candidates for
+// jobs/codAutoConfirm.job.js: delivered (per the delivery record, not just
+// order.status) at least `hours` ago, Cash on Delivery, not yet confirmed
+// by the buyer, and not tied up in an open dispute. Mirrors the shape of
+// wallet.repository.js's own escrow-release query.
+exports.findCodOrdersPendingAutoConfirm = async (hours) => {
+    const [rows] = await db.query(
+        `SELECT o.*
+        FROM orders o
+        JOIN deliveries d ON d.order_id = o.id
+        WHERE o.payment_method = 'cash_on_delivery'
+            AND o.status = 'delivered'
+            AND o.buyer_confirmed_at IS NULL
+            AND d.delivered_at IS NOT NULL
+            AND d.delivered_at <= (NOW() - INTERVAL ? HOUR)
+            AND NOT EXISTS (
+                SELECT 1 FROM disputes disp
+                WHERE disp.order_id = o.id AND disp.status IN ('open', 'under_review')
+            )`,
+        [hours]
+    );
+    return rows;
 };
 
 // Set when a seller ships an order: 'platform' (open pool, any agent can
@@ -557,8 +809,8 @@ exports.setDeliveryMode = async (orderId, mode) => {
     );
 };
 
-exports.updatePaymentStatus = async (orderId, paymentStatus) => {
-    await db.query(
+exports.updatePaymentStatus = async (orderId, paymentStatus, executor = db) => {
+    await executor.query(
         "UPDATE orders SET payment_status = ? WHERE id = ?",
         [paymentStatus, orderId]
     );
@@ -570,15 +822,15 @@ exports.updatePaymentStatus = async (orderId, paymentStatus) => {
 // folding a timestamp param into it) since only pre-order transitions
 // ever set these - a standard order's single unpaid->paid jump never
 // touches them.
-exports.markDepositPaid = async (orderId) => {
-    await db.query(
+exports.markDepositPaid = async (orderId, executor = db) => {
+    await executor.query(
         "UPDATE orders SET payment_status = 'deposit_paid', deposit_paid_at = NOW() WHERE id = ?",
         [orderId]
     );
 };
 
-exports.markBalancePaid = async (orderId) => {
-    await db.query(
+exports.markBalancePaid = async (orderId, executor = db) => {
+    await executor.query(
         "UPDATE orders SET payment_status = 'paid', balance_paid_at = NOW() WHERE id = ?",
         [orderId]
     );
@@ -588,6 +840,43 @@ exports.markBalancePaid = async (orderId) => {
 // balance" (order.service.js#requestPreorderBalance). Just a timestamp -
 // doesn't touch payment_status - the buyer paying is what actually
 // advances that.
+// Phase 2: the seller says the made-to-order item is finished. Idempotent:
+// a second call keeps the original ready_at. Returns true when this call
+// changed the state.
+exports.markReady = async (orderId) => {
+    const [result] = await db.query(
+        `UPDATE orders SET fulfilment_state = 'ready', ready_at = NOW()
+        WHERE id = ? AND order_type = 'pre_order' AND ready_at IS NULL`,
+        [orderId]
+    );
+    return result.affectedRows > 0;
+};
+
+// Phase 2: made-to-order orders the reminder job should look at - still
+// being made, with a ready-by date.
+exports.findPreordersAwaitingReady = async () => {
+    const [rows] = await db.query(
+        `SELECT o.id, o.order_number, o.buyer_id, o.preorder_ready_by,
+                o.ready_reminder_sent_at, o.overdue_notified_at,
+                (SELECT oi.seller_id FROM order_items oi WHERE oi.order_id = o.id ORDER BY oi.id LIMIT 1) AS seller_id
+        FROM orders o
+        WHERE o.order_type = 'pre_order'
+          AND o.fulfilment_state = 'awaiting_ready'
+          AND o.preorder_ready_by IS NOT NULL
+          AND o.status IN ('pending', 'processing')
+          AND o.payment_status IN ('deposit_paid', 'paid')`
+    );
+    return rows;
+};
+
+exports.markReadyReminderSent = async (orderId) => {
+    await db.query("UPDATE orders SET ready_reminder_sent_at = NOW() WHERE id = ?", [orderId]);
+};
+
+exports.markOverdueNotified = async (orderId) => {
+    await db.query("UPDATE orders SET overdue_notified_at = NOW() WHERE id = ?", [orderId]);
+};
+
 exports.markBalanceRequested = async (orderId) => {
     await db.query(
         "UPDATE orders SET balance_requested_at = NOW() WHERE id = ?",
@@ -598,8 +887,8 @@ exports.markBalanceRequested = async (orderId) => {
 // A parent order is paid for once by the buyer, but each vendor child
 // order tracks its own payment_status too (sellers/agents read it off
 // their own order row) - this keeps them all in sync with the parent.
-exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus) => {
-    await db.query(
+exports.updatePaymentStatusForChildren = async (parentOrderId, paymentStatus, executor = db) => {
+    await executor.query(
         "UPDATE orders SET payment_status = ? WHERE parent_order_id = ?",
         [paymentStatus, parentOrderId]
     );
@@ -669,6 +958,7 @@ exports.findOrdersBySeller = async (sellerId, { status, q, sort } = {}) => {
     const [rows] = await db.query(
         `SELECT DISTINCT o.id, o.order_number, o.status, o.payment_status, o.payment_method,
                 o.total_amount, o.created_at,
+                o.order_type, o.ready_at, o.fulfilment_state, o.balance_requested_at,
                 u.first_name AS buyer_first_name, u.last_name AS buyer_last_name,
                 (SELECT p.name FROM order_items oi4
                     JOIN products p ON p.id = oi4.product_id
@@ -756,3 +1046,28 @@ exports.getPrimaryItemSummary = async (orderId) => {
 // an order's stored version against the current one without duplicating
 // the literal.
 exports.CURRENT_CHECKOUT_TERMS_VERSION = CURRENT_CHECKOUT_TERMS_VERSION;
+
+// Round 5, Phase 5 - stores the rider-pay quote taken when the order was
+// placed (migration 150). Only writes when no quote exists yet, so a quote is
+// never silently replaced later.
+// Phase 2: a made-to-order item can sit for days or weeks between checkout and
+// "ready", so its rider fee is re-quoted when it becomes ready (unlike
+// setRiderFeeQuote, which only ever fills an empty quote).
+exports.overwriteRiderFeeQuote = async (orderId, fee, details) => {
+    const [result] = await db.query(
+        `UPDATE orders
+        SET rider_fee_quote = ?, rider_fee_quote_details = ?, rider_fee_quoted_at = NOW()
+        WHERE id = ?`,
+        [fee, JSON.stringify(details), orderId]
+    );
+    return result.affectedRows > 0;
+};
+exports.setRiderFeeQuote = async (orderId, fee, details) => {
+    const [result] = await db.query(
+        `UPDATE orders
+        SET rider_fee_quote = ?, rider_fee_quote_details = ?, rider_fee_quoted_at = NOW()
+        WHERE id = ? AND rider_fee_quote IS NULL`,
+        [fee, JSON.stringify(details), orderId]
+    );
+    return result.affectedRows > 0;
+};

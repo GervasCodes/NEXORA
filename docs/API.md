@@ -117,7 +117,12 @@ not blocked.
 | POST | `/` | Create product (seller) |
 | POST | `/:id/images` | Upload product images |
 | POST | `/:id/videos` | Upload product video (Phase 6A) |
-| POST | `/:id/audio` | Upload product audio (Phase 6B) |
+| GET | `/:id/media` | (seller) Unified gallery for a product (photos + videos, ordered) — Phase 5 |
+| POST | `/:id/media/sign` | (seller) Signed direct-to-Cloudinary upload params for `kind: image\|video` |
+| POST | `/:id/media` | (seller) Register an uploaded file `{kind, publicId, edits}`; server verifies it on Cloudinary |
+| PUT | `/:id/media/order` | (seller) `{ids:[…], coverId}` — one ordered array, one transaction |
+| DELETE | `/:id/media/:mediaId` | (seller) Remove a photo/video and its Cloudinary file |
+| ANY | `/:id/audio…` | **Removed (Phase 4)** — all product-audio routes return `410 Gone` with `code: PRODUCT_AUDIO_REMOVED`. Chat voice notes are unaffected. |
 | GET | `/mine/list` | Own products (seller) — supports `search`, `category_id`, `status` (`active`/`inactive`), `page`, `limit` (Phase A4) |
 | GET | `/mine/:id` | Own product detail (seller) |
 | PUT | `/:id` | Update product |
@@ -367,6 +372,65 @@ for the underlying columns.
 | GET | `/vapid-public-key` | Public key for Web Push subscription (public) |
 | POST | `/subscribe` | Register a push subscription |
 | POST | `/unsubscribe` | Remove a push subscription |
+
+## Nexora Stock Management — `/seller/stock` (seller; paid plan)
+
+Same access rules as `/seller/pos`. All data is scoped to the signed-in seller.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/items` | List items (`q`, `source=nexora|external`, `low=1`, `archived=1`, `page`, `limit`) with a summary |
+| POST | `/items` | Create an external item (`name`, `sku`, `barcode`, `unit`, `cost_price`, `sell_price`, `reorder_level`, `opening_stock`, `idempotency_key`) |
+| GET / PUT | `/items/:id` | Read / edit. Name and selling price of a Nexora-listed item belong to the listing (409 if sent) |
+| POST | `/items/:id/archive`, `/unarchive` | Hide / restore an item |
+| POST | `/items/:id/stock` | Post a movement: `type` = `purchase` (quantity, optional `unit_cost`), `correction` (`new_stock`, optional `baseline`), `opening` (quantity). `idempotency_key`; the same key with a different body returns 409 |
+| POST | `/items/:id/list-on-nexora` | Marketplace sellers: create a draft listing from an external item (moves the stock) |
+| POST | `/items/:id/unlink` | Switch the listing off; the item becomes external again |
+| GET | `/movements` | The ledger (`item_id`, `type`, `from`, `to`, `page`, `limit`) |
+| GET | `/reconcile` | Items whose live stock differs from the last ledger row |
+
+### Sales, purchases, customers, suppliers, receipts (Phase 7)
+
+Same gate as above (seller, business-tools access, paid plan). All amounts are TZS; dates sent as ISO 8601 (UTC); `from`/`to` filters are `YYYY-MM-DD` in Africa/Dar_es_Salaam. Every write accepts `idempotency_key`; the same key with a different body returns 409 and the same body replays the first result (`replayed: true`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/lookup` | Quick-sale / purchase search (`q` = name, SKU or barcode; exact barcode/SKU first) |
+| POST | `/sales` | Record a sale: `lines[{item_id, quantity, unit_price?}]`, `discount`, `payment_method` (`cash`/`mobile_money`/`card`/`bank_transfer`/`credit`/`other`), `amount_paid` + `paid_via` (credit only), `customer_id`, `customer_name`, `note`, `sold_at` (back-dating limited by setting `stock_backdate_max_days`, default 7; logged) |
+| GET | `/sales` | List (`status=active|voided|all`, `owing=1`, `customer_id`, `method`, `q`, `from`, `to`, `page`, `limit`) with net total and amount owed |
+| GET | `/sales/:id` | Sale with lines, returns and payments. `balance` = total - returned - paid |
+| POST | `/sales/:id/void` | Cancel (`reason` required): stock goes back (`void` ledger rows), money taken is refunded in the payments ledger. Not for `source=legacy` |
+| POST | `/sales/:id/return` | Take items back: `lines[{sale_line_id, quantity}]`, `reason`, `refund_method`. Restocks (`return` rows); value is net of the sale discount; first cancels what is still owed, only the excess is refunded |
+| GET | `/sales/:id/receipt` | Receipt data + `share_text` (`lang=en|sw`) |
+| GET | `/sales/:id/receipt.pdf` | 80 mm PDF. Not a fiscal (EFD) receipt |
+| GET / POST | `/purchases` | List (`unpaid=1`, `supplier_id`, `q`, `from`, `to`) / record: `lines[{item_id, quantity, unit_cost}]`, `supplier_id`, `invoice_no`, `amount_paid` (default: paid in full), `payment_method`, `purchased_at`. Adds stock; cost price becomes the moving weighted average |
+| GET | `/purchases/:id` | Purchase with lines and payments |
+| POST | `/purchases/:id/payments` | Pay part of what is owed to the supplier (`amount`, `method`) |
+| GET / POST | `/customers` | List with `owed` (`q`, `owing=1`, `archived`) / create (`name`, `phone`, `note`) |
+| GET / PUT | `/customers/:id` | Statement (sales, debt payments) / edit or archive (`is_archived`) |
+| POST | `/customers/:id/payments` | Receive a payment towards debts; applied to the oldest unpaid sales first; more than owed returns 409 |
+| GET / POST, GET / PUT | `/suppliers`, `/suppliers/:id` | Same for suppliers (`owed` = what you owe them) |
+
+### Expenses, reports, import/export, offline sync, plan access (Phase 8)
+
+All under `/seller/stock`, same seller gate. **Plan access** comes from `subscription_plans.entitlements` (not code): a trial gets everything; a paid plan gets what its entitlements say; within `stock_export_grace_days` (default 30) after a plan ends only GET requests work (`read_only`); otherwise none. Refusals: `403` with `code` = `SUBSCRIPTION_REQUIRED` (no access) or `FEATURE_NOT_IN_PLAN` (plan lacks the feature); in read-only mode a write returns `403 {code: "SUBSCRIPTION_REQUIRED", read_only: true}`. Access is cached for 30 s per seller. `from`/`to` are `YYYY-MM-DD` Africa/Dar_es_Salaam days.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/access` | `{mode: full|read_only, read_only, features{...}, grace_ends_in_days?}` for the signed-in seller |
+| POST | `/sales/sync` | Offline queue upload: `sales[{idempotency_key, sold_at, ...sale body}]` (max 50). Per key `created`, `replayed` or `rejected` (with `message`). Never refuses on date or stock: a finished sale is recorded, stock may go negative (sale flagged, owner alerted) |
+| GET / POST | `/expenses` | List (`category`, `from`, `to`, `page`, `limit`, with totals by category) / record (multipart: `category`, `amount`, `expense_date`, `note`, `idempotency_key`, optional `receipt` image, max 5 MB) |
+| GET | `/expenses/:id` | One expense |
+| POST | `/expenses/:id/void` | Cancel (kept on record, out of totals) |
+| GET | `/reports/overview` | Needs `stock_reports`. On-Nexora revenue (net of commission and refunds, as in the wallet) and shop revenue apart, combined, expenses, daily series; `profit` is `null` with `cost_locked: true` without `stock_cost_reports` |
+| GET | `/reports/best-sellers`, `/reports/low-stock`, `/reports/debts` | Needs `stock_reports` |
+| GET | `/reports/daily-close` | `date` (default today in Dar es Salaam): sales by payment method, expenses, debts taken/collected |
+| GET | `/reports/valuation` | Needs `stock_reports` + `stock_cost_reports` (cost and sale value of stock on hand) |
+| GET | `/import/template` | CSV template (`lang=en|sw`). Needs `stock_import_export` |
+| POST | `/import/items` | Multipart `file` (CSV or XLSX, 2 MB, 2000 rows). `dry_run=1` previews every row and saves nothing; otherwise applies. Matches by barcode, then SKU, then name; updates never change stock; new items get opening stock |
+| GET | `/export/:kind` | CSV download, `kind` = `items`, `sales`, `purchases`, `movements`, `valuation` (`from`, `to` where relevant). Works in read-only mode |
+
+`PUT /products/:id` accepts optional `stock_baseline` (the stock the form loaded); only the seller's own change is applied on top of the live number. `PUT /products/:id/variants` accepts `variants[].stock_baseline` the same way.
 
 ## Wallet — `/wallet`
 

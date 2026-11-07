@@ -63,11 +63,20 @@ exports.validate = async (rawCode, userId, subtotal) => {
     };
 };
 
-// Called only after the order row genuinely exists - see this module's
-// callers in order.service.js, which follow the same
-// quote-then-commit-after-creation sequencing already used for loyalty
-// points redemption.
-exports.commitRedemption = async (couponId, userId, orderId, discountAmount) => {
+// Called from order.repository.js#createOrder/createSplitOrder (Phase 3) -
+// runs INSIDE the order's own creation transaction now (executor is the
+// transaction connection), same quote-then-commit-after-creation
+// sequencing as before, just moved so a checkout that fails after this
+// point rolls the redemption back along with everything else instead of
+// having already burned the code.
+exports.commitRedemption = async (couponId, userId, orderId, discountAmount, executor) => {
     if (!couponId) return;
-    await couponRepository.recordRedemption(couponId, userId, orderId, discountAmount);
+    await couponRepository.recordRedemption(couponId, userId, orderId, discountAmount, executor);
+};
+
+// Cancel a paid order, or a stale/unpaid order expiring (Phase 3) - frees
+// a redeemed code back up since the order it was applied to never
+// completed.
+exports.reverseRedemption = async (orderId, executor) => {
+    await couponRepository.reverseRedemption(orderId, executor);
 };

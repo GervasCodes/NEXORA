@@ -17,10 +17,10 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "products.viewGrid": "Grid view",
                 "products.viewList": "List view",
                 "common.loading": "Loading…",
+                "loading.store": "Loading store",
                 "common.browseMarketplace": "Browse the marketplace",
                 "store.notFoundTitle": "Store not found",
                 "store.noLogo": "No logo",
-                "store.verifiedBadge": "Verified",
                 "store.memberSince": "Member since {date}",
                 "store.about": "About",
                 "store.deliveryTracked": "Delivery tracked door to door",
@@ -28,9 +28,9 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "store.deliveryDefaultNote": "Delivery fees are calculated at checkout.",
                 "store.trustSafety": "Trust & safety",
                 "store.verifiedSellerTitle": "Verified Seller",
-                "store.verifiedSellerHint": "This seller has paid NEXORA's verification fee and passed the Verified Seller review - the same badge shown on their individual products.",
+                "store.verifiedSellerHint": "This seller passed NEXORA's Verified Seller review - the same badge shown on their individual products.",
                 "store.identityVerifiedTitle": "Identity Verified",
-                "store.identityVerifiedHint": "NEXORA reviewed this seller's identity documents before their account was approved to sell - separate from, and required before, the paid Verified Seller badge above.",
+                "store.identityVerifiedHint": "NEXORA reviewed this seller's identity documents before their account was approved to sell - separate from, and required before, the Verified Seller badge above.",
                 "store.productsTitle": "Products",
                 "store.productCountOne": "1 product",
                 "store.productCountMany": "{count} products",
@@ -96,7 +96,7 @@ const store = {
     region: "Dar es Salaam",
     city: "Kinondoni",
     store_type_name: "Grocery",
-    is_verified: 1,
+    is_verified: 1, show_verified_badge: 1,
     created_at: "2024-03-10T00:00:00.000Z",
     average_rating: "4.6",
     review_count: 18
@@ -126,7 +126,8 @@ describe("StorePage (Phase 5A)", () => {
         api.get.mockReturnValue(new Promise(() => {})); // never resolves
         renderPage();
 
-        expect(screen.getByText("Loading…")).toBeInTheDocument();
+        // The page shows a skeleton whose accessible label is "loading.store".
+        expect(screen.getByRole("status")).toHaveTextContent("Loading store");
     });
 
     it("fetches by slug and renders the store's basics", async () => {
@@ -169,15 +170,15 @@ describe("StorePage trust info (Phase 5B)", () => {
 
         await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
 
-        expect(screen.getByText("Verified")).toBeInTheDocument();
+        expect(screen.getByText("Verified Seller")).toBeInTheDocument();
         expect(screen.getByText("4.6")).toBeInTheDocument();
         expect(screen.getByText("(18)")).toBeInTheDocument();
         expect(screen.getByText("Member since Mar 2024")).toBeInTheDocument();
     });
 
-    it("hides the verified badge for a store without the paid badge", async () => {
+    it("hides the verified badge for a store without the badge", async () => {
         api.get.mockImplementation((url) => {
-            if (url === "/stores/mama-ntilies-kitchen") return Promise.resolve({ data: { data: { ...store, is_verified: 0 } } });
+            if (url === "/stores/mama-ntilies-kitchen") return Promise.resolve({ data: { data: { ...store, is_verified: 0, show_verified_badge: 0 } } });
             if (url === "/products") return Promise.resolve({ data: { data: [], pagination: { total: 0, totalPages: 1 } } });
             if (url === "/reviews/store/42") return Promise.resolve({ data: { data: emptyReviews } });
             return Promise.reject(new Error(`unexpected url ${url}`));
@@ -185,7 +186,7 @@ describe("StorePage trust info (Phase 5B)", () => {
         renderPage();
 
         await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
-        expect(screen.queryByText("Verified")).not.toBeInTheDocument();
+        expect(screen.queryByText("Verified Seller")).not.toBeInTheDocument();
     });
 
     it("hides the rating line (but still shows member since) for a store with no reviews yet", async () => {
@@ -209,7 +210,17 @@ describe("StorePage catalog (Phase 5C)", () => {
         renderPage();
 
         await waitFor(() =>
-            expect(api.get).toHaveBeenCalledWith("/products", { params: { seller_id: 42, limit: 24, page: 1 } })
+            // ProductGrid attaches a request timeout to every /products call
+            // (Phase 6.1 - guards against a stalled request on a flaky
+            // mobile connection), so the assertion checks the params it
+            // actually cares about here - that this is scoped to the
+            // store's seller_id, not the whole catalog - rather than an
+            // exact-object match that would also pin down that unrelated
+            // timeout value.
+            expect(api.get).toHaveBeenCalledWith(
+                "/products",
+                expect.objectContaining({ params: { seller_id: 42, limit: 24, page: 1 } })
+            )
         );
     });
 
@@ -348,8 +359,7 @@ describe("StorePage reviews (Phase 5D)", () => {
                                 rating: 5,
                                 comment: "Delicious and arrived hot!",
                                 created_at: "2026-06-01T00:00:00.000Z",
-                                first_name: "Asha",
-                                last_name: "M",
+                                username: "asha_m",
                                 product_id: 1,
                                 product_name: "Chicken pilau",
                                 product_slug: "chicken-pilau"
@@ -366,7 +376,7 @@ describe("StorePage reviews (Phase 5D)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Asha M")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText("asha_m")).toBeInTheDocument());
         expect(screen.getByText("★ 5/5")).toBeInTheDocument();
         expect(screen.getByText("Delicious and arrived hot!")).toBeInTheDocument();
         expect(screen.getByText("on Chicken pilau").closest("a")).toHaveAttribute("href", "/products/chicken-pilau");
@@ -383,7 +393,7 @@ describe("StorePage reviews (Phase 5D)", () => {
                         data: {
                             reviews: [{
                                 id: 501, rating: 5, comment: null, created_at: "2026-06-01T00:00:00.000Z",
-                                first_name: "Asha", last_name: "M", product_id: 1,
+                                username: "asha_m", product_id: 1,
                                 product_name: "Chicken pilau", product_slug: "chicken-pilau"
                             }],
                             average_rating: 5,
@@ -398,7 +408,7 @@ describe("StorePage reviews (Phase 5D)", () => {
         });
         renderPage();
 
-        await waitFor(() => expect(screen.getByText("Asha M")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText("asha_m")).toBeInTheDocument());
         expect(screen.queryByText("Load more reviews")).not.toBeInTheDocument();
     });
 });
@@ -446,7 +456,7 @@ describe("StorePage trust & safety (Phase 7D)", () => {
     it("shows both rows when the seller is both paid-verified and identity-verified", async () => {
         api.get.mockImplementation((url) => {
             if (url === "/stores/mama-ntilies-kitchen") {
-                return Promise.resolve({ data: { data: { ...store, is_verified: 1, identity_verified: 1 } } });
+                return Promise.resolve({ data: { data: { ...store, is_verified: 1, show_verified_badge: 1, identity_verified: 1 } } });
             }
             if (url === "/stores/mama-ntilies-kitchen/collections") return Promise.resolve({ data: { data: [] } });
             if (url === "/products") return Promise.resolve({ data: { data: [], pagination: { total: 0, totalPages: 1 } } });
@@ -463,7 +473,7 @@ describe("StorePage trust & safety (Phase 7D)", () => {
     it("shows only the Identity Verified row when the paid badge isn't active", async () => {
         api.get.mockImplementation((url) => {
             if (url === "/stores/mama-ntilies-kitchen") {
-                return Promise.resolve({ data: { data: { ...store, is_verified: 0, identity_verified: 1 } } });
+                return Promise.resolve({ data: { data: { ...store, is_verified: 0, show_verified_badge: 0, identity_verified: 1 } } });
             }
             if (url === "/stores/mama-ntilies-kitchen/collections") return Promise.resolve({ data: { data: [] } });
             if (url === "/products") return Promise.resolve({ data: { data: [], pagination: { total: 0, totalPages: 1 } } });
@@ -479,7 +489,7 @@ describe("StorePage trust & safety (Phase 7D)", () => {
     it("hides the whole Trust & safety section when neither signal is true", async () => {
         api.get.mockImplementation((url) => {
             if (url === "/stores/mama-ntilies-kitchen") {
-                return Promise.resolve({ data: { data: { ...store, is_verified: 0, identity_verified: 0 } } });
+                return Promise.resolve({ data: { data: { ...store, is_verified: 0, show_verified_badge: 0, identity_verified: 0 } } });
             }
             if (url === "/stores/mama-ntilies-kitchen/collections") return Promise.resolve({ data: { data: [] } });
             if (url === "/products") return Promise.resolve({ data: { data: [], pagination: { total: 0, totalPages: 1 } } });

@@ -4,18 +4,29 @@ const logger = require("../utils/logger").child({ module: "jobs" });
 const Sentry = require("../config/sentry");
 
 const staleOrdersJob = require("./staleOrders.job");
+const paymentReconciliationJob = require("./paymentReconciliation.job");
 const otpCleanupJob = require("./otpCleanup.job");
 const sponsorshipExpiryJob = require("./sponsorshipExpiry.job");
 const featuredStoreExpiryJob = require("./featuredStoreExpiry.job");
-const departmentSponsorshipExpiryJob = require("./departmentSponsorshipExpiry.job");
 const escrowReleaseJob = require("./escrowRelease.job");
 const bookingLifecycleJob = require("./bookingLifecycle.job");
 const departmentMaintenanceScheduleJob = require("./departmentMaintenanceSchedule.job");
 const webhookReplayCleanupJob = require("./webhookReplayCleanup.job");
-const monetizationScheduleJob = require("./monetizationSchedule.job");
+const seoMetricsCleanupJob = require("./seoMetricsCleanup.job");
 const groupBuyExpiryJob = require("./groupBuyExpiry.job");
 const deliveryRematchJob = require("./deliveryRematch.job");
 const supplyNudgeJob = require("./supplyNudge.job");
+const codAutoConfirmJob = require("./codAutoConfirm.job");
+const walletReconciliationJob = require("./walletReconciliation.job");
+const disputeSlaJob = require("./disputeSla.job");
+const bookingExpiryJob = require("./bookingExpiry.job");
+const efdRetryJob = require("./efdRetry.job");
+const emailRetryJob = require("./emailRetry.job");
+const subscriptionLifecycleJob = require("./subscriptionLifecycle.job");
+const rewardSettlementJob = require("./rewardSettlement.job");
+const documentRetentionJob = require("./documentRetention.job");
+const fuelCapReminderJob = require("./fuelCapReminder.job");
+const renderDeployHookJob = require("./renderDeployHook.job");
 
 // Wraps a job so one throwing/rejecting never kills the cron scheduler or
 // crashes the process - it just logs and waits for the next tick. Also
@@ -45,6 +56,11 @@ exports.startJobs = () => {
     // unconfirmed too long.
     cron.schedule("*/15 * * * *", safeRun("staleOrders", staleOrdersJob));
 
+    // Once a day at 04:00: ask each provider about payments we do not hold
+    // as completed and queue any it says were paid - see
+    // paymentReconciliation.job.js.
+    cron.schedule("0 4 * * *", safeRun("paymentReconciliation", paymentReconciliationJob));
+
     // Once a day at 03:00 server time: housekeeping, low traffic hour.
     cron.schedule("0 3 * * *", safeRun("otpCleanup", otpCleanupJob));
 
@@ -60,14 +76,6 @@ exports.startJobs = () => {
     // this just keeps campaign `status` accurate for the seller/admin
     // campaign lists.
     cron.schedule("0 * * * *", safeRun("featuredStoreExpiry", featuredStoreExpiryJob));
-
-    // Every hour, on the hour: close out department-sponsorship campaigns
-    // whose paid duration has ended - see departmentSponsorshipExpiry.job.js
-    // and departmentSponsorship.service.js#expireDueCampaigns. No display
-    // flag to clear here either (the homepage ranking query joins the
-    // campaigns table live), so this just keeps campaign `status` accurate
-    // for the seller/admin campaign lists.
-    cron.schedule("0 * * * *", safeRun("departmentSponsorshipExpiry", departmentSponsorshipExpiryJob));
 
     // Every hour, at 10 past: advance paid bookings through
     // confirmed -> active -> completed as their dates pass - see
@@ -86,20 +94,33 @@ exports.startJobs = () => {
     // Every minute: flip departments into/out of maintenance as their
     // scheduled windows arrive - see departmentMaintenanceSchedule.job.js
     // and category.service.js#applyDueMaintenanceSchedules.
-    cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
+    // Once a day at 02:30: move lapsed seller plans to past_due/expired and
+    // send the expiry reminder - see subscriptionLifecycle.job.js. Daily is
+    // enough because entitlements are judged against NOW(), not this job.
+    cron.schedule("30 2 * * *", safeRun("subscriptionLifecycle", subscriptionLifecycleJob));
 
-    // Every minute: apply due monetization flag activations scheduled
-    // from the Admin Billing Control Center - see
-    // monetizationSchedule.job.js and monetizationSchedule.service.js
-    // #applyDueSchedules. Same cadence/reasoning as
-    // departmentMaintenanceSchedule above (a scheduled billing switch is
-    // similarly time-sensitive to admins).
-    cron.schedule("* * * * *", safeRun("monetizationSchedule", monetizationScheduleJob));
+    // Hourly, at :20 (clear of the :10/:15 sweeps): settle affiliate
+    // commissions, loyalty points and referral bonuses for orders past their
+    // return window, and reverse them for cancelled or refunded orders.
+    // See rewardSettlement.job.js.
+    cron.schedule("20 * * * *", safeRun("rewardSettlement", rewardSettlementJob));
+
+    // Once a day at 03:30: remove the stored file of approved verification/KYC
+    // documents older than approved_document_retention_days (0 = keep).
+    cron.schedule("30 3 * * *", safeRun("documentRetention", documentRetentionJob));
+
+    // Once a day at 06:00: on the first Wednesday of the month (the EWURA cap
+    // effective day, Dar es Salaam time) remind admins to enter the new fuel
+    // caps - see fuelCapReminder.job.js.
+    cron.schedule("0 6 * * *", safeRun("fuelCapReminder", fuelCapReminderJob));
+
+    cron.schedule("* * * * *", safeRun("departmentMaintenanceSchedule", departmentMaintenanceScheduleJob));
 
     // Once a day at 03:10 server time (just after otpCleanup, same low-
     // traffic housekeeping slot): prune webhook_replay_guard rows older
     // than the replay window matters for - see webhookReplayCleanup.job.js.
     cron.schedule("10 3 * * *", safeRun("webhookReplayCleanup", webhookReplayCleanupJob));
+    cron.schedule("40 3 * * *", safeRun("seoMetricsCleanup", seoMetricsCleanupJob));
 
     // Every 15 minutes: resolve group buys whose deadline has passed -
     // see groupBuyExpiry.job.js. Same cadence as staleOrders since both
@@ -127,7 +148,43 @@ exports.startJobs = () => {
     // come online.
     cron.schedule("*/30 * * * *", safeRun("supplyNudge", supplyNudgeJob));
 
+    // Every 30 minutes: auto-confirm Cash on Delivery orders that have
+    // been sitting "delivered" past settings.cod_auto_confirm_hours with
+    // no buyer action and no open dispute - see codAutoConfirm.job.js.
+    // Phase 2, P0: Cash on Delivery no longer depends entirely on the
+    // buyer remembering to tap "confirm receipt".
+    cron.schedule("*/30 * * * *", safeRun("codAutoConfirm", codAutoConfirmJob));
+
+    // Once a day at 03:20 server time (same low-traffic housekeeping slot
+    // as otpCleanup/webhookReplayCleanup): recompute every wallet's
+    // balance from its own ledger and flag any drift for admin review -
+    // see walletReconciliation.job.js and
+    // wallet.service.js#reconcileWallets.
+    cron.schedule("20 3 * * *", safeRun("walletReconciliation", walletReconciliationJob));
+
+    // Every 15 minutes: dispute SLA checkpoints (12h/20h admin nudges,
+    // seller-response-overdue flag) - see disputeSla.job.js.
+    cron.schedule("*/15 * * * *", safeRun("disputeSla", disputeSlaJob));
+
+    // Every 15 minutes: release availability held by unpaid bookings
+    // that never completed payment - see bookingExpiry.job.js.
+    cron.schedule("*/15 * * * *", safeRun("bookingExpiry", bookingExpiryJob));
+
+    // Every 30 minutes: retry EFD receipts stuck pending/failed, and
+    // retry pending credit notes/voids - see efdRetry.job.js.
+    cron.schedule("*/30 * * * *", safeRun("efdRetry", efdRetryJob));
+
+    // Every 5 minutes: retry notification emails that failed to send - see
+    // emailRetry.job.js and migration 131 (email_outbox).
+    cron.schedule("*/5 * * * *", safeRun("emailRetry", emailRetryJob));
+
+    // Every 6 hours: ask Render to rebuild the frontend so dynamic
+    // product/service/store SEO shells (prerender-shells.mjs) don't go
+    // stale between real deploys - see renderDeployHook.job.js.
+    // No-op if RENDER_DEPLOY_HOOK_URL isn't configured.
+    cron.schedule("0 */6 * * *", safeRun("renderDeployHook", renderDeployHookJob));
+
     logger.info(
-        "background jobs scheduled (staleOrders every 15min, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, sponsorshipExpiry hourly, featuredStoreExpiry hourly, departmentSponsorshipExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, monetizationSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min)"
+        "background jobs scheduled (staleOrders every 15min, paymentReconciliation daily at 04:00, otpCleanup daily at 03:00, webhookReplayCleanup daily at 03:10, walletReconciliation daily at 03:20, sponsorshipExpiry hourly, featuredStoreExpiry hourly, bookingLifecycle hourly, escrowRelease hourly, departmentMaintenanceSchedule every minute, groupBuyExpiry every 15min, deliveryRematch every 5min, supplyNudge every 30min, codAutoConfirm every 30min)"
     );
 };

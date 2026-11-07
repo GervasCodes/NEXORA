@@ -15,6 +15,8 @@ import PageMeta from "../components/PageMeta";
 import { useAIAssistant } from "../context/AIAssistantContext";
 import RescheduleModal from "../components/RescheduleModal";
 import { CalendarIcon } from "../components/Icons";
+import Spinner from "../components/ui/Spinner";
+import useUploadProgress from "../hooks/useUploadProgress";
 
 // Mirrors booking.service.js's CANCELLABLE_STATUSES - the backend
 // allows either side to cancel a pending or confirmed booking. A
@@ -61,6 +63,7 @@ export default function BookingDetail() {
     const [reviewError, setReviewError] = useState("");
     const [justSubmittedReview, setJustSubmittedReview] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const photoUpload = useUploadProgress();
 
     const load = () => {
         api.get(`/bookings/${id}`)
@@ -107,6 +110,9 @@ export default function BookingDetail() {
                 .then(({ data }) => {
                     if (data.data?.success) {
                         setMessage(t("booking.payment.success"));
+                    } else if (data.data?.status === "pending") {
+                        setMessage(t("booking.payment.confirming"));
+                        pollForPaymentConfirmation();
                     } else {
                         setError(t("booking.payment.notCompleted"));
                     }
@@ -331,12 +337,13 @@ export default function BookingDetail() {
         try {
             const body = new FormData();
             body.append("photo", file);
-            await api.post(`/reviews/${booking.review.id}/photos`, body);
+            await api.post(`/reviews/${booking.review.id}/photos`, body, { onUploadProgress: photoUpload.onUploadProgress });
             load();
         } catch (err) {
             setReviewError(extractErrorMessage(err));
         } finally {
             setUploadingPhoto(false);
+            photoUpload.reset();
             e.target.value = "";
         }
     };
@@ -431,22 +438,22 @@ export default function BookingDetail() {
                             onChange={setPhone}
                             placeholder={t("booking.payment.phonePlaceholder")}
                         />
-                        <Button onClick={handlePayMobileMoney} disabled={busy}>
+                        <Button loading={busy} onClick={handlePayMobileMoney} disabled={busy}>
                             {busy ? t("booking.payment.processing") : t("booking.payment.payMobileMoney")}
                         </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                        <button onClick={handlePaySnippe} disabled={busy}
-                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        <button aria-busy={busy || undefined} onClick={handlePaySnippe} disabled={busy}
+                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             {busy ? t("booking.payment.redirecting") : t("booking.payment.payCard")}
                         </button>
-                        <button onClick={handlePayMalipopayCard} disabled={busy}
-                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        <button aria-busy={busy || undefined} onClick={handlePayMalipopayCard} disabled={busy}
+                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             {busy ? t("booking.payment.redirecting") : t("booking.payment.payCardMalipopay")}
                         </button>
-                        <button onClick={handlePayPaypal} disabled={busy}
-                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">
+                        <button aria-busy={busy || undefined} onClick={handlePayPaypal} disabled={busy}
+                            className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             {busy ? t("booking.payment.redirecting") : t("booking.payment.payPaypal")}
                         </button>
                     </div>
@@ -456,26 +463,26 @@ export default function BookingDetail() {
             <div className="flex flex-wrap gap-3">
                 {isProvider && booking.status === "pending" && (
                     <>
-                        <button onClick={handleConfirm} disabled={busy}
-                            className="bg-teal text-white px-5 py-2.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-60">
+                        <button aria-busy={busy || undefined} onClick={handleConfirm} disabled={busy}
+                            className="bg-teal text-white px-5 py-2.5 rounded-md text-sm font-medium hover:opacity-90 transition-opacity focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             {busy ? t("booking.confirming") : t("booking.confirmButton")}
                         </button>
-                        <button onClick={handleReject} disabled={busy}
-                            className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
+                        <button aria-busy={busy || undefined} onClick={handleReject} disabled={busy}
+                            className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             {busy ? t("booking.rejecting") : t("booking.rejectButton")}
                         </button>
                     </>
                 )}
                 {canReschedule && (
-                    <button onClick={() => setShowReschedule(true)} disabled={busy}
-                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60 inline-flex items-center gap-1.5">
+                    <button aria-busy={busy || undefined} onClick={() => setShowReschedule(true)} disabled={busy}
+                        className="border border-line px-5 py-2.5 rounded-md text-sm font-medium hover:border-abyss transition-colors focus-ring disabled:opacity-60 inline-flex items-center gap-1.5">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         <CalendarIcon className="w-4 h-4 shrink-0" />
                         Reschedule
                     </button>
                 )}
                 {canCancel && (
-                    <button onClick={handleCancel} disabled={busy}
-                        className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">
+                    <button aria-busy={busy || undefined} onClick={handleCancel} disabled={busy}
+                        className="border border-coral text-coral px-5 py-2.5 rounded-md text-sm font-medium hover:bg-coral/5 transition-colors focus-ring disabled:opacity-60">{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {busy ? t("booking.cancelling") : t("booking.cancelButton")}
                     </button>
                 )}
@@ -511,7 +518,7 @@ export default function BookingDetail() {
                             {justSubmittedReview && (
                                 (booking.review.photos?.length || 0) < MAX_REVIEW_PHOTOS ? (
                                     <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors mt-3">
-                                        {uploadingPhoto ? t("booking.review.uploading") : t("booking.review.addPhoto")}
+                                        {uploadingPhoto ? (photoUpload.progress !== null ? t("upload.percent", { percent: photoUpload.progress }) : t("booking.review.uploading")) : t("booking.review.addPhoto")}
                                         <input type="file" accept="image/*" onChange={handleReviewPhotoUpload} disabled={uploadingPhoto} className="hidden" />
                                     </label>
                                 ) : (
@@ -527,7 +534,7 @@ export default function BookingDetail() {
                                             src={photo.photo_url}
                                             // Phase 3 (alt-text pass): review photos are
                                             // content, not decoration.
-                                            alt={`Photo ${pi + 1} from this review`}
+                                            alt={`Review attachment ${pi + 1}`}
                                             loading="lazy"
                                             className="w-16 h-16 rounded-md object-cover border border-line"
                                         />
@@ -560,7 +567,7 @@ export default function BookingDetail() {
                             />
                             {reviewError && <p className="text-sm text-coral mb-3">{reviewError}</p>}
                             <div className="flex gap-3">
-                                <Button
+                                <Button loading={submittingReview}
                                     type="submit"
                                     disabled={submittingReview}
                                     size="sm"

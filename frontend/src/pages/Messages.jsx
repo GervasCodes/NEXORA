@@ -4,11 +4,15 @@ import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import PageLoader from "../components/PageLoader";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import { useToast } from "../context/ToastContext";
 import Avatar from "../components/ui/Avatar";
-import { BellIcon, BellOffIcon, ArchiveIcon } from "../components/Icons";
+import { BellIcon, BellOffIcon, ArchiveIcon, ChatIcon } from "../components/Icons";
+import { SkeletonAvatarList } from "../components/Skeleton";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import Spinner from "../components/ui/Spinner";
+import PullToRefresh from "../components/ui/PullToRefresh";
 
 // (UI/UX remediation) - search here is now two things layered
 // together, and it's worth being explicit about the difference:
@@ -41,20 +45,31 @@ export default function Messages() {
     const [messageResults, setMessageResults] = useState(null);
     const [searchingMessages, setSearchingMessages] = useState(false);
 
-    const loadConversations = (targetView = view) => {
-        setLoading(true);
+    // Phase 8 sub-phase 3 (empty & loading states): a failed fetch used to
+    // fall through silently, leaving `conversations` at its initial `[]` -
+    // indistinguishable from a person who genuinely has no conversations.
+    // This tracks a real load failure separately so it gets its own
+    // ErrorState with a retry, instead of masquerading as "no messages yet".
+    const [loadError, setLoadError] = useState(false);
+
+    const loadConversations = (targetView = view, silent = false) => {
+        if (!silent) setLoading(true);
         setMaintenance(null);
-        api.get("/chat/conversations", { params: { archived: targetView === "archived" } })
+        setLoadError(false);
+        return api.get("/chat/conversations", { params: { archived: targetView === "archived" } })
             .then(({ data }) => setConversations(data.data))
             .catch((err) => {
                 if (err.response?.data?.code === "MODULE_MAINTENANCE") {
                     setMaintenance(err.response.data.message);
+                } else {
+                    setLoadError(true);
                 }
             })
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => loadConversations(view), [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `loadConversations` is redefined every render; this effect intentionally only re-fetches when `view` changes
+    useEffect(() => { loadConversations(view); }, [view]);
 
     useEffect(() => {
         const trimmed = query.trim();
@@ -87,6 +102,24 @@ export default function Messages() {
         return isMeBuyer ? c.seller_photo_url : c.buyer_photo_url;
     };
 
+    // Pinned chats live on this device (per account) and float to the top.
+    const pinKey = `nexora_pinned_chats_${user?.id}`;
+    const [pinnedIds, setPinnedIds] = useState(() => {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(pinKey) || "[]");
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    });
+    const togglePin = (conversationId) => {
+        setPinnedIds((prev) => {
+            const next = prev.includes(conversationId) ? prev.filter((id) => id !== conversationId) : [...prev, conversationId];
+            try { localStorage.setItem(pinKey, JSON.stringify(next)); } catch { /* storage unavailable */ }
+            return next;
+        });
+    };
+
     const filtered = conversations.filter((c) => {
         const q = query.trim().toLowerCase();
         if (!q) return true;
@@ -95,7 +128,7 @@ export default function Messages() {
             (c.product_name || "").toLowerCase().includes(q) ||
             (c.last_message || "").toLowerCase().includes(q)
         );
-    });
+    }).sort((a, b) => Number(pinnedIds.includes(b.id)) - Number(pinnedIds.includes(a.id)));
 
     const handleDeleteConversation = async (conversationId) => {
         setDeletingId(conversationId);
@@ -149,189 +182,211 @@ export default function Messages() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+                <div className="h-9 w-40 rounded-md skeleton animate-shimmer mb-8" />
+                <SkeletonAvatarList rows={5} />
+            </div>
+        );
+    }
     if (maintenance) return <MaintenanceScreen title="Messages is under maintenance" message={maintenance} onRetry={() => loadConversations()} />;
+    if (loadError) {
+        return (
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+                <ErrorState title="Couldn't load your messages" hint="Check your connection and try again." onRetry={() => loadConversations()} />
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-            <PageMeta title="Messages" noIndex />
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="font-display text-3xl">{t("messages.title")}</h1>
-            </div>
+        <PullToRefresh onRefresh={() => loadConversations(view, true)}>
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+                <PageMeta title="Messages" noIndex />
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="font-display text-3xl">{t("messages.title")}</h1>
+                </div>
 
-            <div className="flex gap-1 border-b border-line mb-6">
-                <button
-                    onClick={() => setView("active")}
-                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                        view === "active" ? "border-ink text-ink" : "border-transparent text-ash hover:text-ink"
-                    }`}
-                >
-                    {t("messages.title")}
-                </button>
-                <button
-                    onClick={() => setView("archived")}
-                    className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                        view === "archived" ? "border-ink text-ink" : "border-transparent text-ash hover:text-ink"
-                    }`}
-                >
-                    {t("messages.archivedTab")}
-                </button>
-            </div>
+                <div className="flex gap-1 border-b border-line mb-6">
+                    <button
+                        onClick={() => setView("active")}
+                        className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            view === "active" ? "border-ink text-ink" : "border-transparent text-ash hover:text-ink"
+                        }`}
+                    >
+                        {t("messages.title")}
+                    </button>
+                    <button
+                        onClick={() => setView("archived")}
+                        className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            view === "archived" ? "border-ink text-ink" : "border-transparent text-ash hover:text-ink"
+                        }`}
+                    >
+                        {t("messages.archivedTab")}
+                    </button>
+                </div>
 
-            <div className="relative mb-3">
-                <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-ash pointer-events-none"
-                >
-                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                    <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={t("messages.searchPlaceholder")}
-                    className="w-full border border-line rounded-full pl-9 pr-4 py-2 text-sm focus-ring"
-                />
-            </div>
+                <div className="relative mb-3">
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-ash pointer-events-none"
+                    >
+                        <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                        <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                    <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder={t("messages.searchPlaceholder")}
+                        className="w-full border border-line rounded-full pl-9 pr-4 py-2 text-sm focus-ring"
+                    />
+                </div>
 
-            {/* Cross-conversation message results  - separate
-                from the conversation-list filter below, since this
-                searches message content across every thread, not just
-                what's visible in the current view/list. */}
-            {query.trim().length >= SEARCH_MIN_CHARS && (
-                <div className="mb-6">
-                    {searchingMessages && <p className="text-xs text-ash">{t("messages.searchingMessages")}</p>}
-                    {!searchingMessages && messageResults?.length > 0 && (
-                        <div className="border border-line rounded-lg divide-y divide-line overflow-hidden">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-ash px-3 py-2 bg-line/20">
-                                {t("messages.messageResultsHeading", { query: query.trim() })}
-                            </p>
-                            {messageResults.map((m) => (
+                {/* Cross-conversation message results  - separate
+                    from the conversation-list filter below, since this
+                    searches message content across every thread, not just
+                    what's visible in the current view/list. */}
+                {query.trim().length >= SEARCH_MIN_CHARS && (
+                    <div className="mb-6">
+                        {searchingMessages && <p className="text-xs text-ash">{t("messages.searchingMessages")}</p>}
+                        {!searchingMessages && messageResults?.length > 0 && (
+                            <div className="border border-line rounded-lg divide-y divide-line overflow-hidden">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-ash px-3 py-2 bg-line/20">
+                                    {t("messages.messageResultsHeading", { query: query.trim() })}
+                                </p>
+                                {messageResults.map((m) => (
+                                    <Link
+                                        key={m.id}
+                                        to={`/messages/${m.conversation_id}`}
+                                        className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-line/20 transition-colors"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-medium text-ink">{m.other_first_name} {m.other_last_name}</p>
+                                            <p className="text-xs text-ash truncate">{m.message}</p>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                        {!searchingMessages && messageResults?.length === 0 && (
+                            <p className="text-xs text-ash">{t("messages.noMessageResults", { query: query.trim() })}</p>
+                        )}
+                    </div>
+                )}
+
+                {conversations.length === 0 && !query.trim() && (
+                    <EmptyState
+                        title={view === "archived" ? t("messages.emptyArchived") : t("messages.emptyTitle")}
+                        hint={view === "active" ? (user.role === "buyer" ? t("messages.emptyHintBuyer") : t("messages.emptyHintSeller")) : undefined}
+                        tone="azure"
+                        icon={<ChatIcon className="w-7 h-7" />}
+                    />
+                )}
+
+                {query.trim() && filtered.length === 0 && conversations.length > 0 && (
+                    <p className="text-ash text-sm text-center py-10">{t("messages.noMatches", { query: query.trim() })}</p>
+                )}
+
+                {filtered.length > 0 && (
+                    <ul className="divide-y divide-line border-y border-line">
+                        {filtered.map((c, i) => (
+                            <li key={c.id} className="group relative animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
                                 <Link
-                                    key={m.id}
-                                    to={`/messages/${m.conversation_id}`}
-                                    className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-line/20 transition-colors"
+                                    to={`/messages/${c.id}`}
+                                    className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"
                                 >
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-medium text-ink">{m.other_first_name} {m.other_last_name}</p>
-                                        <p className="text-xs text-ash truncate">{m.message}</p>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                    {!searchingMessages && messageResults?.length === 0 && (
-                        <p className="text-xs text-ash">{t("messages.noMessageResults", { query: query.trim() })}</p>
-                    )}
-                </div>
-            )}
+                                    <Avatar name={otherPartyName(c)} src={otherPartyPhoto(c)} size="md" />
 
-            {conversations.length === 0 && !query.trim() && (
-                <div className="text-center py-16">
-                    <p className="font-display text-xl mb-2">
-                        {view === "archived" ? t("messages.emptyArchived") : t("messages.emptyTitle")}
-                    </p>
-                    {view === "active" && (
-                        <p className="text-ash text-sm">
-                            {user.role === "buyer" ? t("messages.emptyHintBuyer") : t("messages.emptyHintSeller")}
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {query.trim() && filtered.length === 0 && conversations.length > 0 && (
-                <p className="text-ash text-sm text-center py-10">{t("messages.noMatches", { query: query.trim() })}</p>
-            )}
-
-            {filtered.length > 0 && (
-                <ul className="divide-y divide-line border-y border-line">
-                    {filtered.map((c, i) => (
-                        <li key={c.id} className="group relative animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
-                            <Link
-                                to={`/messages/${c.id}`}
-                                className="py-4 flex items-center gap-4 hover:bg-line/20 transition-colors -mx-2 px-2 rounded-md"
-                            >
-                                <Avatar name={otherPartyName(c)} src={otherPartyPhoto(c)} size="md" />
-
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 justify-between gap-2">
-                                        <span className="flex items-center gap-1.5 min-w-0">
-                                            <p className="text-sm font-medium truncate">{otherPartyName(c)}</p>
-                                            {c.my_muted_at && (
-                                                <span title={t("messages.mutedIndicator")} aria-label={t("messages.mutedIndicator")} className="text-ash shrink-0">
-                                                    <BellOffIcon className="w-3.5 h-3.5" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 justify-between gap-2">
+                                            <span className="flex items-center gap-1.5 min-w-0">
+                                                {pinnedIds.includes(c.id) && <span aria-label={t("messages.pinned")} title={t("messages.pinned")}>📌</span>}
+                                                <p className="text-sm font-medium truncate">{otherPartyName(c)}</p>
+                                                {c.my_muted_at && (
+                                                    <span title={t("messages.mutedIndicator")} aria-label={t("messages.mutedIndicator")} className="text-ash shrink-0">
+                                                        <BellOffIcon className="w-3.5 h-3.5" />
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {c.unread_count > 0 && (
+                                                <span className="bg-mango text-abyss text-xs font-mono font-semibold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shrink-0">
+                                                    {c.unread_count > 9 ? "9+" : c.unread_count}
                                                 </span>
                                             )}
-                                        </span>
-                                        {c.unread_count > 0 && (
-                                            <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shrink-0">
-                                                {c.unread_count > 9 ? "9+" : c.unread_count}
-                                            </span>
+                                        </div>
+                                        {c.product_name && (
+                                            <p className="text-xs text-azure-deep truncate">{t("messages.reLabel", { product: c.product_name })}</p>
                                         )}
+                                        <p className="text-xs text-ash truncate">{c.last_message || t("messages.noMessagePreview")}</p>
                                     </div>
-                                    {c.product_name && (
-                                        <p className="text-xs text-azure-deep truncate">{t("messages.reLabel", { product: c.product_name })}</p>
-                                    )}
-                                    <p className="text-xs text-ash truncate">{c.last_message || t("messages.noMessagePreview")}</p>
-                                </div>
-                            </Link>
+                                </Link>
 
-                            {confirmingId !== c.id ? (
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleMute(c)}
-                                        disabled={busyAction === c.id}
-                                        aria-label={c.my_muted_at ? t("messages.unmuteAria") : t("messages.muteAria")}
-                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
-                                    >
-                                        {c.my_muted_at ? <BellIcon className="w-4 h-4" /> : <BellOffIcon className="w-4 h-4" />}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleArchive(c)}
-                                        disabled={busyAction === c.id}
-                                        aria-label={view === "archived" ? t("messages.unarchiveAria") : t("messages.archiveAria")}
-                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
-                                    >
-                                        <ArchiveIcon className="w-4 h-4" active={view === "archived"} />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setConfirmingId(c.id)}
-                                        aria-label={t("messages.deleteAria")}
-                                        className="text-xs text-ash hover:text-coral px-1.5 py-1"
-                                    >
-                                        {t("messages.deleteButton")}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 glass-strong rounded-md shadow-lg px-3 py-2 flex items-center gap-2 text-xs z-10 whitespace-nowrap">
-                                    <span className="text-ash">{t("chat.deleteConversationConfirm")}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteConversation(c.id)}
-                                        disabled={deletingId === c.id}
-                                        className="text-coral font-medium hover:underline disabled:opacity-60"
-                                    >
-                                        {deletingId === c.id ? t("chat.deleting") : t("chat.confirmDelete")}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setConfirmingId(null)}
-                                        className="text-ash hover:text-ink"
-                                    >
-                                        {t("common.cancel")}
-                                    </button>
-                                </div>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
+                                {confirmingId !== c.id ? (
+                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePin(c.id)}
+                                            aria-pressed={pinnedIds.includes(c.id)}
+                                            aria-label={pinnedIds.includes(c.id) ? t("messages.unpinAria") : t("messages.pinAria")}
+                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash text-sm transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5"
+                                        >
+                                            📌
+                                        </button>
+                                        <button aria-busy={busyAction === c.id || undefined}
+                                            type="button"
+                                            onClick={() => handleToggleMute(c)}
+                                            disabled={busyAction === c.id}
+                                            aria-label={c.my_muted_at ? t("messages.unmuteAria") : t("messages.muteAria")}
+                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
+                                        >{busyAction === c.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                            {c.my_muted_at ? <BellIcon className="w-4 h-4" /> : <BellOffIcon className="w-4 h-4" />}
+                                        </button>
+                                        <button aria-busy={busyAction === c.id || undefined}
+                                            type="button"
+                                            onClick={() => handleToggleArchive(c)}
+                                            disabled={busyAction === c.id}
+                                            aria-label={view === "archived" ? t("messages.unarchiveAria") : t("messages.archiveAria")}
+                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
+                                        >{busyAction === c.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                            <ArchiveIcon className="w-4 h-4" active={view === "archived"} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmingId(c.id)}
+                                            aria-label={t("messages.deleteAria")}
+                                            className="text-xs text-ash hover:text-coral px-1.5 py-1"
+                                        >
+                                            {t("messages.deleteButton")}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 glass-strong rounded-md shadow-lg px-3 py-2 flex items-center gap-2 text-xs z-10 whitespace-nowrap">
+                                        <span className="text-ash">{t("chat.deleteConversationConfirm")}</span>
+                                        <button aria-busy={deletingId === c.id || undefined}
+                                            type="button"
+                                            onClick={() => handleDeleteConversation(c.id)}
+                                            disabled={deletingId === c.id}
+                                            className="text-coral font-medium hover:underline disabled:opacity-60"
+                                        >{deletingId === c.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                            {deletingId === c.id ? t("chat.deleting") : t("chat.confirmDelete")}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmingId(null)}
+                                            className="text-ash hover:text-ink"
+                                        >
+                                            {t("common.cancel")}
+                                        </button>
+                                    </div>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </PullToRefresh>
     );
 }

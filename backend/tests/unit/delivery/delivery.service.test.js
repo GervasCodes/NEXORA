@@ -1,5 +1,7 @@
 jest.mock("../../../src/modules/delivery/delivery.repository");
 jest.mock("../../../src/modules/delivery/deliveryPricing.service");
+jest.mock("../../../src/modules/delivery/deliveryRates.service");
+jest.mock("../../../src/modules/delivery/deliveryRates.repository");
 jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/seller/seller.repository");
 jest.mock("../../../src/modules/notification/notification.service");
@@ -31,6 +33,8 @@ jest.mock("../../../src/modules/sms/providers/sms.provider");
 
 const deliveryRepository = require("../../../src/modules/delivery/delivery.repository");
 const deliveryPricingService = require("../../../src/modules/delivery/deliveryPricing.service");
+const deliveryRatesService = require("../../../src/modules/delivery/deliveryRates.service");
+const deliveryRatesRepository = require("../../../src/modules/delivery/deliveryRates.repository");
 const orderRepository = require("../../../src/modules/order/order.repository");
 const sellerRepository = require("../../../src/modules/seller/seller.repository");
 const notificationService = require("../../../src/modules/notification/notification.service");
@@ -54,6 +58,10 @@ const SELLER_PICKUP_PIN = { pickup_lat: -6.8, pickup_lng: 39.2, store_name: "Tes
 
 beforeEach(() => {
     jest.useFakeTimers();
+    // Round 5 Phase 5: the peak-hour ETA adjustment is out of scope for these
+    // tests, so it passes the routed minutes straight through; no agent vehicle.
+    deliveryRatesService.adjustEta.mockImplementation(async (minutes) => minutes);
+    deliveryRatesRepository.findAgentVehicleType.mockResolvedValue(null);
     notificationService.notify.mockResolvedValue(undefined);
     pushService.sendToUser.mockResolvedValue(undefined);
     earningsService.creditForDelivery.mockResolvedValue(undefined);
@@ -66,6 +74,8 @@ beforeEach(() => {
     // a usable, non-empty array unless it specifically overrides one.
     settingsService.getDeliveryOfferRadiusStepsKm.mockResolvedValue([5, 15, 30]);
     settingsService.getDeliveryOfferTimeoutMs.mockResolvedValue(30000);
+    settingsService.getDeliveryLocationMaxAgeSeconds.mockResolvedValue(120);
+    settingsService.getDeliveryOfferCooldownSeconds.mockResolvedValue(600);
     // Roadmap  (agentScoring) - rankCandidatesBySellerEta always
     // pulls this for whatever pool it just timed, so every test that goes
     // through offerToNextCandidate needs a default here (an empty stats
@@ -367,11 +377,19 @@ describe("delivery.service.updateDeliveryStatus", () => {
 
     it("marking delivered also updates the order status and fires the earnings credit (fire-and-forget)", async () => {
         deliveryRepository.findByOrderId.mockResolvedValue({ id: 9, agent_id: 5, status: "in_transit" });
-        orderRepository.findOrderById.mockResolvedValue({ id: 1, buyer_id: 20, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue({
+            id: 1, buyer_id: 20, order_number: "ORD-1", delivery_handover_code: "1234"
+        });
 
-        await deliveryService.updateDeliveryStatus(1, 5, "delivered", "left at door");
+        // Delivery proof (Phase 5, P0) - marking an order delivered now
+        // requires a matching handover code or a dropoff photo (see
+        // updateDeliveryStatus's own comment); the buyer's code is the
+        // normal case.
+        await deliveryService.updateDeliveryStatus(1, 5, "delivered", "left at door", { handoverCode: "1234" });
 
-        expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(9, "delivered", "left at door");
+        expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(9, "delivered", "left at door", {
+            handoverVerified: true, handoverMethod: "code"
+        });
         expect(orderRepository.updateOrderStatus).toHaveBeenCalledWith(1, "delivered");
         expect(earningsService.creditForDelivery).toHaveBeenCalledWith(
             expect.objectContaining({ id: 9, agent_id: 5 })
@@ -518,6 +536,13 @@ describe("delivery.service.assertCanTrackOrder", () => {
     });
 });
 
+// Phase 2: offerToNextCandidate reads the full order once (for the drop-off
+// and the offer payload) instead of the old two-step sequence.
+const ORDER = {
+    id: 1, order_number: "ORD-1", delivery_lat: -6.8, delivery_lng: 39.2,
+    shipping_address: "123 St", shipping_city: "Dar", shipping_region: "Dar es Salaam"
+};
+
 describe("delivery.service.startMatching / offer flow", () => {
     it("does nothing when the order can't be found", async () => {
         orderRepository.findOrderById.mockResolvedValue(undefined);
@@ -563,9 +588,7 @@ describe("delivery.service.startMatching / offer flow", () => {
     });
 
     it("offers to whoever is nearest the SHOP (not the buyer), and notifies them via socket + push", async () => {
-        orderRepository.findOrderById
-            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1", shipping_address: "123 St", shipping_city: "Dar" });
+        orderRepository.findOrderById.mockResolvedValue(ORDER);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             // ~1.5km from the shop pin (-6.8, 39.2), in range
@@ -579,15 +602,13 @@ describe("delivery.service.startMatching / offer flow", () => {
 
         // Roadmap Phase 1: createOffer also takes an externalChannel (WhatsApp/SMS)
         // arg, null here since neither provider is configured in tests.
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 50, expect.any(Number), expect.any(Date), null);
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 50, expect.any(Number), expect.any(Date), null, expect.objectContaining({ radiusIndex: expect.any(Number) }));
         expect(socket.emitToUser).toHaveBeenCalledWith(50, "delivery:offer", expect.objectContaining({ offerId: 200, orderId: 1 }));
         expect(pushService.sendToUser).toHaveBeenCalledWith(50, expect.objectContaining({ offerId: 200, orderId: 1 }));
     });
 
     it("prefers the agent with the faster road ETA to the shop over the merely-closer-as-the-crow-flies one", async () => {
-        orderRepository.findOrderById
-            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue(ORDER);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             { id: 50, current_lat: -6.805, current_lng: 39.205, vehicle_type: "car" }, // nearer by straight line
@@ -604,14 +625,11 @@ describe("delivery.service.startMatching / offer flow", () => {
 
         await deliveryService.startMatching(1);
 
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null);
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null, expect.objectContaining({ radiusIndex: expect.any(Number) }));
     });
 
     it("advances to the next candidate once an unaccepted offer expires", async () => {
-        orderRepository.findOrderById
-            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 }) // startMatching
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" }) // first offer notify
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" }); // second offer notify (after expiry)
+        orderRepository.findOrderById.mockResolvedValue(ORDER);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             { id: 50, current_lat: -6.81, current_lng: 39.21 }
@@ -629,9 +647,7 @@ describe("delivery.service.startMatching / offer flow", () => {
     });
 
     it("does not re-offer once an offer was accepted before it expired", async () => {
-        orderRepository.findOrderById
-            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue(ORDER);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             { id: 50, current_lat: -6.81, current_lng: 39.21 }
@@ -783,9 +799,7 @@ describe("delivery.service.declineOffer", () => {
         // only one findOrderById call happens here (not two, unlike
         // startMatching) - the pickup point is looked up first, then the
         // order is fetched again just for the offer notification payload.
-        orderRepository.findOrderById
-            .mockResolvedValueOnce({ id: 1, delivery_lat: -6.8, delivery_lng: 39.2 })
-            .mockResolvedValueOnce({ id: 1, order_number: "ORD-1" });
+        orderRepository.findOrderById.mockResolvedValue(ORDER);
         deliveryRepository.findByOrderId.mockResolvedValue(undefined);
         deliveryRepository.findCandidateAgents.mockResolvedValue([
             { id: 51, current_lat: -6.81, current_lng: 39.21 }
@@ -797,6 +811,6 @@ describe("delivery.service.declineOffer", () => {
         // responseChannel defaults to "app" (see delivery.service.js's
         // declineOffer/acceptOffer comment on the default).
         expect(deliveryRepository.declineOffer).toHaveBeenCalledWith(200, 50, "app");
-        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null);
+        expect(deliveryRepository.createOffer).toHaveBeenCalledWith(1, 51, expect.any(Number), expect.any(Date), null, expect.objectContaining({ radiusIndex: expect.any(Number) }));
     });
 });

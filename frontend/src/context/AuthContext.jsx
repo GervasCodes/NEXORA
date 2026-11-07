@@ -117,12 +117,23 @@ export function AuthProvider({ children }) {
                 // happened to log in again.
                 setCsrfToken(data.data.csrfToken);
             })
-            .catch(() => {
+            .catch((error) => {
                 // A 401 here already goes through api/client.js's response
                 // interceptor (clears localStorage, may fire
                 // sessionExpiredHandler) - nothing further needed on a
                 // failure beyond making sure the in-memory user doesn't
                 // keep showing as logged in while that resolves.
+                //
+                // Reliability phase: a failure with NO server verdict - a
+                // closed connection, a timeout, or a 5xx while the host
+                // wakes up (api/client.js has already retried by now) -
+                // says nothing about whether the session is valid. Logging
+                // the person out for that is what made a sleeping server
+                // look like "I got signed out". Keep the cached user; the
+                // next real request that gets an answer corrects it.
+                const status = error?.response?.status;
+                const noVerdict = !error?.response || status >= 500;
+                if (noVerdict) return;
                 setUser(null);
             })
             .finally(() => setSessionReady(true));
@@ -144,7 +155,8 @@ export function AuthProvider({ children }) {
                 // the API response (see login.service.js) so Login.jsx can
                 // drive a live "expires in mm:ss" countdown instead of
                 // hardcoding a duration that could drift from the server's.
-                expiresInSeconds: data.data.expiresInSeconds
+                expiresInSeconds: data.data.expiresInSeconds,
+                codeDelivered: data.data.codeDelivered !== false
             };
         } catch (error) {
             if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
@@ -179,26 +191,85 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const resendLoginOtp = useCallback(async (preAuthToken) => {
+    // ---- Google sign-in / sign-up (round 5, phase 7) -------------------------
+    // Same session handling as verifyLoginOtp: cache the (non-sensitive) user,
+    // mark the session ready and store the CSRF value from the response body.
+    const startSessionFrom = (payload) => {
+        localStorage.setItem("nexora_user", JSON.stringify(payload.user));
+        setUser(payload.user);
+        setSessionReady(true);
+        setCsrfToken(payload.csrfToken);
+    };
+
+    // -> { success, status: "signed_in" } or
+    //    { success, status: "needs_profile", ticket, profile } for a new Google user.
+    const loginWithGoogle = useCallback(async (credential) => {
         try {
-            const response = await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken });
+            const { data } = await api.post("/auth/google", { credential, mode: "signin" });
+            if (data.data.status === "signed_in") {
+                startSessionFrom(data.data);
+                return { success: true, status: "signed_in" };
+            }
+            return { success: true, status: "needs_profile", ticket: data.data.ticket, profile: data.data.profile };
+        } catch (error) {
+            if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
+                setSuspension({ reason: error.response.data?.data?.reason || null });
+            }
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // Seller / delivery-agent registration: name + email only, nothing is created.
+    const prefillFromGoogle = useCallback(async (credential) => {
+        try {
+            const { data } = await api.post("/auth/google", { credential, mode: "prefill" });
+            return { success: true, ticket: data.data.ticket, profile: data.data.profile };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    // Finishes a new Google signup (phone, username, terms) and signs in.
+    const completeGoogleSignup = useCallback(async (details) => {
+        try {
+            const { data } = await api.post("/auth/google/complete", details);
+            startSessionFrom(data.data);
+            return { success: true };
+        } catch (error) {
+            return { success: false, message: extractErrorMessage(error) };
+        }
+    }, []);
+
+    const resendLoginOtp = useCallback(async (preAuthToken, channel = "email") => {
+        try {
+            const response = await api.post("/auth/login/resend-otp", { pre_auth_token: preAuthToken, channel });
             //  (OTP resend/expiry UX) - lets the caller restart both
             // the expiry countdown and its own resend cooldown from the
             // real value instead of assuming the same number as before.
             // Optional-chained throughout since this response shape isn't
             // guaranteed by every caller in tests (or, in principle, an
             // unexpected 2xx from a proxy/gateway in front of the API).
-            return { success: true, expiresInSeconds: response?.data?.data?.expiresInSeconds };
+            // delivered=false means the chosen channel failed or isn't set up;
+            // the message tells the user to pick another method.
+            return {
+                success: true,
+                expiresInSeconds: response?.data?.data?.expiresInSeconds,
+                delivered: response?.data?.data?.delivered !== false,
+                message: response?.data?.message
+            };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
         }
     }, []);
 
-    const register = useCallback(async (payload) => {
+    // `options.onUploadProgress` (axios progress callback) is only forwarded
+    // for multipart payloads - the seller/agent document upload on Register.
+    const register = useCallback(async (payload, options = {}) => {
         try {
             const isFormData = payload instanceof FormData;
             await api.post("/auth/register", payload, isFormData ? {
-                headers: { "Content-Type": "multipart/form-data" }
+                headers: { "Content-Type": "multipart/form-data" },
+                ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {})
             } : undefined);
             return { success: true };
         } catch (error) {
@@ -235,10 +306,12 @@ export function AuthProvider({ children }) {
     const value = useMemo(
         () => ({
             user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
+            loginWithGoogle, prefillFromGoogle, completeGoogleSignup,
             suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
             csrfExpired, clearCsrfExpired
         }),
         [user, login, verifyLoginOtp, resendLoginOtp, register, logout, updateUser,
+            loginWithGoogle, prefillFromGoogle, completeGoogleSignup,
             suspension, clearSuspension, sessionExpired, clearSessionExpired, sessionReady,
             csrfExpired, clearCsrfExpired]
     );

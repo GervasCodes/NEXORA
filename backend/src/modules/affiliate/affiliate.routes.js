@@ -16,5 +16,6 @@ router.post("/click", trackClickValidation, validationMiddleware, affiliateContr
 router.use(authMiddleware, authorize("buyer"));
 router.post("/apply", affiliateController.apply);
 router.get("/me", affiliateController.getDashboard);
+router.post("/payouts", affiliateController.requestPayout);
 
 module.exports = router;

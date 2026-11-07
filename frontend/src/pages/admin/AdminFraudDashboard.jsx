@@ -244,7 +244,7 @@ export default function AdminFraudDashboard() {
                                                 <td className="py-2 pr-4">{entityLink(e)}</td>
                                                 <td className="py-2 pr-4 text-ash">
                                                     {e.personName || "—"}
-                                                    {e.personEmail && <span className="text-ash/70"> · {e.personEmail}</span>}
+                                                    {e.personEmail && <span className="text-ash"> · {e.personEmail}</span>}
                                                 </td>
                                                 <td className="py-2 pr-4 font-medium text-ink">{e.flagCount}</td>
                                                 <td className="py-2 pr-4">{e.confirmedCount}</td>

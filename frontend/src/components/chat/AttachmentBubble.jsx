@@ -52,7 +52,12 @@ export default function AttachmentBubble({ attachment, onOpenLightbox, mine }) {
             rel="noopener noreferrer"
             download={name}
             className={`flex items-center gap-2 rounded-xl px-3 py-2 max-w-[220px] transition-colors ${
-                mine ? "bg-frost/10 hover:bg-frost/20" : "bg-abyss/5 hover:bg-abyss/10"
+                // Phase 8 sub-phase 2: the "mine" bubble it sits inside became
+                // a violet-azure gradient (MessageBubble.jsx) instead of flat
+                // bg-abyss, so a frost-tinted overlay reads correctly on both
+                // sides now - bg-abyss/5 on the "other" side would have
+                // nearly vanished against the new frosted-glass bubble.
+                mine ? "bg-frost/10 hover:bg-frost/20" : "bg-ink/5 hover:bg-ink/10"
             }`}
         >
             <FileIcon />

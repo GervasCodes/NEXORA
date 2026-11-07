@@ -28,45 +28,30 @@ const { verifyMalipopayWebhook, verifySelcomWebhook } = require("../../middlewar
 router.post("/webhooks/malipopay", verifyMalipopayWebhook, paymentController.malipopayWebhook);
 router.post("/webhooks/selcom", verifySelcomWebhook, paymentController.selcomWebhook);
 
-// IMPORTANT: every literal-path route below (verification-fee/*,
-// paypal/capture) MUST stay registered before the "/:orderId/..." routes
-// further down. Express matches routes in registration order, and
-// "/:orderId/snippe/checkout" has the same segment count/shape as
-// "/verification-fee/snippe/checkout" - if the dynamic route were
-// registered first, a request for the literal path would match it
-// instead, with orderId wrongly bound to the string "verification-fee"
-// (caught live during this audit: it 403'd with "Access denied" because
-// that route also requires the buyer role, not seller).
+// NOTE: the PayPal webhook (POST /webhooks/paypal) is registered in app.js
+// with the raw body parser, like the Snippe / MalipoPay Card webhooks.
 
-// Verification fee (seller-only) - Snippe/PayPal alternatives to the
-// existing mobile-money verification fee flow in seller.routes.js
-// (POST /seller/verification/fee). Kept in the payment module since
-// they're genuinely payment-gateway concerns, not seller-profile ones.
-router.post(
-    "/verification-fee/snippe/checkout",
-    authMiddleware,
-    authorize("seller"),
-    paymentController.initiateSnippeVerificationFeePayment
-);
+// Admin: payments that need a human decision (paid after cancel, amount
+// mismatch, duplicate payment, chargeback, completed-at-provider-but-not-
+// here). Literal paths - must stay registered before "/:orderId/...".
+router.get("/review-queue", authMiddleware, authorize("admin"), paymentController.listPaymentReviews);
+router.post("/review-queue/:reviewId/resolve", authMiddleware, authorize("admin"), paymentController.resolvePaymentReview);
+router.post("/review-queue/:reviewId/accept", authMiddleware, authorize("admin"), paymentController.acceptPaymentReview);
 
-router.post(
-    "/verification-fee/malipopay-card/checkout",
-    authMiddleware,
-    authorize("seller"),
-    paymentController.initiateMalipopayCardVerificationFeePayment
-);
-
-router.post(
-    "/verification-fee/paypal/create",
-    authMiddleware,
-    authorize("seller"),
-    paymentController.initiatePaypalVerificationFeePayment
-);
+// IMPORTANT: the "paypal/capture" literal-path route below MUST stay
+// registered before the "/:orderId/..." routes further down. Express
+// matches routes in registration order, and "/:orderId/snippe/checkout"
+// has the same segment count/shape as a literal path like
+// "/paypal/capture" - if a dynamic route were registered first, a
+// request for the literal path would match it instead, with orderId
+// wrongly bound to the literal segment (caught live during an earlier
+// audit, when this same class of route also existed for the now-retired
+// verification-fee flow).
 
 // Called by our OWN frontend after a buyer/seller approves on PayPal's
 // site and is redirected back - this is what actually captures the
-// funds. Works for both an order payment and the verification fee
-// (capturePaypalPayment figures out which from the stored payment row).
+// funds (capturePaypalPayment figures out what the payment was for from
+// the stored payment row).
 router.post(
     "/paypal/capture",
     authMiddleware,

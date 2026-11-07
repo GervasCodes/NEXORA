@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney } from "../../utils/format";
@@ -9,8 +9,12 @@ import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import { useLanguage } from "../../context/LanguageContext";
 import Input from "../../components/ui/Input";
+import ErrorState from "../../components/ui/ErrorState";
+import Spinner from "../../components/ui/Spinner";
+import PullToRefresh from "../../components/ui/PullToRefresh";
 
 const PAGE_SIZE = 20;
+const LOW_STOCK_THRESHOLD = 5;
 
 export default function SellerProducts() {
     const { t } = useLanguage();
@@ -18,6 +22,8 @@ export default function SellerProducts() {
     const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const requestId = useRef(0);
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
 
@@ -49,30 +55,42 @@ export default function SellerProducts() {
         api.get("/categories").then(({ data }) => setCategories(data.data)).catch(() => {});
     }, []);
 
-    const load = () => {
-        setLoading(true);
+    // `silent` refreshes (after activate/deactivate/bulk actions) keep the
+    // current rows on screen instead of swapping the list for a skeleton,
+    // so the page doesn't jump and scroll position survives.
+    const load = (silent = false) => {
+        const thisRequest = ++requestId.current;
+        if (!silent) setLoading(true);
+        setLoadError("");
         const params = { page, limit: PAGE_SIZE };
         if (search.trim()) params.search = search.trim();
         if (categoryId) params.category_id = categoryId;
         if (status) params.status = status;
 
-        api.get("/products/mine/list", { params })
+        return api.get("/products/mine/list", { params })
             .then(({ data }) => {
+                // A slower, older response must not overwrite a newer one.
+                if (requestId.current !== thisRequest) return;
                 setProducts(data.data);
                 setPagination(data.pagination || { page: 1, totalPages: 1, total: data.data.length });
                 setSelectedIds([]);
             })
-            .catch((err) => toast?.error(extractErrorMessage(err)))
-            .finally(() => setLoading(false));
+            .catch((err) => {
+                if (requestId.current !== thisRequest) return;
+                setLoadError(extractErrorMessage(err));
+            })
+            .finally(() => {
+                if (requestId.current === thisRequest) setLoading(false);
+            });
     };
 
-    useEffect(load, [search, categoryId, status, page]);
+    useEffect(() => { load(false); }, [search, categoryId, status, page]);
 
     const toggleActive = async (product) => {
         setBusyId(product.id);
         try {
             await api.put(`/products/${product.id}/${product.is_active ? "deactivate" : "activate"}`);
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -97,7 +115,7 @@ export default function SellerProducts() {
         setBulkBusy(true);
         try {
             await api.put("/products/bulk/status", { ids: selectedIds, is_active: isActive });
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -120,7 +138,7 @@ export default function SellerProducts() {
             toast?.success(`Updated pricing on ${data.data.updated} product(s).`);
             setShowBulkPrice(false);
             setBulkPriceValue("");
-            load();
+            load(true);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
@@ -147,177 +165,192 @@ export default function SellerProducts() {
     };
 
     return (
-        <div>
-            <PageMeta title="My Products" noIndex />
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="font-display text-2xl">{t("seller.products.title")}</h1>
-                <Button as={Link} to="/seller/products/new" size="sm">
-                    {t("seller.products.newProduct")}
-                </Button>
-            </div>
-
-            <SavedFilters
-                pageKey="seller_products"
-                currentFilters={{ search, categoryId, status }}
-                onApply={applySavedFilters}
-            />
-
-            <div className="border border-line rounded-lg p-4 mb-6">
-                <div className="flex flex-wrap gap-3">
-                <div className="flex-1 min-w-[180px] sm:min-w-[220px]">
-                    <Input
-                        type="text"
-                        placeholder={t("seller.products.searchPlaceholder")}
-                        value={searchInput}
-                        onChange={(e) => setSearchInput(e.target.value)}
-                    />
+        <PullToRefresh onRefresh={() => load(true)}>
+            <div>
+                <PageMeta title="My Products" noIndex />
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="font-display text-2xl">{t("seller.products.title")}</h1>
+                    <Button as={Link} to="/seller/products/new" size="sm">
+                        {t("seller.products.newProduct")}
+                    </Button>
                 </div>
-                    <select
-                        value={categoryId}
-                        onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
-                        className="border border-line rounded-md px-3 py-1.5 text-sm"
-                    >
-                        <option value="">{t("seller.products.allCategories")}</option>
-                        {categories.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={status}
-                        onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                        className="border border-line rounded-md px-3 py-1.5 text-sm"
-                    >
-                        <option value="">{t("seller.products.allStatuses")}</option>
-                        <option value="active">{t("seller.products.active")}</option>
-                        <option value="inactive">{t("seller.products.inactive")}</option>
-                    </select>
-                    <button
-                        onClick={resetFilters}
-                        className="text-xs text-ash underline hover:text-ink transition-colors"
-                    >
-                        {t("filters.clear")}
-                    </button>
-                </div>
-            </div>
 
-            <DataTable
-                items={products}
-                loading={loading}
-                emptyTitle={hasNoFiltersApplied ? t("seller.products.emptyNoListings") : t("seller.products.emptyNoMatch")}
-                selectable
-                selectedIds={selectedIds}
-                onToggleSelectAll={toggleSelectAll}
-                onToggleSelectOne={toggleSelectOne}
-                selectAllLabel={t("seller.products.selectAllAria")}
-                getSelectLabel={(p) => t("seller.products.selectOneAria", { name: p.name })}
-                rowClassName="py-4 flex flex-wrap items-center gap-3"
-                bulkActions={selectedIds.length > 0 && (
-                    <>
-                        <p className="text-xs font-medium">{t("seller.products.selectedCount", { count: selectedIds.length })}</p>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => bulkSetActive(true)}
-                            disabled={bulkBusy}
-                            className="bg-paper"
+                <SavedFilters
+                    pageKey="seller_products"
+                    currentFilters={{ search, categoryId, status }}
+                    onApply={applySavedFilters}
+                />
+
+                <div className="border border-line rounded-lg p-4 mb-6">
+                    <div className="flex flex-wrap gap-3">
+                    <div className="flex-1 min-w-[180px] sm:min-w-[220px]">
+                        <Input
+                            type="text"
+                            placeholder={t("seller.products.searchPlaceholder")}
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                        />
+                    </div>
+                        <select
+                            value={categoryId}
+                            onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
+                            className="border border-line rounded-md px-3 py-1.5 text-sm"
                         >
-                            {t("seller.products.activateSelected")}
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => bulkSetActive(false)}
-                            disabled={bulkBusy}
-                            className="bg-paper"
+                            <option value="">{t("seller.products.allCategories")}</option>
+                            {categories.map((c) => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={status}
+                            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                            className="border border-line rounded-md px-3 py-1.5 text-sm"
                         >
-                            {t("seller.products.deactivateSelected")}
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setShowBulkPrice((v) => !v)}
-                            disabled={bulkBusy}
-                            className="bg-paper"
-                        >
-                            Adjust price
-                        </Button>
-                        {showBulkPrice && (
-                            <form onSubmit={bulkAdjustPrice} className="flex items-center gap-1.5">
-                                <select
-                                    value={bulkPriceType}
-                                    onChange={(e) => setBulkPriceType(e.target.value)}
-                                    className="border border-line rounded-md px-2 py-1 text-xs"
-                                >
-                                    <option value="percent">%</option>
-                                    <option value="flat">TZS</option>
-                                </select>
-                                <div className="w-32">
-                                    <Input
-                                        type="number"
-                                        step="any"
-                                        value={bulkPriceValue}
-                                        onChange={(e) => setBulkPriceValue(e.target.value)}
-                                        placeholder={bulkPriceType === "percent" ? "e.g. -10 or 5" : "e.g. -500 or 500"}
-                                    />
-                                </div>
-                                <button type="submit" disabled={bulkBusy || !bulkPriceValue} className="text-xs text-teal hover:underline disabled:opacity-50">
-                                    Apply
-                                </button>
-                            </form>
-                        )}
+                            <option value="">{t("seller.products.allStatuses")}</option>
+                            <option value="active">{t("seller.products.active")}</option>
+                            <option value="inactive">{t("seller.products.inactive")}</option>
+                        </select>
                         <button
-                            onClick={() => setSelectedIds([])}
-                            disabled={bulkBusy}
-                            className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
+                            onClick={resetFilters}
+                            className="text-xs text-ash underline hover:text-ink transition-colors"
                         >
-                            {t("seller.products.clearSelection")}
+                            {t("filters.clear")}
                         </button>
-                    </>
-                )}
-                renderRow={(p) => (
-                    <>
-                        <div className="w-14 h-14 bg-line/40 rounded-md overflow-hidden shrink-0">
-                            {p.image_url && <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
-                        </div>
+                    </div>
+                </div>
 
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-medium truncate">{p.name}</p>
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${p.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
-                                    {p.is_active ? t("seller.products.active") : t("seller.products.inactive")}
-                                </span>
-                            </div>
-                            <p className="price text-xs text-ash">{formatMoney(p.discount_price || p.price)} · {t("seller.products.stockSuffix", { count: p.stock })}</p>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Link
-                                to={`/seller/products/${p.id}/edit`}
-                                className="flex-1 sm:flex-initial text-center text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors"
-                            >
-                                {t("common.edit")}
-                            </Link>
-
-                            <Button
-                                onClick={() => toggleActive(p)}
-                                disabled={busyId === p.id}
+                {loadError && !loading ? (
+                    <ErrorState
+                        title="Couldn't load your products"
+                        hint={loadError}
+                        onRetry={() => load(false)}
+                    />
+                ) : (
+                <DataTable
+                    items={products}
+                    loading={loading}
+                    emptyTitle={hasNoFiltersApplied ? t("seller.products.emptyNoListings") : t("seller.products.emptyNoMatch")}
+                    selectable
+                    selectedIds={selectedIds}
+                    onToggleSelectAll={toggleSelectAll}
+                    onToggleSelectOne={toggleSelectOne}
+                    selectAllLabel={t("seller.products.selectAllAria")}
+                    getSelectLabel={(p) => t("seller.products.selectOneAria", { name: p.name })}
+                    rowClassName="py-4 flex flex-wrap items-center gap-3"
+                    bulkActions={selectedIds.length > 0 && (
+                        <>
+                            <p className="text-xs font-medium">{t("seller.products.selectedCount", { count: selectedIds.length })}</p>
+                            <Button loading={bulkBusy}
                                 variant="secondary"
                                 size="sm"
-                                className="flex-1 sm:flex-initial"
+                                onClick={() => bulkSetActive(true)}
+                                disabled={bulkBusy}
+                                className="bg-paper"
                             >
-                                {p.is_active ? t("seller.products.deactivate") : t("seller.products.activate")}
+                                {t("seller.products.activateSelected")}
                             </Button>
-                        </div>
-                    </>
+                            <Button loading={bulkBusy}
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => bulkSetActive(false)}
+                                disabled={bulkBusy}
+                                className="bg-paper"
+                            >
+                                {t("seller.products.deactivateSelected")}
+                            </Button>
+                            <Button loading={bulkBusy}
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setShowBulkPrice((v) => !v)}
+                                disabled={bulkBusy}
+                                className="bg-paper"
+                            >
+                                Adjust price
+                            </Button>
+                            {showBulkPrice && (
+                                <form onSubmit={bulkAdjustPrice} className="flex items-center gap-1.5">
+                                    <select
+                                        value={bulkPriceType}
+                                        onChange={(e) => setBulkPriceType(e.target.value)}
+                                        className="border border-line rounded-md px-2 py-1 text-xs"
+                                    >
+                                        <option value="percent">%</option>
+                                        <option value="flat">TZS</option>
+                                    </select>
+                                    <div className="w-32">
+                                        <Input
+                                            type="number"
+                                            step="any"
+                                            value={bulkPriceValue}
+                                            onChange={(e) => setBulkPriceValue(e.target.value)}
+                                            placeholder={bulkPriceType === "percent" ? "e.g. -10 or 5" : "e.g. -500 or 500"}
+                                        />
+                                    </div>
+                                    <button aria-busy={bulkBusy || undefined} type="submit" disabled={bulkBusy || !bulkPriceValue} className="text-xs text-teal hover:underline disabled:opacity-50">{bulkBusy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                        Apply
+                                    </button>
+                                </form>
+                            )}
+                            <button aria-busy={bulkBusy || undefined}
+                                onClick={() => setSelectedIds([])}
+                                disabled={bulkBusy}
+                                className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
+                            >{bulkBusy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
+                                {t("seller.products.clearSelection")}
+                            </button>
+                        </>
+                    )}
+                    renderRow={(p) => (
+                        <>
+                            <div className="w-14 h-14 bg-line/40 rounded-md overflow-hidden shrink-0">
+                                {p.image_url && <img src={p.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-medium truncate">{p.name}</p>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${p.is_active ? "bg-teal/10 text-teal" : "bg-line text-ash"}`}>
+                                        {p.is_active ? t("seller.products.active") : t("seller.products.inactive")}
+                                    </span>
+                                </div>
+                                <p className="price text-xs text-ash">{formatMoney(p.discount_price || p.price)} · {t("seller.products.stockSuffix", { count: p.stock })}</p>
+                                {Number(p.stock) <= 0 ? (
+                                    <p className="text-xs text-coral mt-0.5">Out of stock</p>
+                                ) : Number(p.stock) <= LOW_STOCK_THRESHOLD ? (
+                                    <p className="text-xs text-mango-dark mt-0.5">Low stock</p>
+                                ) : null}
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <Link
+                                    to={`/seller/products/${p.id}/edit`}
+                                    className="flex-1 sm:flex-initial text-center text-xs border border-line px-3 py-1.5 rounded-md hover:border-ink transition-colors"
+                                >
+                                    {t("common.edit")}
+                                </Link>
+
+                                <Button loading={busyId === p.id}
+                                    onClick={() => toggleActive(p)}
+                                    disabled={busyId === p.id}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="flex-1 sm:flex-initial"
+                                >
+                                    {p.is_active ? t("seller.products.deactivate") : t("seller.products.activate")}
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                    pagination={{
+                        page: pagination.page,
+                        totalPages: pagination.totalPages,
+                        total: pagination.total,
+                        itemLabel: t("seller.products.itemLabel"),
+                        onPageChange: setPage
+                    }}
+                />
                 )}
-                pagination={{
-                    page: pagination.page,
-                    totalPages: pagination.totalPages,
-                    total: pagination.total,
-                    itemLabel: t("seller.products.itemLabel"),
-                    onPageChange: setPage
-                }}
-            />
-        </div>
+            </div>
+        </PullToRefresh>
     );
 }

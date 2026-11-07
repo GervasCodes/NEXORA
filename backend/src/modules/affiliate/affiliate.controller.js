@@ -27,3 +27,12 @@ exports.trackClick = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+exports.requestPayout = async (req, res) => {
+    try {
+        const data = await affiliateService.requestPayout(req.user.id, req.body);
+        return res.json({ success: true, message: "Payout requested", data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};

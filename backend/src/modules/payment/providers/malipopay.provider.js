@@ -109,3 +109,29 @@ exports.disburse = async (phone, amount, meta = {}) => {
         transactionReference: data.reference || data.transactionReference || data.data?.reference || null
     };
 };
+
+// Read-only status by the reference we sent at initiate time. Endpoint path
+// follows the card product's documented /payment/verify/:reference (see
+// malipopayCard.provider.js) applied to this rail's base URL - confirm in
+// the sandbox. Any doubt is reported as "unknown", never as a failure.
+exports.checkStatus = async (reference) => {
+    const { classifyStatus } = require("../providerStatus");
+
+    const response = await fetch(`${BASE_URL}/payment/verify/${encodeURIComponent(reference)}`, {
+        headers: { apiToken: API_TOKEN }
+    });
+
+    if (!response.ok) {
+        return { state: "unknown" };
+    }
+
+    const data = await response.json().catch(() => ({}));
+    const payload = data.data || data;
+
+    return {
+        state: classifyStatus(payload.status),
+        providerStatus: payload.status,
+        transactionReference: payload.transactionReference || payload.reference || null,
+        amount: payload.amount === undefined || payload.amount === null ? null : Number(payload.amount)
+    };
+};

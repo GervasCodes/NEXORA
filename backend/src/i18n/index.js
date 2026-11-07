@@ -39,8 +39,25 @@ const resolveFromAcceptLanguage = (header) => {
     return DEFAULT_LOCALE;
 };
 
+// Catalogs mix nested objects (notifications.booking.confirmed.title) and
+// flat dotted keys inside a namespace ("subscription.expiring.title"
+// under notifications). At every level this tries the whole remaining
+// path as one flat key first, then descends into each dotted prefix, so
+// both shapes resolve.
 const getByPath = (obj, path) => {
-    return path.split(".").reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), obj);
+    if (obj === null || typeof obj !== "object") return undefined;
+    if (obj[path] !== undefined) return obj[path];
+
+    let dot = path.indexOf(".");
+    while (dot !== -1) {
+        const child = obj[path.slice(0, dot)];
+        if (child !== undefined) {
+            const found = getByPath(child, path.slice(dot + 1));
+            if (found !== undefined) return found;
+        }
+        dot = path.indexOf(".", dot + 1);
+    }
+    return undefined;
 };
 
 const interpolate = (template, params) => {

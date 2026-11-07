@@ -4,6 +4,7 @@ const generateToken = require("../../utils/generateToken");
 const { generateShortLivedToken, verifyShortLivedToken } = require("../../utils/shortLivedToken");
 const otpService = require("../otp/otp.service");
 const appError = require("../../utils/appError");
+const loginLockoutService = require("./loginLockout.service");
 
 const PRE_AUTH_TYP = "login_otp";
 const PRE_AUTH_EXPIRY = "10m";
@@ -15,13 +16,26 @@ exports.login = async (email, password) => {
     const user = await userRepository.findByEmail(email);
 
     if (!user) {
-        throw appError("INVALID_CREDENTIALS", 401);
+        throw Object.assign(appError("INVALID_CREDENTIALS", 401), { failureReason: "unknown_email" });
     }
+
+    // Per-account lockout (see loginLockout.service.js): checked before the
+    // password so a locked account costs no bcrypt work and doesn't rack up
+    // further counted failures.
+    loginLockoutService.assertNotLocked(user);
 
     const match = await comparePassword(password, user.password);
 
     if (!match) {
-        throw appError("INVALID_CREDENTIALS", 401);
+        const outcome = await loginLockoutService.recordFailure(user.id);
+
+        // The failure that trips the lock says so immediately, rather than
+        // making the person find out on their next try.
+        if (outcome && outcome.locked) {
+            throw loginLockoutService.lockedErrorFor(outcome);
+        }
+
+        throw Object.assign(appError("INVALID_CREDENTIALS", 401), { failureReason: "bad_password" });
     }
 
     if (user.is_active === 0) {
@@ -53,7 +67,7 @@ exports.login = async (email, password) => {
     // ticking for 5 minutes after the code had already stopped working.
     // Use requestOtp's own returned value instead so the two can never
     // drift apart again.
-    const { expiresInSeconds } = await otpService.requestOtp(user, "login");
+    const { expiresInSeconds, delivered } = await otpService.requestOtp(user, "login");
 
     const preAuthToken = generateShortLivedToken(PRE_AUTH_TYP, { id: user.id }, PRE_AUTH_EXPIRY);
 
@@ -61,10 +75,10 @@ exports.login = async (email, password) => {
     // without ever having the full address in a network response.
     const maskedEmail = user.email.replace(/^(.{2}).+(@.+)$/, "$1***$2");
 
-    return { preAuthToken, maskedEmail, expiresInSeconds };
+    return { preAuthToken, maskedEmail, expiresInSeconds, codeDelivered: delivered };
 };
 
-exports.resendLoginOtp = async (preAuthToken) => {
+exports.resendLoginOtp = async (preAuthToken, channel) => {
     const { id } = verifyShortLivedToken(PRE_AUTH_TYP, preAuthToken);
     const user = await userRepository.findById(id);
 
@@ -72,7 +86,15 @@ exports.resendLoginOtp = async (preAuthToken) => {
         throw new Error("Session expired. Please sign in again.");
     }
 
-    return otpService.requestOtp(user, "login");
+    // A locked account can't be sent fresh codes - otherwise a pre-auth
+    // token issued before the lock would keep an attacker in the OTP loop
+    // (and keep emailing the account holder).
+    loginLockoutService.assertNotLocked(user);
+
+    const result = await otpService.requestOtp(user, "login", { channel });
+
+    // userId is only for the caller's monitoring log (see authEvents.js).
+    return { ...result, userId: user.id };
 };
 
 // verify the OTP against the pre-auth token issued in step 1. Only
@@ -91,8 +113,35 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
         throw appError("ACCOUNT_NOT_FOUND", 404);
     }
 
-    await otpService.verifyOtp(user.id, "login", code);
+    loginLockoutService.assertNotLocked(user);
 
+    try {
+        await otpService.verifyOtp(user.id, "login", code);
+    } catch (error) {
+        // Only an actual wrong guess counts toward the lockout - an expired
+        // or already-used code is the person's mistake or a slow inbox, not
+        // an attack, and shouldn't lock them out.
+        if (error.failureReason === "otp_incorrect") {
+            const outcome = await loginLockoutService.recordFailure(user.id);
+
+            if (outcome && outcome.locked) {
+                throw loginLockoutService.lockedErrorFor(outcome);
+            }
+        }
+        throw error;
+    }
+
+    // Password AND OTP both passed - the only point that clears the counter.
+    await loginLockoutService.clearFailures(user);
+
+    return exports.buildSession(user);
+};
+
+// Issues the session token and strips secrets from the user row. Shared by the
+// password+OTP flow above and by Google sign-in (google.service.js), so both
+// produce an identical session: same claims, same token_version (tv) so a
+// password change/permission change still invalidates it.
+exports.buildSession = (user) => {
     const token = generateToken({
         id: user.id,
         role: user.role,
@@ -103,7 +152,29 @@ exports.verifyLoginOtp = async (preAuthToken, code) => {
         tv: user.token_version || 0
     });
 
-    delete user.password;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    delete safeUser.failed_login_attempts;
+    delete safeUser.last_failed_login_at;
+    delete safeUser.login_locked_until;
+    delete safeUser.google_sub;
 
-    return { user, token };
+    return { user: safeUser, token };
+};
+
+// Same checks as the password flow, minus the password: deleted / suspended /
+// deactivated accounts can't sign in, and a locked account stays locked.
+exports.assertCanSignIn = (user) => {
+    if (user.is_active === 0) {
+        if (user.deleted_at) {
+            throw new Error("This account has been deleted.");
+        }
+        if (user.suspended_at) {
+            throw Object.assign(appError("ACCOUNT_SUSPENDED", 403), {
+                reason: user.suspension_reason || null
+            });
+        }
+        throw new Error("This account has been deactivated. Please contact support");
+    }
+    loginLockoutService.assertNotLocked(user);
 };

@@ -5,10 +5,34 @@
 // Bumped on every SW logic change so stale, possibly-buggy service
 // workers still installed on returning visitors' devices are replaced
 // rather than continuing to run their old (broken) fetch handler.
-const CACHE_VERSION = "nexora-v4";
+const CACHE_VERSION = "nexora-v6";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const API_CACHE = `${CACHE_VERSION}-api`;
+const IMAGE_CACHE = `${CACHE_VERSION}-images`;
 const OFFLINE_URL = "/offline.html";
+const MAX_CACHED_IMAGES = 120;
+
+// Cloudinary product/service/store images only - a narrow, deliberately
+// specific origin+destination match (not "any cross-origin GET") so this
+// can't accidentally start caching some other third party's response.
+// Cache-first: these URLs are content-hashed by Cloudinary (a given
+// transform URL never changes what it returns), so there's no
+// staleness risk in serving a cached copy indefinitely, unlike the
+// network-first treatment the CACHEABLE_API_PATHS get above.
+const isCacheableImageRequest = (request, url) =>
+    request.destination === "image" && url.hostname === "res.cloudinary.com";
+
+// Cache storage isn't bounded by itself - without a cap this would grow
+// unboundedly as someone browses the catalog. Trim oldest-inserted
+// entries (insertion order == Cache API iteration order) past the cap
+// whenever a new image is added.
+async function trimImageCache() {
+    const cache = await caches.open(IMAGE_CACHE);
+    const keys = await cache.keys();
+    if (keys.length <= MAX_CACHED_IMAGES) return;
+    const excess = keys.length - MAX_CACHED_IMAGES;
+    await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)));
+}
 
 // Only public, non-personal GET endpoints are ever cached. Cart, orders,
 // account, messages, seller/admin data, and anything else that requires
@@ -75,7 +99,7 @@ self.addEventListener("install", (event) => {
                 // A slow/flaky network during install shouldn't leave the
                 // whole activation in a broken state - log and move on;
                 // the app shell just won't have an offline copy yet.
-                console.warn("SW install: pre-cache failed", err);
+                void err;
             })
     );
 });
@@ -85,7 +109,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((keys) =>
             Promise.all(
                 keys
-                    .filter((key) => key.startsWith("nexora-") && key !== APP_SHELL_CACHE && key !== API_CACHE)
+                    .filter((key) => key.startsWith("nexora-") && key !== APP_SHELL_CACHE && key !== API_CACHE && key !== IMAGE_CACHE)
                     .map((key) => caches.delete(key))
             )
         ).then(() => self.clients.claim())
@@ -160,9 +184,39 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Cross-origin (Cloudinary images, fonts, etc.) - let the browser
-    // handle these normally rather than trying to cache/manage them here.
+    // Cloudinary images are deliberately NOT intercepted any more. A fetch()
+    // made from a service worker is checked against the page's CSP
+    // `connect-src`, not `img-src`, so re-fetching them here got every
+    // product image blocked ("Refused to connect ... Content Security
+    // Policy"). Letting the browser load them normally uses `img-src` and
+    // its own HTTP cache (Cloudinary URLs are immutable/long-cached).
+    if (isCacheableImageRequest(request, url)) return;
+
+    // Cross-origin (fonts, etc. - Cloudinary images are handled above) -
+    // let the browser handle these normally rather than trying to
+    // cache/manage them here.
     if (url.origin !== self.location.origin && !isCacheableApiRequest(url)) return;
+
+    // A same-shaped error body (`{success:false, message, code}`, matching
+    // backend/src/middleware/errorHandler.js) for the one case below where
+    // this worker has to manufacture its own response rather than relay a
+    // real one. Real Response, not Response.error(): the frontend's axios
+    // interceptor (api/client.js) branches on `error.response?.status`/
+    // `error.response?.data?.code` - a network-error-typed Response leaves
+    // axios with no `.response` at all (same as a raw dropped connection),
+    // so there's nothing for that existing handling to work with and it
+    // surfaces to the browser as a bare, undiagnosable net::ERR_FAILED.
+    // 503 + a real JSON body lets the exact same error-handling code path
+    // used for a real backend 503 run here too.
+    const offlineApiResponse = () =>
+        new Response(
+            JSON.stringify({
+                success: false,
+                code: "OFFLINE_NO_CACHE",
+                message: "You're offline and this hasn't been loaded before, so there's nothing saved to show."
+            }),
+            { status: 503, headers: { "Content-Type": "application/json" } }
+        );
 
     if (isCacheableApiRequest(url)) {
         // Network-first, cached fallback when offline - so a product
@@ -181,8 +235,8 @@ self.addEventListener("fetch", (event) => {
                 .catch(() =>
                     caches
                         .match(request)
-                        .then((cached) => cached || Response.error())
-                        .catch(() => Response.error())
+                        .then((cached) => cached || offlineApiResponse())
+                        .catch(() => offlineApiResponse())
                 )
         );
         return;
@@ -213,7 +267,13 @@ self.addEventListener("fetch", (event) => {
                         }
                         return response;
                     })
-                    .catch(() => Response.error());
+                    .catch(
+                        () =>
+                            new Response("", {
+                                status: 504,
+                                statusText: "Gateway Timeout"
+                            })
+                    );
             })
         );
     }

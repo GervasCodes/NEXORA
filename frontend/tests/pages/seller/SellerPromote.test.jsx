@@ -8,6 +8,13 @@ vi.mock("../../../src/api/client", () => ({
     extractErrorMessage: () => "Something went wrong"
 }));
 
+// Both SellerSponsorship and SellerFeaturedStore tabs call
+// useLanguage() - without a mock it returns the real context's null
+// default and crashes.
+vi.mock("../../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({ t: (key) => key })
+}));
+
 import api from "../../../src/api/client";
 import SellerPromote from "../../../src/pages/seller/SellerPromote";
 
@@ -42,15 +49,15 @@ describe("SellerPromote hub (A3 consolidation)", () => {
 
         expect(await screen.findByText("Your campaigns")).toBeInTheDocument();
         expect(api.get).toHaveBeenCalledWith("/seller/sponsorship/pricing");
-        expect(screen.getByRole("tab", { name: "Sponsored products" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.sponsorship" })).toHaveAttribute("aria-selected", "true");
     });
 
     it("respects a ?tab= deep link into the Featured stores tab", async () => {
         renderPage("/seller/promote?tab=featured-store");
 
-        await screen.findByText("Your campaigns");
+        await screen.findByText("seller.featured.yourCampaigns");
         expect(api.get).toHaveBeenCalledWith("/seller/featured-store/pricing");
-        expect(screen.getByRole("tab", { name: "Featured stores" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" })).toHaveAttribute("aria-selected", "true");
     });
 
     it("switches tabs on click, loading that tab's own data", async () => {
@@ -58,11 +65,11 @@ describe("SellerPromote hub (A3 consolidation)", () => {
         renderPage();
         await screen.findByText("Your campaigns");
 
-        await user.click(screen.getByRole("tab", { name: "Department sponsorship" }));
+        await user.click(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" }));
 
-        await screen.findByText(/bump a department/i);
-        expect(api.get).toHaveBeenCalledWith("/seller/department-sponsorship/pricing");
-        expect(screen.getByRole("tab", { name: "Department sponsorship" })).toHaveAttribute("aria-selected", "true");
-        expect(screen.getByRole("tab", { name: "Sponsored products" })).toHaveAttribute("aria-selected", "false");
+        await screen.findByText("seller.featured.yourCampaigns");
+        expect(api.get).toHaveBeenCalledWith("/seller/featured-store/pricing");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.featuredStore" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "seller.promote.tab.sponsorship" })).toHaveAttribute("aria-selected", "false");
     });
 });

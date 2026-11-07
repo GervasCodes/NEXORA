@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const stockLedger = require("../stock/stock.ledger");
 
 // continuation (UI/UX remediation) - product variants.
 // See migration 095's comments for the schema reasoning (options_key
@@ -83,26 +84,51 @@ exports.replaceVariants = async (productId, options, variants) => {
         );
         existingRows.forEach((row) => existingKeys.set(row.options_key, row.id));
 
+        // Drafts are not listings yet (no stock items); their stock is written
+        // directly. Published products go through the stock ledger.
+        const [[owner]] = await connection.query("SELECT seller_id, is_draft FROM products WHERE id = ?", [productId]);
+        const sellerId = owner && !owner.is_draft ? owner.seller_id : null;
+        const draftStock = !sellerId;
+
+        // lockByProduct addresses variants only when has_variants is set.
+        if (variants.length > 0) {
+            await connection.query("UPDATE products SET has_variants = 1 WHERE id = ?", [productId]);
+        }
+
         const keptKeys = new Set();
 
         for (const variant of variants) {
             keptKeys.add(variant.optionsKey);
             if (existingKeys.has(variant.optionsKey)) {
+                const variantId = existingKeys.get(variant.optionsKey);
+                // Stock is NOT written here: it goes through the stock ledger as a
+                // locked relative change (Phase 6), so a sale that lands while the
+                // seller edits the form is not overwritten.
                 await connection.query(
                     `UPDATE product_variants
-                     SET options = ?, sku = ?, price_delta = ?, stock = ?, image_url = ?, is_active = 1
+                     SET options = ?, sku = ?, price_delta = ?, image_url = ?, is_active = 1${draftStock ? ", stock = ?" : ""}
                      WHERE id = ?`,
                     [
                         JSON.stringify(variant.options),
                         variant.sku || null,
                         variant.price_delta || 0,
-                        variant.stock || 0,
                         variant.image_url || null,
-                        existingKeys.get(variant.optionsKey)
+                        ...(draftStock ? [variant.stock || 0] : []),
+                        variantId
                     ]
                 );
+                if (sellerId) {
+                    const target = await stockLedger.lockByProduct(connection, sellerId, productId, variantId);
+                    await stockLedger.setStock(connection, target, variant.stock || 0, {
+                        baseline: variant.stock_baseline,
+                        type: "correction",
+                        reason: "Variant edit",
+                        refType: "variant_edit",
+                        createdBy: sellerId
+                    });
+                }
             } else {
-                await connection.query(
+                const [inserted] = await connection.query(
                     `INSERT INTO product_variants (product_id, options, options_key, sku, price_delta, stock, image_url)
                      VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [
@@ -115,6 +141,11 @@ exports.replaceVariants = async (productId, options, variants) => {
                         variant.image_url || null
                     ]
                 );
+                // The item (and its opening balance) is created now, so the ledger
+                // starts at the stock this variant was created with.
+                if (sellerId) {
+                    await stockLedger.lockByProduct(connection, sellerId, productId, inserted.insertId);
+                }
             }
         }
 
@@ -139,6 +170,22 @@ exports.replaceVariants = async (productId, options, variants) => {
             "UPDATE products SET has_variants = ? WHERE id = ?",
             [variants.length > 0 ? 1 : 0, productId]
         );
+
+        // Keep the stock items in step: the plain-product item is retired while
+        // variants exist (their stock lives on the variants) and restored if the
+        // variants are removed again; items of removed variants are retired.
+        if (sellerId) {
+            await connection.query(
+                "UPDATE stock_items SET is_archived = ? WHERE link_key = ?",
+                [variants.length > 0 ? 1 : 0, `${productId}-0`]
+            );
+            if (removedIds.length) {
+                await connection.query(
+                    "UPDATE stock_items SET is_archived = 1 WHERE product_id = ? AND variant_id IN (?)",
+                    [productId, removedIds]
+                );
+            }
+        }
 
         await connection.commit();
     } catch (error) {

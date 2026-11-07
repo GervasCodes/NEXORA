@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
+import Spinner from "../../components/ui/Spinner";
 
 export default function AdminEfd() {
     const [pending, setPending] = useState([]);
@@ -51,18 +52,18 @@ export default function AdminEfd() {
                                 <p className="text-ash text-xs mt-1">TIN: {s.tin}{s.vrn ? ` · VRN: ${s.vrn}` : ""}</p>
                             </div>
                             <div className="flex gap-2">
-                                <button
+                                <button aria-busy={busyId === s.user_id || undefined}
                                     disabled={busyId === s.user_id}
                                     onClick={() => decide(s.user_id, true)}
                                     className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                                >
+                                >{busyId === s.user_id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Approve
                                 </button>
-                                <button
+                                <button aria-busy={busyId === s.user_id || undefined}
                                     disabled={busyId === s.user_id}
                                     onClick={() => decide(s.user_id, false)}
                                     className="border border-line px-4 py-2 rounded-md text-sm hover:border-coral hover:text-coral transition-colors disabled:opacity-60"
-                                >
+                                >{busyId === s.user_id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Reject
                                 </button>
                             </div>

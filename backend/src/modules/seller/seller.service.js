@@ -6,6 +6,7 @@ const logger = require("../../utils/logger").child({ module: "seller" });
 const productRepository = require("../product/product.repository");
 
 const { uploadToCloudinary } = require("../../utils/cloudinaryUpload");
+const { isVerifiedAccuracy } = require("../../utils/pickupPin");
 
 exports.uploadStoreLogo = async (userId, file) => {
     const seller = await sellerRepository.findByUserId(userId);
@@ -41,7 +42,8 @@ exports.createSellerProfile = async (userId, data) => {
         store_name: data.store_name,
         store_slug: storeSlug,
         store_description: data.store_description,
-        store_type_id: data.store_type_id
+        store_type_id: data.store_type_id,
+        merchant_type: data.merchant_type
     });
 
     return {
@@ -71,7 +73,23 @@ exports.updateSellerProfile = async (userId, data) => {
         throw new Error("Seller profile not found.");
     }
 
-    await sellerRepository.update(userId, data);
+    // Phase 2: a pin counts as "verified" when it was confirmed from a GPS
+    // fix accurate to <= 100 m. A pin placed by hand (no accuracy) is still
+    // usable for dispatch but not marked verified, and moving or clearing
+    // the pin always drops any earlier verification.
+    const update = { ...data };
+    const pinTouched = update.pickup_lat !== undefined || update.pickup_lng !== undefined;
+    if (pinTouched) {
+        const clearing = update.pickup_lat === null && update.pickup_lng === null;
+        update.pickup_pin_verified_at = !clearing && isVerifiedAccuracy(update.pickup_accuracy_m) ? new Date() : null;
+        update.pickup_accuracy_m = clearing || update.pickup_accuracy_m === undefined
+            ? null
+            : Math.round(Number(update.pickup_accuracy_m));
+    } else {
+        delete update.pickup_accuracy_m;
+    }
+
+    await sellerRepository.update(userId, update);
 
     return await sellerRepository.findByUserId(userId);
 };
@@ -259,8 +277,8 @@ exports.getAnalytics = async (sellerId) => {
 };
 
 // Phase A5 (Advanced Analytics) - period comparison + top customers for
-// this seller's product sales. Gated behind the same requireVerificationFeePaid
-// middleware as GET /seller/analytics (see seller.routes.js).
+// this seller's product sales. Gated the same way as GET /seller/analytics
+// (see seller.routes.js).
 function growthPercent(current, previous) {
     if (!previous) return current > 0 ? 100 : 0;
     return Number((((current - previous) / previous) * 100).toFixed(1));
@@ -373,21 +391,23 @@ exports.exportAnalyticsCsv = async (sellerId, type) => {
     return lines.join("\n");
 };
 
-// --- Verification fee / paid "Verified Seller" badge ---
-// The document-based per-seller verification_status flow this used to
-// depend on was removed in migration 029 - approval now comes from the
-// centralized users.account_verification_status gate (set at
-// registration, reviewed via accountVerification module) instead.
+// --- Seller approval vs. the Verified Seller badge ---
+// sp.is_verified means "ID approved, allowed to sell" and follows
+// users.account_verification_status. It is NOT shown to buyers as a badge.
+// The one public badge, "Verified Seller", is earned only by approved seller
+// KYC (BRELA / TIN / business licence -> sp.is_business_verified, set by the
+// accountVerification module), with a 30-day grace for sellers that had a
+// badge before this rule (sp.badge_grace_until, migration 148). The single
+// badge rule lives in utils/verifiedBadge.js.
 
-// Reconciles the paid badge: only true once the account-level
-// verification has been approved AND the fee has been paid, in either
-// order.
+// Reconciles is_verified (approved to sell) with the account-level
+// verification status. Does not grant the public badge.
 const syncBadge = async (userId) => {
     const [seller, user] = await Promise.all([
         sellerRepository.findByUserId(userId),
         authRepository.findById(userId)
     ]);
-    const shouldBeVerified = user?.account_verification_status === "approved" && !!seller.verification_fee_paid;
+    const shouldBeVerified = user?.account_verification_status === "approved";
 
     if (!!seller.is_verified !== shouldBeVerified) {
         await sellerRepository.setBadge(userId, shouldBeVerified);
@@ -396,55 +416,14 @@ const syncBadge = async (userId) => {
             notificationService.notify({
                 userId,
                 type: "seller_verification",
-                titleKey: "notifications.seller.badge.title",
-                messageKey: "notifications.seller.badge.message",
+                titleKey: "notifications.seller.approved.title",
+                messageKey: "notifications.seller.approved.message",
                 withEmail: true
             }).catch((err) => logger.warn({ err, userId }, "badge notify error"));
         }
     }
 
     return shouldBeVerified;
-};
-
-// Kicks off the fee payment - or, while monetization_verification_fee_enabled
-// is off (Monetization Master Switch), skips payment entirely and marks
-// the fee waived immediately, syncing the badge right away instead of
-// waiting on a webhook. amount is recorded as 0 with a "waived_free_launch"
-// reference so it's visibly distinct from a real payment in the ledger/history.
-exports.payVerificationFee = async (userId, phone) => {
-    const seller = await sellerRepository.findByUserId(userId);
-
-    if (!seller) {
-        throw new Error("Seller profile not found. Set up your store first.");
-    }
-
-    if (seller.verification_fee_paid) {
-        throw new Error("The verification fee has already been paid.");
-    }
-
-    const verificationFeeEnabled = await settingsService.isVerificationFeeMonetizationEnabled();
-    if (!verificationFeeEnabled) {
-        await exports.confirmVerificationFeePaid(userId, 0, "waived_free_launch");
-        return { status: "waived", message: "Verification is free during launch - your badge is now active." };
-    }
-
-    if (!phone) {
-        throw new Error("A mobile money phone number is required.");
-    }
-
-    const feeAmount = await settingsService.getVerificationFee();
-
-    // Lazy require to avoid a circular dependency: payment.service also
-    // requires seller.service to call confirmVerificationFeePaid below.
-    const paymentService = require("../payment/payment.service");
-    return paymentService.initiateVerificationFeePayment(userId, phone, feeAmount);
-};
-
-// Called by payment.service once the mobile money provider's webhook
-// confirms the verification fee payment actually completed.
-exports.confirmVerificationFeePaid = async (userId, amount, transactionReference) => {
-    await sellerRepository.setVerificationFeePaid(userId, amount, transactionReference);
-    await syncBadge(userId);
 };
 
 exports.syncBadgeForSeller = syncBadge;
@@ -473,4 +452,70 @@ exports.setMerchantType = async (userId, merchantType) => {
     await sellerRepository.setMerchantType(userId, merchantType);
 
     return { merchantType };
+};
+
+// Overview summary (Phase 13b). One call replaces downloading every product,
+// order, service and booking to the browser just to count them.
+const OVERVIEW_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseOverviewRange = (from, to) => {
+    if ((from && !OVERVIEW_DATE.test(from)) || (to && !OVERVIEW_DATE.test(to))) {
+        throw Object.assign(new Error("Dates must be in YYYY-MM-DD format"), { status: 400 });
+    }
+    if (from && to && from > to) {
+        throw Object.assign(new Error("The end date must be on or after the start date"), { status: 400 });
+    }
+    let toExclusive = null;
+    if (to) {
+        const next = new Date(`${to}T00:00:00Z`);
+        next.setUTCDate(next.getUTCDate() + 1);
+        toExclusive = next.toISOString().slice(0, 10);
+    }
+    return { from: from || null, toExclusive };
+};
+
+exports.getOverview = async (sellerId, { from, to } = {}) => {
+    const range = parseOverviewRange(from, to);
+    const [products, orders, productRevenue, services, bookings, bookingRevenue] = await Promise.all([
+        sellerRepository.getOverviewProductCounts(sellerId),
+        sellerRepository.getOverviewOrderCounts(sellerId),
+        sellerRepository.getOverviewProductRevenue(sellerId, range),
+        sellerRepository.getOverviewServiceCounts(sellerId),
+        sellerRepository.getOverviewBookingCounts(sellerId),
+        sellerRepository.getOverviewBookingRevenue(sellerId, range)
+    ]);
+
+    // Things the seller should look at. Counts are all-time, not range-filtered.
+    const attention = [];
+    if (Number(products.low_stock) > 0) {
+        attention.push({ key: "lowStock", count: Number(products.low_stock), to: "/seller/products" });
+    }
+    if (Number(orders.pending_over_day) > 0) {
+        attention.push({ key: "pendingOrdersOverDay", count: Number(orders.pending_over_day), to: "/seller/orders" });
+    }
+    if (Number(bookings.pending) > 0) {
+        attention.push({ key: "pendingBookings", count: Number(bookings.pending), to: "/seller/bookings" });
+    }
+
+    return {
+        range: { from: range.from, to: to || null },
+        products: {
+            total: Number(products.total),
+            active: Number(products.active),
+            drafts: Number(products.drafts)
+        },
+        orders: { total: Number(orders.total), pending: Number(orders.pending) },
+        services: {
+            total: Number(services.total),
+            active: Number(services.active),
+            drafts: Number(services.drafts)
+        },
+        bookings: { total: Number(bookings.total), pending: Number(bookings.pending) },
+        revenue: {
+            productGross: Number(productRevenue.gross),
+            productNet: Number(productRevenue.net),
+            bookingGross: Number(bookingRevenue.gross)
+        },
+        attention
+    };
 };

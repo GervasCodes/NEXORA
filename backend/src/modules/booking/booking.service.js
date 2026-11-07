@@ -5,7 +5,8 @@ const notificationService = require("../notification/notification.service");
 const walletService = require("../wallet/wallet.service");
 const logger = require("../../utils/logger").child({ module: "booking" });
 const Sentry = require("../../config/sentry");
-const paymentService = require("../payment/payment.service");
+const refundService = require("../refund/refund.service");
+const adminNotificationService = require("../adminNotification/adminNotification.service");
 const reviewRepository = require("../review/review.repository");
 const { computeDynamicPrice } = require("../../utils/dynamicPricing");
 
@@ -256,9 +257,11 @@ exports.confirmBooking = async (bookingId, providerId) => {
     await notificationService.notify({
         userId: booking.customer_id,
         type: "booking_confirmed",
-        title: "Booking confirmed",
-        message: `Your booking ${booking.booking_reference} has been confirmed.`,
-        url: `/bookings/${bookingId}`
+        titleKey: "notifications.booking.confirmed.title",
+        messageKey: "notifications.booking.confirmed.message",
+        messageParams: { reference: booking.booking_reference },
+        url: `/bookings/${bookingId}`,
+        withEmail: true
     });
 };
 
@@ -286,9 +289,17 @@ exports.rejectBooking = async (bookingId, providerId) => {
     // Payment flow unchanged: a pending booking that was already paid
     // still exits through 'refunded', exactly like cancelBooking - only
     // the unpaid case gets the new, more specific 'rejected' status.
-    await bookingRepository.cancelBooking(
+    // Conditional update + changed check, same reasoning as
+    // cancelBooking above. No cancellation-fee policy here - this is
+    // the provider declining the request, not the customer backing out,
+    // so it's always a full refund regardless of how close the start
+    // date is.
+    const changed = await bookingRepository.cancelBooking(
         bookingId, booking.service_id, items, wasPaid ? "refunded" : "rejected"
     );
+    if (!changed) {
+        throw new Error(`Booking can no longer be rejected (status: "${booking.status}")`);
+    }
 
     if (wasPaid) {
         walletService.reverseProviderEarningsForBooking(
@@ -296,19 +307,21 @@ exports.rejectBooking = async (bookingId, providerId) => {
         ).catch((err) => {
             logger.error({ err, bookingId }, "booking wallet reversal error");
             Sentry.captureException(err, { tags: { area: "booking", stage: "wallet-reversal" }, extra: { bookingId } });
+            // Admin queue (Phase 5) - a failed reversal here means the
+            // provider's wallet still shows earnings for a booking that
+            // was just refunded to the buyer, so this needs a human to
+            // reconcile it rather than only existing in Sentry.
+            adminNotificationService.notify({
+                type: "booking_wallet_reversal_failed",
+                category: "finance",
+                severity: "error",
+                title: "Booking wallet reversal failed",
+                message: `Reversing provider earnings for booking #${bookingId} failed - needs manual reconciliation.`,
+                metadata: { bookingId }
+            }).catch(() => {});
         });
 
-        paymentService.refundBookingPayment(bookingId, Number(booking.amount))
-            .then((result) => {
-                if (!result.success) {
-                    logger.error({ bookingId, err: result.error }, "booking refund needs manual handling");
-                    Sentry.captureMessage("Booking refund needs manual handling", {
-                        level: "error",
-                        tags: { area: "booking", stage: "refund" },
-                        extra: { bookingId, error: result.error }
-                    });
-                }
-            })
+        refundService.autoRefundForBooking({ booking, amount: Number(booking.amount), requestedBy: null })
             .catch((err) => {
                 logger.error({ err, bookingId }, "booking refund error");
                 Sentry.captureException(err, { tags: { area: "booking", stage: "refund" }, extra: { bookingId } });
@@ -347,6 +360,31 @@ const CANCELLABLE_STATUSES = ["pending", "confirmed"];
 // row to hang this off of (see migration 064's design notes), so it's
 // handled directly here rather than through the disputes/refunds tables
 // an order-side cancellation-with-refund would eventually go through.
+// Cancellation policy (Phase 5, P1) - free up to
+// cancellation_free_until_days before the booking's start date;
+// cancelling later than that keeps cancellation_late_fee_percent of the
+// amount as a late-cancellation fee (service-level setting, services
+// migration 122 - defaults are "free until 1 day before, 0% fee" so
+// every existing service behaves exactly as before this phase until a
+// provider actually sets stricter terms).
+const applyCancellationPolicy = (booking, service) => {
+    const amount = Number(booking.amount);
+    if (!amount) return 0;
+
+    const daysUntilStart = Math.ceil(
+        (new Date(booking.start_date) - new Date()) / (1000 * 60 * 60 * 24)
+    );
+    const freeUntilDays = Number(service?.cancellation_free_until_days ?? 1);
+    const lateFeePercent = Number(service?.cancellation_late_fee_percent ?? 0);
+
+    if (daysUntilStart >= freeUntilDays || lateFeePercent <= 0) {
+        return amount;
+    }
+
+    const refundable = amount * (1 - Math.min(lateFeePercent, 100) / 100);
+    return Math.round(refundable * 100) / 100;
+};
+
 exports.cancelBooking = async (bookingId, userId) => {
     const booking = await loadBookingWithAccessCheck(bookingId, userId);
 
@@ -357,37 +395,58 @@ exports.cancelBooking = async (bookingId, userId) => {
     const wasPaid = booking.payment_status === "paid";
     const items = await bookingRepository.findItemsByBookingId(bookingId);
 
-    await bookingRepository.cancelBooking(
+    // Conditional status update (Phase 5, P0) - the repository call
+    // itself re-checks status IN ('pending','confirmed') against the
+    // live row inside its own transaction and reports back whether it
+    // actually changed anything. The service-layer check above can
+    // still race a concurrent cancel (or the unpaid-booking-expiry job
+    // reaching the same booking first) between that check and this
+    // call - `changed === false` means we lost that race, so bail out
+    // without restoring units a second time or refunding twice.
+    const changed = await bookingRepository.cancelBooking(
         bookingId, booking.service_id, items, wasPaid ? "refunded" : "cancelled"
     );
+    if (!changed) {
+        throw new Error(`Booking can no longer be cancelled (status: "${booking.status}")`);
+    }
 
     if (wasPaid) {
-        // Reverse the provider's escrowed/released earnings for this
-        // booking first (so the ledger reflects the reversal even if the
-        // gateway call below fails or needs manual follow-up), then
-        // attempt to actually push the money back to the buyer.
-        walletService.reverseProviderEarningsForBooking(
-            booking.provider_id, Number(booking.amount), bookingId
-        ).catch((err) => {
-            logger.error({ err, bookingId }, "booking wallet reversal error");
-            Sentry.captureException(err, { tags: { area: "booking", stage: "wallet-reversal" }, extra: { bookingId } });
-        });
+        const service = await serviceRepository.findById(booking.service_id);
+        const refundAmount = applyCancellationPolicy(booking, service);
 
-        paymentService.refundBookingPayment(bookingId, Number(booking.amount))
-            .then((result) => {
-                if (!result.success) {
-                    logger.error({ bookingId, err: result.error }, "booking refund needs manual handling");
-                    Sentry.captureMessage("Booking refund needs manual handling", {
-                        level: "error",
-                        tags: { area: "booking", stage: "refund" },
-                        extra: { bookingId, error: result.error }
-                    });
-                }
-            })
-            .catch((err) => {
-                logger.error({ err, bookingId }, "booking refund error");
-                Sentry.captureException(err, { tags: { area: "booking", stage: "refund" }, extra: { bookingId } });
+        if (refundAmount <= 0) {
+            logger.info({ bookingId }, "booking cancellation: cancellation policy leaves nothing refundable");
+        } else {
+            // Reverse the provider's escrowed/released earnings for this
+            // booking first (so the ledger reflects the reversal even if
+            // the refund call below fails or needs manual follow-up).
+            // Only the refundable portion is reversed, matching whatever
+            // the cancellation policy above actually allows back.
+            walletService.reverseProviderEarningsForBooking(
+                booking.provider_id, refundAmount, bookingId
+            ).catch((err) => {
+                logger.error({ err, bookingId }, "booking wallet reversal error");
+                Sentry.captureException(err, { tags: { area: "booking", stage: "wallet-reversal" }, extra: { bookingId } });
+                adminNotificationService.notify({
+                    type: "booking_wallet_reversal_failed",
+                    category: "finance",
+                    severity: "error",
+                    title: "Booking wallet reversal failed",
+                    message: `Reversing provider earnings for booking #${bookingId} failed - needs manual reconciliation.`,
+                    metadata: { bookingId }
+                }).catch(() => {});
             });
+
+            // Tracked refund row (Phase 5, P0) - goes through the same
+            // refunds table, retryRefund and /admin/refunds queue every
+            // other refund source already uses, instead of the previous
+            // fire-and-forget call with nothing persisted if it failed.
+            refundService.autoRefundForBooking({ booking, amount: refundAmount, requestedBy: null })
+                .catch((err) => {
+                    logger.error({ err, bookingId }, "booking refund error");
+                    Sentry.captureException(err, { tags: { area: "booking", stage: "refund" }, extra: { bookingId } });
+                });
+        }
     }
 
     const notifyUserId = userId === booking.customer_id ? booking.provider_id : booking.customer_id;
@@ -412,6 +471,27 @@ exports.cancelBooking = async (bookingId, userId) => {
 // (buildDateList, priceDateItems) so a rescheduled booking is priced
 // and validated identically to a fresh one, just without losing the
 // booking's own id/history/payment record in the process.
+// Unpaid booking expiry (Phase 5, P1) - called from bookingExpiry.job.js.
+// Reuses the same conditional cancelBooking repository call (status IN
+// ('pending','confirmed') -> 'cancelled') the customer-cancel path uses,
+// so an expiry racing an actual customer cancel/payment-just-succeeded
+// can't double-release availability either.
+exports.expireUnpaidBooking = async (booking) => {
+    const items = await bookingRepository.findItemsByBookingId(booking.id);
+    const changed = await bookingRepository.cancelBooking(booking.id, booking.service_id, items, "cancelled");
+    if (!changed) return false;
+
+    await notificationService.notify({
+        userId: booking.customer_id,
+        type: "booking_expired",
+        title: "Booking expired",
+        message: `Booking ${booking.booking_reference} was cancelled because payment was never completed.`,
+        url: `/bookings/${booking.id}`
+    }).catch(() => {});
+
+    return true;
+};
+
 exports.rescheduleBooking = async (bookingId, customerId, newStartDate, newEndDate) => {
     const booking = await bookingRepository.findById(bookingId);
 

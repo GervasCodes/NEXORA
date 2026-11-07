@@ -4,8 +4,9 @@
  * the guard in provider.js (mirrors payment/providers/simulate.provider.js).
  */
 
+const logger = require("../../../utils/logger");
 exports.sendText = (to, body) => {
-    console.warn(
+    logger.warn(
         "\n" +
         "=============================================================\n" +
         "  SIMULATED WHATSAPP MESSAGE — nothing was actually sent.\n" +

@@ -1,0 +1,605 @@
+%% NEXORA full ERD - generated 2026-10-29 from live schema (131 app tables, 209 FKs). Entities show primary key only; see data-dictionary.md for columns.
+erDiagram
+    account_verification_documents {
+        int id PK
+    }
+    account_verification_document_flags {
+        int document_id PK
+    }
+    account_verification_history {
+        int id PK
+    }
+    admin_notifications {
+        int id PK
+    }
+    affiliate_accounts {
+        int user_id PK
+    }
+    affiliate_clicks {
+        int id PK
+    }
+    affiliate_conversions {
+        int id PK
+    }
+    affiliate_payouts {
+        int id PK
+    }
+    agent_earnings {
+        int id PK
+    }
+    ai_call_outcomes {
+        int id PK
+    }
+    ai_usage_log {
+        int id PK
+    }
+    audit_logs {
+        int id PK
+    }
+    bookings {
+        int id PK
+    }
+    booking_items {
+        int id PK
+    }
+    broadcasts {
+        int id PK
+    }
+    business_verification_requests {
+        int id PK
+    }
+    buyer_addresses {
+        int id PK
+    }
+    buyer_wallets {
+        int buyer_id PK
+    }
+    buyer_wallet_transactions {
+        int id PK
+    }
+    cart_items {
+        int id PK
+    }
+    categories {
+        int id PK
+    }
+    content_articles {
+        int id PK
+    }
+    conversations {
+        int id PK
+    }
+    coupons {
+        int id PK
+    }
+    coupon_redemptions {
+        int id PK
+    }
+    data_reset_approvals {
+        int id PK
+    }
+    deliveries {
+        int id PK
+    }
+    delivery_businesses {
+        int id PK
+    }
+    delivery_business_agents {
+        int id PK
+    }
+    delivery_business_jobs {
+        int id PK
+    }
+    delivery_eta_adjustments {
+        int id PK
+    }
+    delivery_offers {
+        int id PK
+    }
+    delivery_rate_cards {
+        int id PK
+    }
+    delivery_ratings {
+        int id PK
+    }
+    disputes {
+        int id PK
+    }
+    dispute_evidence {
+        int id PK
+    }
+    dispute_history {
+        int id PK
+    }
+    dispute_messages {
+        int id PK
+    }
+    efd_receipts {
+        int id PK
+    }
+    email_delivery_events {
+        int id PK
+    }
+    email_outbox {
+        int id PK
+    }
+    fraud_flags {
+        int id PK
+    }
+    fuel_reference {
+        int id PK
+    }
+    group_buys {
+        int id PK
+    }
+    group_buy_participants {
+        int id PK
+    }
+    kyc_tier_limits {
+        enum tier PK
+    }
+    kyc_upgrade_requests {
+        int id PK
+    }
+    live_selling_reminders {
+        int id PK
+    }
+    live_selling_sessions {
+        int id PK
+    }
+    loyalty_points_ledger {
+        int id PK
+    }
+    messages {
+        int id PK
+    }
+    message_reactions {
+        int id PK
+    }
+    monetization_schedule {
+        int id PK
+    }
+    notifications {
+        int id PK
+    }
+    offline_sales {
+        int id PK
+    }
+    orders {
+        int id PK
+    }
+    order_items {
+        int id PK
+    }
+    order_returns {
+        int id PK
+    }
+    order_return_history {
+        int id PK
+    }
+    otp_codes {
+        int id PK
+    }
+    payments {
+        int id PK
+    }
+    payment_review_queue {
+        int id PK
+    }
+    pickup_points {
+        int id PK
+    }
+    platform_modules {
+        int id PK
+    }
+    platform_settings {
+        varchar setting_key PK
+    }
+    platform_setting_history {
+        int id PK
+    }
+    products {
+        int id PK
+    }
+    product_alerts {
+        int id PK
+    }
+    product_audio {
+        int id PK
+    }
+    product_bulk_price_tiers {
+        int id PK
+    }
+    product_images {
+        int id PK
+    }
+    product_media {
+        int id PK
+    }
+    product_questions {
+        int id PK
+    }
+    product_variants {
+        int id PK
+    }
+    product_variant_options {
+        int id PK
+    }
+    product_variant_option_values {
+        int id PK
+    }
+    product_videos {
+        int id PK
+    }
+    purchases {
+        bigint id PK
+    }
+    purchase_lines {
+        bigint id PK
+    }
+    push_subscriptions {
+        int id PK
+    }
+    referrals {
+        int id PK
+    }
+    refunds {
+        int id PK
+    }
+    return_evidence {
+        int id PK
+    }
+    reviews {
+        int id PK
+    }
+    review_photos {
+        int id PK
+    }
+    sales {
+        bigint id PK
+    }
+    sale_lines {
+        bigint id PK
+    }
+    sale_returns {
+        bigint id PK
+    }
+    sale_return_lines {
+        bigint id PK
+    }
+    search_queries {
+        bigint id PK
+    }
+    search_zero_results {
+        int id PK
+    }
+    seller_collections {
+        int id PK
+    }
+    seller_collection_products {
+        int id PK
+    }
+    seller_delivery_agents {
+        int id PK
+    }
+    seller_profiles {
+        int id PK
+    }
+    seller_saved_filters {
+        int id PK
+    }
+    seller_sponsorship_credit_periods {
+        int id PK
+    }
+    seller_subscriptions {
+        int id PK
+    }
+    seller_wallets {
+        int seller_id PK
+    }
+    services {
+        int id PK
+    }
+    service_availability {
+        int id PK
+    }
+    service_categories {
+        int id PK
+    }
+    service_media {
+        int id PK
+    }
+    service_pricing_rules {
+        int id PK
+    }
+    sponsorship_campaigns {
+        int id PK
+    }
+    status_incidents {
+        int id PK
+    }
+    status_subscribers {
+        int id PK
+    }
+    stock_adjustments {
+        int id PK
+    }
+    stock_counters {
+        int seller_id PK
+        varchar kind PK
+    }
+    stock_customers {
+        int id PK
+    }
+    stock_expenses {
+        bigint id PK
+    }
+    stock_items {
+        int id PK
+    }
+    stock_low_alert_state {
+        int stock_item_id PK
+    }
+    stock_movements {
+        bigint id PK
+    }
+    stock_payments {
+        bigint id PK
+    }
+    stock_suppliers {
+        int id PK
+    }
+    store_featured_campaigns {
+        int id PK
+    }
+    store_follows {
+        int id PK
+    }
+    store_types {
+        int id PK
+    }
+    subscription_plans {
+        int id PK
+    }
+    support_messages {
+        int id PK
+    }
+    support_tickets {
+        int id PK
+    }
+    users {
+        int id PK
+    }
+    wallet_reconciliation_flags {
+        int id PK
+    }
+    wallet_top_ups {
+        int id PK
+    }
+    wallet_transactions {
+        int id PK
+    }
+    webhook_replay_guard {
+        bigint id PK
+    }
+    web_vitals_samples {
+        bigint id PK
+    }
+    whatsapp_sessions {
+        varchar phone PK
+    }
+    wishlist_items {
+        int id PK
+    }
+    withdrawal_requests {
+        int id PK
+    }
+    business_verification_requests ||--o{ account_verification_documents : "business_request_id"
+    users ||--o{ account_verification_documents : "user_id"
+    users ||--o{ account_verification_document_flags : "flagged_by"
+    account_verification_documents ||--o{ account_verification_document_flags : "document_id"
+    users ||--o{ account_verification_history : "actor_admin_id"
+    users ||--o{ account_verification_history : "user_id"
+    users ||--o{ admin_notifications : "related_user_id"
+    users ||--o{ admin_notifications : "read_by"
+    users ||--o{ affiliate_accounts : "user_id"
+    users ||--o{ affiliate_clicks : "affiliate_user_id"
+    users ||--o{ affiliate_conversions : "affiliate_user_id"
+    orders ||--o{ affiliate_conversions : "order_id"
+    users ||--o{ affiliate_payouts : "affiliate_user_id"
+    users ||--o{ agent_earnings : "agent_id"
+    deliveries ||--o{ agent_earnings : "delivery_id"
+    orders ||--o{ agent_earnings : "order_id"
+    users ||--o{ ai_usage_log : "user_id"
+    users ||--o{ audit_logs : "user_id"
+    users ||--o{ bookings : "customer_id"
+    users ||--o{ bookings : "provider_id"
+    services ||--o{ bookings : "service_id"
+    bookings ||--o{ booking_items : "booking_id"
+    users ||--o{ broadcasts : "admin_id"
+    users ||--o{ business_verification_requests : "reviewed_by"
+    users ||--o{ business_verification_requests : "user_id"
+    users ||--o{ buyer_addresses : "user_id"
+    users ||--o{ buyer_wallets : "buyer_id"
+    users ||--o{ buyer_wallet_transactions : "buyer_id"
+    products ||--o{ cart_items : "product_id"
+    users ||--o{ cart_items : "user_id"
+    users ||--o{ content_articles : "author_id"
+    categories ||--o{ content_articles : "category_id"
+    users ||--o{ conversations : "buyer_id"
+    users ||--o{ conversations : "delivery_agent_id"
+    orders ||--o{ conversations : "order_id"
+    products ||--o{ conversations : "product_id"
+    users ||--o{ conversations : "seller_id"
+    coupons ||--o{ coupon_redemptions : "coupon_id"
+    users ||--o{ coupon_redemptions : "user_id"
+    users ||--o{ data_reset_approvals : "approved_by"
+    users ||--o{ data_reset_approvals : "requested_by"
+    users ||--o{ deliveries : "agent_id"
+    orders ||--o{ deliveries : "order_id"
+    users ||--o{ delivery_businesses : "owner_user_id"
+    users ||--o{ delivery_business_agents : "agent_id"
+    delivery_businesses ||--o{ delivery_business_agents : "business_id"
+    users ||--o{ delivery_business_jobs : "assigned_agent_id"
+    delivery_businesses ||--o{ delivery_business_jobs : "business_id"
+    users ||--o{ delivery_offers : "agent_id"
+    orders ||--o{ delivery_offers : "order_id"
+    users ||--o{ delivery_rate_cards : "created_by"
+    users ||--o{ delivery_ratings : "agent_id"
+    users ||--o{ delivery_ratings : "buyer_id"
+    orders ||--o{ delivery_ratings : "order_id"
+    users ||--o{ disputes : "buyer_id"
+    orders ||--o{ disputes : "order_id"
+    order_items ||--o{ disputes : "order_item_id"
+    users ||--o{ disputes : "resolved_by"
+    users ||--o{ disputes : "seller_id"
+    disputes ||--o{ dispute_evidence : "dispute_id"
+    users ||--o{ dispute_evidence : "uploaded_by"
+    users ||--o{ dispute_history : "actor_id"
+    disputes ||--o{ dispute_history : "dispute_id"
+    disputes ||--o{ dispute_messages : "dispute_id"
+    users ||--o{ dispute_messages : "sender_id"
+    orders ||--o{ efd_receipts : "order_id"
+    users ||--o{ efd_receipts : "seller_id"
+    users ||--o{ fraud_flags : "resolved_by"
+    users ||--o{ fuel_reference : "entered_by"
+    products ||--o{ group_buys : "product_id"
+    users ||--o{ group_buys : "seller_id"
+    users ||--o{ group_buy_participants : "buyer_id"
+    group_buys ||--o{ group_buy_participants : "group_buy_id"
+    orders ||--o{ group_buy_participants : "order_id"
+    users ||--o{ kyc_upgrade_requests : "reviewed_by"
+    users ||--o{ kyc_upgrade_requests : "user_id"
+    live_selling_sessions ||--o{ live_selling_reminders : "session_id"
+    users ||--o{ live_selling_reminders : "user_id"
+    users ||--o{ live_selling_sessions : "seller_id"
+    orders ||--o{ loyalty_points_ledger : "order_id"
+    users ||--o{ loyalty_points_ledger : "user_id"
+    conversations ||--o{ messages : "conversation_id"
+    users ||--o{ messages : "sender_id"
+    messages ||--o{ message_reactions : "message_id"
+    users ||--o{ message_reactions : "user_id"
+    users ||--o{ monetization_schedule : "created_by"
+    conversations ||--o{ notifications : "related_conversation_id"
+    orders ||--o{ notifications : "related_order_id"
+    users ||--o{ notifications : "user_id"
+    products ||--o{ offline_sales : "product_id"
+    users ||--o{ offline_sales : "seller_id"
+    product_variants ||--o{ offline_sales : "variant_id"
+    users ||--o{ orders : "buyer_id"
+    orders ||--o{ orders : "parent_order_id"
+    pickup_points ||--o{ orders : "pickup_point_id"
+    orders ||--o{ order_items : "order_id"
+    products ||--o{ order_items : "product_id"
+    users ||--o{ order_items : "seller_id"
+    users ||--o{ order_returns : "buyer_id"
+    users ||--o{ order_returns : "decided_by"
+    order_items ||--o{ order_returns : "order_item_id"
+    orders ||--o{ order_returns : "order_id"
+    users ||--o{ order_returns : "seller_id"
+    users ||--o{ order_return_history : "actor_id"
+    order_returns ||--o{ order_return_history : "return_id"
+    users ||--o{ otp_codes : "user_id"
+    bookings ||--o{ payments : "booking_id"
+    orders ||--o{ payments : "order_id"
+    users ||--o{ payments : "seller_id"
+    seller_subscriptions ||--o{ payments : "subscription_id"
+    wallet_top_ups ||--o{ payments : "topup_id"
+    payments ||--o{ payment_review_queue : "payment_id"
+    users ||--o{ platform_modules : "updated_by"
+    users ||--o{ platform_setting_history : "changed_by"
+    categories ||--o{ products : "category_id"
+    users ||--o{ products : "seller_id"
+    products ||--o{ product_alerts : "product_id"
+    users ||--o{ product_alerts : "user_id"
+    products ||--o{ product_audio : "product_id"
+    products ||--o{ product_bulk_price_tiers : "product_id"
+    products ||--o{ product_images : "product_id"
+    products ||--o{ product_media : "product_id"
+    products ||--o{ product_questions : "product_id"
+    users ||--o{ product_questions : "user_id"
+    products ||--o{ product_variants : "product_id"
+    products ||--o{ product_variant_options : "product_id"
+    product_variant_options ||--o{ product_variant_option_values : "option_id"
+    products ||--o{ product_videos : "product_id"
+    users ||--o{ purchases : "seller_id"
+    stock_suppliers ||--o{ purchases : "supplier_id"
+    stock_items ||--o{ purchase_lines : "stock_item_id"
+    purchases ||--o{ purchase_lines : "purchase_id"
+    users ||--o{ push_subscriptions : "user_id"
+    users ||--o{ referrals : "referred_user_id"
+    users ||--o{ referrals : "referrer_id"
+    bookings ||--o{ refunds : "booking_id"
+    users ||--o{ refunds : "buyer_id"
+    disputes ||--o{ refunds : "dispute_id"
+    orders ||--o{ refunds : "order_id"
+    payments ||--o{ refunds : "payment_id"
+    users ||--o{ refunds : "requested_by"
+    order_returns ||--o{ refunds : "return_id"
+    users ||--o{ refunds : "seller_id"
+    order_returns ||--o{ return_evidence : "return_id"
+    users ||--o{ return_evidence : "uploaded_by"
+    bookings ||--o{ reviews : "booking_id"
+    users ||--o{ reviews : "buyer_id"
+    products ||--o{ reviews : "product_id"
+    reviews ||--o{ review_photos : "review_id"
+    stock_customers ||--o{ sales : "customer_id"
+    users ||--o{ sales : "seller_id"
+    stock_items ||--o{ sale_lines : "stock_item_id"
+    sales ||--o{ sale_lines : "sale_id"
+    sales ||--o{ sale_returns : "sale_id"
+    users ||--o{ sale_returns : "seller_id"
+    sale_lines ||--o{ sale_return_lines : "sale_line_id"
+    sale_returns ||--o{ sale_return_lines : "return_id"
+    users ||--o{ seller_collections : "seller_id"
+    seller_collections ||--o{ seller_collection_products : "collection_id"
+    products ||--o{ seller_collection_products : "product_id"
+    users ||--o{ seller_delivery_agents : "agent_id"
+    users ||--o{ seller_delivery_agents : "seller_id"
+    store_types ||--o{ seller_profiles : "store_type_id"
+    users ||--o{ seller_profiles : "user_id"
+    users ||--o{ seller_saved_filters : "seller_id"
+    users ||--o{ seller_sponsorship_credit_periods : "seller_id"
+    seller_subscriptions ||--o{ seller_sponsorship_credit_periods : "subscription_id"
+    subscription_plans ||--o{ seller_subscriptions : "plan_id"
+    users ||--o{ seller_subscriptions : "seller_id"
+    users ||--o{ seller_wallets : "seller_id"
+    service_categories ||--o{ services : "category_id"
+    users ||--o{ services : "provider_id"
+    services ||--o{ service_availability : "service_id"
+    services ||--o{ service_media : "service_id"
+    services ||--o{ service_pricing_rules : "service_id"
+    products ||--o{ sponsorship_campaigns : "product_id"
+    users ||--o{ sponsorship_campaigns : "seller_id"
+    users ||--o{ status_incidents : "created_by"
+    products ||--o{ stock_adjustments : "product_id"
+    offline_sales ||--o{ stock_adjustments : "offline_sale_id"
+    users ||--o{ stock_adjustments : "seller_id"
+    product_variants ||--o{ stock_adjustments : "variant_id"
+    users ||--o{ stock_counters : "seller_id"
+    users ||--o{ stock_customers : "seller_id"
+    users ||--o{ stock_expenses : "seller_id"
+    products ||--o{ stock_items : "product_id"
+    users ||--o{ stock_items : "seller_id"
+    product_variants ||--o{ stock_items : "variant_id"
+    stock_items ||--o{ stock_low_alert_state : "stock_item_id"
+    stock_items ||--o{ stock_movements : "stock_item_id"
+    users ||--o{ stock_movements : "seller_id"
+    users ||--o{ stock_payments : "seller_id"
+    users ||--o{ stock_suppliers : "seller_id"
+    categories ||--o{ store_featured_campaigns : "category_id"
+    users ||--o{ store_featured_campaigns : "seller_id"
+    users ||--o{ store_follows : "follower_id"
+    users ||--o{ store_follows : "store_user_id"
+    users ||--o{ support_messages : "sender_id"
+    support_tickets ||--o{ support_messages : "ticket_id"
+    users ||--o{ support_tickets : "user_id"
+    users ||--o{ users : "referred_by_user_id"
+    users ||--o{ users : "suspended_by"
+    users ||--o{ users : "account_verification_reviewed_by"
+    users ||--o{ wallet_top_ups : "buyer_id"
+    users ||--o{ wallet_transactions : "seller_id"
+    products ||--o{ wishlist_items : "product_id"
+    services ||--o{ wishlist_items : "service_id"
+    users ||--o{ wishlist_items : "user_id"
+    users ||--o{ withdrawal_requests : "seller_id"

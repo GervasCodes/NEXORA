@@ -17,6 +17,10 @@
 // server.js - kept in sync with .env.example (same source list).
 const KNOWN_VARS = [
     "PORT", "NODE_ENV", "CORS_ORIGIN", "LOG_LEVEL",
+    // Count of reverse-proxy hops in front of the app, for Express's
+    // "trust proxy" (app.js) - see the comment there. Optional, defaults
+    // to 1 (Render's own proxy only).
+    "TRUST_PROXY_HOPS",
     "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
     "DB_SSL", "DB_SSL_REJECT_UNAUTHORIZED", "DB_SSL_CA", "DB_SSL_CA_PATH",
     "DB_READ_HOST", "DB_READ_PORT", "DB_READ_USER", "DB_READ_PASSWORD", "DB_READ_NAME",
@@ -134,10 +138,12 @@ exports.check = () => {
         problems.push("MOBILE_MONEY_PROVIDER is not set in production - mobile money payments will fail to resolve a provider (see mobileMoney.provider.js)");
     }
 
-    // No production-required check for CLAMAV_HOST here (unlike
-    // MOBILE_MONEY_PROVIDER above) - as of Roadmap Phase 1, an unset
-    // CLAMAV_HOST fails open (uploads proceed unscanned) rather than
-    // rejecting uploads, so there's nothing broken to warn about.
+    // Uploads fail OPEN without CLAMAV_HOST (see utils/malwareScan.js), so in
+    // production that is a real security gap worth being loud about - it
+    // does not block startup, but it shows in the boot log on every deploy.
+    if (process.env.NODE_ENV === "production" && !process.env.CLAMAV_HOST) {
+        problems.push("CLAMAV_HOST is not set in production - uploaded files are NOT being virus-scanned (see utils/malwareScan.js)");
+    }
 
     return problems;
 };

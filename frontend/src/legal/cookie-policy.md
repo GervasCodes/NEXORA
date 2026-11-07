@@ -1,10 +1,8 @@
 *Effective date: 18 September 2026 · Version 1.0*
 
 > **Template notice:** This document is a starting-point template generated for the NEXORA
-> platform. It describes what NEXORA actually stores in your browser today. If analytics,
-> advertising, or any third-party tracking is added later, this document must be updated
-> and the consent banner revisited — a notice-only banner is not sufficient once
-> non-essential cookies exist.
+> platform. It describes what NEXORA stores in your browser today, including optional
+> analytics that only run if you accept them. Have it reviewed before launch.
 
 ## 1. What this policy covers
 
@@ -14,9 +12,11 @@ each one is for, and what control you have over them. It sits alongside the
 
 ## 2. The short version
 
-NEXORA sets **two cookies, and both are strictly necessary** for the site to work. We do
-**not** use advertising cookies, and we do **not** load third-party analytics or tracking
-scripts. Nothing we store in your browser is used to profile you or follow you across
+NEXORA sets **two cookies that are strictly necessary** for the site to work. We do
+**not** use advertising cookies. If you press **Accept** on the cookie banner, we also use
+**Google Analytics** to count visits and see which pages are useful. If you press
+**Decline** (or do not answer), Google Analytics is never loaded and sets no cookies.
+Nothing we store in your browser is used to build advertising profiles or follow you across
 other websites.
 
 ## 3. Cookies we set
@@ -55,14 +55,14 @@ browsing data" controls.
 
 ## 5. Third-party cookies
 
-**We currently set none.** NEXORA does not embed Google Analytics, advertising pixels, or
-similar third-party trackers.
+**Only with your consent:** if you accept analytics, Google Analytics 4 (Google LLC) sets
+cookies such as `_ga` and `_ga_<id>` to distinguish visitors and sessions, usually for up
+to 2 years. We send only the page path (never search terms, account pages or order
+details), turn off advertising features and Google signals, and anonymize IP addresses.
+You can withdraw consent at any time by clearing this site's data in your browser; the
+banner will then ask again.
 
-Some third-party services we rely on may set their own cookies **on their own pages** when
-you are sent there — for example a payment provider's hosted checkout page, where you are
-briefly on that provider's site to enter payment details. Those cookies are governed by
-that provider's own cookie and privacy policies, not this one. Map tiles are served from
-OpenStreetMap; embedded media may be served from its own host.
+We embed no advertising pixels or other third-party trackers.
 
 ## 6. Your choices
 

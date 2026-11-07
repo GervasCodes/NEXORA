@@ -3,8 +3,7 @@ const db = require("../../config/db");
 const VALID_KEYS = [
     "monetization_subscriptions_enabled",
     "monetization_commission_enabled",
-    "monetization_sponsorship_enabled",
-    "monetization_verification_fee_enabled"
+    "monetization_sponsorship_enabled"
 ];
 
 exports.VALID_KEYS = VALID_KEYS;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../../api/client";
 import NexoraCopyAssist from "../../components/ai/NexoraCopyAssist";
@@ -6,6 +6,10 @@ import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Input from "../../components/ui/Input";
+import { compressImage } from "../../utils/imageCompression";
+import { checkMediaFile, MAX_IMAGES_PER_PRODUCT, MAX_VIDEOS_PER_PRODUCT } from "../../utils/mediaLimits";
+import { useLanguage } from "../../context/LanguageContext";
+import Spinner from "../../components/ui/Spinner";
 
 const emptyForm = {
     name: "", description: "", price: "", discount_price: "",
@@ -14,7 +18,7 @@ const emptyForm = {
 };
 
 // Swaps the item at `index` with its neighbour in `direction` ("up"/"down")
-// and returns a new array - used by the photo/video/audio reorder controls
+// and returns a new array - used by the photo/video reorder controls
 // below. No-op (returns the same array) at either end of the list.
 const swapWithNeighbour = (list, index, direction) => {
     const target = direction === "up" ? index - 1 : index + 1;
@@ -24,7 +28,85 @@ const swapWithNeighbour = (list, index, direction) => {
     return next;
 };
 
+// Listing-strength checks. Weights add up to 100. Photos carry the most
+// weight because listings without them convert poorly.
+const LISTING_CHECKS = [
+    { labelKey: "seller.productForm.check.name", weight: 15, passes: (f) => f.name.trim().length >= 3 },
+    { labelKey: "seller.productForm.check.description", weight: 20, passes: (f) => (f.description || "").trim().length >= 40 },
+    { labelKey: "seller.productForm.check.price", weight: 15, passes: (f) => f.price !== "" },
+    { labelKey: "seller.productForm.check.category", weight: 15, passes: (f) => Boolean(f.category_id) },
+    { labelKey: "seller.productForm.check.stock", weight: 10, passes: (f) => f.stock !== "" },
+    { labelKey: "seller.productForm.check.photo", weight: 25, passes: (_f, photoCount) => photoCount > 0 }
+];
+
+const computeListingStrength = (form, photoCount) => {
+    let score = 0;
+    const missing = [];
+    for (const check of LISTING_CHECKS) {
+        if (check.passes(form, photoCount)) score += check.weight;
+        else missing.push(check.labelKey);
+    }
+    return { score, missing };
+};
+
+// Shape sent to the draft and publish endpoints. Numbers stay as typed; the
+// backend validates and converts them.
+const buildPayload = (form) => ({
+    ...form,
+    preorder_lead_time_days: form.preorder_lead_time_days === "" ? null : form.preorder_lead_time_days
+});
+
+// Status line beside the publish button.
+function SaveStatus({ savedId, isDraft, dirty, saveState }) {
+    const { t } = useLanguage();
+    if (!savedId) return null;
+    let text = "";
+    if (dirty && saveState !== "saving") text = t("seller.productForm.unsaved");
+    else if (saveState === "saving") text = t("seller.productForm.savingDraft");
+    else if (saveState === "error") text = t("seller.productForm.saveDraftFailed");
+    else if (isDraft) text = t("seller.productForm.draftSaved");
+    return text ? <span role="status" className="text-xs text-ash">{text}</span> : null;
+}
+
+// Listing-strength meter and a live card preview of how buyers will see it.
+function ListingPanel({ form, images }) {
+    const { t } = useLanguage();
+    const primary = images.find((img) => img.is_primary) || images[0];
+    const { score, missing } = computeListingStrength(form, images.length);
+    return (
+        <div className="border border-line rounded-lg p-4 mb-6 space-y-3">
+            <div className="flex gap-3 items-center">
+                <div className="w-16 h-16 rounded-md overflow-hidden border border-line bg-paper flex-shrink-0 flex items-center justify-center">
+                    {primary
+                        ? <img src={primary.image_url} alt="" className="w-full h-full object-cover" />
+                        : <span className="text-[10px] text-ash">{t("seller.productForm.noPhoto")}</span>}
+                </div>
+                <div className="min-w-0">
+                    <p className="font-medium truncate">{form.name.trim() || t("seller.productForm.namePlaceholder")}</p>
+                    <p className="text-sm text-ash">
+                        {form.price !== "" ? t("seller.productForm.priceValue", { price: form.price }) : t("seller.productForm.priceNotSet")}
+                        {form.discount_price !== "" && form.discount_price != null ? ` · ${t("seller.productForm.saleValue", { price: form.discount_price })}` : ""}
+                    </p>
+                </div>
+            </div>
+            <div>
+                <div className="flex justify-between text-xs text-ash mb-1">
+                    <span>{t("seller.productForm.strength")}</span>
+                    <span>{score}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-paper border border-line overflow-hidden" role="progressbar" aria-label={t("seller.productForm.strength")} aria-valuenow={score} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="h-full bg-teal transition-all" style={{ width: `${score}%` }} />
+                </div>
+                {missing.length > 0 && (
+                    <p className="text-xs text-ash mt-1">{t("seller.productForm.strengthen", { items: missing.map((k) => t(k)).join(", ") })}</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function SellerProductForm() {
+    const { t } = useLanguage();
     const { id } = useParams();
     const isEdit = Boolean(id);
     const navigate = useNavigate();
@@ -33,19 +115,31 @@ export default function SellerProductForm() {
     const [form, setForm] = useState(emptyForm);
     const [images, setImages] = useState([]);
     const [videos, setVideos] = useState([]);
-    const [audio, setAudio] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
-    const [uploadingAudio, setUploadingAudio] = useState(false);
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [savedId, setSavedId] = useState(isEdit ? id : null);
+    // isDraft: the row is a draft (not visible to buyers yet). New products
+    // start as drafts on their first field, so photos can be added right away.
+    const [isDraft, setIsDraft] = useState(!isEdit);
+    // The stock figure this form loaded. Sent back on save so the server applies only
+    // the seller's own change on top of any sale that happened in the meantime.
+    const stockBaseline = useRef(null);
+    // dirty: edits not yet saved. editCount lets an autosave that finishes
+    // after newer typing know not to clear the dirty flag.
+    const [dirty, setDirty] = useState(false);
+    const editCount = useRef(0);
+    const creatingDraft = useRef(null);
+    const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+    const [uploadProgress, setUploadProgress] = useState("");
+    const [categoryQuery, setCategoryQuery] = useState("");
 
     // Tracks which single media row (e.g. "image-12") is mid-request, so
     // only that row's controls disable during a delete/reorder/set-primary
     // call instead of locking the whole media section.
     const [mediaBusyKey, setMediaBusyKey] = useState(null);
-    // { type: "image" | "video" | "audio", id } of the row pending delete
+    // { type: "image" | "video", id } of the row pending delete
     // confirmation, or null when the ConfirmDialog is closed.
     const [pendingDelete, setPendingDelete] = useState(null);
 
@@ -71,31 +165,97 @@ export default function SellerProductForm() {
             });
             setImages(p.images || []);
             setVideos(p.videos || []);
-            setAudio(p.audio || []);
+            setIsDraft(Boolean(p.is_draft));
+            stockBaseline.current = p.is_draft || p.stock === null || p.stock === undefined ? null : Number(p.stock);
+            setDirty(false);
         });
     }, [id, isEdit]);
 
-    const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-    const updateChecked = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
+    const markEdited = () => {
+        editCount.current += 1;
+        setDirty(true);
+    };
+
+    const update = (field) => (e) => {
+        setForm((f) => ({ ...f, [field]: e.target.value }));
+        markEdited();
+    };
+    const updateChecked = (field) => (e) => {
+        setForm((f) => ({ ...f, [field]: e.target.checked }));
+        markEdited();
+    };
+
+    // Returns the product id, creating the draft on the first call. Concurrent
+    // callers (e.g. a photo pick during the name-blur request) share one request.
+    const ensureDraft = async () => {
+        if (savedId) return savedId;
+        if (creatingDraft.current) return creatingDraft.current;
+        creatingDraft.current = api.post("/products/draft", buildPayload(form))
+            .then(({ data }) => {
+                setSavedId(data.data.productId);
+                setIsDraft(true);
+                // Mark dirty so the full form (not just the name) is autosaved next.
+                markEdited();
+                return data.data.productId;
+            })
+            .finally(() => {
+                creatingDraft.current = null;
+            });
+        return creatingDraft.current;
+    };
+
+    const handleNameBlur = () => {
+        if (savedId || form.name.trim().length < 3) return;
+        ensureDraft().catch((err) => setError(extractErrorMessage(err)));
+    };
+
+    // Autosave drafts 1.5s after the last edit.
+    useEffect(() => {
+        if (!savedId || !isDraft || !dirty) return undefined;
+        const timer = setTimeout(async () => {
+            const version = editCount.current;
+            setSaveState("saving");
+            try {
+                await api.put(`/products/draft/${savedId}`, buildPayload(form));
+                if (editCount.current === version) setDirty(false);
+                setSaveState("saved");
+            } catch (err) {
+                setSaveState("error");
+                setError(extractErrorMessage(err));
+            }
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [form, savedId, isDraft, dirty]);
+
+    // Browser warning when leaving with unsaved edits.
+    useEffect(() => {
+        if (!dirty) return undefined;
+        const warn = (e) => {
+            e.preventDefault();
+            e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [dirty]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError("");
 
-        const payload = {
-            ...form,
-            preorder_lead_time_days: form.preorder_lead_time_days === "" ? null : form.preorder_lead_time_days
-        };
-
         try {
-            if (isEdit) {
-                await api.put(`/products/${id}`, payload);
-                navigate("/seller/products");
+            const productId = await ensureDraft();
+            if (!isDraft) {
+                // Already-published product: plain edit, no publish step.
+                await api.put(`/products/${productId}`, {
+                    ...buildPayload(form),
+                    ...(stockBaseline.current === null ? {} : { stock_baseline: stockBaseline.current })
+                });
             } else {
-                const { data } = await api.post("/products", payload);
-                setSavedId(data.data.productId);
+                await api.post(`/products/draft/${productId}/publish`, buildPayload(form));
             }
+            setDirty(false);
+            navigate("/seller/products");
         } catch (err) {
             setError(extractErrorMessage(err));
         } finally {
@@ -104,21 +264,49 @@ export default function SellerProductForm() {
     };
 
     const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || !savedId) return;
+        const files = Array.from(e.target.files || []);
+        e.target.value = "";
+        if (files.length === 0) return;
 
-        setUploading(true);
         setError("");
+        if (images.length + files.length > MAX_IMAGES_PER_PRODUCT) {
+            setError(t("media.tooMany", { max: MAX_IMAGES_PER_PRODUCT }));
+            return;
+        }
+        let productId;
         try {
-            const body = new FormData();
-            body.append("image", file);
-            const { data } = await api.post(`/products/${savedId}/images`, body);
-            setImages([...images, { id: data.data.id, image_url: data.data.imageUrl, is_primary: data.data.isPrimary }]);
+            productId = await ensureDraft();
         } catch (err) {
             setError(extractErrorMessage(err));
+            return;
+        }
+
+        setUploading(true);
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const label = files.length > 1 ? t("seller.productForm.photoNofM", { n: i + 1, total: files.length }) : t("seller.productForm.photo");
+                setUploadProgress(t("seller.productForm.progressPreparing", { label }));
+                try {
+                    const file = await compressImage(files[i]);
+                    const problem = checkMediaFile(file, "image");
+                    if (problem) throw new Error(t(problem.key, problem.params));
+                    const body = new FormData();
+                    body.append("image", file);
+                    const { data } = await api.post(`/products/${productId}/images`, body, {
+                        onUploadProgress: (ev) => {
+                            if (!ev.total) return;
+                            setUploadProgress(t("seller.productForm.progressUploading", { label, pct: Math.round((ev.loaded / ev.total) * 100) }));
+                        }
+                    });
+                    setImages((prev) => [...prev, { id: data.data.id, image_url: data.data.imageUrl, is_primary: data.data.isPrimary }]);
+                } catch (err) {
+                    // Keep going so one bad file doesn't drop the rest of the batch.
+                    setError(t("seller.productForm.photoFailed", { label, reason: extractErrorMessage(err) }));
+                }
+            }
         } finally {
             setUploading(false);
-            e.target.value = "";
+            setUploadProgress("");
         }
     };
 
@@ -177,11 +365,18 @@ export default function SellerProductForm() {
     // Kept in sync with the backend's MAX_VIDEOS_PER_PRODUCT
     // (product.service.js) so the "+ Add video" control disappears
     // instead of letting a seller pick a file only to have it rejected.
-    const MAX_VIDEOS = 3;
+    const MAX_VIDEOS = MAX_VIDEOS_PER_PRODUCT;
 
     const handleVideoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file || !savedId) return;
+
+        const problem = checkMediaFile(file, "video");
+        if (problem) {
+            setError(t(problem.key, problem.params));
+            e.target.value = "";
+            return;
+        }
 
         setUploadingVideo(true);
         setError("");
@@ -228,87 +423,35 @@ export default function SellerProductForm() {
         }
     };
 
-    // Kept in sync with the backend's MAX_AUDIO_PER_PRODUCT
-    // (product.service.js), same reasoning as MAX_VIDEOS above.
-    const MAX_AUDIO = 3;
-
-    const handleAudioUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || !savedId) return;
-
-        setUploadingAudio(true);
-        setError("");
-        try {
-            const body = new FormData();
-            body.append("audio", file);
-            const { data } = await api.post(`/products/${savedId}/audio`, body);
-            setAudio([...audio, { id: data.data.id, audio_url: data.data.audioUrl }]);
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setUploadingAudio(false);
-            e.target.value = "";
-        }
-    };
-
-    const handleDeleteAudio = async (audioId) => {
-        setMediaBusyKey(`audio-${audioId}`);
-        setError("");
-        try {
-            await api.delete(`/products/${savedId}/audio/${audioId}`);
-            setAudio((prev) => prev.filter((clip) => clip.id !== audioId));
-        } catch (err) {
-            setError(extractErrorMessage(err));
-        } finally {
-            setMediaBusyKey(null);
-            setPendingDelete(null);
-        }
-    };
-
-    const handleMoveAudio = async (index, direction) => {
-        const reordered = swapWithNeighbour(audio, index, direction);
-        if (reordered === audio) return;
-        setAudio(reordered);
-        setMediaBusyKey(`audio-${audio[index].id}`);
-        setError("");
-        try {
-            await api.put(`/products/${savedId}/audio/reorder`, { ids: reordered.map((clip) => clip.id) });
-        } catch (err) {
-            setAudio(audio);
-            setError(extractErrorMessage(err));
-        } finally {
-            setMediaBusyKey(null);
-        }
-    };
-
     const confirmPendingDelete = () => {
         if (!pendingDelete) return;
         if (pendingDelete.type === "image") handleDeleteImage(pendingDelete.id);
         else if (pendingDelete.type === "video") handleDeleteVideo(pendingDelete.id);
-        else if (pendingDelete.type === "audio") handleDeleteAudio(pendingDelete.id);
     };
 
     return (
         <div className="max-w-lg">
-            <PageMeta title="Product Form" noIndex />
-            <h1 className={`font-display text-2xl ${isEdit ? "mb-6" : "mb-1"}`}>{isEdit ? "Edit product" : "List a new product"}</h1>
+            <PageMeta title={t("seller.productForm.metaTitle")} noIndex />
+            <h1 className={`font-display text-2xl ${isEdit ? "mb-6" : "mb-1"}`}>{isEdit ? t("seller.productForm.editTitle") : t("seller.productForm.newTitle")}</h1>
             {!isEdit && (
                 <p className="text-ash text-sm mb-6">
-                    Listing a product is two steps: save the details below first, then add photos, videos, and
-                    audio once the product exists.
+                    {t("seller.productForm.twoSteps")}
                 </p>
             )}
 
+            <ListingPanel form={form} images={images} />
+
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                    label="Product name"
+                    label={t("seller.productForm.name")}
                     required minLength={3} value={form.name} onChange={update("name")}
+                    onBlur={handleNameBlur}
                 />
 
                 <div>
                     <Input
                         as="textarea"
-                        label="Description"
+                        label={t("seller.productForm.descriptionLabel")}
                         rows={4} value={form.description} onChange={update("description")}
                     />
                     <NexoraCopyAssist
@@ -324,12 +467,12 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Price"
+                        label={t("seller.productForm.price")}
                         required type="number" min="0" step="0.01" value={form.price} onChange={update("price")}
                         className="price"
                     />
                     <Input
-                        label="Discount price (optional)"
+                        label={t("seller.productForm.discountPrice")}
                         type="number" min="0" step="0.01" value={form.discount_price} onChange={update("discount_price")}
                         className="price"
                     />
@@ -337,11 +480,11 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <Input
-                        label="Stock"
+                        label={t("seller.productForm.stock")}
                         type="number" min="0" value={form.stock} onChange={update("stock")}
                     />
                     <Input
-                        label="Brand (optional)"
+                        label={t("seller.productForm.brand")}
                         value={form.brand} onChange={update("brand")}
                     />
                 </div>
@@ -349,15 +492,16 @@ export default function SellerProductForm() {
                 <div className="border rounded-lg p-4 space-y-3">
                     <label className="flex items-center gap-2">
                         <input type="checkbox" checked={form.is_preorder} onChange={updateChecked("is_preorder")} />
-                        <span className="text-sm font-medium">Made to order / pre-order</span>
+                        <span className="text-sm font-medium">{t("seller.productForm.preorder")}</span>
                     </label>
                     <p className="text-xs text-ash">
-                        Buyers pay a deposit at checkout and the remaining balance once it's ready. Requires
-                        made-to-order to be turned on in your <Link to="/seller/store" className="underline">store settings</Link> first.
+                        {t("seller.productForm.preorderHintBefore")}{" "}
+                        <Link to="/seller/store" className="underline">{t("seller.productForm.storeSettings")}</Link>{" "}
+                        {t("seller.productForm.preorderHintAfter")}
                     </p>
                     {form.is_preorder && (
                         <Input
-                            label="Lead time for this product (days, optional - overrides your store default)"
+                            label={t("seller.productForm.leadTime")}
                             type="number" min="1" max="365" value={form.preorder_lead_time_days}
                             onChange={update("preorder_lead_time_days")}
                         />
@@ -366,42 +510,61 @@ export default function SellerProductForm() {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label htmlFor="productCondition" className="block text-sm mb-1">Condition</label>
+                        <label htmlFor="productCondition" className="block text-sm mb-1">{t("seller.productForm.condition")}</label>
                         <select id="productCondition" value={form.product_condition} onChange={update("product_condition")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
-                            <option value="new">New</option>
-                            <option value="used">Used</option>
+                            <option value="new">{t("seller.productForm.conditionNew")}</option>
+                            <option value="used">{t("seller.productForm.conditionUsed")}</option>
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="productCategory" className="block text-sm mb-1">Category</label>
+                        <label htmlFor="productCategory" className="block text-sm mb-1">{t("seller.productForm.category")}</label>
+                        <input
+                            type="search"
+                            aria-label={t("seller.productForm.searchCategories")}
+                            placeholder={t("seller.productForm.searchCategories")}
+                            value={categoryQuery}
+                            onChange={(e) => setCategoryQuery(e.target.value)}
+                            className="w-full border border-line rounded-md px-3 py-1.5 mb-1 text-sm focus-ring bg-paper"
+                        />
                         <select id="productCategory" required value={form.category_id} onChange={update("category_id")}
                             className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper">
-                            <option value="">Select…</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
+                            <option value="">{t("seller.productForm.select")}</option>
+                            {categories
+                                .filter((c) => c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase()) || String(c.id) === String(form.category_id))
+                                .map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
                         </select>
                     </div>
                 </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button type="submit" disabled={submitting}>
-                    {submitting ? "Saving…" : isEdit ? "Save changes" : "Create product"}
-                </Button>
+                <div className="flex items-center justify-between gap-3">
+                    <Button loading={submitting || uploading} type="submit" disabled={submitting || uploading}>
+                        {submitting ? t("seller.productForm.publishing") : isEdit && !isDraft ? t("seller.productForm.saveChanges") : t("seller.productForm.publish")}
+                    </Button>
+                    <SaveStatus savedId={savedId} isDraft={isDraft} dirty={dirty} saveState={saveState} />
+                </div>
             </form>
+
+            {!savedId && (
+                <p className="mt-10 border-t border-line pt-6 text-ash text-sm">
+                    {t("seller.productForm.startDraft")}
+                </p>
+            )}
 
             {savedId && (
                 <div className="mt-10 border-t border-line pt-6">
-                    {!isEdit && (
+                    {isDraft && (
                         <p className="text-teal text-sm mb-6 -mt-2">
-                            Product saved — now add photos, videos, and audio below. You can come back and edit
-                            these anytime from your product list.
+                            {t("seller.productForm.draftHidden")}
                         </p>
                     )}
 
-                    <h2 className="font-display text-lg mb-3">Photos</h2>
+                    <h2 className="font-display text-lg mb-1">{t("seller.productForm.photos")}</h2>
+                    <p className="text-xs text-ash mb-3">{t("seller.productForm.resizeNote")}</p>
 
                     <div className="flex flex-wrap gap-3 mb-4">
                         {images.map((img, i) => {
@@ -412,49 +575,49 @@ export default function SellerProductForm() {
                                         <img src={img.image_url} alt="" className="w-full h-full object-cover" />
                                         {img.is_primary && (
                                             <span className="absolute top-1 left-1 text-[10px] font-medium bg-mango text-abyss rounded-full px-1.5 py-0.5">
-                                                Primary
+                                                {t("seller.productForm.primary")}
                                             </span>
                                         )}
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => setPendingDelete({ type: "image", id: img.id })}
                                             disabled={busy}
-                                            aria-label="Remove photo"
-                                            title="Remove photo"
+                                            aria-label={t("seller.productForm.removePhoto")}
+                                            title={t("seller.productForm.removePhoto")}
                                             className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-abyss/60 text-frost text-xs hover:bg-coral disabled:opacity-50 transition-colors"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             ✕
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between mt-1">
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => handleMoveImage(i, "up")}
                                             disabled={busy || i === 0}
-                                            aria-label="Move photo earlier"
-                                            title="Move earlier"
+                                            aria-label={t("seller.productForm.movePhotoEarlier")}
+                                            title={t("seller.productForm.moveEarlier")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             ↑
                                         </button>
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => handleSetPrimaryImage(img.id)}
                                             disabled={busy || img.is_primary}
-                                            aria-label="Set as primary photo"
-                                            title="Set as primary photo"
+                                            aria-label={t("seller.productForm.setPrimary")}
+                                            title={t("seller.productForm.setPrimary")}
                                             className="text-ash hover:text-mango-dark text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             {img.is_primary ? "★" : "☆"}
                                         </button>
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => handleMoveImage(i, "down")}
                                             disabled={busy || i === images.length - 1}
-                                            aria-label="Move photo later"
-                                            title="Move later"
+                                            aria-label={t("seller.productForm.movePhotoLater")}
+                                            title={t("seller.productForm.moveLater")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             ↓
                                         </button>
                                     </div>
@@ -463,12 +626,19 @@ export default function SellerProductForm() {
                         })}
                     </div>
 
-                    <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                        {uploading ? "Uploading…" : "+ Add photo"}
-                        <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} className="hidden" />
-                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {uploading ? t("seller.productForm.uploading") : t("seller.productForm.choosePhotos")}
+                            <input type="file" accept="image/*,.heic,.heif,.avif" multiple onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                        </label>
+                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
+                            {t("seller.productForm.takePhoto")}
+                            <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} disabled={uploading} className="hidden" />
+                        </label>
+                    </div>
+                    {uploadProgress && <p role="status" className="text-sm text-ash mt-2">{uploadProgress}</p>}
 
-                    <h2 className="font-display text-lg mb-3 mt-8">Videos</h2>
+                    <h2 className="font-display text-lg mb-3 mt-8">{t("seller.productForm.videos")}</h2>
 
                     <div className="flex flex-col gap-3 mb-4">
                         {videos.map((vid, i) => {
@@ -479,35 +649,35 @@ export default function SellerProductForm() {
                                     <video src={vid.video_url} controls
                                         className="w-40 h-24 rounded-md border border-line object-cover" />
                                     <div className="flex flex-col gap-1">
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => handleMoveVideo(i, "up")}
                                             disabled={busy || i === 0}
-                                            aria-label="Move video earlier"
-                                            title="Move earlier"
+                                            aria-label={t("seller.productForm.moveVideoEarlier")}
+                                            title={t("seller.productForm.moveEarlier")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             ↑
                                         </button>
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             type="button"
                                             onClick={() => handleMoveVideo(i, "down")}
                                             disabled={busy || i === videos.length - 1}
-                                            aria-label="Move video later"
-                                            title="Move later"
+                                            aria-label={t("seller.productForm.moveVideoLater")}
+                                            title={t("seller.productForm.moveLater")}
                                             className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             ↓
                                         </button>
                                     </div>
-                                    <button
+                                    <button aria-busy={busy || undefined}
                                         type="button"
                                         onClick={() => setPendingDelete({ type: "video", id: vid.id })}
                                         disabled={busy}
-                                        aria-label="Remove video"
-                                        title="Remove video"
+                                        aria-label={t("seller.productForm.removeVideo")}
+                                        title={t("seller.productForm.removeVideo")}
                                         className="text-ash hover:text-coral text-xs px-1 disabled:opacity-50"
-                                    >
+                                    >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                         ✕
                                     </button>
                                 </div>
@@ -517,70 +687,17 @@ export default function SellerProductForm() {
 
                     {videos.length < MAX_VIDEOS ? (
                         <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingVideo ? "Uploading…" : "+ Add video"}
+                            {uploadingVideo ? t("seller.productForm.uploading") : t("seller.productForm.addVideo")}
                             <input type="file" accept="video/*" onChange={handleVideoUpload} disabled={uploadingVideo} className="hidden" />
                         </label>
                     ) : (
-                        <p className="text-ash text-xs">Maximum of {MAX_VIDEOS} videos per product.</p>
-                    )}
-
-                    <h2 className="font-display text-lg mb-3 mt-8">Audio</h2>
-
-                    <div className="flex flex-col gap-2 mb-4">
-                        {audio.map((clip, i) => {
-                            const busy = mediaBusyKey === `audio-${clip.id}`;
-                            return (
-                                <div key={clip.id} className="flex items-center gap-2">
-                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- seller-uploaded voice note, no caption track available */}
-                                    <audio src={clip.audio_url} controls className="flex-1" />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleMoveAudio(i, "up")}
-                                        disabled={busy || i === 0}
-                                        aria-label="Move audio earlier"
-                                        title="Move earlier"
-                                        className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                    >
-                                        ↑
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleMoveAudio(i, "down")}
-                                        disabled={busy || i === audio.length - 1}
-                                        aria-label="Move audio later"
-                                        title="Move later"
-                                        className="text-ash hover:text-ink text-xs disabled:opacity-30 disabled:hover:text-ash px-1"
-                                    >
-                                        ↓
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPendingDelete({ type: "audio", id: clip.id })}
-                                        disabled={busy}
-                                        aria-label="Remove audio"
-                                        title="Remove audio"
-                                        className="text-ash hover:text-coral text-xs px-1 disabled:opacity-50"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {audio.length < MAX_AUDIO ? (
-                        <label className="inline-block text-sm border border-line px-4 py-2 rounded-md cursor-pointer hover:border-ink transition-colors">
-                            {uploadingAudio ? "Uploading…" : "+ Add audio"}
-                            <input type="file" accept="audio/*" onChange={handleAudioUpload} disabled={uploadingAudio} className="hidden" />
-                        </label>
-                    ) : (
-                        <p className="text-ash text-xs">Maximum of {MAX_AUDIO} audio clips per product.</p>
+                        <p className="text-ash text-xs">{t("seller.productForm.maxVideos", { max: MAX_VIDEOS })}</p>
                     )}
 
                     {!isEdit && (
                         <p className="mt-6">
                             <Link to="/seller/products" className="text-teal text-sm hover:underline">
-                                Done — back to your products
+                                {t("seller.productForm.backToProducts")}
                             </Link>
                         </p>
                     )}
@@ -589,10 +706,10 @@ export default function SellerProductForm() {
 
             <ConfirmDialog
                 open={Boolean(pendingDelete)}
-                title={pendingDelete?.type === "image" ? "Remove this photo?" : pendingDelete?.type === "video" ? "Remove this video?" : "Remove this audio clip?"}
-                description="This can't be undone."
-                confirmLabel="Remove"
-                cancelLabel="Cancel"
+                title={pendingDelete?.type === "image" ? t("seller.productForm.confirmPhoto") : pendingDelete?.type === "video" ? t("seller.productForm.confirmVideo") : ""}
+                description={t("seller.productForm.cantUndo")}
+                confirmLabel={t("seller.productForm.remove")}
+                cancelLabel={t("seller.productForm.cancel")}
                 danger
                 onConfirm={confirmPendingDelete}
                 onCancel={() => setPendingDelete(null)}

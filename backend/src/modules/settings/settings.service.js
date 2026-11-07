@@ -6,9 +6,20 @@ const { OFFER_RADIUS_KM, OFFER_TIMEOUT_MS } = require("../../constants/orderStat
 // but the default INSERT was skipped) - keeps the platform functional
 // instead of throwing mid-checkout.
 const DEFAULTS = {
+    // Nexora Stock Management (Phase 6): the low-stock threshold a new item
+    // starts with. Each item then keeps its own reorder_level.
+    stock_default_reorder_level: "5",
+    // Phase 7: how many days back a sale or purchase may be dated.
+    stock_backdate_max_days: "7",
+    // Phase 8: how long after a plan lapses the seller can still view and export
+    // their stock data; which channels carry low-stock alerts; how old an offline
+    // sale may be and still be accepted on sync (older ones are accepted too, but
+    // flagged - see sales.service createSale).
+    stock_export_grace_days: "30",
+    stock_low_alert_channels: "push",
+    stock_offline_max_age_days: "30",
     commission_rate: "10",
     rider_delivery_fee: "3000",
-    seller_verification_fee: "20000",
     // TZS per 1 USD. Only used to convert a TZS amount into USD for
     // PayPal, which (unlike Snippe) doesn't support TZS as a transaction
     // currency - see providers/paypal.provider.js. Admin-editable so it
@@ -35,19 +46,18 @@ const DEFAULTS = {
     // (store_featured_campaigns.daily_rate), same reasoning as
     // sponsorship_daily_rate above.
     featured_store_daily_rate: "8000",
-    // Flat cost (TZS) a seller pays per day to sponsor an entire department
-    // on the homepage grid (migration 053, Phase 8C). Priced above
-    // featured_store_daily_rate since it's homepage-wide visibility, not a
-    // placement within a department a shopper has already opened. A
-    // running campaign snapshots the rate that applied when purchased
-    // (department_sponsorship_campaigns.daily_rate), same reasoning as the
-    // two rates above.
-    department_sponsorship_daily_rate: "12000",
     // Days after delivery, with no open dispute, before a seller's held
     // order earnings become withdrawable (migration 054, Phase 9B). Not
     // read anywhere yet - Phase 9D's release job is the first caller of
     // getEscrowHoldDays() below.
     escrow_hold_days: "5",
+
+    // Group buys (Phase 3) - how long after a group buy's deadline
+    // resolves to 'successful' a participant still has to complete their
+    // discounted checkout before forfeiting their spot. Was a hardcoded
+    // constant in groupBuy.service.js; admin-editable like every other
+    // rate/window above now.
+    group_buy_claim_window_hours: "48",
 
     // Escalating search radius for nearest-agent dispatch matching
     // (Phase 1, Durable Dispatch Foundation - see
@@ -70,18 +80,15 @@ const DEFAULTS = {
     // radius is exhausted) - same value OFFER_TIMEOUT_MS always was,
     // just now admin-editable instead of a fixed constant.
     delivery_offer_timeout_ms: String(OFFER_TIMEOUT_MS),
-
-    // Monetization Master Switch (migration 079). Each flag lets NEXORA
-    // launch fully free and turn a specific monetization stream on later
-    // from the admin panel, with no redeploy or code change - see
-    // updateMonetizationSettings()/getMonetizationFlags() below and
-    // docs/DATABASE.md. Stored as the strings "true"/"false" (not "1"/"0")
-    // to read unambiguously in the admin UI and audit log metadata.
-    // Default OFF for every flag, matching a free launch.
-    monetization_subscriptions_enabled: "false",
-    monetization_commission_enabled: "false",
-    monetization_sponsorship_enabled: "false",
-    monetization_verification_fee_enabled: "false",
+    // Phase 2: only agents whose last GPS update is at most this old (seconds)
+    // are offered orders - an "online" agent with a stale position used to
+    // get offers for pickups they were nowhere near.
+    delivery_location_max_age_seconds: "120",
+    // Phase 2: an agent who let an offer time out can be offered the same
+    // order again once this many seconds have passed (agents who explicitly
+    // declined are never re-offered). Always at least twice the offer
+    // timeout, so a late expiry job can never hit a fresh offer.
+    delivery_offer_cooldown_seconds: "600",
 
     // Nexora AI . ai_enabled is a master switch
     // independent of whether a provider is actually configured via env
@@ -93,7 +100,98 @@ const DEFAULTS = {
     ai_daily_token_cap_per_user: "20000",
     ai_monthly_token_cap_per_user: "300000",
     ai_daily_token_cap_global: "2000000",
-    ai_monthly_token_cap_global: "30000000"
+    ai_monthly_token_cap_global: "30000000",
+
+    // Wallets, escrow, COD & withdrawals (master prompt Phase 2) - see
+    // wallet.service.js#requestWithdrawal / payment.service.js#initiateWalletTopUp
+    // / order.service.js#checkout for the readers of each of these.
+    withdrawal_min_amount: "5000",
+    withdrawal_max_amount: "5000000",
+    // Per day, by the seller's users.verification_tier.
+    withdrawal_daily_cap_none: "200000",
+    withdrawal_daily_cap_id_verified: "2000000",
+    withdrawal_daily_cap_business_verified: "10000000",
+    // Hours a seller's FIRST withdrawal to a given payout method+details
+    // combination is held before an admin can approve it.
+    withdrawal_new_payout_hold_hours: "24",
+    // A seller with this many currently open/under_review disputes cannot
+    // request a new withdrawal.
+    withdrawal_open_dispute_block_threshold: "3",
+    topup_min_amount: "1000",
+    topup_max_amount: "3000000",
+    // Per day, by the buyer's KYC tier (kyc.service.js's tier0/1/2).
+    topup_daily_cap_tier0: "500000",
+    topup_daily_cap_tier1: "2000000",
+    topup_daily_cap_tier2: "10000000",
+    // Hours after `delivered`, with no open dispute, before a Cash on
+    // Delivery order is auto-confirmed instead of waiting on the buyer.
+    cod_auto_confirm_hours: "48",
+    // A buyer with this many "refused" Cash on Delivery deliveries loses
+    // access to the Cash on Delivery payment method at checkout.
+    cod_block_after_refused_count: "3",
+
+    // Phase 7 guardrails. commission_rate_max caps what an admin can set;
+    // usd_exchange_rate_max_change_percent is the band beyond which a rate
+    // change needs a second confirmation; retention 0 = keep documents.
+    commission_rate_max: "30",
+    usd_exchange_rate_max_change_percent: "10",
+    approved_document_retention_days: "0",
+
+    // Phase 5 (round 5) - Tanzanian transport-rate delivery pay (migration
+    // 150). Rate cards, fuel caps and ETA windows live in their own tables
+    // (see modules/delivery/deliveryRates.service.js); only the scalar knobs
+    // sit here. fuel_baseline_cap is the litre price at which fuel factor = 1.
+    fuel_passthrough_pct: "30",
+    fuel_baseline_cap: "4057",
+    fuel_max_monthly_change_pct: "15",
+    default_delivery_vehicle: "boda",
+    delivery_handling_buffer_minutes: "10",
+    delivery_default_region: "Dar es Salaam",
+
+    // Phase 6 (round 5) - usernames (migration 151). Comma-separated words
+    // that may not be used as a whole username, on top of the reserved words
+    // hard-coded in utils/username.js. Admin-editable.
+    username_blocklist: "staff,moderator,official,customercare,helpdesk,payments,billing,security,verified",
+
+    // Round 6 Phase 5 - cart caps (migration 154). Were fixed constants in
+    // cart.service.js: most of one product a buyer can add per cart line, and
+    // most different lines a cart can hold. Admin-editable within
+    // CART_LIMIT_BOUNDS below.
+    max_quantity_per_cart_line: "500",
+    max_cart_line_items: "100"
+};
+
+const CART_LIMIT_BOUNDS = {
+    max_quantity_per_cart_line: { min: 1, max: 10000, label: "Max quantity per cart line" },
+    max_cart_line_items: { min: 1, max: 500, label: "Max different items per cart" }
+};
+
+const USERNAME_BLOCKLIST_MAX_LENGTH = 1000;
+
+// "Staff, Official ,staff" -> ["staff", "official"]
+const parseUsernameBlocklist = (value) => [...new Set(
+    String(value || "")
+        .split(/[,\n]/)
+        .map((word) => word.trim().toLowerCase())
+        .filter(Boolean)
+)];
+
+const normalizeUsernameBlocklist = (value) => {
+    const joined = parseUsernameBlocklist(value).join(",");
+    if (joined.length > USERNAME_BLOCKLIST_MAX_LENGTH) {
+        throw badRequest(`The username blocklist is too long (limit ${USERNAME_BLOCKLIST_MAX_LENGTH} characters).`);
+    }
+    return joined;
+};
+
+const ESCROW_HOLD_MIN_DAYS = 0;
+const ESCROW_HOLD_MAX_DAYS = 60;
+
+const badRequest = (message, extra = {}) => {
+    const error = new Error(message);
+    error.status = 400;
+    Object.assign(error, extra);
+    return error;
 };
 
 const isEnabled = (value) => value === "true" || value === true;
@@ -144,12 +242,6 @@ exports.getRiderDeliveryFee = async () => {
     return Number(map.rider_delivery_fee);
 };
 
-// Flat fee (TZS) a seller pays once to receive the paid Verified Seller badge
-exports.getVerificationFee = async () => {
-    const map = await getCachedAll();
-    return Number(map.seller_verification_fee);
-};
-
 // TZS per 1 USD - see DEFAULTS comment above.
 exports.getUsdExchangeRate = async () => {
     const map = await getCachedAll();
@@ -195,6 +287,59 @@ exports.getDeliveryOfferTimeoutMs = async () => {
     return Number.isFinite(value) && value > 0 ? value : OFFER_TIMEOUT_MS;
 };
 
+// Phase 2: how fresh (seconds) an agent's GPS position must be to be offered
+// an order. Falls back to the default for a missing/invalid stored value.
+exports.getDeliveryLocationMaxAgeSeconds = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.delivery_location_max_age_seconds);
+    return Number.isFinite(value) && value >= 10 ? Math.floor(value) : Number(DEFAULTS.delivery_location_max_age_seconds);
+};
+
+// Phase 2: how long (seconds) before an agent whose offer timed out can be
+// offered the same order again. Never less than twice the offer timeout.
+exports.getDeliveryOfferCooldownSeconds = async () => {
+    const map = await getCachedAll();
+    const stored = Number(map.delivery_offer_cooldown_seconds);
+    const base = Number.isFinite(stored) && stored > 0 ? stored : Number(DEFAULTS.delivery_offer_cooldown_seconds);
+    const timeoutMs = Number(map.delivery_offer_timeout_ms);
+    const timeoutSeconds = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs / 1000 : OFFER_TIMEOUT_MS / 1000;
+    return Math.ceil(Math.max(base, timeoutSeconds * 2));
+};
+
+// Phase 6: reorder level a new stock item starts with.
+exports.getStockDefaultReorderLevel = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_default_reorder_level);
+    return Number.isInteger(value) && value >= 0 && value <= 100000 ? value : 5;
+};
+
+// Phase 7: how far back (days) a seller may date a sale or purchase.
+exports.getStockBackdateMaxDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_backdate_max_days);
+    return Number.isInteger(value) && value >= 0 && value <= 365 ? value : 7;
+};
+
+exports.getStockExportGraceDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_export_grace_days);
+    return Number.isInteger(value) && value >= 0 && value <= 3650 ? value : 30;
+};
+
+exports.getStockOfflineMaxAgeDays = async () => {
+    const map = await getCachedAll();
+    const value = Number(map.stock_offline_max_age_days);
+    return Number.isInteger(value) && value >= 1 && value <= 365 ? value : 30;
+};
+
+// Subset of push | whatsapp | sms, comma separated. Anything else is ignored; empty -> push.
+exports.getStockLowAlertChannels = async () => {
+    const map = await getCachedAll();
+    const wanted = String(map.stock_low_alert_channels || "push").split(",").map((c) => c.trim().toLowerCase());
+    const valid = ["push", "whatsapp", "sms"].filter((c) => wanted.includes(c));
+    return valid.length ? valid : ["push"];
+};
+
 // Flat cost (TZS) a seller currently pays per day to sponsor one product.
 exports.getSponsorshipDailyRate = async () => {
     const map = await getCachedAll();
@@ -208,13 +353,6 @@ exports.getFeaturedStoreDailyRate = async () => {
     return Number(map.featured_store_daily_rate);
 };
 
-// Flat cost (TZS) a seller currently pays per day to sponsor an entire
-// department on the homepage grid.
-exports.getDepartmentSponsorshipDailyRate = async () => {
-    const map = await getCachedAll();
-    return Number(map.department_sponsorship_daily_rate);
-};
-
 // Days after delivery, with no open dispute, before a seller's held
 // order earnings become withdrawable. Unused until Phase 9D's release
 // job calls this.
@@ -223,33 +361,110 @@ exports.getEscrowHoldDays = async () => {
     return Number(map.escrow_hold_days);
 };
 
-// ---- Monetization Master Switch ------------------------------------------
-// Each getter below is the single enforcement point its domain module
-// reads before creating a payment request:
-//   - subscription.service.js#getEffectiveCommissionRate reads commission
-//   - subscription.controller.js's subscribe* actions read subscriptions
-//   - sponsorship/featuredStore/departmentSponsorship .service.js#createCampaign read sponsorship
-//   - requireVerificationFeePaid.middleware.js + seller.service.js#payVerificationFee read verificationFee
-// All default OFF (see DEFAULTS above) so a fresh launch is free by default.
-
-exports.isSubscriptionsMonetizationEnabled = async () => {
+exports.getApprovedDocumentRetentionDays = async () => {
     const map = await getCachedAll();
-    return isEnabled(map.monetization_subscriptions_enabled);
+    return Number(map.approved_document_retention_days);
 };
 
-exports.isCommissionMonetizationEnabled = async () => {
+exports.getCommissionRateMax = async () => {
     const map = await getCachedAll();
-    return isEnabled(map.monetization_commission_enabled);
+    const max = Number(map.commission_rate_max);
+    return Number.isFinite(max) && max > 0 ? max : 30;
 };
 
-exports.isSponsorshipMonetizationEnabled = async () => {
+// Cart caps - always a usable positive integer (falls back to the default if
+// the stored value is missing/corrupt), same guarantee as the getters above.
+exports.getCartLimits = async () => {
     const map = await getCachedAll();
-    return isEnabled(map.monetization_sponsorship_enabled);
+    const read = (key) => {
+        const value = Number(map[key]);
+        return Number.isInteger(value) && value > 0 ? value : Number(DEFAULTS[key]);
+    };
+    return {
+        maxQuantityPerLine: read("max_quantity_per_cart_line"),
+        maxLineItems: read("max_cart_line_items")
+    };
 };
 
-exports.isVerificationFeeMonetizationEnabled = async () => {
+exports.getGroupBuyClaimWindowHours = async () => {
     const map = await getCachedAll();
-    return isEnabled(map.monetization_verification_fee_enabled);
+    return Number(map.group_buy_claim_window_hours);
+};
+
+// ---- Disputes & returns (Phase 5) ----------------------------------------
+
+exports.getReturnWindowDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.return_window_days);
+};
+
+exports.getReturnWindowInsuredDays = async () => {
+    const map = await getCachedAll();
+    return Number(map.return_window_insured_days);
+};
+
+exports.getDisputeSellerResponseHours = async () => {
+    const map = await getCachedAll();
+    return Number(map.dispute_seller_response_hours);
+};
+
+// ---- Wallets, escrow, COD & withdrawals (Phase 2) ------------------------
+
+exports.getWithdrawalLimits = async () => {
+    const map = await getCachedAll();
+    return {
+        minAmount: Number(map.withdrawal_min_amount),
+        maxAmount: Number(map.withdrawal_max_amount),
+        dailyCapByTier: {
+            none: Number(map.withdrawal_daily_cap_none),
+            id_verified: Number(map.withdrawal_daily_cap_id_verified),
+            business_verified: Number(map.withdrawal_daily_cap_business_verified)
+        },
+        newPayoutHoldHours: Number(map.withdrawal_new_payout_hold_hours),
+        openDisputeBlockThreshold: Number(map.withdrawal_open_dispute_block_threshold)
+    };
+};
+
+exports.getTopUpLimits = async () => {
+    const map = await getCachedAll();
+    return {
+        minAmount: Number(map.topup_min_amount),
+        maxAmount: Number(map.topup_max_amount),
+        dailyCapByTier: {
+            tier0: Number(map.topup_daily_cap_tier0),
+            tier1: Number(map.topup_daily_cap_tier1),
+            tier2: Number(map.topup_daily_cap_tier2)
+        }
+    };
+};
+
+// Words that may not be used as a username (admin-editable, lower-case).
+exports.getUsernameBlocklist = async () => {
+    const map = await getCachedAll();
+    return parseUsernameBlocklist(map.username_blocklist);
+};
+
+// Scalar knobs for transport-rate delivery pay and ETA (migration 150).
+exports.getDeliveryRateSettings = async () => {
+    const map = await getCachedAll();
+    return {
+        fuelPassThroughPct: Number(map.fuel_passthrough_pct),
+        fuelBaselineCap: Number(map.fuel_baseline_cap),
+        fuelMaxMonthlyChangePct: Number(map.fuel_max_monthly_change_pct),
+        defaultVehicle: String(map.default_delivery_vehicle || "boda"),
+        handlingBufferMinutes: Number(map.delivery_handling_buffer_minutes) || 0,
+        defaultRegion: String(map.delivery_default_region || "Dar es Salaam")
+    };
+};
+
+exports.getCodAutoConfirmHours = async () => {
+    const map = await getCachedAll();
+    return Number(map.cod_auto_confirm_hours);
+};
+
+exports.getCodBlockAfterRefusedCount = async () => {
+    const map = await getCachedAll();
+    return Number(map.cod_block_after_refused_count);
 };
 
 // Nexora AI master switch + the four spend-guard caps in one call - see
@@ -265,166 +480,149 @@ exports.getAiSettings = async () => {
     };
 };
 
-// All four monetization flags at once, plus each one's last-changed
-// actor/timestamp pulled from audit_logs (event_type
-// "monetization_setting_changed") - the Admin Billing Control Center
-// reads this directly rather than combining getAll() with a separate
-// audit query itself. Reuses audit_logs per the roadmap's instruction
-// instead of adding updated_by/updated_at columns to platform_settings.
-exports.getMonetizationStatus = async () => {
-    const map = await getCachedAll();
-    const auditRepository = require("../audit/audit.repository");
+// Writes only keys whose value actually changes, records old -> new in
+// platform_setting_history, and enforces the Phase 7 guardrails:
+//  - commission_rate is capped at commission_rate_max and a change needs
+//    confirm_commission_change: true (the UI shows current -> new first);
+//  - usd_exchange_rate moves beyond usd_exchange_rate_max_change_percent need
+//    confirm_large_exchange_rate_change: true;
+//  - username_blocklist is normalised to a clean lower-case comma list;
+//  - escrow_hold_days is bounded;
+//  - expected_updated_at (ISO time the admin loaded the page) rejects the save
+//    if any key being changed was edited by someone else since.
+const asComparable = (value) => (value === undefined || value === null ? "" : String(value));
 
-    const flags = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
+exports.updateSettings = async (data, { actorId = null } = {}) => {
+    const { rows: currentRows, map: current } = await (async () => {
+        const rows = await settingsRepository.findAll();
+        const map = { ...DEFAULTS };
+        rows.forEach((row) => { map[row.setting_key] = row.setting_value; });
+        return { rows, map };
+    })();
+    const updatedAtByKey = Object.fromEntries(currentRows.map((r) => [r.setting_key, r.updated_at]));
+
+    const NUMBER_KEYS = [
+        "commission_rate", "rider_delivery_fee", "usd_exchange_rate",
+        "sponsorship_daily_rate", "featured_store_daily_rate",
+        "escrow_hold_days",
+        "withdrawal_min_amount", "withdrawal_max_amount",
+        "withdrawal_daily_cap_none", "withdrawal_daily_cap_id_verified", "withdrawal_daily_cap_business_verified",
+        "withdrawal_new_payout_hold_hours", "withdrawal_open_dispute_block_threshold",
+        "topup_min_amount", "topup_max_amount",
+        "topup_daily_cap_tier0", "topup_daily_cap_tier1", "topup_daily_cap_tier2",
+        "cod_auto_confirm_hours", "cod_block_after_refused_count",
+        "delivery_offer_timeout_ms",
+        "delivery_location_max_age_seconds", "delivery_offer_cooldown_seconds",
+        "ai_daily_token_cap_per_user", "ai_monthly_token_cap_per_user",
+        "ai_daily_token_cap_global", "ai_monthly_token_cap_global",
+        "approved_document_retention_days",
+        "fuel_passthrough_pct", "fuel_baseline_cap", "fuel_max_monthly_change_pct",
+        "delivery_handling_buffer_minutes",
+        "max_quantity_per_cart_line", "max_cart_line_items"
     ];
 
-    // search() (not findRecent()) since it LEFT JOINs users - gives the
-    // Admin Billing Control Center a ready-to-render actor name/email,
-    // same shape AdminAuditLogs.jsx already renders for other events.
-    const { rows: recentChanges } = await auditRepository.search({
-        eventTypes: ["monetization_setting_changed"],
-        pageSize: 100
-    });
+    const changes = [];
+    const queue = (key, nextValue) => {
+        if (asComparable(current[key]) !== nextValue) {
+            changes.push({ key, oldValue: current[key] === undefined ? null : String(current[key]), newValue: nextValue });
+        }
+    };
 
-    const lastChangeFor = (key) => recentChanges.find((row) => {
-        const metadata = typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata;
-        return metadata?.setting_key === key;
-    });
-
-    return flags.reduce((acc, key) => {
-        const lastChange = lastChangeFor(key);
-        acc[key] = {
-            enabled: isEnabled(map[key]),
-            lastChangedBy: lastChange
-                ? {
-                    userId: lastChange.user_id,
-                    firstName: lastChange.actor_first_name,
-                    lastName: lastChange.actor_last_name,
-                    email: lastChange.actor_email
-                }
-                : null,
-            lastChangedAt: lastChange ? lastChange.created_at : null
-        };
-        return acc;
-    }, {});
-};
-
-// Admin-only. Flips one or more of the four monetization flags and
-// writes an audit_logs entry per changed flag (old -> new value),
-// reusing the existing audit_logs table per the roadmap rather than
-// adding new tracking columns. Only writes/logs keys that actually
-// changed, so toggling one flag doesn't spam four audit rows.
-exports.updateMonetizationSettings = async (data, adminId) => {
-    const auditService = require("../audit/audit.service");
-    const map = await getCachedAll();
-
-    const flagKeys = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
-    ];
-
-    for (const key of flagKeys) {
-        if (data[key] === undefined) continue;
-
-        const nextValue = data[key] ? "true" : "false";
-        const previousValue = map[key];
-        if (nextValue === previousValue) continue;
-
-        await settingsRepository.upsert(key, nextValue);
-
-        auditService.log({
-            userId: adminId,
-            eventType: "monetization_setting_changed",
-            description: `Admin ${nextValue === "true" ? "enabled" : "disabled"} ${key}`,
-            metadata: { setting_key: key, previous_value: previousValue, new_value: nextValue }
-        });
-    }
-
-    invalidateCache();
-    return exports.getMonetizationStatus();
-};
-
-// Public: same 4 monetization flags the Admin Billing Control Center
-// manages (settings.service.js), but without the audit/actor detail -
-// this is what sellers/providers see on their own billing status
-// banners (Trust & Monetization Communication roadmap section), not an
-// admin-only view.
-exports.getPublicMonetizationStatus = async () => {
-    const map = await getCachedAll();
-
-    const flagKeys = [
-        "monetization_subscriptions_enabled",
-        "monetization_commission_enabled",
-        "monetization_sponsorship_enabled",
-        "monetization_verification_fee_enabled"
-    ];
-
-    return flagKeys.reduce((acc, key) => {
-        acc[key] = { enabled: isEnabled(map[key]) };
-        return acc;
-    }, {});
-};
-
-exports.updateSettings = async (data) => {
-    if (data.commission_rate !== undefined) {
-        await settingsRepository.upsert("commission_rate", String(data.commission_rate));
-    }
-    if (data.rider_delivery_fee !== undefined) {
-        await settingsRepository.upsert("rider_delivery_fee", String(data.rider_delivery_fee));
-    }
-    if (data.seller_verification_fee !== undefined) {
-        await settingsRepository.upsert("seller_verification_fee", String(data.seller_verification_fee));
-    }
-    if (data.usd_exchange_rate !== undefined) {
-        await settingsRepository.upsert("usd_exchange_rate", String(data.usd_exchange_rate));
+    for (const key of NUMBER_KEYS) {
+        if (data[key] !== undefined) queue(key, String(data[key]));
     }
     if (data.delivery_distance_bands !== undefined) {
-        await settingsRepository.upsert("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
-    }
-    if (data.sponsorship_daily_rate !== undefined) {
-        await settingsRepository.upsert("sponsorship_daily_rate", String(data.sponsorship_daily_rate));
-    }
-    if (data.featured_store_daily_rate !== undefined) {
-        await settingsRepository.upsert("featured_store_daily_rate", String(data.featured_store_daily_rate));
-    }
-    if (data.department_sponsorship_daily_rate !== undefined) {
-        await settingsRepository.upsert("department_sponsorship_daily_rate", String(data.department_sponsorship_daily_rate));
-    }
-    if (data.escrow_hold_days !== undefined) {
-        await settingsRepository.upsert("escrow_hold_days", String(data.escrow_hold_days));
+        queue("delivery_distance_bands", JSON.stringify(data.delivery_distance_bands));
     }
     if (data.delivery_offer_radius_steps_km !== undefined) {
-        await settingsRepository.upsert(
-            "delivery_offer_radius_steps_km",
-            JSON.stringify(data.delivery_offer_radius_steps_km)
-        );
+        queue("delivery_offer_radius_steps_km", JSON.stringify(data.delivery_offer_radius_steps_km));
     }
-    if (data.delivery_offer_timeout_ms !== undefined) {
-        await settingsRepository.upsert("delivery_offer_timeout_ms", String(data.delivery_offer_timeout_ms));
-    }
-    // Nexora Assistant admin controls (Phase 7) - see the DEFAULTS comment
-    // above and exports.getAiSettings, the only reader of these five keys.
     if (data.ai_enabled !== undefined) {
-        await settingsRepository.upsert("ai_enabled", data.ai_enabled ? "true" : "false");
+        queue("ai_enabled", data.ai_enabled ? "true" : "false");
     }
-    if (data.ai_daily_token_cap_per_user !== undefined) {
-        await settingsRepository.upsert("ai_daily_token_cap_per_user", String(data.ai_daily_token_cap_per_user));
+    if (data.default_delivery_vehicle !== undefined) {
+        queue("default_delivery_vehicle", String(data.default_delivery_vehicle));
     }
-    if (data.ai_monthly_token_cap_per_user !== undefined) {
-        await settingsRepository.upsert("ai_monthly_token_cap_per_user", String(data.ai_monthly_token_cap_per_user));
+    if (data.delivery_default_region !== undefined) {
+        queue("delivery_default_region", String(data.delivery_default_region));
     }
-    if (data.ai_daily_token_cap_global !== undefined) {
-        await settingsRepository.upsert("ai_daily_token_cap_global", String(data.ai_daily_token_cap_global));
+    if (data.username_blocklist !== undefined) {
+        queue("username_blocklist", normalizeUsernameBlocklist(data.username_blocklist));
     }
-    if (data.ai_monthly_token_cap_global !== undefined) {
-        await settingsRepository.upsert("ai_monthly_token_cap_global", String(data.ai_monthly_token_cap_global));
+
+    const changing = (key) => changes.find((c) => c.key === key);
+
+    const commission = changing("commission_rate");
+    if (commission) {
+        const max = Number(current.commission_rate_max) || 30;
+        if (Number(commission.newValue) > max) {
+            throw badRequest(`Commission cannot be set above the platform maximum of ${max}%.`);
+        }
+        if (data.confirm_commission_change !== true) {
+            throw badRequest(
+                `Changing commission from ${commission.oldValue}% to ${commission.newValue}% needs confirmation.`,
+                { code: "CONFIRMATION_REQUIRED", field: "commission_rate" }
+            );
+        }
     }
+
+    const fx = changing("usd_exchange_rate");
+    if (fx) {
+        const previous = Number(fx.oldValue);
+        const band = Number(current.usd_exchange_rate_max_change_percent) || 10;
+        const movedPercent = previous > 0 ? (Math.abs(Number(fx.newValue) - previous) / previous) * 100 : 0;
+        if (movedPercent > band && data.confirm_large_exchange_rate_change !== true) {
+            throw badRequest(
+                `This moves the exchange rate by ${movedPercent.toFixed(1)}% (limit without extra confirmation: ${band}%).`,
+                { code: "CONFIRMATION_REQUIRED", field: "usd_exchange_rate" }
+            );
+        }
+    }
+
+    for (const [key, bounds] of Object.entries(CART_LIMIT_BOUNDS)) {
+        const change = changing(key);
+        if (change) {
+            const value = Number(change.newValue);
+            if (!Number.isInteger(value) || value < bounds.min || value > bounds.max) {
+                throw badRequest(`${bounds.label} must be a whole number from ${bounds.min} to ${bounds.max}.`);
+            }
+        }
+    }
+
+    const escrow = changing("escrow_hold_days");
+    if (escrow) {
+        const days = Number(escrow.newValue);
+        if (!Number.isInteger(days) || days < ESCROW_HOLD_MIN_DAYS || days > ESCROW_HOLD_MAX_DAYS) {
+            throw badRequest(`Escrow hold must be a whole number of days from ${ESCROW_HOLD_MIN_DAYS} to ${ESCROW_HOLD_MAX_DAYS}.`);
+        }
+    }
+
+    if (data.expected_updated_at) {
+        const loadedAt = new Date(data.expected_updated_at).getTime();
+        const stale = changes.find((c) => {
+            const t = updatedAtByKey[c.key] ? new Date(updatedAtByKey[c.key]).getTime() : 0;
+            return Number.isFinite(loadedAt) && t > loadedAt;
+        });
+        if (stale) {
+            const error = badRequest(
+                `"${stale.key}" was changed by someone else after you opened this page. Reload and try again.`,
+                { code: "STALE_SETTINGS" }
+            );
+            error.status = 409;
+            throw error;
+        }
+    }
+
+    for (const change of changes) {
+        await settingsRepository.upsert(change.key, change.newValue);
+        await settingsRepository.recordHistory(change.key, change.oldValue, change.newValue, actorId);
+    }
+
     invalidateCache();
     return exports.getAll();
 };
+
+exports.getSettingHistory = async (key, limit = 50) => settingsRepository.findHistory(key, limit);
+
+// "Last changed by / when" for every key that has history.
+exports.getSettingsMeta = async () => settingsRepository.findLastChanges();

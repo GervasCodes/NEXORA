@@ -5,6 +5,7 @@ import PageMeta from "../components/PageMeta";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import PageLoader from "../components/PageLoader";
+import Spinner from "../components/ui/Spinner";
 
 const TYPE_KEYS = [
     "damaged_item",
@@ -154,11 +155,11 @@ export default function NewDispute() {
                 {error && <p className="text-sm text-coral">{error}</p>}
 
                 <div className="flex gap-3">
-                    <button
+                    <button aria-busy={submitting || undefined}
                         type="submit"
                         disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? t("dispute.new.submitting") : t("dispute.new.submit")}
                     </button>
                     <Link

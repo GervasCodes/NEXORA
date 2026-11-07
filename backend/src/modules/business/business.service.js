@@ -67,3 +67,43 @@ exports.getBulkUnitPrice = async (productId, quantity) => {
     if (eligible.length === 0) return null;
     return Number(eligible[eligible.length - 1].unit_price); // tiers are ascending by min_quantity, so the last eligible one is the best
 };
+
+// Batched version of getBulkUnitPrice (Phase 3) - order.service.js#checkout
+// was calling getBulkUnitPrice once per cart line item (one DB round trip
+// each), the same N+1 shape its product/variant lookups were already fixed
+// for in an earlier phase. Resolves every distinct product's tiers in one
+// query, then computes each cart item's own best eligible price in memory
+// against ITS OWN quantity - a cart can have the same product across two
+// different variant lines with different quantities (cart_items' unique
+// key is (user_id, product_id, variant_id)), so collapsing to a single
+// price per product here would silently misprice one of those lines.
+// Returns a Map(product_id -> Map(quantity -> unitPrice|null)) only for
+// the (product, quantity) combinations actually present in `cartItems`,
+// not every quantity - cheap to build and exactly what the caller needs.
+exports.getBulkUnitPrices = async (productIds, cartItems) => {
+    const tiersByProduct = productIds.length
+        ? (await businessRepository.findTiersByProducts(productIds)).reduce((map, row) => {
+            const list = map.get(row.product_id) || [];
+            list.push(row);
+            map.set(row.product_id, list);
+            return map;
+        }, new Map())
+        : new Map();
+
+    const priceByProductAndQuantity = new Map();
+    for (const item of cartItems) {
+        const tiers = tiersByProduct.get(item.product_id) || [];
+        const eligible = tiers.filter((t) => item.quantity >= t.min_quantity);
+        const price = eligible.length ? Number(eligible[eligible.length - 1].unit_price) : null;
+
+        const byQuantity = priceByProductAndQuantity.get(item.product_id) || new Map();
+        byQuantity.set(item.quantity, price);
+        priceByProductAndQuantity.set(item.product_id, byQuantity);
+    }
+
+    // Flattened lookup helper so callers don't need to know the nested
+    // shape above - mirrors getBulkUnitPrice's single-value return.
+    return {
+        get: (productId, quantity) => priceByProductAndQuantity.get(productId)?.get(quantity) ?? null
+    };
+};

@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { TRIAL_DAYS } = require("../subscription/trial.constants");
 
 exports.findByEmail = async (email) => {
     const [rows] = await db.query(
@@ -14,6 +15,24 @@ exports.findById = async (id) => {
         [id]
     );
     return rows[0];
+};
+
+exports.findByGoogleSub = async (googleSub) => {
+    const [rows] = await db.query(
+        "SELECT * FROM users WHERE google_sub = ?",
+        [googleSub]
+    );
+    return rows[0];
+};
+
+// Links a Google account to an existing user. Guarded on google_sub IS NULL so
+// an account already linked to some Google id can never be silently re-pointed.
+exports.linkGoogleSub = async (userId, googleSub) => {
+    const [result] = await db.query(
+        "UPDATE users SET google_sub = ? WHERE id = ? AND google_sub IS NULL",
+        [googleSub, userId]
+    );
+    return result.affectedRows > 0;
 };
 
 exports.findByPhone = async (phone) => {
@@ -57,6 +76,39 @@ exports.touchLastActive = async (id) => {
 // omit it to just use the shared pool like any other one-off query.
 const runner = (conn) => conn || db;
 
+// ---- Per-account login lockout (migration 117) -------------------------
+// Persistence for loginLockout.service.js - the policy itself (thresholds,
+// backoff tiers) lives there, these are just the reads/writes.
+
+// Locks the row for the duration of the caller's transaction so two
+// concurrent failed attempts can't both read "4" and both write "5".
+exports.findLoginLockStateForUpdate = async (userId, conn) => {
+    const [rows] = await runner(conn).query(
+        `SELECT failed_login_attempts, last_failed_login_at, login_locked_until
+        FROM users WHERE id = ? FOR UPDATE`,
+        [userId]
+    );
+    return rows[0];
+};
+
+exports.saveLoginLockState = async (userId, { failedAttempts, lastFailedAt, lockedUntil }, conn) => {
+    await runner(conn).query(
+        `UPDATE users
+        SET failed_login_attempts = ?, last_failed_login_at = ?, login_locked_until = ?
+        WHERE id = ?`,
+        [failedAttempts, lastFailedAt, lockedUntil, userId]
+    );
+};
+
+exports.clearLoginLockState = async (userId) => {
+    await db.query(
+        `UPDATE users
+        SET failed_login_attempts = 0, last_failed_login_at = NULL, login_locked_until = NULL
+        WHERE id = ?`,
+        [userId]
+    );
+};
+
 exports.createUser = async (user, conn) => {
     const {
         first_name,
@@ -67,14 +119,26 @@ exports.createUser = async (user, conn) => {
         role,
         vehicle_type,
         vehicle_plate_number,
-        terms_version
+        terms_version,
+        seller_mode,
+        username,
+        google_sub,
+        auth_provider
     } = user;
 
     // Seller/delivery_agent accounts start life needing verification;
     // every other role (buyer, admin) never needs it, so the gate is
     // simply never checked for them (see requireApprovedSeller /
     // requireApprovedDeliveryAgent middleware).
-    const needsVerification = role === "seller" || role === "delivery_agent";
+    // Business-tools-only sellers (migration 146) skip marketplace verification.
+    const toolsOnly = role === "seller" && seller_mode === "business_tools";
+    const needsVerification = (role === "seller" && !toolsOnly) || role === "delivery_agent";
+    // One free trial per account, started automatically at registration
+    // (marketplace AND business-tools sellers). Only sellers get one.
+    // Computed in SQL so it uses the same clock as every trial check.
+    // TRIAL_DAYS is a code constant, never user input.
+    const trialStartSql = role === "seller" ? "NOW()" : "NULL";
+    const trialEndSql = role === "seller" ? `NOW() + INTERVAL ${Number(TRIAL_DAYS)} DAY` : "NULL";
 
     // vehicle_type/vehicle_plate_number (migration 032) only ever arrive
     // for delivery_agent registrations - auth.validator.js requires both
@@ -87,8 +151,8 @@ exports.createUser = async (user, conn) => {
     // moment of acceptance.
     const [result] = await runner(conn).query(
         `INSERT INTO users
-        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number,terms_accepted_at,terms_version)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        (first_name,last_name,email,phone,password,role,account_verification_status,account_verification_submitted_at,vehicle_type,vehicle_plate_number,terms_accepted_at,terms_version,seller_mode,username,google_sub,auth_provider,trial_started_at,trial_ends_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,${trialStartSql},${trialEndSql})`,
         [
             first_name,
             last_name,
@@ -101,17 +165,25 @@ exports.createUser = async (user, conn) => {
             role === "delivery_agent" ? vehicle_type : null,
             role === "delivery_agent" ? (vehicle_plate_number || null) : null,
             new Date(),
-            terms_version || null
+            terms_version || null,
+            toolsOnly ? "business_tools" : "marketplace",
+            username,
+            google_sub || null,
+            auth_provider || "password"
         ]
     );
 
     return result.insertId;
 };
 
-exports.insertVerificationDocument = async (userId, documentType, fileUrl, conn) => {
+// `stored` is the { publicId, resourceType, format } of a private
+// (authenticated) Cloudinary upload - no public URL is kept.
+exports.insertVerificationDocument = async (userId, documentType, stored, conn) => {
     await runner(conn).query(
-        "INSERT INTO account_verification_documents (user_id, document_type, file_url) VALUES (?, ?, ?)",
-        [userId, documentType, fileUrl]
+        `INSERT INTO account_verification_documents
+            (user_id, document_type, file_public_id, file_resource_type, file_format, file_storage)
+        VALUES (?, ?, ?, ?, ?, 'authenticated')`,
+        [userId, documentType, stored.publicId, stored.resourceType, stored.format]
     );
 };
 

@@ -11,7 +11,9 @@ const {
     sellerResetPreviewValidation,
     sellerResetValidation,
     platformResetPreviewValidation,
-    platformResetValidation
+    platformResetValidation,
+    platformApprovalRequestValidation,
+    platformApprovalApproveValidation
 } = require("./dataReset.validator");
 
 router.use(authMiddleware, authorize("admin"));
@@ -56,6 +58,24 @@ router.post(
     platformResetValidation,
     validationMiddleware,
     dataResetController.resetPlatform
+);
+
+// Production only: a second super admin must approve a platform reset
+// (see dataReset.service.js#requestPlatformResetApproval / approvePlatformReset).
+router.post(
+    "/platform/approvals",
+    requireSuperAdmin,
+    platformApprovalRequestValidation,
+    validationMiddleware,
+    dataResetController.requestPlatformApproval
+);
+
+router.post(
+    "/platform/approvals/:approvalId/approve",
+    requireSuperAdmin,
+    platformApprovalApproveValidation,
+    validationMiddleware,
+    dataResetController.approvePlatformReset
 );
 
 module.exports = router;

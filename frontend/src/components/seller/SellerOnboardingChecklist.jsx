@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckIcon } from "../Icons";
+import { useLanguage } from "../../context/LanguageContext";
 
 // Phase 6 (New UI/UX & Imagery Additions, item 21): the seller
 // onboarding checklist referenced in the original audit but deferred
@@ -15,10 +16,15 @@ import { CheckIcon } from "../Icons";
 // OnboardingTour's "shown once per account" key - a shared device
 // logging in as a different seller should still see it.
 const STORAGE_PREFIX = "nexora_seller_checklist_dismissed_";
+const CELEBRATED_PREFIX = "nexora_seller_checklist_celebrated_";
 
 export default function SellerOnboardingChecklist({ userId, profile, hasProducts, hasServices, merchantType }) {
+    const { t } = useLanguage();
     const [dismissed, setDismissed] = useState(
         () => localStorage.getItem(`${STORAGE_PREFIX}${userId}`) === "1"
+    );
+    const [celebrated, setCelebrated] = useState(
+        () => localStorage.getItem(`${CELEBRATED_PREFIX}${userId}`) === "1"
     );
 
     const showListingStep = merchantType === "service" ? hasServices : hasProducts || hasServices;
@@ -46,9 +52,28 @@ export default function SellerOnboardingChecklist({ userId, profile, hasProducts
 
     const remaining = items.filter((item) => !item.done).length;
 
-    if (dismissed || remaining === 0) {
-        return null;
+    if (dismissed) return null;
+
+    if (remaining === 0) {
+        if (celebrated) return null;
+        const closeCelebration = () => {
+            localStorage.setItem(`${CELEBRATED_PREFIX}${userId}`, "1");
+            setCelebrated(true);
+        };
+        return (
+            <div role="status" className="border border-teal/30 bg-teal/5 rounded-lg p-4 mb-8 flex items-center justify-between gap-3">
+                <div>
+                    <p className="font-display text-lg">🎉 {t("seller.checklist.doneTitle")}</p>
+                    <p className="text-sm text-ash">{t("seller.checklist.doneBody")}</p>
+                </div>
+                <button type="button" onClick={closeCelebration} className="text-xs text-ash hover:text-ink shrink-0">
+                    {t("seller.checklist.close")}
+                </button>
+            </div>
+        );
     }
+
+    const doneCount = items.length - remaining;
 
     const dismiss = () => {
         localStorage.setItem(`${STORAGE_PREFIX}${userId}`, "1");
@@ -58,10 +83,22 @@ export default function SellerOnboardingChecklist({ userId, profile, hasProducts
     return (
         <div className="border border-line rounded-lg p-4 mb-8">
             <div className="flex items-center justify-between mb-3">
-                <p className="font-display text-lg">Finish setting up your store</p>
+                <p className="font-display text-lg">{t("seller.checklist.title")}</p>
                 <button type="button" onClick={dismiss} className="text-xs text-ash hover:text-ink">
-                    Dismiss
+                    {t("seller.checklist.dismiss")}
                 </button>
+            </div>
+            <div className="mb-4">
+                <div
+                    className="h-1.5 rounded-full bg-line overflow-hidden"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={items.length}
+                    aria-valuenow={doneCount}
+                >
+                    <div className="h-full bg-teal transition-all" style={{ width: `${(doneCount / items.length) * 100}%` }} />
+                </div>
+                <p className="text-xs text-ash mt-1">{t("seller.checklist.progress", { done: doneCount, total: items.length })}</p>
             </div>
             <ul className="space-y-2">
                 {items.map((item) => (

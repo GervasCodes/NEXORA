@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import Spinner from "../../components/ui/Spinner";
 
 const FLAGS = [
     {
@@ -18,12 +19,7 @@ const FLAGS = [
     {
         key: "monetization_sponsorship_enabled",
         label: "Sponsorship & featured placement",
-        description: "When off, product sponsorship, featured-store, and department-sponsorship campaigns are free and auto-approved."
-    },
-    {
-        key: "monetization_verification_fee_enabled",
-        label: "Seller verification fee",
-        description: "When off, the one-time Verified Seller fee is waived - the badge activates as soon as account verification is approved."
+        description: "Controls paid a la carte purchases of product sponsorship and featured-store campaigns. When off, sellers can still start campaigns with the sponsorship credits included in their subscription plan, but cannot buy extra days from their wallet."
     }
 ];
 
@@ -54,7 +50,7 @@ export default function AdminBillingControl() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const toggleFlag = async (key, nextEnabled) => {
         setSavingKey(key);
@@ -124,7 +120,7 @@ export default function AdminBillingControl() {
                                     )}
                                 </p>
                             </div>
-                            <button
+                            <button aria-busy={savingKey === flag.key || undefined}
                                 type="button"
                                 disabled={savingKey === flag.key}
                                 onClick={() => toggleFlag(flag.key, !enabled)}
@@ -133,7 +129,7 @@ export default function AdminBillingControl() {
                                         ? "bg-teal/10 border-teal text-teal"
                                         : "bg-paper border-line text-ash"
                                 }`}
-                            >
+                            >{savingKey === flag.key && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {savingKey === flag.key ? "Saving…" : enabled ? "Enabled" : "Disabled"}
                             </button>
                         </div>

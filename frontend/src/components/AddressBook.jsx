@@ -4,6 +4,7 @@ import PhoneInput from "./PhoneInput";
 import Input from "./ui/Input";
 import Button from "./ui/Button";
 import EmptyState from "./ui/EmptyState";
+import { SkeletonCard } from "./Skeleton";
 
 const emptyForm = {
     label: "",
@@ -180,10 +181,10 @@ export default function AddressBook() {
                     {formError && <p role="alert" className="text-coral text-sm">{formError}</p>}
 
                     <div className="flex gap-2">
-                        <Button type="submit" size="sm" disabled={busy}>
+                        <Button loading={busy} type="submit" size="sm" disabled={busy}>
                             {busy ? "Saving…" : editingId ? "Save changes" : "Save address"}
                         </Button>
-                        <Button type="button" variant="secondary" size="sm" onClick={closeForm} disabled={busy}>
+                        <Button loading={busy} type="button" variant="secondary" size="sm" onClick={closeForm} disabled={busy}>
                             Cancel
                         </Button>
                     </div>
@@ -195,7 +196,7 @@ export default function AddressBook() {
             )}
 
             {!error && addresses === null && (
-                <p className="text-ash text-sm">Loading…</p>
+                <div role="status"><span className="sr-only">Loading…</span><SkeletonCard /></div>
             )}
 
             {!error && addresses?.length === 0 && !formOpen && (

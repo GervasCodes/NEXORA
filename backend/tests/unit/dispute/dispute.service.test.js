@@ -3,6 +3,13 @@ jest.mock("../../../src/modules/dispute/dispute.repository");
 jest.mock("../../../src/modules/order/order.repository");
 jest.mock("../../../src/modules/wallet/wallet.repository");
 jest.mock("../../../src/modules/notification/notification.service");
+// resolveDispute reserves the refund against the order's refund cap
+// (shared with returns/cancellations) before writing anything.
+jest.mock("../../../src/modules/refund/refundCap.service");
+// getFullDispute attaches the dispute's refund row (refund.service), and
+// resolveDispute fires the provider refund fire-and-forget via the same
+// service - mocked so neither reaches the (mocked) db.
+jest.mock("../../../src/modules/refund/refund.service");
 jest.mock("../../../src/utils/cloudinaryUpload");
 
 const db = require("../../../src/config/db");
@@ -10,6 +17,8 @@ const disputeRepository = require("../../../src/modules/dispute/dispute.reposito
 const orderRepository = require("../../../src/modules/order/order.repository");
 const walletRepository = require("../../../src/modules/wallet/wallet.repository");
 const notificationService = require("../../../src/modules/notification/notification.service");
+const refundCapService = require("../../../src/modules/refund/refundCap.service");
+const refundService = require("../../../src/modules/refund/refund.service");
 const { uploadToCloudinary } = require("../../../src/utils/cloudinaryUpload");
 
 const disputeService = require("../../../src/modules/dispute/dispute.service");
@@ -32,6 +41,16 @@ beforeEach(() => {
     // unchanged; tests that specifically exercise the held-balance split
     // override this.
     walletRepository.getWalletForUpdate.mockResolvedValue({ held_balance: 0 });
+    // Default passthrough: the cap reservation runs its callback with a stub
+    // connection and reserves exactly what was asked, so existing tests are
+    // unaffected. Cap-exceeded tests override reserveRefund to reject.
+    refundCapService.withTransaction.mockImplementation(async (fn) => fn({}));
+    refundCapService.reserveRefund.mockImplementation(async (_connection, { amount }) => amount);
+    // No refund row attached to a dispute by default; the provider refund
+    // call resolves (the service chains .catch() on it, so it must return a
+    // promise, not undefined).
+    refundService.getRefundForDispute.mockResolvedValue(undefined);
+    refundService.autoRefundForDispute.mockResolvedValue(undefined);
 });
 
 describe("dispute.service.createDispute", () => {
@@ -384,6 +403,41 @@ describe("dispute.service.resolveDispute", () => {
         expect(notificationService.notify).toHaveBeenCalledWith(
             expect.objectContaining({ userId: 10, messageKey: "notifications.dispute.resolved.sellerMessage" })
         );
+    });
+
+    it("reserves the refund against the order's refund cap before writing the resolution, then fires the provider refund", async () => {
+        disputeRepository.findById.mockResolvedValue({
+            id: 1, status: "open", buyer_id: 5, seller_id: 10, dispute_number: "DSP-1", order_id: 1, order_item_id: null
+        });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, total_amount: "15000.00" });
+        walletRepository.incrementBalance.mockResolvedValue(5000);
+
+        await disputeService.resolveDispute(1, 99, { resolution: "refund_full", resolution_note: "confirmed damaged" });
+
+        expect(refundCapService.reserveRefund).toHaveBeenCalledWith(
+            expect.anything(), { orderId: 1, orderItemId: null, amount: 15000 }
+        );
+        expect(refundCapService.reserveRefund.mock.invocationCallOrder[0])
+            .toBeLessThan(disputeRepository.resolve.mock.invocationCallOrder[0]);
+        expect(refundService.autoRefundForDispute).toHaveBeenCalledWith(
+            expect.objectContaining({ amount: 15000, requestedBy: 99 })
+        );
+    });
+
+    it("aborts before resolving, reversing earnings or refunding when the refund cap would be exceeded", async () => {
+        disputeRepository.findById.mockResolvedValue({
+            id: 1, status: "open", buyer_id: 5, seller_id: 10, dispute_number: "DSP-1", order_id: 1
+        });
+        orderRepository.findOrderById.mockResolvedValue({ id: 1, total_amount: "15000.00" });
+        refundCapService.reserveRefund.mockRejectedValue(new Error("Refund of 15000 would exceed what's left to refund on this order (0 remaining)"));
+
+        await expect(
+            disputeService.resolveDispute(1, 99, { resolution: "refund_full", resolution_note: "x" })
+        ).rejects.toThrow("would exceed what's left to refund");
+
+        expect(disputeRepository.resolve).not.toHaveBeenCalled();
+        expect(walletRepository.incrementBalance).not.toHaveBeenCalled();
+        expect(refundService.autoRefundForDispute).not.toHaveBeenCalled();
     });
 
     it("reverses from held_balance first when the order's earnings are still fully held (escrowed, not yet released)", async () => {

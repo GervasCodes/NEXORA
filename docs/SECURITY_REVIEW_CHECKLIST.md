@@ -50,7 +50,7 @@ reviewing.
 |---|---|---|
 | SQL parameterization | ✅ | Spot-checked across repositories (e.g. `product.repository.js`) — all queries use `?` placeholders via `mysql2`, no string-concatenated SQL found in the sampled files |
 | Request body/query validation | ✅ | Per-module `*.validator.js` files (e.g. `payment.validator.js`) |
-| File upload type/size restriction | ✅ | `multer` memory storage, 5 MB limit, MIME-type allowlist (`image/*`) — `upload.middleware.js`; separate middlewares exist for video/audio/document/chat-attachment uploads with their own limits |
+| File upload type/size restriction | ✅ | `multer` memory storage, 5 MB limit, MIME-type allowlist (`image/*`) — `upload.middleware.js`; separate middlewares exist for video/document/chat-attachment uploads with their own limits (product audio was removed in Phase 4). Image limits live in `config/mediaLimits.js`; photos are EXIF/GPS-stripped (`utils/imageSanitize.js`); video uploads are concurrency-capped; missing `CLAMAV_HOST` is flagged loudly in production |
 | Uploaded file content validated server-side (not just MIME sniffing) | ✅ | Phase 2: magic-byte content classifier (`utils/fileContentValidator.js`) runs after multer buffers the file, independent of the client-reported `mimetype` — wired into all five upload middlewares via `utils/wrapUploadMiddleware.js`; see `PHASE2_SECURITY_CHANGELOG.md` |
 | Open redirect protection (general, beyond payment return URLs) | ⚠️ | Confirmed for payment flows (§2); reviewer should check any other user-supplied-URL redirect surfaces |
 
@@ -59,7 +59,7 @@ reviewing.
 | Item | Status | Notes |
 |---|---|---|
 | HTTPS-only in production | ⚠️ | Enforced at the hosting/reverse-proxy layer (Render), not in application code — reviewer should confirm the deployment target terminates TLS and doesn't accept plaintext HTTP |
-| Security headers | ✅ | `helmet()` — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, etc. CSP re-enabled and scoped in Phase 2 (`default-src 'none'`, per-response nonce for `/health`'s one inline `<style>` block) — see `PHASE2_SECURITY_CHANGELOG.md`. Frontend (separately deployed, Netlify) gets its own scoped CSP via `frontend/public/_headers`, also added in Phase 2 — the `connect-src` origin there needs a manual production value; see that file's header comment |
+| Security headers | ✅ | `helmet()` — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, etc. CSP re-enabled and scoped in Phase 2 (`default-src 'none'`, per-response nonce for `/health`'s one inline `<style>` block) — see `PHASE2_SECURITY_CHANGELOG.md`. Frontend (separately deployed, Render Static Site) gets its own scoped CSP via the Render Dashboard's Custom Response Headers (Settings → Headers) — Render Static Sites don't read a committed `_headers` file the way Netlify does; the `connect-src` origin there needs a manual production value — see `docs/DEPLOYMENT.md`'s frontend section |
 | CORS restricted to known origins in production | ✅ | `CORS_ORIGIN` env var, comma-separated allowlist; falls back to `*` only if unset (dev default) — `.env.example` calls out setting it explicitly in production |
 | `trust proxy` configured correctly for rate limiting | ✅ | `app.set("trust proxy", 1)` — trusts exactly one hop (the platform's own proxy), not the full `X-Forwarded-For` chain, preventing IP-spoofing around rate limits |
 | Response compression | ✅ | `compression()` — not a security control, noted for completeness |

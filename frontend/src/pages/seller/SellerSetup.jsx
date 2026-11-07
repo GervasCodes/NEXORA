@@ -4,6 +4,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import Input from "../../components/ui/Input";
+import { useLanguage } from "../../context/LanguageContext";
 
 // (Onboarding) - the three choices map straight
 // onto seller_profiles.merchant_type (migration 062: product/service/
@@ -19,25 +20,26 @@ import Input from "../../components/ui/Input";
 const MERCHANT_TYPE_OPTIONS = [
     {
         value: "product",
-        label: "Products",
-        description: "List physical products for sale.",
-        subtitle: "Give your store a name to start listing products."
+        labelKey: "seller.setup.type.product.label",
+        descriptionKey: "seller.setup.type.product.description",
+        subtitleKey: "seller.setup.type.product.subtitle"
     },
     {
         value: "service",
-        label: "Services",
-        description: "Offer bookable services - accommodation, transportation, tours, and more.",
-        subtitle: "Give your store a name to start listing bookable services."
+        labelKey: "seller.setup.type.service.label",
+        descriptionKey: "seller.setup.type.service.description",
+        subtitleKey: "seller.setup.type.service.subtitle"
     },
     {
         value: "hybrid",
-        label: "Products & Services",
-        description: "Sell products and offer bookable services from the same store.",
-        subtitle: "Give your store a name to start listing products and services."
+        labelKey: "seller.setup.type.hybrid.label",
+        descriptionKey: "seller.setup.type.hybrid.description",
+        subtitleKey: "seller.setup.type.hybrid.subtitle"
     }
 ];
 
 export default function SellerSetup() {
+    const { t } = useLanguage();
     const { refreshProfile } = useOutletContext();
     const navigate = useNavigate();
     const [storeTypes, setStoreTypes] = useState([]);
@@ -45,32 +47,39 @@ export default function SellerSetup() {
     const [merchantType, setMerchantType] = useState("product");
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [storeTypesFailed, setStoreTypesFailed] = useState(false);
 
-    useEffect(() => {
-        api.get("/store-types").then(({ data }) => setStoreTypes(data.data)).catch(() => {});
-    }, []);
+    const loadStoreTypes = () => {
+        setStoreTypesFailed(false);
+        api.get("/store-types")
+            .then(({ data }) => setStoreTypes(data.data))
+            .catch(() => setStoreTypesFailed(true));
+    };
+
+    useEffect(loadStoreTypes, []);
 
     const selectedOption = MERCHANT_TYPE_OPTIONS.find((o) => o.value === merchantType) ?? MERCHANT_TYPE_OPTIONS[0];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError("");
-        try {
-            await api.post("/seller/profile", form);
 
-            // "product" is already the column default, so only a
-            // non-default pick needs the follow-up call - keeps skip/
-            // product behavior identical to before this phase.
-            if (merchantType !== "product") {
-                try {
-                    await api.put("/seller/merchant-type", { merchant_type: merchantType });
-                } catch {
-                    // The store itself was created successfully; merchant
-                    // type can still be changed from Settings afterward
-                    // (Phase 3), so this shouldn't block onboarding.
-                }
-            }
+        const storeName = form.store_name.trim();
+        if (storeName.length < 3) {
+            setError(t("seller.setup.nameTooShort"));
+            return;
+        }
+        setSubmitting(true);
+        try {
+            // merchant_type now travels in the same request as store
+            // creation (Phase 4 remediation) - previously a non-default
+            // pick needed a second PUT /seller/merchant-type call after
+            // the store already existed, and a failure there was
+            // silently swallowed, so a seller could pick "Services" and
+            // end up with a product-only store with no visible error.
+            // One request means one place that can fail and one error
+            // to show.
+            await api.post("/seller/profile", { ...form, store_name: storeName, merchant_type: merchantType });
 
             refreshProfile();
             navigate("/seller");
@@ -83,13 +92,13 @@ export default function SellerSetup() {
 
     return (
         <div className="max-w-md mx-auto px-4 py-16">
-            <PageMeta title="Set Up Your Store" noIndex />
-            <h1 className="font-display text-2xl mb-1">Set up your store</h1>
-            <p className="text-ash text-sm mb-8">{selectedOption.subtitle}</p>
+            <PageMeta title={t("seller.setup.metaTitle")} noIndex />
+            <h1 className="font-display text-2xl mb-1">{t("seller.setup.title")}</h1>
+            <p className="text-ash text-sm mb-8">{t(selectedOption.subtitleKey)}</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <p className="block text-sm mb-1">What will you offer?</p>
+                    <p className="block text-sm mb-1">{t("seller.setup.offerQuestion")}</p>
                     <div className="grid gap-2">
                         {MERCHANT_TYPE_OPTIONS.map((option) => (
                             <button
@@ -101,47 +110,59 @@ export default function SellerSetup() {
                                     merchantType === option.value ? "border-ink bg-line/30" : "border-line hover:border-ink"
                                 }`}
                             >
-                                <p className="font-medium text-sm mb-0.5">{option.label}</p>
-                                <p className="text-xs text-ash">{option.description}</p>
+                                <p className="font-medium text-sm mb-0.5">{t(option.labelKey)}</p>
+                                <p className="text-xs text-ash">{t(option.descriptionKey)}</p>
                             </button>
                         ))}
                     </div>
                 </div>
 
                 <Input
-                    label="Store name"
+                    label={t("seller.setup.storeName")}
                     required minLength={3} maxLength={150}
+                    autoFocus
+                    autoComplete="organization"
                     value={form.store_name}
                     onChange={(e) => setForm({ ...form, store_name: e.target.value })}
                 />
 
                 <div>
-                    <label htmlFor="storeTypeId" className="block text-sm mb-1">Store type</label>
+                    <label htmlFor="storeTypeId" className="block text-sm mb-1">{t("seller.setup.storeType")}</label>
                     <select
                         id="storeTypeId"
                         value={form.store_type_id}
                         onChange={(e) => setForm({ ...form, store_type_id: e.target.value })}
                         className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                     >
-                        <option value="">Select a store type…</option>
-                        {storeTypes.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
+                        <option value="">{t("seller.setup.selectStoreType")}</option>
+                        {storeTypes.map((st) => (
+                            <option key={st.id} value={st.id}>{st.name}</option>
                         ))}
                     </select>
+                    {storeTypesFailed && (
+                        <p role="alert" className="text-xs text-coral mt-1">
+                            {t("seller.setup.storeTypesFailed")}{" "}
+                            <button type="button" onClick={loadStoreTypes} className="underline">{t("seller.setup.tryAgain")}</button>
+                            {" "}{t("seller.setup.pickLater")}
+                        </p>
+                    )}
                 </div>
 
-                <Input
-                    as="textarea"
-                    label="Store description (optional)"
-                    rows={4} maxLength={1000}
-                    value={form.store_description}
-                    onChange={(e) => setForm({ ...form, store_description: e.target.value })}
-                />
+                <div>
+                    <Input
+                        as="textarea"
+                        label={t("seller.setup.descriptionLabel")}
+                        rows={4} maxLength={1000}
+                        value={form.store_description}
+                        onChange={(e) => setForm({ ...form, store_description: e.target.value })}
+                    />
+                    <p className="text-xs text-ash text-right mt-1" aria-live="off">{form.store_description.length}/1000</p>
+                </div>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button type="submit" disabled={submitting} fullWidth>
-                    {submitting ? "Creating store…" : "Create store"}
+                <Button loading={submitting} type="submit" disabled={submitting} fullWidth>
+                    {submitting ? t("seller.setup.creating") : t("seller.setup.create")}
                 </Button>
             </form>
         </div>

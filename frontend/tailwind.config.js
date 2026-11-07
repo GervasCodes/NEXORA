@@ -35,9 +35,11 @@ export default {
                 frost: withOpacity("--color-frost")
             },
             fontFamily: {
-                display: ["Fraunces", "serif"],
+                display: ["'Fraunces Variable'", "Fraunces", "serif"],
                 sans: ["Inter", "system-ui", "sans-serif"],
-                mono: ["'IBM Plex Mono'", "monospace"]
+                // Phase 1: IBM Plex Mono is no longer loaded (one fewer font
+                // download); the system monospace stack is used instead.
+                mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"]
             },
             backgroundImage: {
                 "brand-gradient": "linear-gradient(135deg, #9FC1F2 0%, #6EA8FE 45%, #1D4ED8 100%)"
@@ -129,6 +131,17 @@ export default {
                 pageIn: {
                     from: { opacity: "0", transform: "translateY(6px)" },
                     to: { opacity: "1", transform: "translateY(0)" }
+                },
+                // Indeterminate <ProgressBar /> - a segment that slides
+                // across the track for waits with no known percentage.
+                indeterminate: {
+                    "0%": { transform: "translateX(-100%)" },
+                    "100%": { transform: "translateX(350%)" }
+                },
+                // <PulseBar /> - non-blocking "something is syncing" cue.
+                pulseBar: {
+                    "0%, 100%": { opacity: "0.35", transform: "scaleX(0.55)" },
+                    "50%": { opacity: "1", transform: "scaleX(1)" }
                 }
             },
             animation: {
@@ -143,7 +156,9 @@ export default {
                 "suspend-ring": "suspendRing 2s ease-out infinite",
                 "typing-dot": "typingDot 1.2s ease-in-out infinite",
                 "check-pop": "checkPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both",
-                "page-in": "pageIn 0.28s cubic-bezier(0.16,1,0.3,1) both"
+                "page-in": "pageIn 0.28s cubic-bezier(0.16,1,0.3,1) both",
+                indeterminate: "indeterminate 1.3s ease-in-out infinite",
+                "pulse-bar": "pulseBar 1.4s ease-in-out infinite"
             }
         }
     },

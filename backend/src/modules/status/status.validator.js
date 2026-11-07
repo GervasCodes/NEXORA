@@ -1,5 +1,9 @@
 const { body } = require("express-validator");
 
+exports.subscribeValidation = [
+    body("email").trim().isEmail().isLength({ max: 255 }).withMessage("A valid email is required")
+];
+
 exports.createIncidentValidation = [
     body("title").trim().notEmpty().isLength({ max: 150 }).withMessage("A title is required"),
     body("message").trim().notEmpty().withMessage("A message is required"),

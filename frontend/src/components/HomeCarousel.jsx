@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { useCurrency } from "../context/CurrencyContext";
+import { useDataSaver } from "../context/DataSaverContext";
+import { useLanguage } from "../context/LanguageContext";
 
 // How often autoplay advances - long enough to read a slide's title,
 // short enough that a full deck (see HOME_CAROUSEL_MAX_SLIDES on the
@@ -12,42 +14,14 @@ const SWIPE_THRESHOLD_PX = 50;
 
 // Safety-net default banner shown only when the API returns no live
 // promo content (no active sponsorship/promotion/featured-store
-// campaigns or seller promo videos yet) - same three real, verified,
-// freely-licensed photos (Unsplash License - free for commercial use,
-// no attribution required: https://unsplash.com/license) this hero
-// briefly shipped with as a static collage: "Marketing Flatlay" by
-// Campaign Creators (https://unsplash.com/photos/RSc6D7bO0fA), "Ships
-// out today" by Bench Accounting (https://unsplash.com/photos/MGaFENpDCsw),
-// and "GRAB courier makes delivery" by Kseniia Ilinykh
-// (https://unsplash.com/photos/62JneRv7jW4).
+// campaigns or seller promo videos yet). Phase 1: these used to be
+// hot-linked Unsplash photos; they are now small original SVG artworks
+// hosted with the app (no third-party request, a ~1 KB download each),
+// and the copy is translated through the language dictionary.
 const FALLBACK_SLIDES = [
-    {
-        type: "fallback",
-        title: "Everything you need",
-        subtitle: "Thousands of products from local vendors",
-        imageUrl: "https://images.unsplash.com/photo-1533750516457-a7f992034fec?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/products",
-        badge: null
-    },
-    {
-        type: "fallback",
-        title: "From sellers you trust",
-        subtitle: "Verified stores, ready to ship",
-        imageUrl: "https://images.unsplash.com/photo-1449247666642-264389f5f5b1?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/products",
-        badge: null
-    },
-    {
-        type: "fallback",
-        title: "Tracked door to door",
-        subtitle: "Follow every order from pickup to drop-off",
-        imageUrl: "https://images.unsplash.com/photo-1587476351660-e9fa4bb8b26c?q=80&w=1200&auto=format&fit=crop",
-        videoUrl: null,
-        href: "/products",
-        badge: null
-    }
+    { type: "fallback", titleKey: "home.fallback.everything.title", subtitleKey: "home.fallback.everything.subtitle", imageUrl: "/images/hero/everything.svg", videoUrl: null, href: "/feed", badge: null },
+    { type: "fallback", titleKey: "home.fallback.trusted.title", subtitleKey: "home.fallback.trusted.subtitle", imageUrl: "/images/hero/trusted.svg", videoUrl: null, href: "/feed", badge: null },
+    { type: "fallback", titleKey: "home.fallback.tracked.title", subtitleKey: "home.fallback.tracked.subtitle", imageUrl: "/images/hero/tracked.svg", videoUrl: null, href: "/feed", badge: null }
 ];
 
 const BADGE_STYLES = {
@@ -56,11 +30,18 @@ const BADGE_STYLES = {
     "Featured store": "bg-mango/90 text-abyss"
 };
 
+const BADGE_KEYS = {
+    Sponsored: "home.badge.sponsored",
+    "On sale": "home.badge.onSale",
+    "Featured store": "home.badge.featuredStore"
+};
+
 function SlideBadge({ badge }) {
+    const { t } = useLanguage();
     if (!badge) return null;
     return (
         <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-1 rounded-full shrink-0 ${BADGE_STYLES[badge] || "bg-frost/90 text-abyss"}`}>
-            {badge}
+            {BADGE_KEYS[badge] ? t(BADGE_KEYS[badge]) : badge}
         </span>
     );
 }
@@ -73,7 +54,7 @@ function SlidePrice({ slide }) {
         <p className="text-frost text-sm mt-1">
             <span className="font-medium">{format(hasDiscount ? slide.discountPrice : slide.price)}</span>
             {hasDiscount && (
-                <span className="text-frost/50 line-through ml-2">{format(slide.price)}</span>
+                <span className="text-frost/70 line-through ml-2">{format(slide.price)}</span>
             )}
         </p>
     );
@@ -83,6 +64,8 @@ export default function HomeCarousel() {
     const [slides, setSlides] = useState(null);
     const [index, setIndex] = useState(0);
     const [paused, setPaused] = useState(false);
+    const { t } = useLanguage();
+    const dataSaver = useDataSaver();
     const dragStartX = useRef(null);
 
     useEffect(() => {
@@ -100,8 +83,9 @@ export default function HomeCarousel() {
         });
     }, [count]);
 
-    // Autoplay - paused on hover/focus (desktop) and mid-drag (touch),
-    // so a slide never gets yanked out from under a reader or a swipe.
+    // Fully automatic: advances on its own, no arrows and no play/pause
+    // buttons. Only held briefly while a finger is mid-swipe so a slide is
+    // never yanked out from under a touch. (Hover/focus no longer pause it.)
     useEffect(() => {
         if (paused || count < 2) return undefined;
         const timer = setInterval(() => goTo(index + 1), AUTOPLAY_INTERVAL_MS);
@@ -110,12 +94,14 @@ export default function HomeCarousel() {
 
     if (slides === null) {
         return (
-            <div className="rounded-2xl overflow-hidden h-56 sm:h-72 lg:h-[420px] bg-frost/5 animate-pulse border border-frost/10" />
+            <div className="rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] bg-frost/5 animate-pulse border border-frost/10" />
         );
     }
 
     const slide = slides[index];
     if (!slide) return null;
+    const slideTitle = slide.titleKey ? t(slide.titleKey) : slide.title;
+    const slideSubtitle = slide.subtitleKey ? t(slide.subtitleKey) : slide.subtitle;
 
     const handleTouchStart = (e) => {
         dragStartX.current = e.touches[0].clientX;
@@ -133,17 +119,20 @@ export default function HomeCarousel() {
 
     return (
         <div
-            className="relative rounded-2xl overflow-hidden h-56 sm:h-72 lg:h-[420px] border border-frost/10 bg-azure/10 group"
-            onMouseEnter={() => setPaused(true)}
-            onMouseLeave={() => setPaused(false)}
+            role="region"
+            aria-roledescription="carousel"
+            aria-label={t("home.carouselLabel")}
+            aria-live="off"
+            className="relative rounded-2xl overflow-hidden h-64 sm:h-96 lg:h-[540px] border border-frost/10 bg-azure/10 group"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
             <Link to={slide.href} className="absolute inset-0 block">
-                {slide.videoUrl ? (
+                {slide.videoUrl && !dataSaver?.enabled ? (
                     <video
                         key={slide.videoUrl}
                         src={slide.videoUrl}
+                        poster={slide.imageUrl || undefined}
                         className="w-full h-full object-cover"
                         autoPlay
                         muted
@@ -154,62 +143,37 @@ export default function HomeCarousel() {
                     <img
                         key={slide.imageUrl}
                         src={slide.imageUrl}
-                        alt={slide.title || ""}
-                        className="w-full h-full object-cover"
+                        alt={slideTitle || ""}
+                        className="w-full h-full object-cover animate-fade-in motion-reduce:animate-none"
                         loading={index === 0 ? "eager" : "lazy"}
+                        fetchPriority={index === 0 ? "high" : undefined}
+                        decoding="async"
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                     />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-abyss/80 via-abyss/10 to-transparent" />
 
-                <div className="absolute bottom-4 left-4 right-16">
+                <div className="absolute bottom-4 left-4 right-16 max-h-[65%] overflow-hidden">
                     <SlideBadge badge={slide.badge} />
-                    <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 truncate">
-                        {slide.title}
+                    <h3 className="font-display text-lg sm:text-xl text-frost leading-tight mt-1.5 line-clamp-2">
+                        {slideTitle}
                     </h3>
-                    {slide.subtitle && (
-                        <p className="text-frost/70 text-xs sm:text-sm truncate">{slide.subtitle}</p>
+                    {slideSubtitle && (
+                        <p className="text-frost/80 text-xs sm:text-sm truncate">{slideSubtitle}</p>
                     )}
                     <SlidePrice slide={slide} />
                 </div>
             </Link>
 
             {count > 1 && (
-                <>
-                    <button
-                        type="button"
-                        onClick={() => goTo(index - 1)}
-                        aria-label="Previous slide"
-                        className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="M15 19 8 12l7-7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => goTo(index + 1)}
-                        aria-label="Next slide"
-                        className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-abyss/40 hover:bg-abyss/60 text-frost items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="m9 5 7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-
-                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-                        {slides.map((s, i) => (
-                            <button
-                                key={i}
-                                type="button"
-                                onClick={() => goTo(i)}
-                                aria-label={`Go to slide ${i + 1}`}
-                                aria-current={i === index}
-                                className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-frost" : "w-1.5 bg-frost/40 hover:bg-frost/60"}`}
-                            />
-                        ))}
-                    </div>
-                </>
+                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-abyss/55 backdrop-blur px-2 py-1.5 pointer-events-none" aria-hidden="true">
+                    {slides.map((_, i) => (
+                        <span
+                            key={i}
+                            className={`block h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-frost" : "w-1.5 bg-frost/50"}`}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );

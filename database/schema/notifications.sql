@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 
     type VARCHAR(50) NOT NULL,
     title VARCHAR(150) NOT NULL,
-    message VARCHAR(500) NOT NULL,
+    message TEXT NOT NULL, -- see migrations/139_widen_notification_message.sql
 
     related_order_id INT NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,

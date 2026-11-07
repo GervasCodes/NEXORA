@@ -95,37 +95,33 @@ common case: a same-provider read replica with the same credentials, a
 different host). See `.env.example` for the full var list and
 `tests/unit/config/dbRead.test.js` for the fallback/override behavior.
 
-**Why infra-only this phase:** every existing repository still imports
-`../config/db` untouched — nothing was rewired to actually use the
-replica pool yet. That's intentional, per this phase's restrictions
-(reuse existing architecture, don't modify unrelated functionality,
-preserve backward compatibility): swapping real read traffic onto a
-replica is a per-repository, per-query decision that depends on how
-tolerant each query is of replication lag, and doing that broadly in
-one pass is exactly the kind of change that risks subtle bugs (a
-read-after-write within the same request silently seeing stale data).
+**Current adoption status:** the read-heavy, lag-tolerant candidates
+listed below have since been rewired onto `dbRead` for their `SELECT`
+paths — `product.repository.js`, `service.repository.js`,
+`store.repository.js`, and `review.repository.js` all `require("../config/dbRead")`
+for browsing/listing queries, while writes and any read-after-write in
+the same request still go through the primary `../config/db` pool. When
+`DB_READ_HOST` is unset, `dbRead` is still a no-op re-export of the
+primary pool (see above), so this adoption has zero behavior change
+until a replica is actually provisioned and the env var is set.
 
-**Adoption plan (follow-on work, not done here):**
+**Still on the primary only (by design, not yet migrated):** admin
+analytics/reporting queries, and everything in modules not listed above.
 
-1. **Good first candidates** — read-heavy, lag-tolerant, no
-   read-after-write requirement in the same request: product/service
-   browsing and search (`product.repository.js`, `service.repository.js`),
-   store pages, review listings, admin analytics/reporting queries.
-   Swap `require("../config/db")` for `require("../config/dbRead")` in
-   just those functions' `SELECT`s.
-2. **Must stay on the primary unconditionally:** anything that reads a
-   row it (or the same request) just wrote — order confirmation right
-   after `INSERT`, payment status right after a webhook's `UPDATE`,
-   wallet balance right after a credit — and anything inside a
-   transaction (`getConnection()`/`beginTransaction()` already pins a
-   single dedicated connection, which is correct and shouldn't change).
-3. **Operational prerequisite:** provision the actual MySQL replica
-   (managed-provider read replica, or `mysqldump`+binlog replication for
-   self-hosted) before setting `DB_READ_HOST` anywhere — this phase
-   ships the code path, not the database infrastructure itself.
-4. Roll out module-by-module behind code review, watching for
-   replication-lag-sensitive UX regressions (e.g. "I just posted a
-   review and it's not showing up yet").
+**Must stay on the primary unconditionally:** anything that reads a
+row it (or the same request) just wrote — order confirmation right
+after `INSERT`, payment status right after a webhook's `UPDATE`,
+wallet balance right after a credit — and anything inside a
+transaction (`getConnection()`/`beginTransaction()` already pins a
+single dedicated connection, which is correct and shouldn't change).
+
+**Operational prerequisite (still outstanding):** provision the actual
+MySQL replica (managed-provider read replica, or `mysqldump`+binlog
+replication for self-hosted) before setting `DB_READ_HOST` anywhere —
+the code path is ready, the database infrastructure is not. Continue
+rolling out to remaining candidates (e.g. admin analytics/reporting)
+module-by-module behind code review, watching for replication-lag-sensitive
+UX regressions (e.g. "I just posted a review and it's not showing up yet").
 
 ## 4. Duplicate `NewDispute` bundle/chunk investigation
 

@@ -24,7 +24,7 @@ describe("review.service.getStoreReviews", () => {
 
     it("returns paginated reviews with a rounded average rating", async () => {
         reviewRepository.findBySeller.mockResolvedValue([
-            { id: 1, rating: 5, comment: "Great!", first_name: "Asha", last_name: "M" }
+            { id: 1, rating: 5, comment: "Great!", username: "asha_m" }
         ]);
         reviewRepository.getSellerRatingSummary.mockResolvedValue({
             review_count: 18,
@@ -36,7 +36,7 @@ describe("review.service.getStoreReviews", () => {
         expect(reviewRepository.findBySeller).toHaveBeenCalledWith(42, 10, 0, undefined);
         expect(reviewRepository.getSellerRatingSummary).toHaveBeenCalledWith(42);
         expect(result).toEqual({
-            reviews: [{ id: 1, rating: 5, comment: "Great!", first_name: "Asha", last_name: "M", photos: [] }],
+            reviews: [{ id: 1, rating: 5, comment: "Great!", username: "asha_m", photos: [] }],
             average_rating: 4.6,
             review_count: 18,
             page: 1,

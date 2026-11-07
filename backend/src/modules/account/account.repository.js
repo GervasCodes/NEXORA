@@ -9,7 +9,7 @@ exports.findById = async (userId) => {
                 vehicle_type, vehicle_plate_number, whatsapp_order_updates, data_saver_enabled,
                 notify_order_updates, notify_messages, notify_price_stock_alerts, notify_store_updates,
                 referral_code, loyalty_points, business_account_status,
-                location_sharing_enabled
+                location_sharing_enabled, username, username_changed_at
         FROM users WHERE id = ?`,
         [userId]
     );
@@ -55,6 +55,42 @@ exports.updateProfile = async (userId, data) => {
     params.push(userId);
 
     await db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`, params);
+};
+
+// ---- Usernames (round 5, phase 6) -------------------------------------
+// Case-insensitive lookup: the column's utf8mb4_unicode_ci collation (migration
+// 151) makes "Amina" and "amina" the same value. `excludeUserId` lets a person
+// "re-pick" their own current name without it counting as taken.
+exports.findByUsername = async (username, excludeUserId = null, conn = null) => {
+    const runner = conn || db;
+    const [rows] = await runner.query(
+        "SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1",
+        [username, excludeUserId || 0]
+    );
+    return rows[0];
+};
+
+exports.findUsernameState = async (userId) => {
+    const [rows] = await db.query(
+        "SELECT id, username, username_changed_at FROM users WHERE id = ?",
+        [userId]
+    );
+    return rows[0];
+};
+
+// One guarded UPDATE: the 30-day rule is checked in SQL (with the same clock
+// as every other date in the app), so two quick requests can't both pass it.
+// Returns true when a row changed, false when the cooldown still applies.
+exports.updateUsername = async (userId, username, cooldownDays) => {
+    const [result] = await db.query(
+        `UPDATE users
+        SET username = ?, username_changed_at = NOW()
+        WHERE id = ?
+          AND (username_changed_at IS NULL
+               OR username_changed_at <= NOW() - INTERVAL ? DAY)`,
+        [username, userId, Number(cooldownDays)]
+    );
+    return result.affectedRows > 0;
 };
 
 // (Real Imagery & Avatars): deliberately separate from

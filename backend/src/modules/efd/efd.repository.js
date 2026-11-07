@@ -89,3 +89,58 @@ exports.markFailed = async (id, errorMessage) => {
         [errorMessage, id]
     );
 };
+
+// ---- Retry + credit note (Phase 5, P1) ------------------------------------
+
+exports.findById = async (id) => {
+    const [rows] = await db.query("SELECT * FROM efd_receipts WHERE id = ?", [id]);
+    return rows[0];
+};
+
+exports.markRetried = async (id) => {
+    await db.query(
+        "UPDATE efd_receipts SET retry_count = retry_count + 1, last_retry_at = NOW() WHERE id = ?",
+        [id]
+    );
+};
+
+// failed or stuck pending (submitted but never resolved - a process
+// crash mid-call, say) receipts, capped at a handful of retries so a
+// permanently-broken one (bad TIN, say) doesn't retry forever.
+exports.findRetryable = async (maxRetries = 5, limit = 50) => {
+    const [rows] = await db.query(
+        `SELECT * FROM efd_receipts
+        WHERE status IN ('failed', 'pending') AND retry_count < ?
+        ORDER BY submitted_at ASC
+        LIMIT ?`,
+        [Number(maxRetries), Number(limit)]
+    );
+    return rows;
+};
+
+exports.setCreditNoteStatus = async (id, status) => {
+    await db.query("UPDATE efd_receipts SET credit_note_status = ? WHERE id = ?", [status, id]);
+};
+
+exports.findPendingCreditNotes = async (limit = 50) => {
+    const [rows] = await db.query(
+        "SELECT * FROM efd_receipts WHERE credit_note_status = 'pending' ORDER BY submitted_at ASC LIMIT ?",
+        [Number(limit)]
+    );
+    return rows;
+};
+
+// Admin list (Phase 5, P1) - everything needing attention: a failed
+// receipt, a stuck pending one, or a failed credit note.
+exports.findNeedsAttention = async (limit = 100) => {
+    const [rows] = await db.query(
+        `SELECT r.*, o.order_number
+        FROM efd_receipts r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.status IN ('failed', 'pending') OR r.credit_note_status = 'failed'
+        ORDER BY r.submitted_at DESC
+        LIMIT ?`,
+        [Number(limit)]
+    );
+    return rows;
+};

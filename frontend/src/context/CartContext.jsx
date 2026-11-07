@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "./AuthContext";
+import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
 
 const CartContext = createContext(null);
 
@@ -30,8 +31,8 @@ export function CartProvider({ children }) {
             const { data } = await api.get("/cart");
             setItems(data.data.items);
             setTotal(data.data.total);
-        } catch (error) {
-            console.error("Failed to refresh cart:", error);
+        } catch {
+            // Cart refresh is best-effort; keep the last known cart.
         } finally {
             setLoading(false);
         }
@@ -45,6 +46,7 @@ export function CartProvider({ children }) {
         try {
             await api.post("/cart", { product_id: productId, quantity });
             await refresh();
+            notifyMeaningfulAction();
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };

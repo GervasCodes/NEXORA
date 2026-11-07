@@ -4,6 +4,7 @@ import { formatMoney } from "../../utils/format";
 import Button from "../../components/ui/Button";
 import DataTable from "../../components/ui/DataTable";
 import PageMeta from "../../components/PageMeta";
+import Spinner from "../../components/ui/Spinner";
 
 const PAGE_SIZE = 20;
 
@@ -157,7 +158,7 @@ export default function AdminServices() {
                 bulkActions={selectedIds.length > 0 && (
                     <>
                         <p className="text-xs font-medium">{selectedIds.length} selected</p>
-                        <Button
+                        <Button loading={bulkBusy}
                             variant="secondary"
                             size="sm"
                             onClick={() => bulkSetActive(true)}
@@ -166,7 +167,7 @@ export default function AdminServices() {
                         >
                             Restore selected
                         </Button>
-                        <Button
+                        <Button loading={bulkBusy}
                             variant="secondary"
                             size="sm"
                             onClick={() => bulkSetActive(false)}
@@ -175,11 +176,11 @@ export default function AdminServices() {
                         >
                             Remove selected
                         </Button>
-                        <button
+                        <button aria-busy={bulkBusy || undefined}
                             onClick={() => setSelectedIds([])}
                             disabled={bulkBusy}
                             className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
-                        >
+                        >{bulkBusy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             Clear selection
                         </button>
                     </>
@@ -203,7 +204,7 @@ export default function AdminServices() {
                             {s.is_active ? "Live" : "Removed"}
                         </span>
 
-                        <Button
+                        <Button loading={busyId === s.id}
                             onClick={() => toggleActive(s)}
                             disabled={busyId === s.id}
                             variant="secondary"

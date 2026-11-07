@@ -1,4 +1,4 @@
-import { forwardRef, useId, useState } from "react";
+import { forwardRef, useCallback, useEffect, useId, useRef, useState } from "react";
 
 /**
  * Shared Input / TextField component - Phase 1 Design System Extraction.
@@ -20,6 +20,14 @@ import { forwardRef, useId, useState } from "react";
  * strings (via the app's own t()) without this shared primitive taking a
  * dependency on LanguageContext itself, matching how EmptyState/ErrorState
  * take plain string props rather than reading context directly.
+ *
+ * (Broadcast history - expand instead of scroll): a textarea (`as=
+ * "textarea"`) auto-grows to fit its content instead of clipping it
+ * behind a native scrollbar once it passes its `rows` height. `rows`
+ * still sets the starting size - it's just no longer a hard cap. This
+ * lives here rather than per-page because every multi-line field in the
+ * app (broadcast compose boxes, reviews, dispute details, ...) already
+ * goes through this one component.
  */
 const EyeIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
@@ -48,6 +56,7 @@ const Input = forwardRef(function Input(
         type,
         showPasswordLabel = "Show password",
         hidePasswordLabel = "Hide password",
+        onInput,
         ...rest
     },
     ref
@@ -55,8 +64,38 @@ const Input = forwardRef(function Input(
     const generatedId = useId();
     const inputId = id || generatedId;
     const Tag = as === "textarea" ? "textarea" : "input";
-    const isPassword = as !== "textarea" && type === "password";
+    const isTextarea = as === "textarea";
+    const isPassword = !isTextarea && type === "password";
     const [revealed, setRevealed] = useState(false);
+    const textareaRef = useRef(null);
+
+    const resize = useCallback((node) => {
+        if (!node) return;
+        // Reset first so a shrink (e.g. deleting a line) isn't stuck at
+        // the previous, taller scrollHeight.
+        node.style.height = "auto";
+        node.style.height = `${node.scrollHeight}px`;
+    }, []);
+
+    // Covers the controlled-value case (every textarea in the app sets
+    // `value` from its own state) - resizes on mount and whenever that
+    // value changes, not just on direct user keystrokes, so a value set
+    // programmatically (loading a draft, clearing the field after
+    // submit) is never left clipped.
+    useEffect(() => {
+        if (isTextarea) resize(textareaRef.current);
+    }, [isTextarea, resize, rest.value]);
+
+    const setTextareaRef = useCallback((node) => {
+        textareaRef.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+    }, [ref]);
+
+    const handleInput = (e) => {
+        if (isTextarea) resize(e.target);
+        onInput?.(e);
+    };
 
     return (
         <div className="w-full">
@@ -69,13 +108,15 @@ const Input = forwardRef(function Input(
             <div className="relative">
                 <Tag
                     id={inputId}
-                    ref={ref}
+                    ref={isTextarea ? setTextareaRef : ref}
+                    onInput={handleInput}
                     type={isPassword ? (revealed ? "text" : "password") : type}
                     aria-invalid={error ? "true" : undefined}
                     aria-required={required || undefined}
                     aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
                     className={[
                         "w-full border rounded-md px-3 py-2 text-base bg-paper text-ink focus-ring transition-colors",
+                        isTextarea ? "resize-none overflow-hidden" : "",
                         isPassword ? "pr-10" : "",
                         error ? "border-coral focus:border-coral" : "border-line focus:border-teal",
                         className

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { generateListingDraft, generateMarketingCopy } from "../../api/ai";
+import Spinner from "../../components/ui/Spinner";
 
 // features #6 (listing/description generator) and #8 (AI
 // marketing assistant) share this one control - both are "type a few
@@ -88,12 +89,12 @@ export default function NexoraCopyAssist({ mode, name, category, onApply }) {
                 placeholder={isMarketing ? "Key points to highlight" : "Key features or details"}
                 className="w-full border border-line rounded-md px-2 py-1.5 text-sm focus-ring"
             />
-            <button
+            <button aria-busy={loading || undefined}
                 type="button"
                 onClick={handleGenerate}
                 disabled={loading}
                 className="text-xs font-medium rounded-full bg-gradient-to-br from-azure-light to-azure-deep text-white px-3 py-1.5 disabled:opacity-50"
-            >
+            >{loading && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                 {loading ? "Drafting…" : "Generate draft"}
             </button>
             {error && <p className="text-xs text-coral">{error}</p>}

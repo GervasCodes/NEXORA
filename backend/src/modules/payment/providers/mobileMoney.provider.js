@@ -82,3 +82,19 @@ exports.disburse = async (phone, amount, meta = {}) => {
 exports.refund = async (phone, amount, meta = {}) => {
     return resolveProvider().refund(phone, amount, meta);
 };
+
+// Asks the active provider for the status of one payment attempt.
+// Returns { state: "success" | "failed" | "pending" | "unknown", ... }.
+// Providers that expose no status lookup (Selcom, AzamPay and the dev
+// simulator here) report "unknown" - the stale sweep then falls back to its
+// age cutoff, which is safe because a late success is still applied (or
+// flagged for refund) by the webhook handlers.
+exports.checkStatus = async (reference) => {
+    const provider = activeProvider();
+
+    if (!provider || !provider.isConfigured() || typeof provider.checkStatus !== "function") {
+        return { state: "unknown" };
+    }
+
+    return provider.checkStatus(reference);
+};

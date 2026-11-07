@@ -38,6 +38,16 @@ exports.getStoreCollections = async (req, res) => {
     }
 };
 
+// Public, no auth. Always 200 with an array (possibly empty).
+exports.getStoreServices = async (req, res) => {
+    try {
+        const services = await storeService.getStoreServices(req.params.slug);
+        return res.status(200).json({ success: true, data: services });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 // (UI/UX remediation) - backs the global search box's store
 // suggestions. Always 200 with an array (possibly empty) for the same
 // reasoning getStoreCollections above already documents for this kind

@@ -143,7 +143,7 @@ export default function NexoraDisputeCopilot({ disputeId, onApply }) {
                                     </p>
                                 )}
 
-                                <p className="text-[11px] text-ash/80 pt-1 border-t border-azure/10">
+                                <p className="text-[11px] text-ash pt-1 border-t border-azure/10">
                                     Draft only — Nexora Assistant never resolves a dispute on its own.
                                 </p>
                             </div>

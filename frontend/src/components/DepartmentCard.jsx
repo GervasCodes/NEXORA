@@ -15,19 +15,10 @@ const FALLBACK_GRADIENTS = [
     "linear-gradient(135deg, #1E3A8A 0%, #9FC1F2 100%)"
 ];
 
-//  (item 23) follow-up: the team decided to replace the
-// gradient-and-initial placeholder with a real photo for the
-// "services" department specifically. This is a real, verified,
-// freely-licensed photo (Unsplash License - free for commercial use,
-// no attribution required: https://unsplash.com/license), not a
-// fabricated URL - "Businessmen are shaking hands in a professional
-// gesture" by Ambre Estève (https://unsplash.com/photos/bGczI5fXbmo).
-//
-// Phase 4 (Real Imagery & Avatars) follow-up: the remaining four
-// departments now have a curated cover too, sourced the exact same
-// verified/freely-licensed way (all Unsplash License, all hotlinked
-// from images.unsplash.com - Unsplash's own CDN, not a re-hosted
-// copy):
+// Phase 4 (Real Imagery & Avatars) follow-up: four departments have a
+// curated cover, sourced from verified/freely-licensed photos (all
+// Unsplash License, all hotlinked from images.unsplash.com - Unsplash's
+// own CDN, not a re-hosted copy):
 //  - phones-electronics: "black smartphone" by Balázs Kétyi
 //    (https://unsplash.com/photos/xIcr9ygfhIk)
 //  - fashion-beauty: "assorted-colored clothes on rack near brown
@@ -37,10 +28,13 @@ const FALLBACK_GRADIENTS = [
 //    window" by Minh Pham (https://unsplash.com/photos/OtXADkUh3-I)
 //  - groceries-food: "assorted vegetable lot" by Julian Hanslmaier
 //    (https://unsplash.com/photos/bWg-BeVJPG4)
-// Every department now has a sourced photo, so this is a full curated
-// set rather than the partial rollout it started as.
+// "services" deliberately has no entry here - it's excluded from this
+// department grid entirely (see Home.jsx's DepartmentDiscovery) and
+// rendered as its own tile instead. A previous "services" entry here
+// pointed at a Pinterest pin page rather than a real image file (round-3
+// audit) and never rendered reliably; removed rather than fixed, since
+// this map isn't read for that tile in the first place.
 const CURATED_COVER_IMAGES = {
-    "services": "https://www.pinterest.com/pin/492229434296870277/fm=jpg&q=80&w=1200&auto=format&fit=crop",
     "phones-electronics": "https://images.unsplash.com/photo-1545063328-c8e3faffa16f?q=80&w=1200&auto=format&fit=crop",
     "fashion-beauty": "https://images.unsplash.com/photo-1573612664822-d7d347da7b80?q=80&w=1200&auto=format&fit=crop",
     "home-living": "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=1200&auto=format&fit=crop",
@@ -49,13 +43,18 @@ const CURATED_COVER_IMAGES = {
 
 export default function DepartmentCard({ department, index }) {
     const gradient = FALLBACK_GRADIENTS[index % FALLBACK_GRADIENTS.length];
-    const trending = department.trending || [];
     const coverImage = department.cover_image_url || CURATED_COVER_IMAGES[department.slug];
 
     return (
         <Link
             to={`/departments/${department.slug}`}
-            className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+            // Subtle staggered entrance (Phase 3: modernize the department
+            // grid's visual treatment) - additive only, reuses the
+            // existing "fade-in" keyframe/animation rather than adding a
+            // second animation system. Doesn't touch DepartmentDiscovery's
+            // data-fetching.
+            style={{ animationDelay: `${Math.min(index, 9) * 40}ms` }}
+            className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all animate-fade-in"
         >
             <div className="aspect-[4/3] relative overflow-hidden" style={!coverImage ? { background: gradient } : undefined}>
                 {coverImage ? (
@@ -75,43 +74,10 @@ export default function DepartmentCard({ department, index }) {
                     title={department.name}
                     subtitle={`${department.productCount} ${department.productCount === 1 ? "product" : "products"}`}
                 />
-                {department.is_sponsored ? (
-                    <CornerBadge corner="top-right" shape="pill" tone="bg-mango text-abyss" label="Sponsored" />
-                ) : department.newCount > 0 && (
+                {department.newCount > 0 && (
                     <CornerBadge corner="top-right" shape="pill" tone="bg-teal text-frost" label={`${department.newCount} new`} />
                 )}
             </div>
-
-            {trending.length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2.5 border-t border-line">
-                    <span className="text-[10px] uppercase tracking-wide text-ash shrink-0">Trending</span>
-                    <div className="flex -space-x-2 shrink-0">
-                        {trending.map((product) => (
-                            <div key={product.id} className="w-7 h-7 rounded-full border-2 border-paper bg-line/50 overflow-hidden shrink-0">
-                                {product.image_url ? (
-                                    <img src={product.image_url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                    {/* Mobile UI/UX audit: this row sits inside a 2-column
-                        grid tile (grid-cols-2 on the smallest breakpoint -
-                        see Home.jsx's DepartmentDiscovery), so it's often
-                        under 160px wide once the tile's own padding is
-                        subtracted. `truncate` alone does nothing on a flex
-                        child with the default `min-width: auto` - a long
-                        product name just kept the row (and the tile) at
-                        its full content width instead of clipping,
-                        overflowing the card at exactly the widths this
-                        was meant to protect. flex-1 min-w-0 lets it
-                        actually shrink to the space left after the label
-                        and avatar stack, so truncate has something to work
-                        with. */}
-                    <p className="text-xs text-ash truncate flex-1 min-w-0">
-                        {trending[0].name}
-                    </p>
-                </div>
-            )}
         </Link>
     );
 }

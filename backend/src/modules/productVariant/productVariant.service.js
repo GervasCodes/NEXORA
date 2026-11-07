@@ -80,6 +80,7 @@ exports.replaceForProduct = async (sellerId, productId, rawOptions, rawVariants)
             sku: rawVariant.sku,
             price_delta: Number(rawVariant.price_delta) || 0,
             stock: Math.max(0, Number(rawVariant.stock) || 0),
+            stock_baseline: rawVariant.stock_baseline,
             image_url: rawVariant.image_url
         });
     }

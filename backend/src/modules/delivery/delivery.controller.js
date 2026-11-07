@@ -148,13 +148,22 @@ exports.getMyRatingSummary = async (req, res) => {
 
 exports.updateDeliveryStatus = async (req, res) => {
     try {
-        const { status, notes } = req.body;
+        const { status, notes, handover_code, delivery_lat, delivery_lng } = req.body;
 
         await deliveryService.updateDeliveryStatus(
             req.params.orderId,
             req.user.id,
             status,
-            notes
+            notes,
+            // Delivery proof (Phase 5) - only meaningful (and only ever
+            // sent by the app) when status === "delivered"; harmless
+            // undefined otherwise.
+            {
+                handoverCode: handover_code,
+                deliveryLat: delivery_lat ? Number(delivery_lat) : null,
+                deliveryLng: delivery_lng ? Number(delivery_lng) : null,
+                dropoffPhotoFile: req.file || null
+            }
         );
 
         return res.json({
@@ -167,5 +176,18 @@ exports.updateDeliveryStatus = async (req, res) => {
             success: false,
             message: error.message
         });
+    }
+};
+
+// Pickup confirmation photo (Phase 5, P1).
+exports.confirmPickupPhoto = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "A photo is required" });
+        }
+        await deliveryService.confirmPickupPhoto(req.params.orderId, req.user.id, req.file);
+        return res.json({ success: true, message: "Pickup photo recorded" });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
     }
 };

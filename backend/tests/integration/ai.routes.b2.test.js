@@ -22,12 +22,21 @@ const queueAuthMiddlewareCheck = () => {
 // then sellerRepository.findByUserId (store profile exists).
 const queueApprovedSellerChecks = () => {
     db.query.mockResolvedValueOnce([[{ account_verification_status: "approved" }]]);
-    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 1 }]]);
+    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1 }]]);
 };
 
-// requireVerificationFeePaid re-reads the seller profile again.
-const queueVerificationFeeCheck = () => {
-    db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 1 }]]);
+// requireSubscriptionTier reads the seller's trial row first, then their
+// entitled plan (trial.service#getAccessState). The trial here is over, so
+// only a paid plan opens the gate.
+const queueTrialOver = () => {
+    db.query.mockResolvedValueOnce([[{
+        in_trial: 0, days_left: 0, trial_started_at: new Date("2026-10-01"), trial_ends_at: new Date("2026-10-08")
+    }]]);
+};
+
+const queueSubscriptionTierCheck = (planCode = "growth") => {
+    queueTrialOver();
+    db.query.mockResolvedValueOnce([[{ id: 1, seller_id: 1, status: "active", plan_code: planCode, current_period_end: null }]]);
 };
 
 const queueApprovedDeliveryAgentCheck = () => {
@@ -99,27 +108,26 @@ describe("POST /api/v1/ai/seller/marketing-copy", () => {
 });
 
 describe("GET /api/v1/ai/seller/analytics/summary", () => {
-    it("requires the verification fee gate in addition to seller approval", async () => {
+    it("requires a paid subscription tier in addition to seller approval", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        db.query.mockResolvedValueOnce([[{ id: 1, user_id: 1, verification_fee_paid: 0 }]]);
-        // Monetization master switch check inside requireVerificationFeePaid
+        // Trial over and no active plan at all (implicit free plan).
+        queueTrialOver();
         db.query.mockResolvedValueOnce([[]]);
 
         const res = await request(app)
             .get("/api/v1/ai/seller/analytics/summary")
             .set("Authorization", `Bearer ${signToken()}`);
 
-        // Either blocked (fee monetization on) or allowed through
-        // (monetization off) - either way it must not 500, and the
-        // service call only happens if it passed the gate.
-        expect([200, 403]).toContain(res.status);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe("SUBSCRIPTION_REQUIRED");
+        expect(aiService.summarizeSellerAnalytics).not.toHaveBeenCalled();
     });
 
     it("returns the AI summary once every gate passes", async () => {
         queueAuthMiddlewareCheck();
         queueApprovedSellerChecks();
-        queueVerificationFeeCheck();
+        queueSubscriptionTierCheck();
         aiService.summarizeSellerAnalytics.mockResolvedValue({ summary: "Solid month.", aiGenerated: true });
 
         const res = await request(app)

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import PageMeta from "../components/PageMeta";
 import Button from "../components/ui/Button";
+import { useLanguage } from "../context/LanguageContext";
 
 // (New UI/UX & Imagery Additions, item 22): extracted from the
 // inline `<Route path="*">` fallback in App.jsx into a real page so it
@@ -11,9 +12,10 @@ import Button from "../components/ui/Button";
 // doesn't need real photography, and an SVG scales cleanly at any size
 // with no asset to source.
 export default function NotFound() {
+    const { t } = useLanguage();
     return (
         <div className="max-w-lg mx-auto py-24 px-6 text-center">
-            <PageMeta title="Page not found" noIndex />
+            <PageMeta title={t("notFound.title")} noIndex />
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
@@ -21,6 +23,7 @@ export default function NotFound() {
                 stroke="currentColor"
                 strokeWidth="1.2"
                 className="w-20 h-20 mx-auto mb-6 text-line"
+                aria-hidden="true"
             >
                 <circle cx="12" cy="12" r="9" />
                 <path d="M9.5 14.5l2.2-5 2.8 2-2.2 5-2.8-2Z" />
@@ -31,10 +34,10 @@ export default function NotFound() {
                 heading element at all - a screen-reader user landing here
                 after a broken link got no "page title" announcement, just
                 body text. Promoted to <h1>; visual style unchanged. */}
-            <h1 className="font-display text-2xl mb-2">Page not found</h1>
-            <p className="text-ash text-sm mb-6">The page you're looking for doesn't exist or may have moved.</p>
+            <h1 className="font-display text-2xl mb-2">{t("notFound.title")}</h1>
+            <p className="text-ash text-sm mb-6">{t("notFound.body")}</p>
             <Button as={Link} to="/">
-                Go to Home
+                {t("notFound.goHome")}
             </Button>
         </div>
     );

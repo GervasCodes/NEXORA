@@ -3,9 +3,14 @@ const fraudService = require("../fraud/fraud.service");
 const auditRepository = require("../audit/audit.repository");
 const { EVENT_TYPE_GROUPS } = require("../audit/audit.constants");
 const refundService = require("../refund/refund.service");
+const { wantsPaging } = require("../../utils/adminListQuery");
 
 exports.listUsers = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listUsersPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const users = await adminService.listUsers();
 
         return res.json({ success: true, data: users });
@@ -29,6 +34,10 @@ exports.getUserMap = async (req, res) => {
 
 exports.listDeletedUsers = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listDeletedUsersPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const users = await adminService.listDeletedUsers();
 
         return res.json({ success: true, data: users });
@@ -91,6 +100,10 @@ exports.unsuspendUser = async (req, res) => {
 
 exports.listSellers = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listSellersPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const sellers = await adminService.listSellers();
 
         return res.json({ success: true, data: sellers });
@@ -102,6 +115,10 @@ exports.listSellers = async (req, res) => {
 
 exports.listDeliveryAgents = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listDeliveryAgentsPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const agents = await adminService.listDeliveryAgents();
 
         return res.json({ success: true, data: agents });
@@ -253,6 +270,10 @@ exports.unsponsorProduct = async (req, res) => {
 
 exports.listOrders = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listAllOrdersPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const orders = await adminService.listAllOrders(req.query);
 
         return res.json({ success: true, data: orders });
@@ -281,6 +302,16 @@ exports.getCoverageHeatmap = async (req, res) => {
 
         return res.json({ success: true, data: heatmap });
 
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Phase 2: follow-up list of sellers without a verified store pin.
+exports.getSellersWithoutPin = async (req, res) => {
+    try {
+        const data = await adminService.getSellersWithoutVerifiedPin();
+        return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }
@@ -439,68 +470,19 @@ exports.getSettings = async (req, res) => {
 
 exports.updateSettings = async (req, res) => {
     try {
-        const settings = await adminService.updateSettings(req.body);
+        const settings = await adminService.updateSettings(req.body, req.user.id);
 
         return res.json({ success: true, message: "Settings updated", data: settings });
 
     } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
+        return res.status(error.status || 400).json({ success: false, message: error.message, code: error.code });
     }
 };
 
-// --- Monetization Master Switch (Admin Billing Control Center) ---
-
-exports.getMonetizationStatus = async (req, res) => {
+exports.getSettingHistory = async (req, res) => {
     try {
-        const status = await adminService.getMonetizationStatus();
-
-        return res.json({ success: true, data: status });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.updateMonetizationSettings = async (req, res) => {
-    try {
-        const status = await adminService.updateMonetizationSettings(req.body, req.user.id);
-
-        return res.json({ success: true, message: "Monetization settings updated", data: status });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.listMonetizationSchedule = async (req, res) => {
-    try {
-        const schedule = await adminService.listMonetizationSchedule();
-
-        return res.json({ success: true, data: schedule });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.createMonetizationSchedule = async (req, res) => {
-    try {
-        const { setting_key, enabled, scheduled_at } = req.body;
-        const result = await adminService.createMonetizationSchedule(setting_key, enabled, scheduled_at, req.user.id);
-
-        return res.json({ success: true, message: "Scheduled", data: result });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-exports.cancelMonetizationSchedule = async (req, res) => {
-    try {
-        await adminService.cancelMonetizationSchedule(req.params.id, req.user.id);
-
-        return res.json({ success: true, message: "Scheduled change cancelled" });
-
+        const data = await adminService.getSettingHistory(req.params.key);
+        return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }
@@ -528,27 +510,30 @@ exports.listFeaturedStoreCampaigns = async (req, res) => {
     }
 };
 
-exports.listDepartmentSponsorshipCampaigns = async (req, res) => {
-    try {
-        const campaigns = await adminService.listDepartmentSponsorshipCampaigns();
-
-        return res.json({ success: true, data: campaigns });
-
-    } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-};
-
 // --- Seller withdrawal requests ---
 
 exports.listWithdrawals = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listWithdrawalsPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const withdrawals = await adminService.listWithdrawals();
 
         return res.json({ success: true, data: withdrawals });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.revealWithdrawalPayoutDetails = async (req, res) => {
+    try {
+        const data = await adminService.revealWithdrawalPayoutDetails(req.params.id, req.user.id, req);
+        res.set("Cache-Control", "no-store");
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
     }
 };
 
@@ -576,9 +561,21 @@ exports.rejectWithdrawal = async (req, res) => {
 
 exports.markWithdrawalPaid = async (req, res) => {
     try {
-        const result = await adminService.markWithdrawalPaid(req.params.id, req.body.admin_note);
+        const result = await adminService.markWithdrawalPaid(req.params.id, req.body.admin_note, req.body.payout_reference);
 
         return res.json({ success: true, message: "Withdrawal marked as paid", data: result });
+
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// Negative seller balances (Phase 2)
+exports.listNegativeBalanceSellers = async (req, res) => {
+    try {
+        const sellers = await adminService.listNegativeBalanceSellers();
+
+        return res.json({ success: true, data: sellers });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
@@ -619,6 +616,10 @@ exports.releaseBookingEscrow = async (req, res) => {
 
 exports.listAdmins = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await adminService.listAdminsPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const admins = await adminService.listAdmins();
 
         return res.json({ success: true, data: admins });
@@ -663,6 +664,10 @@ exports.removeAdmin = async (req, res) => {
 
 exports.listFraudFlags = async (req, res) => {
     try {
+        if (wantsPaging(req.query)) {
+            const { items, meta } = await fraudService.listOpenFlagsPaged(req.query);
+            return res.json({ success: true, data: items, meta });
+        }
         const flags = await fraudService.listOpenFlags();
 
         return res.json({ success: true, data: flags });
@@ -791,6 +796,26 @@ exports.resolveFraudFlag = async (req, res) => {
 
         return res.json({ success: true, message: "Flag updated." });
 
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// --- Phase 8: withdrawal decision context and queue badges ---
+
+exports.getWithdrawalContext = async (req, res) => {
+    try {
+        const data = await adminService.getWithdrawalContext(req.params.id);
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};
+
+exports.getQueueCounts = async (req, res) => {
+    try {
+        const data = await adminService.getQueueCounts();
+        return res.json({ success: true, data });
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
     }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "../../api/client";
 import { formatDate } from "../../utils/format";
-import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import { useLanguage } from "../../context/LanguageContext";
+import { SkeletonPage } from "../../components/Skeleton";
 
 export default function DeliveryRatings() {
     const { t } = useLanguage();
@@ -18,7 +18,7 @@ export default function DeliveryRatings() {
             .finally(() => setLoading(false));
     }, [t]);
 
-    if (loading) return <PageLoader />;
+    if (loading) return <SkeletonPage rows={4} avatar />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!summary) return null;
 

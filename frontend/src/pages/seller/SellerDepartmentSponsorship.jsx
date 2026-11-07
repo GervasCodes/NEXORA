@@ -5,8 +5,13 @@ import PageLoader from "../../components/PageLoader";
 import BillingStatusBanner from "../../components/BillingStatusBanner";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import { useLanguage } from "../../context/LanguageContext";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
+import { IncludedCreditsBanner, FundingBreakdown } from "../../components/SponsorshipCredits";
+import { computeFunding } from "../../utils/sponsorshipCredits";
+import Spinner from "../../components/ui/Spinner";
 
 const STATUS_STYLES = {
     active: "bg-teal/10 text-teal",
@@ -15,7 +20,9 @@ const STATUS_STYLES = {
 };
 
 
-export default function SellerDepartmentSponsorship({ embedded = false }) {
+export default function SellerDepartmentSponsorship({ embedded = false, onCampaignsChanged }) {
+    const { t } = useLanguage();
+    const [confirmCancel, setConfirmCancel] = useState(null);
     const [pricing, setPricing] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -47,7 +54,7 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
 
     useEffect(load, []);
 
-    const totalCost = pricing ? pricing.daily_rate * Number(days || 0) : 0;
+    const funding = pricing ? computeFunding(pricing, days) : null;
 
     const submitCampaign = async (e) => {
         e.preventDefault();
@@ -63,6 +70,9 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
             setDays(7);
             setShowForm(false);
             load();
+            // Starting a campaign may have spent included credits - let the
+            // Promote hub (which shows the balance) refresh its copy.
+            onCampaignsChanged?.();
         } catch (err) {
             setFormError(extractErrorMessage(err));
         } finally {
@@ -70,11 +80,27 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
         }
     };
 
-    const cancelCampaign = async (campaign) => {
+    const openCancel = async (campaign) => {
+        setBusyId(campaign.id);
+        setError("");
+        try {
+            const { data } = await api.get(`/seller/department-sponsorship/campaigns/${campaign.id}/cancel-preview`);
+            setConfirmCancel({ campaign, preview: data.data });
+        } catch (err) {
+            setError(extractErrorMessage(err));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const cancelCampaign = async () => {
+        if (!confirmCancel) return;
+        const { campaign } = confirmCancel;
         setBusyId(campaign.id);
         setError("");
         try {
             await api.put(`/seller/department-sponsorship/campaigns/${campaign.id}/cancel`);
+            setConfirmCancel(null);
             load();
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -83,11 +109,39 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
         }
     };
 
+    const cancelDescription = confirmCancel ? (
+        <div className="space-y-1 text-sm">
+            {confirmCancel.preview.can_cancel === false ? (
+                <p>{confirmCancel.preview.reason}</p>
+            ) : (
+                <>
+                    <p>{t("seller.sponsorship.cancelRefund")}: {formatMoney(confirmCancel.preview.refund_amount)}</p>
+                    <p>
+                        {confirmCancel.preview.credit_days > 0
+                            ? `${t("seller.sponsorship.cancelCredits")}: ${confirmCancel.preview.credit_days}`
+                            : t("seller.sponsorship.cancelNoCredits")}
+                    </p>
+                </>
+            )}
+        </div>
+    ) : null;
+
     if (loading) return <PageLoader />;
     if (error) return <p role="alert" className="text-coral text-sm">{error}</p>;
     if (!pricing) return null;
 
     return (
+        <>
+        <ConfirmDialog
+            open={Boolean(confirmCancel)}
+            title={t("seller.sponsorship.cancelTitle")}
+            description={cancelDescription}
+            confirmLabel={t("seller.sponsorship.cancelConfirm")}
+            cancelLabel={t("seller.sponsorship.cancelKeep")}
+            danger
+            onConfirm={confirmCancel && confirmCancel.preview.can_cancel === false ? () => setConfirmCancel(null) : cancelCampaign}
+            onCancel={() => setConfirmCancel(null)}
+        />
         <div>
             {!embedded && (
                 <>
@@ -97,10 +151,16 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
             )}
             <p className="text-ash text-sm mb-8">
                 Pay to bump a department to the front of the homepage "Shop by department" grid.
-                Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance.
+                Currently {formatMoney(pricing.daily_rate)} per day, charged from your wallet balance once your plan's included credits are used up.
             </p>
 
-            <BillingStatusBanner flagKey="monetization_sponsorship_enabled" label="Department sponsorship" />
+            <BillingStatusBanner
+                flagKey="monetization_sponsorship_enabled"
+                label="Department sponsorship"
+                offTitle="Paid sponsorship isn't available yet — included credits still work"
+            />
+            {/* Embedded in the Promote hub, which shows the balance once above the tabs. */}
+            {!embedded && <IncludedCreditsBanner credits={pricing.included_credits} />}
 
             <div className="border border-line rounded-lg p-6 mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -154,15 +214,13 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
                         onChange={(e) => setDays(e.target.value)}
                     />
 
-                    <p className="text-sm">
-                        Total cost: <span className="price font-medium">{formatMoney(totalCost)}</span>
-                    </p>
+                    <FundingBreakdown pricing={pricing} days={days} />
 
-                    <button
+                    <button aria-busy={submitting || undefined}
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || funding?.blocked}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-medium disabled:opacity-50"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Starting…" : "Start campaign"}
                     </button>
                 </form>
@@ -184,17 +242,18 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
                             <p className="text-xs text-ash">
                                 {c.days} day{c.days === 1 ? "" : "s"} at {formatMoney(c.daily_rate)}/day ·
                                 {" "}total {formatMoney(c.total_cost)}
+                                {c.credits_used > 0 && ` · ${c.credits_used} day${c.credits_used === 1 ? "" : "s"} covered by included credits`}
                             </p>
                             <p className="text-xs text-ash mb-2">
                                 {formatDate(c.starts_at)} → {formatDate(c.ends_at)}
                             </p>
                             {c.status === "active" && (
                                 <div>
-                                    <button
-                                        onClick={() => cancelCampaign(c)}
+                                    <button aria-busy={busyId === c.id || undefined}
+                                        onClick={() => openCancel(c)}
                                         disabled={busyId === c.id}
                                         className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-coral hover:text-coral transition-colors disabled:opacity-50"
-                                    >
+                                    >{busyId === c.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                         Cancel campaign
                                     </button>
                                     <span className="text-xs text-ash ml-2">No refund for remaining days</span>
@@ -205,5 +264,6 @@ export default function SellerDepartmentSponsorship({ embedded = false }) {
                 </ul>
             )}
         </div>
+        </>
     );
 }

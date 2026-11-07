@@ -104,9 +104,9 @@ async function seedAdmin(connection) {
     const hashed = await bcrypt.hash(password, 10);
 
     await connection.query(
-        `INSERT INTO users (first_name, last_name, email, phone, password, role)
-         VALUES (?, ?, ?, ?, ?, 'admin')`,
-        ["NEXORA", "Admin", email, phone, hashed]
+        `INSERT INTO users (first_name, last_name, email, phone, password, role, username)
+         VALUES (?, ?, ?, ?, ?, 'admin', ?)`,
+        ["NEXORA", "Admin", email, phone, hashed, "nexora.admin"]
     );
 
     console.log(`Created initial admin account (${email}). Change the password after first login.`);

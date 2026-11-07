@@ -84,7 +84,7 @@ export default function AdminStoreTypes() {
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring flex-1 min-w-[160px] sm:min-w-[200px]"
                 />
-                <Button type="submit" disabled={submitting}>
+                <Button loading={submitting} type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : editingId ? "Save changes" : "Add store type"}
                 </Button>
                 {editingId && (
@@ -112,7 +112,7 @@ export default function AdminStoreTypes() {
                             Edit
                         </button>
 
-                        <Button
+                        <Button loading={busyId === t.id}
                             onClick={() => toggleActive(t)}
                             disabled={busyId === t.id}
                             variant="secondary"

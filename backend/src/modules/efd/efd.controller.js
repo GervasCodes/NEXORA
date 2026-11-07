@@ -54,3 +54,22 @@ exports.verifyRegistration = async (req, res) => {
         return res.status(400).json({ success: false, message: error.message });
     }
 };
+
+// Admin queue (Phase 5, P1).
+exports.listNeedsAttention = async (req, res) => {
+    try {
+        const data = await efdService.listNeedsAttention();
+        return res.json({ success: true, data: { receipts: data, count: data.length } });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+exports.retryReceipt = async (req, res) => {
+    try {
+        const data = await efdService.retryReceipt(req.params.id);
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};

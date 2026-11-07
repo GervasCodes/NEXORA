@@ -96,3 +96,57 @@ describe("ProductGrid view toggle (Phase 4A)", () => {
         expect(screen.getByLabelText("List view")).toHaveAttribute("aria-pressed", "true");
     });
 });
+
+describe("ProductGrid stale-response guard (Phase 6.1 follow-up)", () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+        mockGet.mockReset();
+    });
+
+    it("ignores an earlier request's response if it resolves after a newer one", async () => {
+        // First call (params={}) resolves LATE, after the second call
+        // (params={ seller: 2 }) has already resolved - simulates an
+        // out-of-order response on a slow/flaky connection. The grid
+        // should end up showing the second, newer result, not the first.
+        let resolveFirst;
+        const firstPromise = new Promise((resolve) => { resolveFirst = resolve; });
+
+        mockGet
+            .mockImplementationOnce(() => firstPromise)
+            .mockImplementationOnce(() => Promise.resolve({
+                data: {
+                    data: [{ ...SAMPLE_PRODUCT, id: 2, name: "Newer product" }],
+                    pagination: { totalPages: 1, total: 1 }
+                }
+            }));
+
+        const { rerender } = render(
+            <MemoryRouter>
+                <ProductGrid params={{}} />
+            </MemoryRouter>
+        );
+
+        rerender(
+            <MemoryRouter>
+                <ProductGrid params={{ seller: 2 }} />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => expect(screen.getByText("Newer product")).toBeInTheDocument());
+
+        // Now let the stale first request resolve - it must not overwrite
+        // the grid with its (older) product.
+        resolveFirst({
+            data: {
+                data: [{ ...SAMPLE_PRODUCT, id: 1, name: "Sample product" }],
+                pagination: { totalPages: 1, total: 1 }
+            }
+        });
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(screen.getByText("Newer product")).toBeInTheDocument();
+        expect(screen.queryByText("Sample product")).not.toBeInTheDocument();
+    });
+});

@@ -4,6 +4,10 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import NexoraFraudExplain from "../../components/ai/NexoraFraudExplain";
 import PageMeta from "../../components/PageMeta";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
+import Spinner from "../../components/ui/Spinner";
 
 const SEVERITY_CONFIG = {
     high: {
@@ -99,19 +103,19 @@ function FlagCard({ flag, busy, onResolve }) {
                         </Link>
                     )}
 
-                    <button
+                    <button aria-busy={busy || undefined}
                         onClick={() => onResolve(flag.id, "dismissed")}
                         disabled={busy}
                         className="text-xs px-3 py-1.5 rounded-lg border border-line hover:border-ink/40 hover:bg-line/30 transition-all disabled:opacity-50"
-                    >
+                    >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {busy ? "Working…" : "Dismiss"}
                     </button>
 
-                    <button
+                    <button aria-busy={busy || undefined}
                         onClick={() => onResolve(flag.id, "confirmed")}
                         disabled={busy}
                         className="text-xs px-3 py-1.5 rounded-lg bg-coral text-white hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 font-medium"
-                    >
+                    >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {busy ? "Working…" : "Confirm fraud"}
                     </button>
                 </div>
@@ -121,26 +125,19 @@ function FlagCard({ flag, busy, onResolve }) {
 }
 
 export default function AdminFraud() {
-    const [flags, setFlags] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [busyId, setBusyId] = useState(null);
     const [aiRefresh, setAiRefresh] = useState(0);
 
-    const load = () => {
-        api.get("/admin/fraud-flags")
-            .then(({ data }) => setFlags(data.data))
-            .catch(() => setError("Couldn't load fraud flags."))
-            .finally(() => setLoading(false));
-    };
-
-    useEffect(load, []);
+    const list = useAdminPagedList("/admin/fraud-flags", { onError: setError });
+    const { items: flags, loading, meta } = list;
+    const load = list.reload;
 
     const resolve = async (id, status) => {
         setBusyId(id);
         try {
             await api.put(`/admin/fraud-flags/${id}/resolve`, { status });
-            setFlags((prev) => prev.filter((f) => f.id !== id));
+            load();
             setAiRefresh((n) => n + 1);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -209,7 +206,7 @@ export default function AdminFraud() {
                 </div>
             )}
 
-            {!loading && flags.length === 0 && !error && (
+            {!loading && flags.length === 0 && !error && !list.filters.q && (
                 <div className="text-center py-16 text-ash">
                     <div className="w-12 h-12 rounded-full bg-teal/10 flex items-center justify-center mx-auto mb-3">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-6 h-6 text-teal">
@@ -219,6 +216,18 @@ export default function AdminFraud() {
                     <p className="font-medium text-ink mb-1">All clear</p>
                     <p className="text-sm">No open fraud flags right now.</p>
                 </div>
+            )}
+
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search order number, buyer or seller"
+                ariaLabel="Search fraud flags"
+            />
+
+            {!loading && flags.length === 0 && list.filters.q && (
+                <p className="text-sm text-ash mb-6">No open flags match that search.</p>
             )}
 
             <ul className="space-y-3">
@@ -231,6 +240,8 @@ export default function AdminFraud() {
                     />
                 ))}
             </ul>
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Fraud flag pages" />
         </div>
     );
 }

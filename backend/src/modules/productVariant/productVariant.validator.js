@@ -30,6 +30,10 @@ exports.replaceValidation = [
         .optional()
         .isInt({ min: 0 })
         .withMessage("Stock must be zero or more"),
+    body("variants.*.stock_baseline")
+        .optional({ nullable: true })
+        .isInt({ min: 0 })
+        .withMessage("Invalid stock baseline"),
     body("variants.*.price_delta")
         .optional()
         .isFloat()

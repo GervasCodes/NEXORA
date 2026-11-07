@@ -55,9 +55,9 @@ describe("POST /api/v1/payments/webhooks/malipopay - payloadSignature verificati
     it("processes a webhook with a correctly computed payloadSignature", async () => {
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
-            .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // paymentRepository.findByOrderId
+            .mockResolvedValueOnce([[{ id: 1, status: "pending", amount: 10000 }]]) // paymentRepository.findByOrderId
             .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]) // orderRepository.findOrderById (orderForNotify, fetched up front)
-            .mockResolvedValueOnce([{}]) // markCompleted
+            .mockResolvedValueOnce([{ affectedRows: 1 }]) // claimCompleted
             .mockResolvedValueOnce([{}]) // orderRepository.updatePaymentStatus
             .mockResolvedValueOnce([[{ id: 5, is_parent: 0, buyer_id: 1 }]]); // orderRepository.findOrderById (is_parent check)
 
@@ -105,7 +105,7 @@ describe("POST /api/v1/payments/webhooks/selcom - Bearer token auth", () => {
             .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
             .mockResolvedValueOnce([[{ id: 1, status: "pending" }]])
             .mockResolvedValueOnce([[{ id: 6, is_parent: 0, buyer_id: 1 }]])
-            .mockResolvedValueOnce([{}])
+            .mockResolvedValueOnce([{ affectedRows: 1 }])
             .mockResolvedValueOnce([{}])
             .mockResolvedValueOnce([[{ id: 6, is_parent: 0, buyer_id: 1 }]]);
 
@@ -171,9 +171,9 @@ describe("POST /api/v1/payments/webhooks/snippe - raw-body HMAC signature", () =
 
         db.query
             .mockResolvedValueOnce([{ insertId: 1 }]) // webhookReplayGuard.recordDelivery INSERT
-            .mockResolvedValueOnce([[{ id: 1, status: "pending" }]]) // findByOrderId
+            .mockResolvedValueOnce([[{ id: 1, status: "pending", amount: 10000 }]]) // findByOrderId
             .mockResolvedValueOnce([[{ id: 9, is_parent: 0, buyer_id: 1 }]]) // findOrderById (orderForNotify, fetched up front)
-            .mockResolvedValueOnce([{}]) // markCompleted
+            .mockResolvedValueOnce([{ affectedRows: 1 }]) // claimCompleted
             .mockResolvedValueOnce([{}]) // updatePaymentStatus
             .mockResolvedValueOnce([[{ id: 9, is_parent: 0, buyer_id: 1 }]]); // findOrderById (is_parent check)
 
@@ -185,5 +185,60 @@ describe("POST /api/v1/payments/webhooks/snippe - raw-body HMAC signature", () =
 
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
+    });
+});
+
+describe("webhook auth - fail closed outside production too", () => {
+    const original = { ...process.env };
+    afterEach(() => {
+        process.env = { ...original };
+    });
+
+    const post = () => request(app)
+        .post("/api/v1/payments/webhooks/malipopay")
+        .send({ reference: "ORDER-1", status: "PENDING", amount: 1, timestamp: "x", customer: { phoneNumber: "255" } });
+
+    it("rejects an unsigned malipopay webhook in a non-production environment when no secret is configured", async () => {
+        process.env.NODE_ENV = "test";
+        delete process.env.MOBILE_MONEY_API_KEY;
+        delete process.env.ALLOW_UNSIGNED_WEBHOOKS;
+
+        const res = await post();
+
+        expect(res.body.success).toBe(false);
+        expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it("lets it through only with an explicit ALLOW_UNSIGNED_WEBHOOKS=true (local development)", async () => {
+        process.env.NODE_ENV = "test";
+        delete process.env.MOBILE_MONEY_API_KEY;
+        process.env.ALLOW_UNSIGNED_WEBHOOKS = "true";
+        db.query.mockResolvedValueOnce([{ insertId: 1 }]);
+
+        const res = await post();
+
+        expect(res.body).toMatchObject({ success: true, ignored: true });
+    });
+
+    it("ignores ALLOW_UNSIGNED_WEBHOOKS in production", async () => {
+        process.env.NODE_ENV = "production";
+        delete process.env.MOBILE_MONEY_API_KEY;
+        process.env.ALLOW_UNSIGNED_WEBHOOKS = "true";
+
+        const res = await post();
+
+        expect(res.body.success).toBe(false);
+    });
+
+    it("rejects a Selcom webhook from an IP outside SELCOM_WEBHOOK_ALLOWED_IPS even with the right token", async () => {
+        process.env.SELCOM_WEBHOOK_ALLOWED_IPS = "203.0.113.9";
+
+        const res = await request(app)
+            .post("/api/v1/payments/webhooks/selcom")
+            .set("Authorization", `Bearer ${process.env.SELCOM_WEBHOOK_SECRET}`)
+            .send({ transid: "ORDER-6", resultcode: "000", result: "SUCCESS" });
+
+        expect(res.body.success).toBe(false);
+        expect(db.query).not.toHaveBeenCalled();
     });
 });

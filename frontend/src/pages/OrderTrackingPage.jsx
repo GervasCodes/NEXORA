@@ -11,6 +11,7 @@ import { ORDER_STATE, SEARCH_STAGE, getOrderState, getSearchStageFromElapsed } f
 import useSmoothPosition from "../hooks/useSmoothPosition";
 import Skeleton from "../components/Skeleton";
 import PageMeta from "../components/PageMeta";
+import PullToRefresh from "../components/ui/PullToRefresh";
 
 const SEARCH_STAGE_COPY_KEY = {
     [SEARCH_STAGE.LOOKING]: "delivery.tracking.searching.looking",
@@ -42,7 +43,7 @@ export default function OrderTrackingPage() {
     // the alarming false-failure this phase exists to remove.
     const load = useCallback(() => {
         setError("");
-        api.get(`/orders/${id}`)
+        return api.get(`/orders/${id}`)
             .then(({ data }) => {
                 setOrder(data.data);
                 return api.get(`/delivery/${id}`)
@@ -62,7 +63,7 @@ export default function OrderTrackingPage() {
             .finally(() => setLoading(false));
     }, [id]);
 
-    useEffect(load, [load]);
+    useEffect(() => { load(); }, [load]);
 
     // Elapsed-time copy escalation for the searching state - same
     // client-side-baseline-plus-socket-event approach as TrackingWidget
@@ -243,56 +244,58 @@ export default function OrderTrackingPage() {
     );
 
     return (
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-            <PageMeta title="Track Order" noIndex />
-            {/* Phase 4 (SEO Supporting, H1 audit): the live-tracking view has
-                no title-like text anywhere in its visible layout (just the
-                back button + a live/connecting badge) - a sighted user reads
-                the map itself as "this is the tracking page", which a screen
-                reader can't. Visually hidden so the existing design is
-                untouched. Hardcoded English rather than routed through t() -
-                this page's own <PageMeta title="Track Order" /> two lines
-                above is already hardcoded English, not an i18n key, so this
-                matches the existing convention on this specific page rather
-                than inventing a dictionary key that doesn't exist in
-                en.js/sw.js. */}
-            <h1 className="sr-only">Track your order</h1>
-            <div className="flex items-center justify-between mb-4">
-                {backButton}
-                <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? "text-teal" : "text-ash"}`}>
-                    <span className={`w-2 h-2 rounded-full ${connected ? "bg-teal animate-pulse" : "bg-ash"}`} />
-                    {connected ? t("delivery.tracking.live") : t("delivery.tracking.connecting")}
-                </span>
-            </div>
-
-            {connectionBanner}
-
-            <DeliveryTrackingMap
-                agentPos={smoothAgentPos}
-                pickup={delivery.pickup}
-                destination={destination}
-                height={320}
-            />
-
-            <div className="grid grid-cols-2 gap-4 my-6 text-sm">
-                <div>
-                    <p className="text-ash mb-0.5">{t("delivery.tracking.eta")}</p>
-                    <p className="font-medium text-lg price">
-                        {etaMinutes != null ? `${etaMinutes} min` : t("delivery.tracking.calculating")}
-                    </p>
+        <PullToRefresh onRefresh={() => load()}>
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+                <PageMeta title="Track Order" noIndex />
+                {/* Phase 4 (SEO Supporting, H1 audit): the live-tracking view has
+                    no title-like text anywhere in its visible layout (just the
+                    back button + a live/connecting badge) - a sighted user reads
+                    the map itself as "this is the tracking page", which a screen
+                    reader can't. Visually hidden so the existing design is
+                    untouched. Hardcoded English rather than routed through t() -
+                    this page's own <PageMeta title="Track Order" /> two lines
+                    above is already hardcoded English, not an i18n key, so this
+                    matches the existing convention on this specific page rather
+                    than inventing a dictionary key that doesn't exist in
+                    en.js/sw.js. */}
+                <h1 className="sr-only">Track your order</h1>
+                <div className="flex items-center justify-between mb-4">
+                    {backButton}
+                    <span className={`flex items-center gap-1.5 text-xs font-medium ${connected ? "text-teal" : "text-ash"}`}>
+                        <span className={`w-2 h-2 rounded-full ${connected ? "bg-teal animate-pulse" : "bg-ash"}`} />
+                        {connected ? t("delivery.tracking.live") : t("delivery.tracking.connecting")}
+                    </span>
                 </div>
-                <div>
-                    <p className="text-ash mb-0.5">{t("delivery.tracking.distanceRemaining")}</p>
-                    <p className="font-medium text-lg price">
-                        {distanceRemainingKm != null ? `${distanceRemainingKm.toFixed(1)} km` : t("delivery.tracking.calculating")}
-                    </p>
+
+                {connectionBanner}
+
+                <DeliveryTrackingMap
+                    agentPos={smoothAgentPos}
+                    pickup={delivery.pickup}
+                    destination={destination}
+                    height={320}
+                />
+
+                <div className="grid grid-cols-2 gap-4 my-6 text-sm">
+                    <div>
+                        <p className="text-ash mb-0.5">{t("delivery.tracking.eta")}</p>
+                        <p className="font-medium text-lg price">
+                            {etaMinutes != null ? `${etaMinutes} min` : t("delivery.tracking.calculating")}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-ash mb-0.5">{t("delivery.tracking.distanceRemaining")}</p>
+                        <p className="font-medium text-lg price">
+                            {distanceRemainingKm != null ? `${distanceRemainingKm.toFixed(1)} km` : t("delivery.tracking.calculating")}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <DeliveryStatusTimeline delivery={delivery} />
+                    <CourierDetailsCard delivery={delivery} onMessage={handleMessageAgent} />
                 </div>
             </div>
-
-            <div className="space-y-6">
-                <DeliveryStatusTimeline delivery={delivery} />
-                <CourierDetailsCard delivery={delivery} onMessage={handleMessageAgent} />
-            </div>
-        </div>
+        </PullToRefresh>
     );
 }

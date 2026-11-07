@@ -3,12 +3,15 @@ const authService = require("./auth.service");
 const { t } = require("../../i18n");
 const loginService = require("./login.service");
 const authRepository = require("./auth.repository");
+const usernameService = require("../account/username.service");
+const googleService = require("./google.service");
 const passwordResetService = require("./passwordReset.service");
 const otpService = require("../otp/otp.service");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
 const { sessionCookieOptions, csrfCookieOptions } = require("../../utils/sessionCookie");
 const { generateCsrfToken } = require("../../middleware/csrf.middleware");
+const { logAuthAttempt, reasonFor } = require("./authEvents");
 
 exports.register = async (req, res) => {
     try {
@@ -54,6 +57,22 @@ exports.register = async (req, res) => {
     }
 };
 
+// GET /auth/username-available?username=... - public and rate-limited (see
+// usernameCheckLimiter). Never reveals anything beyond "free or not".
+exports.usernameAvailable = async (req, res) => {
+    try {
+        const username = typeof req.query.username === "string" ? req.query.username : "";
+        const result = await usernameService.checkAvailability(username);
+        res.set("Cache-Control", "no-store");
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return res.status(error.status || 400).json({
+            success: false,
+            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+        });
+    }
+};
+
 //  of login: email + password. Never returns a session token -
 // only a masked email + pre-auth token, once an OTP has been emailed.
 exports.login = async (req, res) => {
@@ -62,6 +81,8 @@ exports.login = async (req, res) => {
 
         const result = await loginService.login(email, password);
 
+        logAuthAttempt(req, { endpoint: "login", outcome: "success", reason: "otp_sent", email });
+
         res.json({
             success: true,
             message: "Enter the code we emailed you to finish signing in.",
@@ -69,17 +90,26 @@ exports.login = async (req, res) => {
         });
 
     } catch (error) {
+        const reason = reasonFor(error);
+
+        logAuthAttempt(req, { endpoint: "login", outcome: "failure", reason, email: req.body.email });
+
         auditService.logFromRequest(req, {
             eventType: "login_failed",
             description: `Failed login attempt for ${req.body.email || "unknown email"}`,
-            metadata: { email: req.body.email, stage: "password" }
+            metadata: { email: req.body.email, stage: "password", reason }
         });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
 
         res.status(error.status || 401).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message,
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
             ...(error.code ? { code: error.code } : {}),
-            ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {})
+            ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {}),
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };
@@ -90,6 +120,8 @@ exports.verifyLoginOtp = async (req, res) => {
         const { pre_auth_token, code } = req.body;
 
         const result = await loginService.verifyLoginOtp(pre_auth_token, code);
+
+        logAuthAttempt(req, { endpoint: "login_otp_verify", outcome: "success", userId: result.user?.id });
 
         auditService.logFromRequest(req, {
             userId: result.user?.id,
@@ -130,15 +162,24 @@ exports.verifyLoginOtp = async (req, res) => {
         });
 
     } catch (error) {
+        const reason = reasonFor(error);
+
+        logAuthAttempt(req, { endpoint: "login_otp_verify", outcome: "failure", reason });
+
         auditService.logFromRequest(req, {
             eventType: "login_failed",
             description: "Failed login attempt (invalid or expired OTP)",
-            metadata: { stage: "otp" }
+            metadata: { stage: "otp", reason }
         });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
 
         res.status(error.status || 401).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };
@@ -147,18 +188,34 @@ exports.resendLoginOtp = async (req, res) => {
     try {
         // (OTP resend/expiry UX) - previously discarded, so the
         // frontend had no way to restart its countdown after a resend.
-        const { expiresInSeconds } = await loginService.resendLoginOtp(req.body.pre_auth_token);
+        const { expiresInSeconds, userId, delivered, channel } = await loginService.resendLoginOtp(
+            req.body.pre_auth_token,
+            req.body.channel
+        );
 
+        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: delivered ? "success" : "failure", userId, reason: delivered ? undefined : "code_not_delivered" });
+
+        // A failed channel is still a 200 so the user can pick another one
+        // straight away; the message tells them what happened.
         res.json({
             success: true,
-            message: "A new code has been sent.",
-            data: { expiresInSeconds }
+            message: delivered
+                ? "A new code has been sent."
+                : t(req.locale, "otp.channelFailed", { channel: t(req.locale, `otp.channelName.${channel}`) }),
+            data: { expiresInSeconds, delivered, channel }
         });
 
     } catch (error) {
+        logAuthAttempt(req, { endpoint: "login_otp_resend", outcome: "failure", reason: reasonFor(error) });
+
+        if (error.retryAfterSeconds) {
+            res.set("Retry-After", String(error.retryAfterSeconds));
+        }
+
         res.status(error.status || 400).json({
             success: false,
-            message: error.code ? t(req.locale, `errors.${error.code}`) : error.message
+            message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+            ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
         });
     }
 };
@@ -173,8 +230,9 @@ exports.forgotPassword = async (req, res) => {
     // exists, so this stays safe for the anti-enumeration guarantee
     // above.
     let expiresInSeconds = otpService.OTP_EXPIRY_SECONDS;
+    let channelUnavailable = false;
     try {
-        ({ expiresInSeconds } = await passwordResetService.requestPasswordReset(req.body.email));
+        ({ expiresInSeconds, channelUnavailable } = await passwordResetService.requestPasswordReset(req.body.email, req.body.channel));
     } catch (error) {
         // Swallowed deliberately - an OTP send failure here shouldn't
         // reveal anything different to the caller than the happy path.
@@ -183,7 +241,7 @@ exports.forgotPassword = async (req, res) => {
     res.json({
         success: true,
         message: "If an account exists for that email, we've sent a reset code.",
-        data: { expiresInSeconds }
+        data: { expiresInSeconds, channelUnavailable }
     });
 };
 
@@ -240,4 +298,116 @@ exports.me = async (req, res) => {
     // from the frontend's own JS, not on the backend reading its own
     // cookies.
     res.json({ success: true, data: { user, csrfToken: req.cookies?.nexora_csrf || null } });
+};
+
+// GET /auth/csrf - re-issues the nexora_csrf cookie for a session that is
+// still valid but whose CSRF cookie was cleared (Safari ITP, long idle).
+// Requires authMiddleware, so an anonymous caller cannot mint tokens. The
+// token is also returned in the body, matching login (see the comment there).
+exports.csrfRefresh = async (req, res) => {
+    const csrfToken = generateCsrfToken();
+    res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
+    res.set("Cache-Control", "no-store");
+    return res.json({ success: true, data: { csrfToken } });
+};
+
+
+// ---- Google sign-in / sign-up (round 5, phase 7) ---------------------------
+
+// Sets the session exactly like verifyLoginOtp: httpOnly session cookie plus the
+// readable CSRF cookie, with the CSRF value also returned in the body (the
+// frontend can't read cross-origin cookies - see verifyLoginOtp's comment).
+const startSession = (req, res, result, endpoint) => {
+    logAuthAttempt(req, { endpoint, outcome: "success", userId: result.user?.id });
+
+    auditService.logFromRequest(req, {
+        userId: result.user?.id,
+        eventType: "login_success",
+        description: "User signed in with Google",
+        metadata: { role: result.user?.role, provider: "google", linked: Boolean(result.linked) }
+    });
+
+    res.cookie("nexora_session", result.token, sessionCookieOptions());
+    const csrfToken = generateCsrfToken();
+    res.cookie("nexora_csrf", csrfToken, csrfCookieOptions());
+
+    return csrfToken;
+};
+
+const googleError = (req, res, error, endpoint) => {
+    logAuthAttempt(req, { endpoint, outcome: "failure", reason: reasonFor(error) });
+
+    if (error.retryAfterSeconds) {
+        res.set("Retry-After", String(error.retryAfterSeconds));
+    }
+
+    res.status(error.status || 400).json({
+        success: false,
+        message: error.code ? t(req.locale, `errors.${error.code}`, error.params) : error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.code === "ACCOUNT_SUSPENDED" ? { data: { reason: error.reason || null } } : {}),
+        ...(error.retryAfterSeconds ? { data: { retryAfterSeconds: error.retryAfterSeconds } } : {})
+    });
+};
+
+// POST /auth/google { credential, mode? }
+//   mode "signin" (default): known Google user -> session; new user -> ticket.
+//   mode "prefill": seller / delivery-agent registration - name + email only.
+exports.googleSignIn = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
+
+        if (req.body.mode === "prefill") {
+            const result = await googleService.prefill(req.body.credential);
+            return res.json({ success: true, data: result });
+        }
+
+        const result = await googleService.signIn(req.body.credential);
+
+        if (result.status === "needs_profile") {
+            return res.json({ success: true, data: result });
+        }
+
+        const csrfToken = startSession(req, res, result, "google_signin");
+        return res.json({ success: true, message: "Login successful", data: { status: "signed_in", user: result.user, csrfToken } });
+    } catch (error) {
+        return googleError(req, res, error, "google_signin");
+    }
+};
+
+// POST /auth/google/complete { ticket, phone, username, terms_accepted, referral_code }
+exports.googleComplete = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
+
+        const result = await googleService.complete(req.body);
+
+        auditService.logFromRequest(req, {
+            userId: result.userId,
+            eventType: "user_registered",
+            description: "New buyer account registered with Google",
+            metadata: { role: "buyer", provider: "google" }
+        });
+
+        adminNotificationService.notify({
+            type: "user_registered",
+            category: "account",
+            severity: "info",
+            title: "New account registered",
+            message: `A new buyer account was registered with Google (${result.user?.email}).`,
+            metadata: { role: "buyer", email: result.user?.email, provider: "google" },
+            relatedUserId: result.userId
+        });
+
+        const csrfToken = startSession(req, res, result, "google_complete");
+        return res.status(201).json({ success: true, message: "User registered successfully.", data: { status: "signed_in", user: result.user, csrfToken } });
+    } catch (error) {
+        return googleError(req, res, error, "google_complete");
+    }
 };

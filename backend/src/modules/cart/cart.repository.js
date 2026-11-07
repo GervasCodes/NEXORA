@@ -28,6 +28,30 @@ exports.addItem = async (userId, productId, quantity, variantId = 0) => {
     return result.insertId;
 };
 
+// Atomic add-to-cart (Phase 3) - cart.service.js's addToCart previously
+// read the existing line's quantity, computed the new total in
+// application code, then wrote it back with a separate UPDATE/INSERT -
+// two requests adding the same product back-to-back (a fast double-tap,
+// or two browser tabs) could both read the same starting quantity and
+// each write their own "+1" on top of it, silently losing one of the
+// adds (a lost-update race). This folds read-check-write into one
+// statement: unique_user_product_variant is what makes ON DUPLICATE KEY
+// UPDATE target the right existing row, and LEAST(...) caps the result at
+// `availableStock` in the same statement rather than trusting a
+// pre-computed "requestedQuantity" that may be stale by the time this
+// runs. Returns the row's quantity AFTER the write so the caller can
+// report the real result without a second round trip.
+exports.addOrIncrementItem = async (userId, productId, quantity, variantId, availableStock) => {
+    await db.query(
+        `INSERT INTO cart_items (user_id, product_id, variant_id, quantity)
+        VALUES (?, ?, ?, LEAST(?, ?))
+        ON DUPLICATE KEY UPDATE quantity = LEAST(quantity + VALUES(quantity), ?)`,
+        [userId, productId, variantId || 0, quantity, availableStock, availableStock]
+    );
+    const row = await exports.findByUserAndProduct(userId, productId, variantId);
+    return row.quantity;
+};
+
 // Update quantity for an existing cart item
 exports.updateQuantity = async (userId, productId, quantity, variantId = 0) => {
     await db.query(
@@ -95,7 +119,7 @@ exports.getCartByUser = async (userId) => {
 // Look up a product by id (used to validate stock/existence before cart ops)
 exports.findProductById = async (productId) => {
     const [rows] = await db.query(
-        "SELECT id, price, discount_price, stock, is_active, has_variants FROM products WHERE id = ?",
+        "SELECT id, seller_id, price, discount_price, stock, is_active, has_variants FROM products WHERE id = ?",
         [productId]
     );
     return rows[0];
@@ -130,6 +154,25 @@ exports.findVariantById = async (variantId) => {
         [variantId]
     );
     return rows[0];
+};
+
+// "Currently allowed to sell" check (Phase 3) - batched across every
+// distinct seller in a cart/checkout in one query, rather than once per
+// line item. A seller is blocked once their account is suspended
+// (users.is_active = FALSE, see admin.repository.js#suspendUser) or
+// soft-deleted (deleted_at) - there's no separate seller "vacation mode"
+// in this codebase to also check (confirmed: no such column/flag exists
+// anywhere in the schema). Verification status is deliberately NOT part
+// of this - an unverified seller on the Free tier is still allowed to
+// sell (see the verification/monetization rework), only badge/analytics
+// features are gated behind it.
+exports.findActiveSellerIds = async (sellerIds) => {
+    if (!sellerIds.length) return [];
+    const [rows] = await db.query(
+        "SELECT id FROM users WHERE id IN (?) AND is_active = TRUE AND deleted_at IS NULL",
+        [sellerIds]
+    );
+    return rows.map((row) => row.id);
 };
 
 exports.findVariantsByIds = async (variantIds) => {

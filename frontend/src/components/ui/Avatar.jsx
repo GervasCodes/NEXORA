@@ -76,13 +76,24 @@ export default function Avatar({ firstName, lastName, name, src, size = "md", cl
         );
     }
 
+    // `role="img" aria-label` rather than `aria-hidden` (Phase 2:
+    // Reliability & performance groundwork - a11y fix): this used to hide
+    // the fallback entirely from assistive tech, which is fine at a call
+    // site that also renders the person's name as adjacent text, but
+    // Avatar is a generic shared component - several call sites (an
+    // online-users strip, a grid of reviewer/store avatars) use the
+    // avatar as the only visible identifier, with no separate name text
+    // nearby. Hiding it there removed the person's identity from
+    // screen-reader output entirely. Matches the real-photo branch above,
+    // which already uses `alt={fullName}`.
     return (
         <div
-            aria-hidden="true"
+            role="img"
+            aria-label={fullName}
             style={{ background: gradient }}
             className={`${sizeClass} rounded-full flex items-center justify-center font-display text-frost shrink-0 ${className}`}
         >
-            {initials}
+            <span aria-hidden="true">{initials}</span>
         </div>
     );
 }

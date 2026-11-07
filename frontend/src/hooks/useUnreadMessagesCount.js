@@ -10,11 +10,9 @@ const POLL_INTERVAL_MS = 45000;
 // (much longer) network-level timeout kicks in.
 const REQUEST_TIMEOUT_MS = 10000;
 
-// Total unread-message count for the "Messages" nav badge, shared between
-// Header.jsx (buyer nav + buyer mobile bottom nav) and SellerLayout.jsx
-// (seller mobile bottom nav) so both stay in sync with the same polling
-// logic instead of drifting apart. Same interval-poll approach
-// NotificationBell already uses for its own badge.
+// Total unread-message count for the "Messages" nav badge in Header.jsx
+// (buyer and seller nav). Same interval-poll approach NotificationBell
+// already uses for its own badge.
 //
 // `enabled` should be false for any role that never sees a "/messages"
 // link (delivery agents, admins, signed-out visitors) - there's no point

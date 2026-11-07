@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { publicName } from "../utils/username";
 import { formatDate } from "../utils/format";
 import Button from "./ui/Button";
+import InfiniteScrollFooter from "./ui/InfiniteScrollFooter";
+import { SkeletonCard } from "./Skeleton";
+import useInfiniteScroll from "../hooks/useInfiniteScroll";
 
 /**
  * ProductQA (UI/UX remediation).
@@ -26,24 +30,38 @@ export default function ProductQA({ productId }) {
     const [questionText, setQuestionText] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const [loadingMore, setLoadingMore] = useState(false);
+    // A failed next page keeps the loaded questions on screen; the footer offers a Retry.
+    const [moreError, setMoreError] = useState(false);
+    // Bumped per first-page fetch so a late "next page" can't append onto a refreshed list.
+    const seq = useRef(0);
 
+    // `page` only advances once a page has actually loaded, so retrying after
+    // a failure asks for the same page again instead of skipping it.
     const load = (targetPage) => {
+        const append = targetPage > 1;
+        const mySeq = append ? seq.current : ++seq.current;
+        setMoreError(false);
+        setLoadingMore(append);
         api.get(`/products/${productId}/questions`, { params: { page: targetPage } })
             .then(({ data: res }) => {
+                if (mySeq !== seq.current) return;
                 setData((prev) => {
-                    if (!prev || targetPage === 1) return res.data;
+                    if (!prev || !append) return res.data;
                     return { ...res.data, questions: [...prev.questions, ...res.data.questions] };
                 });
+                setPage(targetPage);
             })
-            .catch(() => {});
+            .catch(() => { if (mySeq === seq.current && append) setMoreError(true); })
+            .finally(() => { if (mySeq === seq.current) setLoadingMore(false); });
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-fetches when productId changes, not on every render
     useEffect(() => { load(1); }, [productId]);
 
     const loadMore = () => {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        load(nextPage);
+        if (loadingMore) return;
+        load(page + 1);
     };
 
     const submitQuestion = async (e) => {
@@ -54,7 +72,6 @@ export default function ProductQA({ productId }) {
             await api.post(`/products/${productId}/questions`, { question: questionText });
             setQuestionText("");
             setAskOpen(false);
-            setPage(1);
             load(1);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -63,7 +80,8 @@ export default function ProductQA({ productId }) {
         }
     };
 
-    const hasMore = data && data.questions.length < data.total;
+    const hasMore = Boolean(data && data.questions.length < data.total);
+    const { sentinelRef } = useInfiniteScroll({ hasMore, loading: loadingMore, error: moreError, onLoadMore: loadMore });
 
     return (
         <section className="mt-16 max-w-2xl">
@@ -93,7 +111,7 @@ export default function ProductQA({ productId }) {
                     />
                     {error && <p role="alert" className="text-sm text-coral mb-3">{error}</p>}
                     <div className="flex gap-3">
-                        <Button type="submit" size="sm" disabled={submitting}>
+                        <Button loading={submitting} type="submit" size="sm" disabled={submitting}>
                             {submitting ? t("product.qaSubmitting") : t("product.qaSubmit")}
                         </Button>
                         <button type="button" onClick={() => setAskOpen(false)} className="text-sm text-ash hover:underline">
@@ -111,7 +129,7 @@ export default function ProductQA({ productId }) {
                 {data?.questions.map((q) => (
                     <li key={q.id} className="border-b border-line pb-4">
                         <div className="flex justify-between items-baseline gap-3">
-                            <p className="text-sm font-medium">{q.first_name} {q.last_name?.[0]}.</p>
+                            <p className="text-sm font-medium">{publicName(q, t("username.anonymous"))}</p>
                             <p className="text-xs text-ash shrink-0">{formatDate(q.created_at)}</p>
                         </div>
                         <p className="text-sm text-ink/80 mt-0.5">{q.question}</p>
@@ -128,11 +146,16 @@ export default function ProductQA({ productId }) {
                 ))}
             </ul>
 
-            {hasMore && (
-                <button onClick={loadMore} className="text-sm text-teal hover:underline mt-4">
-                    {t("product.qaLoadMore")}
-                </button>
-            )}
+            <InfiniteScrollFooter
+                sentinelRef={sentinelRef}
+                hasMore={hasMore}
+                loading={loadingMore}
+                error={moreError}
+                onLoadMore={loadMore}
+                loadMoreLabel={t("product.qaLoadMore")}
+                skeleton={<SkeletonCard className="mt-4" />}
+                className="mt-4"
+            />
         </section>
     );
 }

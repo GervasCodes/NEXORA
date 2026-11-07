@@ -16,6 +16,13 @@ describe("NexoraAIButton", () => {
         expect(screen.getByRole("button", { name: /nexora assistant/i })).toBeInTheDocument();
     });
 
+    it("is icon-only: the accessible name comes from aria-label, with no visible text label", () => {
+        render(<NexoraAIButton />);
+        const button = screen.getByRole("button", { name: /nexora assistant/i });
+        expect(button).toHaveAttribute("aria-label", "Open Nexora Assistant");
+        expect(button).toHaveTextContent("");
+    });
+
     it("opens the assistant with no preset context when clicked", async () => {
         render(<NexoraAIButton />);
         await userEvent.click(screen.getByRole("button", { name: /nexora assistant/i }));

@@ -50,48 +50,30 @@ exports.bookingIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid booking")
 ];
 
-const MONETIZATION_KEYS = [
-    "monetization_subscriptions_enabled",
-    "monetization_commission_enabled",
-    "monetization_sponsorship_enabled",
-    "monetization_verification_fee_enabled"
-];
-
-exports.updateMonetizationSettingsValidation = MONETIZATION_KEYS.map((key) =>
-    body(key).optional().isBoolean().withMessage(`${key} must be true or false`).toBoolean()
-);
-
-exports.createMonetizationScheduleValidation = [
-    body("setting_key")
-        .notEmpty().withMessage("setting_key is required")
-        .isIn(MONETIZATION_KEYS).withMessage("Unknown monetization setting"),
-    body("enabled")
-        .isBoolean().withMessage("enabled must be true or false")
-        .toBoolean(),
-    body("scheduled_at")
-        .notEmpty().withMessage("scheduled_at is required")
-        .isISO8601().withMessage("scheduled_at must be a valid date/time")
-];
-
-exports.monetizationScheduleIdValidation = [
-    param("id").isInt({ gt: 0 }).withMessage("Invalid scheduled change")
-];
-
 exports.updateSettingsValidation = [
     body("commission_rate")
         .optional()
         .isFloat({ min: 0, max: 100 })
         .withMessage("Commission rate must be between 0 and 100"),
 
+    body("confirm_commission_change").optional().isBoolean(),
+    body("confirm_large_exchange_rate_change").optional().isBoolean(),
+    body("expected_updated_at").optional().isISO8601(),
+    body("approved_document_retention_days")
+        .optional()
+        .isInt({ min: 0, max: 3650 })
+        .withMessage("Retention must be 0 (keep) or a number of days up to 3650"),
+
+    body("username_blocklist")
+        .optional()
+        .isString()
+        .isLength({ max: 1000 })
+        .withMessage("Username blocklist must be text of at most 1000 characters"),
+
     body("rider_delivery_fee")
         .optional()
         .isFloat({ min: 0 })
         .withMessage("Rider delivery fee must be a positive amount"),
-
-    body("seller_verification_fee")
-        .optional()
-        .isFloat({ min: 0 })
-        .withMessage("Verification fee must be a positive amount"),
 
     body("usd_exchange_rate")
         .optional()
@@ -128,18 +110,13 @@ exports.updateSettingsValidation = [
         .isFloat({ min: 0 })
         .withMessage("Featured store daily rate must be a positive amount"),
 
-    body("department_sponsorship_daily_rate")
-        .optional()
-        .isFloat({ min: 0 })
-        .withMessage("Department sponsorship daily rate must be a positive amount"),
-
     // Unused until Phase 9D's release job reads settingsService.getEscrowHoldDays() -
     // validated here now so the admin settings endpoint accepts it as soon
     // as it's editable, same as every other setting above.
     body("escrow_hold_days")
         .optional()
-        .isInt({ min: 0 })
-        .withMessage("Escrow hold period must be zero or a positive whole number of days"),
+        .isInt({ min: 0, max: 60 })
+        .withMessage("Escrow hold period must be a whole number of days from 0 to 60"),
 
     // (Durable Dispatch Foundation) - see settingsService.getDeliveryOfferRadiusStepsKm.
     body("delivery_offer_radius_steps_km")
@@ -156,6 +133,16 @@ exports.updateSettingsValidation = [
         .optional()
         .isInt({ min: 1000 })
         .withMessage("Offer timeout must be at least 1000ms"),
+
+    body("delivery_location_max_age_seconds")
+        .optional()
+        .isInt({ min: 10, max: 3600 })
+        .withMessage("Agent location freshness must be between 10 and 3600 seconds"),
+
+    body("delivery_offer_cooldown_seconds")
+        .optional()
+        .isInt({ min: 30, max: 86400 })
+        .withMessage("Re-offer cooldown must be between 30 and 86400 seconds"),
 
     // Nexora Assistant (admin controls) -
     // see settingsService.getAiSettings/ai.service.js#checkSpendGuard.

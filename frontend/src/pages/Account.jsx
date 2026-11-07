@@ -13,6 +13,11 @@ import Avatar from "../components/ui/Avatar";
 import Input from "../components/ui/Input";
 import AddressBook from "../components/AddressBook";
 import ImageLightbox from "../components/chat/ImageLightbox";
+import ImageCropper from "../components/ImageCropper";
+import UsernameField from "../components/UsernameField";
+import Spinner from "../components/ui/Spinner";
+import { SkeletonProfile } from "../components/Skeleton";
+import useUploadProgress from "../hooks/useUploadProgress";
 
 export default function Account() {
     const { user, updateUser, logout } = useAuth();
@@ -25,6 +30,10 @@ export default function Account() {
 
     const [profile, setProfile] = useState(null);
     const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+    // Phase 6 (round 5): username, saved separately from the name/email/phone
+    // form because it has its own once-per-30-days rule.
+    const [usernameValue, setUsernameValue] = useState("");
+    const [usernameStatus, setUsernameStatus] = useState("idle");
     const [deletePassword, setDeletePassword] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -42,6 +51,7 @@ export default function Account() {
     const load = () => {
         api.get("/account").then(({ data }) => {
             setProfile(data.data);
+            setUsernameValue(data.data.username || "");
             setProfileForm({
                 first_name: data.data.first_name,
                 last_name: data.data.last_name,
@@ -56,6 +66,7 @@ export default function Account() {
         }).catch(() => {});
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; syncTheme/syncLanguage/syncCurrency/syncDataSaver are redefined every render and would turn this into a re-fetch-on-every-render loop
     useEffect(load, []);
 
     const saveProfile = async (e) => {
@@ -73,26 +84,58 @@ export default function Account() {
         }
     };
 
+    const usernameCooldownActive = Boolean(profile?.username_next_change_at);
+    const usernameChanged = usernameValue.trim() !== (profile?.username || "");
+
+    const saveUsername = async (e) => {
+        e.preventDefault();
+        if (!usernameChanged || usernameCooldownActive) return;
+        setBusy("username");
+        try {
+            const { data } = await api.put("/account/username", { username: usernameValue.trim() });
+            setProfile(data.data);
+            setUsernameValue(data.data.username || "");
+            updateUser(data.data);
+            toast?.success(t("account.usernameSaved"));
+        } catch (err) {
+            toast?.error(extractErrorMessage(err) || t("account.usernameSaveFailed"));
+        } finally {
+            setBusy("");
+        }
+    };
+
     // (Real Imagery & Avatars): same shape as
     // SellerStore.jsx#handleLogoUpload, just for the shared
     // buyer/seller/delivery-agent profile photo endpoint instead of the
     // seller-only store logo one.
-    const handlePhotoUpload = async (e) => {
+    // Picking a file opens the crop step; only the cropped square is uploaded.
+    const [cropFile, setCropFile] = useState(null);
+    const handlePhotoSelected = (e) => {
         const file = e.target.files[0];
+        e.target.value = "";
         if (!file) return;
+        if (!file.type.startsWith("image/")) {
+            toast?.error("Please choose an image file.");
+            return;
+        }
+        setCropFile(file);
+    };
+    const photoUpload = useUploadProgress();
+    const handleCroppedUpload = async (blob) => {
         setUploadingPhoto(true);
         try {
             const body = new FormData();
-            body.append("photo", file);
-            const { data } = await api.post("/account/photo", body);
+            body.append("photo", blob, "profile.jpg");
+            const { data } = await api.post("/account/photo", body, { onUploadProgress: photoUpload.onUploadProgress });
             setProfile((prev) => ({ ...prev, photo_url: data.data.photoUrl }));
             updateUser({ photo_url: data.data.photoUrl });
             toast?.success("Photo updated.");
+            setCropFile(null);
         } catch (err) {
             toast?.error(extractErrorMessage(err));
         } finally {
             setUploadingPhoto(false);
-            e.target.value = "";
+            photoUpload.reset();
         }
     };
 
@@ -216,7 +259,7 @@ export default function Account() {
         }
     };
 
-    if (!profile) return <div className="max-w-2xl mx-auto px-4 py-16 text-ash">{t("common.loading")}</div>;
+    if (!profile) return <SkeletonProfile label={t("loading.profile")} />;
 
     return (
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-12">
@@ -252,20 +295,28 @@ export default function Account() {
                     <div className="flex items-center gap-2">
                         <label className="inline-block text-xs border border-line px-3 py-1.5 rounded-md cursor-pointer hover:border-ink transition-colors">
                             {uploadingPhoto ? "Uploading…" : "Change photo"}
-                            <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto} className="hidden" />
+                            <input type="file" accept="image/*" onChange={handlePhotoSelected} disabled={uploadingPhoto} className="hidden" />
                         </label>
                         {profile?.photo_url && (
-                            <button
+                            <button aria-busy={deletingPhoto || undefined}
                                 type="button"
                                 onClick={handleDeletePhoto}
                                 disabled={deletingPhoto}
                                 className="text-xs border border-line px-3 py-1.5 rounded-md hover:border-red-400 hover:text-red-600 transition-colors disabled:opacity-60"
-                            >
+                            >{deletingPhoto && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {deletingPhoto ? "Removing…" : "Remove"}
                             </button>
                         )}
                     </div>
                 </div>
+
+                <ImageCropper
+                    file={cropFile}
+                    busy={uploadingPhoto}
+                    progress={photoUpload.progress}
+                    onConfirm={handleCroppedUpload}
+                    onCancel={() => setCropFile(null)}
+                />
 
                 <ImageLightbox
                     src={photoLightboxOpen ? profile?.photo_url : null}
@@ -277,20 +328,20 @@ export default function Account() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label htmlFor="profileFirstName" className="block text-sm mb-1">First name</label>
-                            <input id="profileFirstName" value={profileForm.first_name}
+                            <input id="profileFirstName" value={profileForm.first_name} autoComplete="given-name"
                                 onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                         <div>
                             <label htmlFor="profileLastName" className="block text-sm mb-1">Last name</label>
-                            <input id="profileLastName" value={profileForm.last_name}
+                            <input id="profileLastName" value={profileForm.last_name} autoComplete="family-name"
                                 onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
                                 className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                         </div>
                     </div>
                     <div>
                         <label htmlFor="profileEmail" className="block text-sm mb-1">Email</label>
-                        <input id="profileEmail" type="email" value={profileForm.email}
+                        <input id="profileEmail" type="email" value={profileForm.email} autoComplete="email" inputMode="email"
                             onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                             className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     </div>
@@ -308,9 +359,34 @@ export default function Account() {
                         {busy === "profile" ? t("common.saving") : t("common.save") + " profile"}
                     </button>
                 </form>
+
+                <form onSubmit={saveUsername} className="space-y-3 mt-6 pt-6 border-t border-line">
+                    <h3 className="font-medium text-sm">{t("account.usernameTitle")}</h3>
+                    <p className="text-ash text-sm">{t("account.usernameNote")}</p>
+                    <UsernameField
+                        id="profileUsername"
+                        value={usernameValue}
+                        onChange={setUsernameValue}
+                        onStatusChange={setUsernameStatus}
+                        currentUsername={profile?.username || ""}
+                        disabled={usernameCooldownActive}
+                    />
+                    {usernameCooldownActive && (
+                        <p className="text-xs text-ash">
+                            {t("account.usernameNextChange", {
+                                date: new Date(profile.username_next_change_at).toLocaleDateString(language === "sw" ? "sw-TZ" : "en-GB")
+                            })}
+                        </p>
+                    )}
+                    <button type="submit"
+                        disabled={busy === "username" || usernameCooldownActive || !usernameChanged || usernameStatus === "checking" || ["invalid", "reserved", "taken"].includes(usernameStatus)}
+                        className="w-full sm:w-auto bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
+                        {busy === "username" ? t("common.saving") : t("account.usernameSave")}
+                    </button>
+                </form>
             </section>
 
-            <AddressBook />
+            {user?.role === "buyer" && <AddressBook />}
 
             {/* Settings - applied instantly via context, persisted in the background */}
             <section>
@@ -488,6 +564,7 @@ export default function Account() {
                             type="password"
                             required
                             minLength={8}
+                            autoComplete="new-password"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
                             showPasswordLabel="Show password"
@@ -527,6 +604,7 @@ export default function Account() {
                             label="Confirm your password"
                             type="password"
                             required
+                            autoComplete="current-password"
                             value={deletePassword}
                             onChange={(e) => setDeletePassword(e.target.value)}
                             showPasswordLabel="Show password"

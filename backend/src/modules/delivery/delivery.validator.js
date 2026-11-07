@@ -12,7 +12,17 @@ exports.updateDeliveryStatusValidation = [
         .isIn(Object.values(DELIVERY_STATUS_TRANSITIONS).flat())
         .withMessage("Invalid status"),
 
-    body("notes").optional().isString()
+    body("notes").optional().isString(),
+
+    // Delivery proof (Phase 5, P0) - required only when status is
+    // "delivered", enforced in delivery.service.js (not here) since
+    // that's conditional on the `status` field also present in this
+    // same body, which express-validator can do but is clearer written
+    // as a plain check in the service alongside the rest of the
+    // delivered-transition logic.
+    body("handover_code").optional().isString().isLength({ min: 4, max: 6 }),
+    body("delivery_lat").optional().isFloat(),
+    body("delivery_lng").optional().isFloat()
 ];
 
 exports.rateDeliveryValidation = [

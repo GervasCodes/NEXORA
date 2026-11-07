@@ -5,6 +5,7 @@ import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
 
 const COMPONENTS = ["platform", "payments", "orders", "bookings", "delivery", "notifications"];
 const SEVERITIES = ["minor", "major", "critical"];
@@ -37,7 +38,7 @@ export default function AdminStatusIncidents() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, []);
+    useEffect(load, [toast]);
 
     const submitIncident = async (e) => {
         e.preventDefault();
@@ -95,7 +96,7 @@ export default function AdminStatusIncidents() {
                             {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
-                    <button type="submit" disabled={submitting} className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                    <button aria-busy={submitting || undefined} type="submit" disabled={submitting} className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Posting…" : "Post incident"}
                     </button>
                 </form>

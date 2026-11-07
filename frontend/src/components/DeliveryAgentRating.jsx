@@ -90,7 +90,7 @@ export default function DeliveryAgentRating({ orderId, existingRating, onRated }
 
             {error && <p role="alert" className="text-coral text-sm mb-3">{error}</p>}
 
-            <Button
+            <Button loading={submitting}
                 type="submit"
                 disabled={submitting}
             >

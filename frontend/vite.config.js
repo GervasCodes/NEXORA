@@ -1,8 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     plugins: [react()],
+    // Production bundles ship with zero console output (log/warn/error/info/
+    // debug) and no debugger statements. Errors still reach Sentry.
+    esbuild: mode === "production" ? { drop: ["console", "debugger"], legalComments: "none" } : {},
     server: {
         port: 5173
     },
@@ -35,6 +38,14 @@ export default defineConfig({
                 // blob on every deploy - and keeps any one chunk small
                 // enough to not warrant the warning.
                 manualChunks(id) {
+                    // Vite's own tiny helpers (the dynamic-import preload
+                    // helper used by every lazy route, and the CommonJS
+                    // interop helper) have no node_modules path, so left
+                    // unassigned Rollup was parking them inside whichever
+                    // vendor chunk it processed first - which here was
+                    // a vendor chunk that then loaded on every page.
+                    // Pinning them to the always-loaded React chunk avoids that.
+                    if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers")) return "vendor-react";
                     if (!id.includes("node_modules")) return undefined;
                     if (id.includes("react-router")) return "vendor-router";
                     if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("scheduler")) return "vendor-react";
@@ -133,4 +144,4 @@ export default defineConfig({
             ]
         }
     }
-});
+}));

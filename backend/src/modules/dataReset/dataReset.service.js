@@ -3,7 +3,44 @@ const dataResetRepository = require("./dataReset.repository");
 const auditRepository = require("../audit/audit.repository");
 const auditService = require("../audit/audit.service");
 const adminNotificationService = require("../adminNotification/adminNotification.service");
+const comparePassword = require("../../utils/comparePassword");
 const logger = require("../../utils/logger").child({ module: "data-reset" });
+
+const APPROVAL_TTL_MINUTES = 30;
+
+const isProduction = () => process.env.NODE_ENV === "production";
+
+const forbidden = (message) => {
+    const error = new Error(message);
+    error.status = 403;
+    return error;
+};
+
+// Production guardrails for the platform-wide reset. Outside production the
+// flags are not needed (local/staging resets stay possible).
+//  - ALLOW_PLATFORM_DATA_RESET=true must be set on the server;
+//  - a reset of ALL data (test_only = false) needs a second flag,
+//    ALLOW_PLATFORM_DATA_RESET_REAL=true, so a mis-sent request cannot wipe
+//    real orders on its own.
+const assertPlatformResetAllowed = (testOnly) => {
+    if (!isProduction()) return;
+    if (process.env.ALLOW_PLATFORM_DATA_RESET !== "true") {
+        throw forbidden("A platform-wide reset is disabled on this server (ALLOW_PLATFORM_DATA_RESET is not set).");
+    }
+    if (!testOnly && process.env.ALLOW_PLATFORM_DATA_RESET_REAL !== "true") {
+        throw forbidden("Resetting real (non-test) data platform-wide is disabled on this server (ALLOW_PLATFORM_DATA_RESET_REAL is not set).");
+    }
+};
+
+const assertFreshPassword = async (actorId, password) => {
+    if (typeof password !== "string" || !password) {
+        throw badRequest("Enter your password to confirm this action.");
+    }
+    const hash = await dataResetRepository.findUserPasswordHash(actorId);
+    if (!hash || !(await comparePassword(password, hash))) {
+        throw forbidden("Password incorrect.");
+    }
+};
 
 // The exact string an admin has to type to arm each reset. Not a checkbox
 // and not a generic "yes": the phrase names the thing being destroyed, so
@@ -51,9 +88,11 @@ exports.previewSellerReset = async (sellerId, { testOnly = true } = {}) => {
     const orderIds = await dataResetRepository.findSellerOrderIds(sellerId, { testOnly });
     const bookingIds = await dataResetRepository.findSellerBookingIds(sellerId, { testOnly });
     const counts = await dataResetRepository.countSellerScope(sellerId, { testOnly, orderIds, bookingIds });
+    const sampleOrders = await dataResetRepository.sampleOrders(orderIds);
 
     return {
         scope: "seller",
+        sample_orders: sampleOrders,
         test_only: testOnly,
         seller: {
             id: seller.id,
@@ -72,9 +111,20 @@ exports.previewPlatformReset = async ({ testOnly = true } = {}) => {
     const orderIds = await dataResetRepository.findAllOrderIds({ testOnly });
     const bookingIds = await dataResetRepository.findAllBookingIds({ testOnly });
     const counts = await dataResetRepository.countPlatformScope({ testOnly, orderIds, bookingIds });
+    const [sampleOrders, paidOrders, realOrders] = await Promise.all([
+        dataResetRepository.sampleOrders(orderIds),
+        dataResetRepository.countPaidOrders(orderIds),
+        dataResetRepository.countRealOrdersIn(orderIds)
+    ]);
 
     return {
         scope: "platform",
+        sample_orders: sampleOrders,
+        paid_orders_in_scope: paidOrders,
+        real_orders_in_scope: realOrders,
+        reset_allowed_here: !isProduction() || process.env.ALLOW_PLATFORM_DATA_RESET === "true",
+        real_data_reset_allowed_here: !isProduction() || process.env.ALLOW_PLATFORM_DATA_RESET_REAL === "true",
+        requires_second_approver: isProduction(),
         test_only: testOnly,
         counts,
         total_rows: totalRows(counts),
@@ -220,11 +270,77 @@ exports.resetSeller = async (sellerId, { testOnly = true, confirmation } = {}, {
     return { scope: "seller", seller_id: Number(seller.id), test_only: testOnly, deleted, reversible: false };
 };
 
-exports.resetPlatform = async ({ testOnly = true, confirmation } = {}, { actorId, req } = {}) => {
+// Step 1 of a production platform reset: a super admin asks for it.
+exports.requestPlatformResetApproval = async ({ testOnly = true } = {}, { actorId }) => {
+    assertPlatformResetAllowed(testOnly);
+    const id = await dataResetRepository.createApproval(actorId, testOnly, APPROVAL_TTL_MINUTES);
+
+    auditService.log({
+        userId: actorId,
+        eventType: "data_reset.platform_requested",
+        description: `Super admin requested approval for a platform reset (${testOnly ? "test data only" : "ALL data"})`,
+        metadata: { approval_id: id, test_only: testOnly }
+    });
+    adminNotificationService.notify({
+        type: "data_reset_performed",
+        category: "security",
+        severity: "critical",
+        title: "Platform reset needs a second approver",
+        message: `A super admin asked to reset ${testOnly ? "test" : "ALL"} platform data. Another super admin must approve it within ${APPROVAL_TTL_MINUTES} minutes.`,
+        metadata: { approval_id: id, test_only: testOnly }
+    });
+
+    return { approval_id: id, expires_in_minutes: APPROVAL_TTL_MINUTES };
+};
+
+// Step 2: a DIFFERENT super admin approves, re-entering their password.
+exports.approvePlatformReset = async (approvalId, { actorId, password, req }) => {
+    await assertFreshPassword(actorId, password);
+
+    const approval = await dataResetRepository.findApproval(approvalId);
+    if (!approval) throw notFound("Approval request not found.");
+    if (Number(approval.requested_by) === Number(actorId)) {
+        throw forbidden("You cannot approve your own reset request.");
+    }
+
+    const changed = await dataResetRepository.approve(approvalId, actorId);
+    if (!changed) throw badRequest("This request is expired, already approved or already used.");
+
+    auditService.logFromRequest(req || { ip: null }, {
+        userId: actorId,
+        eventType: "data_reset.platform_approved",
+        description: `Super admin approved platform reset request #${approvalId}`,
+        metadata: { approval_id: Number(approvalId), requested_by: approval.requested_by, test_only: !!approval.test_only }
+    });
+
+    return { approval_id: Number(approvalId), approved: true };
+};
+
+exports.resetPlatform = async ({ testOnly = true, confirmation, password, approvalId } = {}, { actorId, req } = {}) => {
+    assertPlatformResetAllowed(testOnly);
     requireConfirmation(confirmation, PLATFORM_CONFIRMATION_PHRASE);
+    await assertFreshPassword(actorId, password);
 
     const orderIds = await dataResetRepository.findAllOrderIds({ testOnly });
     const bookingIds = await dataResetRepository.findAllBookingIds({ testOnly });
+
+    // The is_test marker is only set by seeders / explicit admin action. If a
+    // "test only" scope contains orders that were actually paid through a
+    // payment provider, the marker is suspect: refuse in production.
+    if (testOnly && isProduction()) {
+        const paid = await dataResetRepository.countPaidOrders(orderIds);
+        if (paid > 0) {
+            throw badRequest(
+                `${paid} order(s) marked as test have a completed online payment. Check the test marker before resetting.`
+            );
+        }
+    }
+
+    if (isProduction()) {
+        if (!approvalId) throw forbidden("A second super admin must approve this reset first.");
+        const consumed = await dataResetRepository.consumeApproval(approvalId, actorId, testOnly);
+        if (!consumed) throw forbidden("The approval is missing, expired, already used, or does not match this request.");
+    }
     const planned = await dataResetRepository.countPlatformScope({ testOnly, orderIds, bookingIds });
 
     await recordIntent({

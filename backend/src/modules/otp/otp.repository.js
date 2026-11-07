@@ -8,6 +8,17 @@ exports.invalidateActive = async (userId, purpose, executor = db) => {
     );
 };
 
+// Once a new code has actually reached the user, retire the older ones so
+// only the latest code works. Kept separate from invalidateActive so a
+// failed send doesn't kill a code the user already received.
+exports.invalidateOthers = async (userId, purpose, keepId, executor = db) => {
+    await executor.query(
+        `UPDATE otp_codes SET consumed_at = NOW()
+        WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL AND id <> ?`,
+        [userId, purpose, keepId]
+    );
+};
+
 exports.create = async (userId, purpose, codeHash, expiresAt, executor = db) => {
     const [result] = await executor.query(
         `INSERT INTO otp_codes (user_id, purpose, code_hash, expires_at)

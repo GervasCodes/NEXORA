@@ -1,0 +1,16 @@
+-- ============================================================================
+-- DEFERRED MIGRATION - DO NOT RUN WITH THE PHASE 4 RELEASE.
+--
+-- Run this ONLY after:
+--   1. The release that removed product audio has been live and stable for at
+--      least two weeks (rollbacks to the old code would need this table), AND
+--   2. `node backend/scripts/purgeProductAudio.js` has been run (it deletes the
+--      audio files from Cloudinary and prints the row count), AND
+--   3. A database backup has been taken.
+--
+-- It lives outside database/migrations/ on purpose so the migration runner and
+-- checkMigrationDocsDrift.js never pick it up automatically. When you are ready,
+-- copy it into database/migrations/ with the next number (e.g. 1NN_drop_product_audio.sql)
+-- and update docs/DATABASE.md's migration count.
+-- ============================================================================
+DROP TABLE IF EXISTS product_audio;

@@ -4,10 +4,11 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatMoney, formatDate } from "../../utils/format";
 import { useLanguage } from "../../context/LanguageContext";
 import BookingStatusBadge from "../../components/BookingStatusBadge";
-import PageLoader from "../../components/PageLoader";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import { SkeletonPage } from "../../components/Skeleton";
+import PullToRefresh from "../../components/ui/PullToRefresh";
 
 //  a still-pending request is now declined via reject (below),
 // not cancel - cancel stays for a confirmed booking either side needs
@@ -24,16 +25,17 @@ export default function SellerBookings() {
     const [busyId, setBusyId] = useState(null);
     const toast = useToast();
 
-    const load = () => {
+    const load = (silent = false) => {
         if (!isProvider) {
             setLoading(false);
-            return;
+            return Promise.resolve();
         }
-        setLoading(true);
-        api.get("/bookings/provider/mine").then(({ data }) => setBookings(data.data)).finally(() => setLoading(false));
+        if (!silent) setLoading(true);
+        return api.get("/bookings/provider/mine").then(({ data }) => setBookings(data.data)).finally(() => setLoading(false));
     };
 
-    useEffect(load, [isProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; re-fetch only when provider status changes
+    useEffect(() => { load(); }, [isProvider]);
 
     const handleConfirm = async (booking) => {
         setBusyId(booking.id);
@@ -81,73 +83,75 @@ export default function SellerBookings() {
         );
     }
 
-    if (loading) return <PageLoader />;
+    if (loading) return <SkeletonPage rows={4} />;
 
     return (
-        <div>
-            <PageMeta title="Bookings" noIndex />
-            <h1 className="font-display text-2xl mb-6">{t("booking.seller.title")}</h1>
+        <PullToRefresh onRefresh={() => load(true)}>
+            <div>
+                <PageMeta title="Bookings" noIndex />
+                <h1 className="font-display text-2xl mb-6">{t("booking.seller.title")}</h1>
 
 
-            {bookings.length === 0 && <p className="text-ash text-sm">{t("booking.seller.empty")}</p>}
+                {bookings.length === 0 && <p className="text-ash text-sm">{t("booking.seller.empty")}</p>}
 
-            <ul className="divide-y divide-line border-y border-line">
-                {bookings.map((booking) => (
-                    <li key={booking.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">{booking.service_title}</p>
-                            <p className="price text-xs text-ash">{booking.booking_reference}</p>
-                            <p className="text-xs text-ash">
-                                {booking.customer_first_name} {booking.customer_last_name} ·{" "}
-                                {formatDate(booking.start_date)}
-                                {booking.end_date !== booking.start_date ? ` – ${formatDate(booking.end_date)}` : ""}
-                            </p>
-                        </div>
+                <ul className="divide-y divide-line border-y border-line">
+                    {bookings.map((booking) => (
+                        <li key={booking.id} className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{booking.service_title}</p>
+                                <p className="price text-xs text-ash">{booking.booking_reference}</p>
+                                <p className="text-xs text-ash">
+                                    {booking.customer_first_name} {booking.customer_last_name} ·{" "}
+                                    {formatDate(booking.start_date)}
+                                    {booking.end_date !== booking.start_date ? ` – ${formatDate(booking.end_date)}` : ""}
+                                </p>
+                            </div>
 
-                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                            <BookingStatusBadge status={booking.status} size="sm" />
-                            <p className="price text-sm">{formatMoney(booking.amount)}</p>
-                        </div>
+                            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                                <BookingStatusBadge status={booking.status} size="sm" />
+                                <p className="price text-sm">{formatMoney(booking.amount)}</p>
+                            </div>
 
-                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                            {booking.status === "pending" && (
-                                <>
-                                    <Button
-                                        onClick={() => handleConfirm(booking)}
+                            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                                {booking.status === "pending" && (
+                                    <>
+                                        <Button loading={busyId === booking.id}
+                                            onClick={() => handleConfirm(booking)}
+                                            disabled={busyId === booking.id}
+                                            variant="secondary"
+                                            size="sm"
+                                        >
+                                            {t("booking.seller.confirm")}
+                                        </Button>
+                                        <Button loading={busyId === booking.id}
+                                            onClick={() => handleReject(booking)}
+                                            disabled={busyId === booking.id}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="hover:border-coral hover:text-coral"
+                                        >
+                                            {t("booking.seller.reject")}
+                                        </Button>
+                                    </>
+                                )}
+                                {CANCELLABLE.includes(booking.status) && (
+                                    <Button loading={busyId === booking.id}
+                                        onClick={() => handleCancel(booking)}
                                         disabled={busyId === booking.id}
                                         variant="secondary"
                                         size="sm"
                                     >
-                                        {t("booking.seller.confirm")}
+                                        {t("booking.seller.cancel")}
                                     </Button>
-                                    <Button
-                                        onClick={() => handleReject(booking)}
-                                        disabled={busyId === booking.id}
-                                        variant="secondary"
-                                        size="sm"
-                                        className="hover:border-coral hover:text-coral"
-                                    >
-                                        {t("booking.seller.reject")}
-                                    </Button>
-                                </>
-                            )}
-                            {CANCELLABLE.includes(booking.status) && (
-                                <Button
-                                    onClick={() => handleCancel(booking)}
-                                    disabled={busyId === booking.id}
-                                    variant="secondary"
-                                    size="sm"
-                                >
-                                    {t("booking.seller.cancel")}
-                                </Button>
-                            )}
-                            <Link to={`/bookings/${booking.id}`} className="text-xs text-teal hover:underline">
-                                {t("booking.seller.details")}
-                            </Link>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </div>
+                                )}
+                                <Link to={`/bookings/${booking.id}`} className="text-xs text-teal hover:underline">
+                                    {t("booking.seller.details")}
+                                </Link>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </PullToRefresh>
     );
 }

@@ -6,11 +6,13 @@ import { useLanguage } from "../context/LanguageContext";
 import { useUnreadMessagesCount } from "../hooks/useUnreadMessagesCount";
 import SearchBox from "./SearchBox";
 import NotificationBell from "./NotificationBell";
-import MobileBottomNav from "./MobileBottomNav";
 import Button from "./ui/Button";
-import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, OrdersIcon, MessagesIcon, AccountIcon, SignInIcon, SignOutIcon } from "./NavIcons";
+import ThemeToggle from "./ThemeToggle";
+import LanguageToggle from "./LanguageToggle";
+import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
+import SideDrawer from "./ui/SideDrawer";
 
 // A single nav link config, shared between the desktop row and the mobile
 // drawer, so the two never drift out of sync with each other.
@@ -87,7 +89,7 @@ function IconNavLink({ to, label, icon: Icon, active, badge, onClick }) {
                 className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-abyss text-frost text-xs px-2 py-1
                     opacity-0 scale-95 translate-y-0.5 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0
                     group-focus-visible:opacity-100 group-focus-visible:scale-100 group-focus-visible:translate-y-0
-                    transition-all duration-150 ease-out z-50"
+                    transition-all duration-150 ease-out z-[var(--z-nav)]"
             >
                 {label}
             </span>
@@ -102,6 +104,21 @@ export default function Header() {
     const navigate = useNavigate();
     const location = useLocation();
     const [menuOpen, setMenuOpen] = useState(false);
+    // Mobile: the search row folds away while the page scrolls down and comes
+    // back on scroll up. Below 80px it is always shown.
+    const [searchCollapsed, setSearchCollapsed] = useState(false);
+    useEffect(() => {
+        let lastY = window.scrollY;
+        const onScroll = () => {
+            const y = window.scrollY;
+            if (y < 80) setSearchCollapsed(false);
+            else if (y > lastY + 4) setSearchCollapsed(true);
+            else if (y < lastY - 4) setSearchCollapsed(false);
+            lastY = y;
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        return () => window.removeEventListener("scroll", onScroll);
+    }, []);
     const links = useNavLinks();
     // Desktop icon row only ever shows the primary links directly - the
     // rest live inside ToolsMenu. The mobile drawer below still maps
@@ -126,17 +143,9 @@ export default function Header() {
         setMenuOpen(false);
     }, [user]);
 
-    // Keyboard users get the same "back out of the drawer" affordance a
-    // mouse user gets by tapping elsewhere - only listens while the
-    // drawer is actually open, so it costs nothing the rest of the time.
-    useEffect(() => {
-        if (!menuOpen) return;
-        const handleKeyDown = (e) => {
-            if (e.key === "Escape") setMenuOpen(false);
-        };
-        document.addEventListener("keydown", handleKeyDown);
-        return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [menuOpen]);
+    // Escape-to-close and outside-click-to-close for the mobile drawer
+    // are now handled inside the shared SideDrawer itself (see below),
+    // so there's no separate keydown listener to maintain here.
 
     //  sign-out now requires an explicit confirmation instead of
     // firing on a single click - a stray tap (easy on the mobile drawer's
@@ -155,36 +164,11 @@ export default function Header() {
         navigate("/");
     };
 
-    // Buyer's mobile bottom nav (Phase 6: Mobile Navigation
-    // Unification) - fixed to 5 slots, so newer buyer destinations
-    // (Wallet added in Phase Q2) live in the desktop icon row/Account
-    // page instead of competing for a bottom-nav slot; Cart keeps its
-    // slot here as the buyer's actual highest-frequency action.
-    const buyerBottomNavItems = [
-        { to: "/", label: t("nav.home"), icon: HomeIcon, end: true },
-        { to: "/orders", label: t("nav.orders"), icon: OrdersIcon },
-        { to: "/messages", label: t("nav.messages"), icon: MessagesIcon, badge: unreadMessages > 0 && (
-            <span className="absolute -top-1.5 -right-2 bg-coral text-frost text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                {unreadMessages > 9 ? "9+" : unreadMessages}
-            </span>
-        ) },
-        {
-            to: "/cart",
-            label: t("nav.cart"),
-            icon: CartIcon,
-            badge: itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 bg-mango text-abyss text-[9px] font-mono font-semibold rounded-full min-w-[14px] h-3.5 px-1 flex items-center justify-center">
-                    {itemCount > 9 ? "9+" : itemCount}
-                </span>
-            )
-        },
-        { to: "/account", label: t("nav.account"), icon: AccountIcon }
-    ];
-
     const searchInputClass = "w-full bg-paper placeholder-ash text-ink rounded-l-md px-4 py-2 text-sm focus-ring border border-transparent";
 
     return (
-        <header className="glass-dark text-frost sticky top-0 z-40">
+        <>
+        <header className="glass-dark text-frost sticky top-0 z-[var(--z-sticky)]">
             {/* (UI/UX remediation): the cart/messages/notification
                 badge counts above only ever updated visually - a
                 screen-reader user had no way to learn a new item landed
@@ -234,10 +218,10 @@ export default function Header() {
                     />
 
                     <IconNavLink
-                        to="/products"
+                        to="/feed"
                         label={t("nav.browse")}
                         icon={BrowseIcon}
-                        active={isActive("/products")}
+                        active={isActive("/feed")}
                     />
 
                     {primaryLinks.map((link) => (
@@ -249,11 +233,11 @@ export default function Header() {
                             active={isActive(link.to)}
                             badge={
                                 link.to === "/cart" && itemCount > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                    <span className="absolute -top-1 -right-1 bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                         {itemCount > 9 ? "9+" : itemCount}
                                     </span>
                                 ) : link.to === "/messages" && unreadMessages > 0 ? (
-                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                    <span className="absolute -top-1 -right-1 bg-coral text-frost text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                         {unreadMessages > 9 ? "9+" : unreadMessages}
                                     </span>
                                 ) : null
@@ -277,13 +261,15 @@ export default function Header() {
                                 className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-abyss text-frost text-xs px-2 py-1
                                     opacity-0 scale-95 translate-y-0.5 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0
                                     group-focus-visible:opacity-100 group-focus-visible:scale-100 group-focus-visible:translate-y-0
-                                    transition-all duration-150 ease-out z-50"
+                                    transition-all duration-150 ease-out z-[var(--z-nav)]"
                             >
                                 {t("nav.signOut")}
                             </span>
                         </button>
                     ) : !user ? (
                         <>
+                            <LanguageToggle className="mr-1" />
+                            <ThemeToggle className="mr-1" />
                             <IconNavLink
                                 to="/login"
                                 label={t("nav.signIn")}
@@ -312,7 +298,7 @@ export default function Header() {
                         <Link to="/cart" className="relative text-frost/90 shrink-0 transition-transform duration-150 ease-out active:scale-90" aria-label={t("nav.cart")}>
                             <CartIcon className="w-6 h-6" />
                             {itemCount > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                                <span className="absolute -top-2 -right-2 bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
                                     {itemCount > 9 ? "9+" : itemCount}
                                 </span>
                             )}
@@ -322,7 +308,7 @@ export default function Header() {
                     <button
                         type="button"
                         onClick={() => setMenuOpen((v) => !v)}
-                        aria-label="Menu"
+                        aria-label={t("header.menu")}
                         aria-expanded={menuOpen}
                         aria-controls="mobile-nav-drawer"
                         className="shrink-0 w-9 h-9 flex items-center justify-center rounded-md text-frost/90 hover:text-azure-light focus-ring transition-all duration-150 ease-out active:scale-90"
@@ -340,7 +326,13 @@ export default function Header() {
                 </div>
             </div>
 
-            <div className="md:hidden px-4 pb-3">
+            <div
+                className={`md:hidden px-4 overflow-hidden transition-[max-height,opacity,padding] duration-200 motion-reduce:transition-none ${
+                    searchCollapsed ? "max-h-0 opacity-0 pb-0" : "max-h-24 opacity-100 pb-3"
+                }`}
+                aria-hidden={searchCollapsed}
+                {...(searchCollapsed ? { inert: "" } : {})}
+            >
                 <SearchBox
                     placeholder={t("nav.searchPlaceholder")}
                     submitLabel={t("nav.go")}
@@ -353,25 +345,27 @@ export default function Header() {
                 of screen width or orientation. Icon + label rows - a
                 drawer has room for both, unlike the compact desktop bar.
 
-                Mobile UI/UX audit: this list has grown past what a short
-                phone viewport can show in one screen (Home/Browse plus
-                every nav link plus sign-out/sign-in) - at ~44px a row that
-                easily tops 700-800px. The drawer lives inside `header`,
-                which is `sticky top-0`, so once stuck it behaves like a
-                fixed element: without its own scroll, anything past the
-                viewport's bottom edge (Bookings/Disputes/Returns/Wallet/
-                Loyalty/Affiliate were landing right in that cut-off zone)
-                was rendered but permanently unreachable - no amount of
-                page-scrolling brings it into view. max-h + overflow-y-auto
-                makes the drawer itself the thing that scrolls. The extra
-                bottom padding for buyers reserves room for the fixed
-                MobileBottomNav below so the last item can scroll clear of
-                it instead of ending up hidden underneath. */}
-            {menuOpen && (
+                UI Modernization Phase 2: now the shared, edge-anchored
+                SideDrawer (right side, the component's default) instead
+                of a top-anchored slide-down panel living inline inside
+                `header`. Its own internal scroll region (see
+                SideDrawer.jsx) is what fixed the original "unreachable
+                nav items on short viewports" bug (Bookings/Disputes/
+                Returns/Wallet/Loyalty/Affiliate landing past the
+                viewport's cut-off with no way to scroll to them) - this
+                keeps that fix, just inside the shared component now. */}
+        </header>
+
+        <SideDrawer
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                id="mobile-nav-drawer"
+                ariaLabel="Menu"
+                widthClassName="w-80 max-w-[85vw]"
+            >
                 <div
-                    id="mobile-nav-drawer"
-                    className="md:hidden glass-strong text-ink border-t border-line/60 px-4 pt-3 animate-slide-up overflow-y-auto overscroll-contain max-h-[calc(100dvh-140px)]"
-                    style={{ paddingBottom: user?.role === "buyer" ? "calc(env(safe-area-inset-bottom) + 76px)" : "0.75rem" }}
+                    className="md:hidden glass-strong text-ink px-4 pt-3"
+                    style={{ paddingBottom: "0.75rem" }}
                 >
                     <nav className="flex flex-col divide-y divide-line/60">
                         <Link
@@ -385,10 +379,10 @@ export default function Header() {
                         </Link>
 
                         <Link
-                            to="/products"
+                            to="/feed"
                             onClick={() => setMenuOpen(false)}
                             className={`py-3 flex items-center gap-3 text-sm font-medium transition-colors duration-150
-                                ${isActive("/products") ? "text-teal" : "hover:text-teal"}`}
+                                ${isActive("/feed") ? "text-teal" : "hover:text-teal"}`}
                         >
                             <BrowseIcon className="w-[18px] h-[18px] shrink-0" />
                             {t("nav.browse")}
@@ -407,12 +401,12 @@ export default function Header() {
                                     <Icon className="w-[18px] h-[18px] shrink-0" />
                                     <span className="flex-1">{link.label}</span>
                                     {link.to === "/cart" && itemCount > 0 && (
-                                        <span className="bg-mango text-abyss text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
+                                        <span className="bg-mango text-abyss text-[10px] font-sans font-semibold tabular-nums rounded-full w-5 h-5 flex items-center justify-center">
                                             {itemCount}
                                         </span>
                                     )}
                                     {link.to === "/messages" && unreadMessages > 0 && (
-                                        <span className="bg-coral text-frost text-[10px] font-mono font-semibold rounded-full w-5 h-5 flex items-center justify-center">
+                                        <span className="bg-coral text-frost text-[10px] font-sans font-semibold tabular-nums rounded-full w-5 h-5 flex items-center justify-center">
                                             {unreadMessages > 9 ? "9+" : unreadMessages}
                                         </span>
                                     )}
@@ -430,6 +424,8 @@ export default function Header() {
                             </button>
                         ) : !user ? (
                             <div className="py-3 flex items-center gap-3">
+                                <LanguageToggle />
+                                <ThemeToggle />
                                 <Link
                                     to="/login"
                                     onClick={() => setMenuOpen(false)}
@@ -450,20 +446,19 @@ export default function Header() {
                         ) : null}
                     </nav>
                 </div>
-            )}
+        </SideDrawer>
 
-            {user?.role === "buyer" && <MobileBottomNav items={buyerBottomNavItems} />}
+        <ConfirmDialog
+            open={signOutConfirmOpen}
+            title={t("nav.signOut")}
+            description="You'll need to sign in again to access your account."
+            confirmLabel={t("nav.signOut")}
+            cancelLabel={t("common.cancel") || "Cancel"}
+            danger
+            onConfirm={confirmSignOut}
+            onCancel={() => setSignOutConfirmOpen(false)}
+        />
 
-            <ConfirmDialog
-                open={signOutConfirmOpen}
-                title={t("nav.signOut")}
-                description="You'll need to sign in again to access your account."
-                confirmLabel={t("nav.signOut")}
-                cancelLabel={t("common.cancel") || "Cancel"}
-                danger
-                onConfirm={confirmSignOut}
-                onCancel={() => setSignOutConfirmOpen(false)}
-            />
-        </header>
+        </>
     );
 }

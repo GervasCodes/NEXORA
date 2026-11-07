@@ -47,3 +47,16 @@ process.env.DB_SSL = "false";
 process.env.DB_SSL_REJECT_UNAUTHORIZED = "false";
 process.env.DB_SSL_CA_PATH = "";
 process.env.DB_SSL_CA = "";
+
+// Same dotenv-never-overrides-an-already-set-key leak as above, but for
+// the branded-email logo: emailTemplate.js#renderEmail falls back to the
+// shipped /nexora-logo.png only when EMAIL_LOGO_URL is unset. Without
+// pinning it here, a real backend/.env on the machine running the tests
+// (e.g. one pointing EMAIL_LOGO_URL at a CDN/category-cover image) leaks
+// in via db.js's require("dotenv").config() and silently replaces the
+// logo in every rendered email, which is what broke
+// tests/unit/broadcast/broadcast.service.test.js's "nexora-logo.png"
+// assertion - it was never a bug in broadcast.service.js or
+// emailTemplate.js, just an unpinned env var letting local config bleed
+// into the test run.
+process.env.EMAIL_LOGO_URL = "";

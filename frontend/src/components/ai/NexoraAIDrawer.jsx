@@ -38,6 +38,8 @@ export default function NexoraAIDrawer() {
     const [sending, setSending] = useState(false);
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
+    const panelRef = useRef(null);
+    const openerRef = useRef(null);
 
     const isOpen = Boolean(assistant?.isOpen);
 
@@ -88,10 +90,16 @@ export default function NexoraAIDrawer() {
         bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
     }, [messages, sending]);
 
-    // Focus input when drawer opens
+    // Focus input when drawer opens; remember + restore the trigger element
+    // so keyboard/screen-reader users land back where they opened it from,
+    // not at the top of the page (same pattern ConfirmDialog/SideDrawer use).
     useEffect(() => {
         if (isOpen) {
+            openerRef.current = document.activeElement;
             setTimeout(() => inputRef.current?.focus(), 200);
+        } else if (openerRef.current) {
+            openerRef.current.focus?.();
+            openerRef.current = null;
         }
     }, [isOpen]);
 
@@ -167,8 +175,32 @@ export default function NexoraAIDrawer() {
         }
     };
 
+    // Keep Tab/Shift+Tab cycling within the drawer panel, and let Escape
+    // close it - standard dialog focus-trap behavior, matching aria-modal.
+    const handlePanelKeyDown = (e) => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            assistant.close();
+            return;
+        }
+        if (e.key !== "Tab" || !panelRef.current) return;
+        const focusable = panelRef.current.querySelectorAll(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-end">
+        <div className="fixed inset-0 z-[var(--z-drawer)] flex items-end sm:items-center sm:justify-end">
             {/* Backdrop */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
             <div
@@ -179,9 +211,11 @@ export default function NexoraAIDrawer() {
 
             {/* Drawer panel */}
             <div
+                ref={panelRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Nexora Assistant"
+                onKeyDown={handlePanelKeyDown}
                 className="
                     relative w-full sm:w-[400px] sm:mr-6 sm:mb-6
                     h-[80vh] sm:h-[600px]

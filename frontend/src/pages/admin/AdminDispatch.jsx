@@ -6,6 +6,7 @@ import Skeleton, { SkeletonList } from "../../components/Skeleton";
 import AdminDispatchMap from "../../components/AdminDispatchMap";
 import AdminCoverageHeatmap from "../../components/AdminCoverageHeatmap";
 import PageMeta from "../../components/PageMeta";
+import Spinner from "../../components/ui/Spinner";
 
 const statusStyles = {
     assigned: "bg-line text-ash",
@@ -316,12 +317,12 @@ export default function AdminDispatch() {
                                 ))}
                             </select>
 
-                            <button
+                            <button aria-busy={assigningOrderId === o.order_id || undefined}
                                 type="button"
                                 onClick={() => assignOrder(o.order_id)}
                                 disabled={assigningOrderId === o.order_id}
                                 className="text-xs font-medium px-3 py-1.5 rounded-md bg-teal text-white disabled:opacity-50 transition-opacity"
-                            >
+                            >{assigningOrderId === o.order_id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {assigningOrderId === o.order_id ? "Assigning…" : "Assign"}
                             </button>
 

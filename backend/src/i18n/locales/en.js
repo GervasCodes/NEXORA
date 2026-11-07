@@ -25,7 +25,18 @@ module.exports = {
         NOTIFICATION_NOT_FOUND: "Notification not found",
         TERMS_NOT_ACCEPTED: "You must accept the Terms of Service and Privacy Policy to create an account",
         CATEGORY_UNAVAILABLE: "Selected category is not available",
-        ACCOUNT_SUSPENDED: "This account has been suspended."
+        ACCOUNT_SUSPENDED: "This account has been suspended.",
+        USERNAME_INVALID: "That username is not valid. Use 3-20 letters, numbers, underscores or dots.",
+        USERNAME_RESERVED: "That username is reserved. Please choose another one.",
+        USERNAME_TAKEN: "That username is already taken",
+        USERNAME_CHANGE_TOO_SOON: "You can change your username again in {days} day(s).",
+        GOOGLE_NOT_CONFIGURED: "Google sign-in is not available right now.",
+        GOOGLE_TOKEN_INVALID: "We could not verify your Google sign-in. Please try again.",
+        GOOGLE_EMAIL_UNVERIFIED: "Your Google email is not verified, so we cannot use it to sign in or create an account.",
+        GOOGLE_ACCOUNT_CONFLICT: "This account is already linked to a different Google account.",
+        GOOGLE_TICKET_INVALID: "Your Google sign-up expired. Please sign in with Google again.",
+        GOOGLE_ACCOUNT_EXISTS: "An account with this Google account already exists. Please sign in.",
+        ACCOUNT_LOCKED: "Too many failed sign-in attempts. Please try again in {minutes} minute(s), or reset your password to sign in now."
     },
 
     labels: {
@@ -52,6 +63,12 @@ module.exports = {
     },
 
     notifications: {
+        booking: {
+            confirmed: {
+                title: "Booking confirmed",
+                message: "Your booking {reference} has been confirmed."
+            }
+        },
         "message.new.title": "New message from {senderName}",
         "message.new.message": "{preview}",
 
@@ -59,6 +76,10 @@ module.exports = {
         "verification.approved.message": "Your {role} account has been verified. You now have full access to {role} features.",
         "verification.rejected.title": "Verification rejected",
         "verification.rejected.message": "Your {role} account verification was rejected: {reason}. Please contact support.",
+        "verification.businessApproved.title": "Verified Seller badge approved",
+        "verification.businessApproved.message": "Your business documents have been approved. Your store now shows the Verified Seller badge.",
+        "verification.businessRejected.title": "Verified Seller request rejected",
+        "verification.businessRejected.message": "Your Verified Seller request was rejected: {reason}. You can submit a new request with corrected documents.",
 
         "account.unsuspended.title": "Account reinstated",
         "account.unsuspended.message": "Your account has been reinstated. Welcome back!",
@@ -69,8 +90,8 @@ module.exports = {
         "seller.storeVerified.message": "Congratulations! \"{storeName}\" has been verified.",
         "seller.storeUnverified.title": "Store verification removed",
         "seller.storeUnverified.message": "Verification for \"{storeName}\" has been removed.",
-        "seller.badge.title": "You're now a Verified Seller!",
-        "seller.badge.message": "Your Verified Seller badge is live. Advanced analytics, revenue reports and premium tools are now unlocked.",
+        "seller.approved.title": "Your account is approved to sell",
+        "seller.approved.message": "NEXORA approved your ID, so you can sell now. To earn the Verified Seller badge, submit your business documents from the Verification page.",
 
         "product.reactivated.title": "Product reactivated",
         "product.reactivated.message": "Your product \"{productName}\" is visible again.",
@@ -124,11 +145,17 @@ module.exports = {
         "order.placed.title": "Order placed",
         "order.placed.messageMultiVendor": "Your order {orderNumber} ({vendorCount} vendors) has been placed successfully.",
         "order.placed.messageSingle": "Your order {orderNumber} ({itemSummary}) has been placed successfully.",
+        "order.handoverCode.title": "Your delivery code",
+        "order.handoverCode.message": "Your NEXORA order {orderNumber} delivery code is {code}. Give this code to the rider when your order arrives - don't share it before then.",
         "order.cancelled.title": "Order cancelled",
         "order.cancelled.message": "Your order {orderNumber} has been cancelled.",
         "order.cancelled.messageWithItem": "Your order {orderNumber} ({itemSummary}) has been cancelled.",
         "order.cancelledUnpaid.message": "Your order {orderNumber} was cancelled because payment was never completed. Feel free to place it again.",
         "order.cancelledUnpaid.messageWithItem": "Your order {orderNumber} ({itemSummary}) was cancelled because payment was never completed. Feel free to place it again.",
+        "payment.paidAfterCancel.title": "Payment received for a cancelled order",
+        "payment.paidAfterCancel.message": "We received your payment for order {orderNumber}, but the order had already been cancelled. Our team will review it and refund you.",
+        "payment.notReceived.title": "We did not receive your payment",
+        "payment.notReceived.message": "We did not receive your payment, so it was not completed. Please try again.",
         "order.statusUpdated.title": "Order status updated",
         "order.statusUpdated.message": "Your order {orderNumber} is now \"{status}\".",
         "order.statusUpdated.messageWithItem": "Your order {orderNumber} ({itemSummary}) is now \"{status}\".",
@@ -136,9 +163,19 @@ module.exports = {
         "order.preorderDepositPaid.message": "We've received your deposit for order {orderNumber}. We'll let you know once it's ready and the remaining balance is due.",
         "order.preorderBalanceDue.title": "Balance payment due",
         "order.preorderBalanceDue.message": "Your made-to-order item for order {orderNumber} is ready! Please pay the remaining balance of {balanceAmount} to have it shipped.",
+        "order.preorderReady.title": "Your order is ready",
+        "order.preorderReady.message": "Your made-to-order item for order {orderNumber} is ready and will be handed to a delivery driver shortly.",
+        "order.preorderDueSoon.title": "Made-to-order item due tomorrow",
+        "order.preorderDueSoon.message": "Order {orderNumber} is due to be ready by {readyBy}. Mark it ready in your orders when it's finished.",
+        "order.preorderOverdueSeller.title": "Made-to-order item is late",
+        "order.preorderOverdueSeller.message": "Order {orderNumber} has passed its ready-by date. Please finish it and mark it ready, or contact the buyer.",
+        "order.preorderOverdueBuyer.title": "Your order is taking longer than expected",
+        "order.preorderOverdueBuyer.message": "Your made-to-order item for order {orderNumber} is running late. We've reminded the seller.",
 
         "wallet.credited.title": "Wallet credited",
         "wallet.credited.message": "Your wallet has been credited for order #{orderId}.",
+        "wallet.codCommissionDebited.title": "Cash on Delivery commission debited",
+        "wallet.codCommissionDebited.message": "Your platform commission for Cash on Delivery order #{orderId} has been debited from your wallet.",
         "wallet.released.title": "Held earnings released",
         "wallet.released.message": "Some of your held earnings have cleared the escrow hold period and are now available to withdraw.",
         "withdrawal.status.title": "Withdrawal {status}",
@@ -156,13 +193,52 @@ module.exports = {
         "featuredStore.expired.title": "Featured store campaign ended",
         "featuredStore.expired.message": "Your featured store campaign in \"{categoryName}\" has ended. Start a new one any time from your seller dashboard.",
 
-        "departmentSponsorship.started.title": "Department sponsorship started",
-        "departmentSponsorship.started.message": "Your {days}-day sponsorship of \"{categoryName}\" on the homepage is now live ({amount} charged to your wallet).",
-        "departmentSponsorship.expired.title": "Department sponsorship ended",
-        "departmentSponsorship.expired.message": "Your sponsorship of \"{categoryName}\" has ended. Start a new one any time from your seller dashboard."
+        "subscription.expiring.title": "Your seller plan is ending soon",
+        "subscription.expiring.message": "Your {planName} plan runs until {date}. Renew from your seller dashboard to keep its benefits.",
+        "subscription.renewal.title": "Renew your seller plan",
+        "subscription.renewal.message": "Your {planName} plan renews on {date}. Pay from your seller dashboard to keep its benefits without a gap.",
+        "stock.low.title": "Low stock: {count} item(s) need restocking",
+        "stock.low.message": "Running low: {names}. Open Stock Management to reorder.",
+        "stock.negative.title": "A sale took stock below zero",
+        "stock.negative.message": "Sale {receipt} was recorded offline and synced later. Check the stock of: {names}.",
+        "trial.midway.title": "Your free trial has 2 days left",
+        "trial.midway.message": "Your 7-day free trial ends in about 2 days. Choose a plan from your seller dashboard to keep Analytics, POS and the other plan features.",
+        "trial.lastDay.title": "Last day of your free trial",
+        "trial.lastDay.message": "Your free trial ends within 24 hours. Choose a plan now to keep Analytics, POS and the other plan features without a gap.",
+        "trial.expired.title": "Your free trial has ended",
+        "trial.expired.message": "Trial ended - choose a plan to keep Analytics and POS. You can keep selling on the Free plan.",
+        "trial.extended.title": "Your free trial was extended",
+        "trial.extended.message": "Good news: your free trial now runs {days} more day(s)."
     },
 
+    otp: {
+        channelName: { email: "email", sms: "SMS", whatsapp: "WhatsApp" },
+        channelFailed: "We couldn't send the code by {channel}. Please choose another method.",
+        subject: {
+            login: "Your NEXORA sign-in code",
+            password_change: "Your NEXORA password change code",
+            password_reset: "Your NEXORA password reset code",
+            default: "Your NEXORA verification code"
+        },
+        intro: {
+            login: "Use this code to finish signing in to NEXORA:",
+            password_change: "Use this code to verify it's you before changing your NEXORA password:",
+            password_reset: "Use this code to reset your NEXORA password:"
+        },
+        expiry: "This code expires in {minutes} minutes. If you didn't request this, you can safely ignore this message.",
+        sms: "NEXORA code: {code}. It expires in {minutes} minutes. Never share this code with anyone."
+    },
     email: {
-        footer: "This is an automated message from NEXORA. Please do not reply directly to this email."
+        cta: { view: "View in NEXORA" },
+        supportLabel: "Need help? Contact support",
+        manageLabel: "Manage notification emails",
+        // Previously told people NOT to reply, which is exactly the
+        // "no-reply bulk mail" shape that makes mail clients file a
+        // message under Promotions/Updates instead of Primary - now that
+        // config/brevo.js sets a real Reply-To, this should invite a
+        // reply instead of discouraging one.
+        footer: "This message was sent by NEXORA - reply any time if you need help.",
+        tagline: "Tanzania's marketplace",
+        greetingPrefix: "Hi"
     }
 };

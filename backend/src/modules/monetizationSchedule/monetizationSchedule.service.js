@@ -63,8 +63,7 @@ exports.cancel = async (id, adminId) => {
 const FLAG_LABELS = {
     monetization_subscriptions_enabled: "Subscriptions",
     monetization_commission_enabled: "Commission",
-    monetization_sponsorship_enabled: "Sponsorship & featured placement",
-    monetization_verification_fee_enabled: "Verification fee"
+    monetization_sponsorship_enabled: "Sponsorship & featured placement"
 };
 
 // Called every minute by jobs/monetizationSchedule.job.js, alongside

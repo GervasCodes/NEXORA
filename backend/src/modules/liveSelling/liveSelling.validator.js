@@ -1,9 +1,12 @@
 const { body, param } = require("express-validator");
+const { isAllowedLiveSellingLink, ALLOWED_HOSTS } = require("../../utils/liveSellingLink");
 
 exports.createValidation = [
     body("title").notEmpty().isLength({ max: 200 }).withMessage("Title is required"),
     body("description").optional({ nullable: true }).isLength({ max: 1000 }),
-    body("externalLink").isURL().withMessage("A valid link is required"),
+    body("externalLink")
+        .custom((value) => isAllowedLiveSellingLink(value))
+        .withMessage(`Use an https link from: ${ALLOWED_HOSTS.join(", ")}`),
     body("scheduledAt").isISO8601().withMessage("Invalid scheduled time")
 ];
 

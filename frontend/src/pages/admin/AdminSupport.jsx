@@ -4,6 +4,7 @@ import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatDate } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
 
 const STATUS_STYLES = {
     open: "bg-mango/20 text-mango-dark",
@@ -124,12 +125,12 @@ export default function AdminSupport() {
                                 <h2 className="font-display text-lg">{activeTicket.subject}</h2>
                                 <div className="flex gap-2">
                                     {["open", "pending", "resolved", "closed"].map((s) => (
-                                        <button
+                                        <button aria-busy={busy || undefined}
                                             key={s}
                                             disabled={busy || activeTicket.status === s}
                                             onClick={() => changeStatus(s)}
                                             className={`text-xs px-2.5 py-1 rounded-full capitalize border transition-colors disabled:opacity-100 ${activeTicket.status === s ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"}`}
-                                        >
+                                        >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                             {s}
                                         </button>
                                     ))}
@@ -154,11 +155,11 @@ export default function AdminSupport() {
                                     placeholder="Reply…"
                                     className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus-ring"
                                 />
-                                <button
+                                <button aria-busy={busy || undefined}
                                     type="submit"
                                     disabled={busy}
                                     className="bg-ink text-paper px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-60"
-                                >
+                                >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Send
                                 </button>
                             </form>

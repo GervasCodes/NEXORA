@@ -10,12 +10,12 @@ import ImageLightbox from "../components/chat/ImageLightbox";
 import MessageSearch from "../components/chat/MessageSearch";
 import DateSeparator from "../components/chat/DateSeparator";
 import ChatWallpaperPicker from "../components/chat/ChatWallpaperPicker";
-import PageLoader from "../components/PageLoader";
-import Button from "../components/ui/Button";
+import ThreadSkeleton from "../components/chat/ThreadSkeleton";
 import PageMeta from "../components/PageMeta";
-import { ImageIcon, PaperclipIcon } from "../components/Icons";
+import { ImageIcon, PaperclipIcon, ChatIcon } from "../components/Icons";
 import { formatDate } from "../utils/format";
 import { getWallpaper, loadStoredWallpaperId, storeWallpaperId } from "../utils/chatWallpaper";
+import ProgressBar from "../components/ui/ProgressBar";
 
 // How long the "user is typing…" indicator stays up after the last
 // typing_start with no follow-up typing_stop (covers a tab closing or a
@@ -49,8 +49,22 @@ export default function ConversationThread() {
     const [highlightedId, setHighlightedId] = useState(null);
     const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
     const [wallpaperId, setWallpaperId] = useState(loadStoredWallpaperId);
+    // Phase 8 sub-phase 3 (empty & loading states): distinguishes "the
+    // history fetch actually failed" from "this is a genuinely brand-new
+    // conversation" - both leave `messages` at `[]`, but they need very
+    // different treatment (a retry vs. a friendly "say hello" placeholder).
+    // Kept separate from the generic `error` string below, which is also
+    // reused for later send/react/delete failures unrelated to this.
+    const [loadFailed, setLoadFailed] = useState(false);
 
     const bottomRef = useRef(null);
+    const cameraInputRef = useRef(null);
+    const recorderRef = useRef(null);
+    const recordChunksRef = useRef([]);
+    const recordTimerRef = useRef(null);
+    const [recording, setRecording] = useState(false);
+    const [recordSeconds, setRecordSeconds] = useState(0);
+    const composerRef = useRef(null);
     const fileInputRef = useRef(null);
     const typingStopTimer = useRef(null);
     const otherTypingTimer = useRef(null);
@@ -60,14 +74,23 @@ export default function ConversationThread() {
     // below for why this matters.
     const hasAutoScrolledRef = useRef(false);
 
-    useEffect(() => {
+    const loadMessages = () => {
         setLoading(true);
+        setLoadFailed(false);
         hasAutoScrolledRef.current = false;
         api.get(`/chat/conversations/${id}/messages`)
             .then(({ data }) => setMessages(data.data))
-            .catch(() => setError(t("chat.loadError")))
+            .catch(() => {
+                // The dedicated loadFailed banner below already surfaces this
+                // message with its own role="alert" and a retry action -
+                // also setting the generic `error` string here duplicated it
+                // as a second, redundant role="alert" element on the page.
+                setLoadFailed(true);
+            })
             .finally(() => setLoading(false));
-    }, [id]);
+    };
+
+    useEffect(loadMessages, [id]);
 
     // Phase 5 (production error fixes): split out from the fetch effect
     // above. `PUT .../read` is a mutating request, so it needs the
@@ -239,6 +262,92 @@ export default function ConversationThread() {
         }
     };
 
+    // Grow the composer with its content (up to its max-h), shrink back
+    // when it's cleared after sending.
+    useEffect(() => {
+        const el = composerRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+    }, [draft]);
+
+    // Enter sends, Shift+Enter inserts a new line. On touch keyboards the
+    // Enter key is left alone so it keeps meaning "new line".
+    const handleComposerKeyDown = (e) => {
+        if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+        if (window.matchMedia?.("(pointer: coarse)").matches) return;
+        e.preventDefault();
+        e.currentTarget.form?.requestSubmit();
+    };
+
+    const QUICK_REPLIES = [
+        t("chat.quickReply.thanks"),
+        t("chat.quickReply.available"),
+        t("chat.quickReply.shipToday"),
+        t("chat.quickReply.sendLocation")
+    ];
+
+    const insertQuickReply = (text) => {
+        setDraft((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
+        composerRef.current?.focus();
+    };
+
+    // Voice notes: record with the browser's MediaRecorder, then hand the
+    // result to the normal attachment flow (preview, then Send).
+    const stopRecordTimer = () => {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+    };
+
+    const startRecording = async () => {
+        setError("");
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+            setError(t("chat.voice.unsupported"));
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream);
+            recordChunksRef.current = [];
+            recorder.ondataavailable = (e) => { if (e.data.size > 0) recordChunksRef.current.push(e.data); };
+            recorder.onstop = () => {
+                stream.getTracks().forEach((track) => track.stop());
+                const type = recorder.mimeType || "audio/webm";
+                const blob = new Blob(recordChunksRef.current, { type });
+                if (blob.size > 0 && recorder.cancelled !== true) {
+                    const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+                    setAttachmentFile(new File([blob], `voice-note.${ext}`, { type }));
+                }
+            };
+            recorder.start();
+            recorderRef.current = recorder;
+            setRecordSeconds(0);
+            setRecording(true);
+            recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+        } catch {
+            setError(t("chat.voice.denied"));
+        }
+    };
+
+    const finishRecording = (cancel = false) => {
+        const recorder = recorderRef.current;
+        stopRecordTimer();
+        setRecording(false);
+        if (!recorder || recorder.state === "inactive") return;
+        recorder.cancelled = cancel;
+        recorder.stop();
+        recorderRef.current = null;
+    };
+
+    useEffect(() => () => {
+        stopRecordTimer();
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== "inactive") {
+            recorder.cancelled = true;
+            recorder.stop();
+        }
+    }, []);
+
     const handleDraftChange = (e) => {
         setDraft(e.target.value);
         if (e.target.value.trim()) emitTyping();
@@ -387,10 +496,10 @@ export default function ConversationThread() {
         }
     };
 
-    if (loading) return <PageLoader />;
+    if (loading) return <ThreadSkeleton />;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col h-[calc(100vh-64px)] supports-[height:100dvh]:h-[calc(100dvh-64px)]">
+        <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 pb-4 flex flex-col h-screen supports-[height:100dvh]:h-[100dvh]">
             <PageMeta title="Conversation" noIndex />
             {/* Phase 4 (SEO Supporting, H1 audit): this page has no heading
                 anywhere - just a "← All messages" back link and the action
@@ -401,8 +510,8 @@ export default function ConversationThread() {
                 title above - visually hidden so the existing header layout
                 is untouched. */}
             <h1 className="sr-only">Conversation</h1>
-            <div className="flex items-center justify-between mb-2 gap-2">
-                <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0">
+            <div className="flex items-center justify-between mb-2 gap-2 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sticky top-0 z-10 bg-paper border-b border-line/60 -mx-4 px-4 sm:-mx-6 sm:px-6">
+                <Link to="/messages" className="text-sm text-teal hover:underline inline-block shrink-0 py-1">
                     ← {t("chat.allMessages")}
                 </Link>
 
@@ -494,7 +603,45 @@ export default function ConversationThread() {
                 style={wallpaper.style || undefined}
             >
                 {messages.length === 0 && (
-                    <p className="text-ash text-sm text-center py-10">{t("chat.noMessages")}</p>
+                    loadFailed ? (
+                        // Phase 8 sub-phase 3: a failed history fetch previously
+                        // rendered identically to a brand-new, empty conversation
+                        // (see loadFailed above) - this gets its own coral-toned
+                        // state with a retry, consistent with ErrorState elsewhere
+                        // in the app, rather than looking like nothing was ever said.
+                        <div className="flex flex-col items-center justify-center text-center px-6 py-16" role="alert">
+                            <div className="w-14 h-14 rounded-full bg-coral/10 flex items-center justify-center mb-3" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6 text-coral">
+                                    <circle cx="12" cy="12" r="9" />
+                                    <path d="M12 8v5" />
+                                    <path d="M12 16h.01" />
+                                </svg>
+                            </div>
+                            <p className="text-sm text-ink font-medium mb-3">{t("chat.loadError")}</p>
+                            <button type="button" onClick={loadMessages} className="text-xs font-medium text-teal hover:underline">
+                                Try again
+                            </button>
+                        </div>
+                    ) : (
+                        // Genuinely empty (new) conversation - the violet-azure
+                        // gradient badge echoes the "mine" bubble/send-button
+                        // branding from sub-phases 1-2 instead of a flat neutral
+                        // circle, so this reads as an on-brand invitation to say
+                        // something rather than a generic "nothing here" notice.
+                        <div className="flex flex-col items-center justify-center text-center px-6 py-16" role="status">
+                            <div
+                                className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+                                style={{
+                                    background: "linear-gradient(135deg, #7C3AED 0%, #1D4ED8 100%)",
+                                    boxShadow: "0 6px 20px -4px rgba(124,58,237,0.35)"
+                                }}
+                                aria-hidden="true"
+                            >
+                                <ChatIcon className="w-6 h-6 text-frost" />
+                            </div>
+                            <p className="text-sm text-ash">{t("chat.noMessages")}</p>
+                        </div>
+                    )
                 )}
 
                 {messages.map((m, i) => {
@@ -522,14 +669,34 @@ export default function ConversationThread() {
 
             {error && <p role="alert" className="text-coral text-sm mb-2">{error}</p>}
 
+            {/* Phase 8 sub-phase 2 (input bar & attachments, premium dark/glassy
+                direction): the attachment preview and composer both move onto
+                the same frosted-glass surface as sub-phase 1's bubbles
+                (glass-strong, already used elsewhere in the app), rather than
+                a plain bordered box and a bare top border. */}
+            {user?.role === "seller" && (
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" role="group" aria-label={t("chat.quickReply.label")}>
+                    {QUICK_REPLIES.map((text) => (
+                        <button
+                            key={text}
+                            type="button"
+                            onClick={() => insertQuickReply(text)}
+                            className="shrink-0 text-xs border border-line rounded-full px-3 py-1.5 bg-paper hover:border-ink transition-colors"
+                        >
+                            {text}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {attachmentFile && (
-                <div className="flex items-center gap-2 border border-line rounded-lg px-3 py-2 mb-2 animate-slide-up">
+                <div className="flex items-center gap-2 glass-strong rounded-2xl px-3 py-2 mb-2 animate-slide-up">
                     <span className="text-xs truncate flex-1 inline-flex items-center gap-1">
                         {attachmentFile.type.startsWith("image/") ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <PaperclipIcon className="w-3.5 h-3.5 shrink-0" />}
                         {attachmentFile.name}
                     </span>
                     {uploadProgress !== null && (
-                        <span className="text-[10px] text-ash font-mono">{uploadProgress}%</span>
+                        <ProgressBar value={uploadProgress} label={t("upload.progress")} hideLabel size="xs" tone="teal" className="w-16" />
                     )}
                     <button
                         type="button"
@@ -544,7 +711,7 @@ export default function ConversationThread() {
 
             <form
                 onSubmit={handleSend}
-                className="flex gap-2 border-t border-line pt-4 pb-[env(safe-area-inset-bottom)]"
+                className="flex items-end gap-2 glass-strong rounded-3xl pl-2 pr-2 py-2 mb-[env(safe-area-inset-bottom)]"
             >
                 <input
                     ref={fileInputRef}
@@ -556,7 +723,7 @@ export default function ConversationThread() {
                 <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full border border-line text-ash hover:text-ink hover:border-ash transition-colors"
+                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-paper border border-line/60 text-ash shadow-btn-icon-rest transition-all duration-150 ease-out hover:text-ink hover:-translate-y-0.5 hover:shadow-btn-icon-hover active:translate-y-0 active:shadow-btn-icon-active"
                     aria-label="Attach a file"
                 >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -569,20 +736,83 @@ export default function ConversationThread() {
                     </svg>
                 </button>
                 <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                />
+                <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-paper border border-line/60 text-ash hover:text-ink transition-colors"
+                    aria-label={t("chat.camera")}
+                >
+                    <ImageIcon className="w-[18px] h-[18px]" />
+                </button>
+                {recording ? (
+                    <div className="flex-1 min-w-0 flex items-center gap-2 px-2 py-2" role="status">
+                        <span className="w-2.5 h-2.5 rounded-full bg-coral animate-pulse" />
+                        <span className="text-sm font-mono">{Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}</span>
+                        <button type="button" onClick={() => finishRecording(true)} className="text-xs text-ash hover:text-coral ml-auto">
+                            {t("common.cancel")}
+                        </button>
+                        <button type="button" onClick={() => finishRecording(false)} className="text-xs font-semibold text-teal">
+                            {t("chat.voice.stop")}
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={startRecording}
+                        className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-paper border border-line/60 text-ash hover:text-ink transition-colors"
+                        aria-label={t("chat.voice.record")}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <rect x="9" y="3" width="6" height="11" rx="3" />
+                            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+                        </svg>
+                    </button>
+                )}
+                <textarea
+                    ref={composerRef}
                     value={draft}
                     onChange={handleDraftChange}
+                    onKeyDown={handleComposerKeyDown}
                     onBlur={stopTypingNow}
-                    placeholder="Write a message…"
-                    className="flex-1 min-w-0 border border-line rounded-full px-4 py-2 text-base focus-ring"
+                    rows={1}
+                    placeholder={t("chat.composerPlaceholder")}
+                    aria-label={t("chat.composerPlaceholder")}
+                    className="flex-1 min-w-0 bg-transparent rounded-2xl px-2 py-2 text-base focus-ring resize-none max-h-32 leading-snug"
                 />
-                <Button
+                {/* Custom send button rather than the shared <Button> - this
+                    should read as part of the chat surface (violet-azure
+                    gradient matching the "mine" bubble/glow), not the
+                    warm/mango purchase-CTA color <Button> uses everywhere
+                    else, and <Button> is shared across 45+ places so isn't
+                    touched here. */}
+                <button
                     type="submit"
                     disabled={sending || (!draft.trim() && !attachmentFile)}
-                    size="sm"
-                    className="shrink-0 !rounded-full !px-5"
+                    aria-label={sending ? "Sending…" : "Send message"}
+                    className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full text-frost transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:pointer-events-none"
+                    style={{
+                        background: "linear-gradient(135deg, #7C3AED 0%, #1D4ED8 100%)",
+                        boxShadow: "0 6px 20px -4px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.12)"
+                    }}
                 >
-                    {sending ? "Sending…" : "Send"}
-                </Button>
+                    {sending ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3" />
+                            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        </svg>
+                    ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path d="M4 12h15.5M13 5.5 20 12l-7 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    )}
+                </button>
             </form>
 
             <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />

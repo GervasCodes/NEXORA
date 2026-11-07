@@ -8,6 +8,12 @@ exports.updateProfileValidation = [
     phoneValidator("phone", { optional: true })
 ];
 
+// Format/reserved/availability rules live in utils/username.js and
+// username.service.js; this only makes sure a string arrived.
+exports.changeUsernameValidation = [
+    body("username").isString().trim().notEmpty().withMessage("Username is required")
+];
+
 exports.updateSettingsValidation = [
     body("language")
         .optional()

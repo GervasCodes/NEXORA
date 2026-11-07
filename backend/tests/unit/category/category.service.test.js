@@ -34,7 +34,7 @@ describe("category.service Phase RF5 caching", () => {
     });
 
     it("listDepartments reads through the categories cache namespace", async () => {
-        categoryRepository.findAllActiveWithSponsorship.mockResolvedValue([]);
+        categoryRepository.findAllActive.mockResolvedValue([]);
 
         await categoryService.listDepartments();
 

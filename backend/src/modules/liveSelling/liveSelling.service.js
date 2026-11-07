@@ -6,10 +6,14 @@
 
 const liveSellingRepository = require("./liveSelling.repository");
 const notificationService = require("../notification/notification.service");
+const { isAllowedLiveSellingLink } = require("../../utils/liveSellingLink");
 
 exports.create = async (sellerId, { title, description, externalLink, scheduledAt }) => {
     if (!title || !externalLink || !scheduledAt) {
         throw new Error("Title, link, and scheduled time are required");
+    }
+    if (!isAllowedLiveSellingLink(externalLink)) {
+        throw new Error("The stream link must be an https link from YouTube, Facebook, Instagram or TikTok.");
     }
     if (new Date(scheduledAt).getTime() <= Date.now()) {
         throw new Error("Scheduled time must be in the future");

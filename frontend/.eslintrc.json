@@ -6,7 +6,7 @@
         "node": true
     },
     "parserOptions": {
-        "ecmaVersion": 2021,
+        "ecmaVersion": "latest",
         "sourceType": "module",
         "ecmaFeatures": {
             "jsx": true
@@ -28,7 +28,19 @@
         "react/prop-types": "off",
         "react/react-in-jsx-scope": "off",
         "react/no-unescaped-entities": "off",
-        "no-unused-vars": ["warn", { "args": "none" }],
+        "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }],
         "react/no-danger": "error"
-    }
+    },
+    "overrides": [
+        {
+            // react-three-fiber (Hero3DScene) renders real three.js object
+            // properties (position/rotation/intensity/etc.) as JSX props -
+            // react/no-unknown-property doesn't know the r3f JSX runtime and
+            // otherwise flags every one of them as an unknown DOM attribute.
+            "files": ["src/components/hero3d/**/*.jsx"],
+            "rules": {
+                "react/no-unknown-property": "off"
+            }
+        }
+    ]
 }

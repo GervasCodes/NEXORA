@@ -1,57 +1,75 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { ROUTE_LOADING_EVENT } from "./RouteFallback";
 
 /**
- * Animation System — loaders.
+ * Animation System - loaders.
  *
- * A slim progress bar across the very top of the viewport that sweeps in
- * on every route change, the same idea as the bar YouTube/GitHub show
- * while a new page is loading. This is a *perceived-performance* cue,
- * separate from the existing <PageLoader /> spinner (which only shows
- * while a lazy-loaded route chunk is actually still downloading, inside
- * the <Suspense> fallback) — this bar animates on every navigation,
- * including instant ones, so the app always acknowledges the tap/click
- * immediately instead of feeling unresponsive for the first frame.
+ * A slim progress bar across the very top of the viewport while a route
+ * is *actually* loading (a lazy page chunk being downloaded - see
+ * <RouteFallback />, the Suspense fallback in App.jsx).
  *
- * Deliberately simulated rather than tied to real network progress
- * (there's no single "page load" promise to watch here — a route can
- * finish instantly from cache, trigger a lazy import, and/or kick off
- * its own data fetches independently) — same approach NProgress and
- * similar libraries use, and why this doesn't add one as a dependency.
+ * It used to run a fixed timer on every navigation, which made instant,
+ * already-cached navigations flash a bar that implied work that wasn't
+ * happening. Now:
+ *  - it only starts if the route is still loading after START_DELAY_MS,
+ *    so cached navigations show nothing;
+ *  - while loading it eases toward 90% (never claiming to be done early);
+ *  - when the route settles it snaps to 100% and fades out.
+ * Data fetches inside a page are covered by that page's skeletons.
  */
+const START_DELAY_MS = 120;
+
 export default function RouteProgressBar() {
-    const location = useLocation();
     const [progress, setProgress] = useState(0);
     const [visible, setVisible] = useState(false);
-    const timers = useRef([]);
+    const startTimer = useRef(null);
+    const tick = useRef(null);
+    const hideTimer = useRef(null);
+    const showing = useRef(false);
 
     useEffect(() => {
-        timers.current.forEach(clearTimeout);
-        timers.current = [];
+        const clearAll = () => {
+            clearTimeout(startTimer.current);
+            clearInterval(tick.current);
+            clearTimeout(hideTimer.current);
+        };
 
-        setVisible(true);
-        setProgress(12);
+        const begin = () => {
+            clearTimeout(hideTimer.current);
+            startTimer.current = setTimeout(() => {
+                showing.current = true;
+                setVisible(true);
+                setProgress(12);
+                tick.current = setInterval(() => {
+                    setProgress((p) => p + (90 - p) * 0.12);
+                }, 150);
+            }, START_DELAY_MS);
+        };
 
-        // Quick ramp that decelerates - never quite reaches 100% on its
-        // own, since we don't actually know when the route is "done".
-        timers.current.push(setTimeout(() => setProgress(45), 60));
-        timers.current.push(setTimeout(() => setProgress(68), 180));
-        timers.current.push(setTimeout(() => setProgress(82), 380));
+        const finish = () => {
+            clearTimeout(startTimer.current);
+            clearInterval(tick.current);
+            if (!showing.current) return;
+            showing.current = false;
+            setProgress(100);
+            hideTimer.current = setTimeout(() => {
+                setVisible(false);
+                setProgress(0);
+            }, 280);
+        };
 
-        // Finish it off and fade out shortly after - long enough to
-        // cover a lazy chunk fetch on a typical connection, short enough
-        // to never feel like it's lying about still loading.
-        const finish = setTimeout(() => setProgress(100), 520);
-        const hide = setTimeout(() => setVisible(false), 760);
-        timers.current.push(finish, hide);
-
-        return () => timers.current.forEach(clearTimeout);
-    }, [location.pathname]);
+        const onEvent = (e) => (e.detail?.loading ? begin() : finish());
+        window.addEventListener(ROUTE_LOADING_EVENT, onEvent);
+        return () => {
+            window.removeEventListener(ROUTE_LOADING_EVENT, onEvent);
+            clearAll();
+        };
+    }, []);
 
     return (
         <div
             aria-hidden="true"
-            className="fixed top-0 left-0 right-0 z-[60] h-[3px] pointer-events-none"
+            className="fixed top-0 left-0 right-0 z-[var(--z-float)] h-[3px] pointer-events-none"
         >
             <div
                 className="h-full bg-gradient-to-r from-azure via-mango to-coral transition-[width,opacity] duration-300 ease-out"

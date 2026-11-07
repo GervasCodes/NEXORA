@@ -11,12 +11,17 @@ exports.preview = async (req, res) => {
 
 exports.send = async (req, res) => {
     try {
-        const result = await broadcastService.sendBroadcast({
+        const result = await broadcastService.queueBroadcast({
             adminId: req.user.id,
             segment: req.body.segment,
             channels: req.body.channels,
+            templateType: req.body.templateType || "all",
             subject: req.body.subject,
-            message: req.body.message
+            message: req.body.message,
+            smsMessage: req.body.smsMessage,
+            whatsappMessage: req.body.whatsappMessage,
+            inAppTitle: req.body.inAppTitle,
+            inAppMessage: req.body.inAppMessage
         });
         return res.json({ success: true, data: result });
     } catch (error) {
@@ -26,9 +31,27 @@ exports.send = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
     try {
-        const data = await broadcastService.getHistory();
+        const data = await broadcastService.getHistory({ type: req.query.type });
         return res.json({ success: true, data });
     } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};
+
+exports.remove = async (req, res) => {
+    try {
+        await broadcastService.deleteBroadcast(req.params.id);
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
+    }
+};
+
+exports.resend = async (req, res) => {
+    try {
+        const result = await broadcastService.queueResendBroadcast(req.params.id, req.user.id);
+        return res.json({ success: true, data: result });
+    } catch (error) {
+        return res.status(error.status || 400).json({ success: false, message: error.message });
     }
 };

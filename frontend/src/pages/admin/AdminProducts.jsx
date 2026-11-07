@@ -4,6 +4,7 @@ import { formatMoney } from "../../utils/format";
 import Button from "../../components/ui/Button";
 import DataTable from "../../components/ui/DataTable";
 import PageMeta from "../../components/PageMeta";
+import Spinner from "../../components/ui/Spinner";
 
 const PAGE_SIZE = 20;
 
@@ -172,7 +173,7 @@ export default function AdminProducts() {
                 bulkActions={selectedIds.length > 0 && (
                     <>
                         <p className="text-xs font-medium">{selectedIds.length} selected</p>
-                        <Button
+                        <Button loading={bulkBusy}
                             variant="secondary"
                             size="sm"
                             onClick={() => bulkSetActive(true)}
@@ -181,7 +182,7 @@ export default function AdminProducts() {
                         >
                             Restore selected
                         </Button>
-                        <Button
+                        <Button loading={bulkBusy}
                             variant="secondary"
                             size="sm"
                             onClick={() => bulkSetActive(false)}
@@ -190,11 +191,11 @@ export default function AdminProducts() {
                         >
                             Remove selected
                         </Button>
-                        <button
+                        <button aria-busy={bulkBusy || undefined}
                             onClick={() => setSelectedIds([])}
                             disabled={bulkBusy}
                             className="text-xs text-ash underline hover:text-ink transition-colors ml-auto"
-                        >
+                        >{bulkBusy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                             Clear selection
                         </button>
                     </>
@@ -224,7 +225,7 @@ export default function AdminProducts() {
                             </span>
                         ) : null}
 
-                        <Button
+                        <Button loading={busyId === p.id}
                             onClick={() => toggleSponsored(p)}
                             disabled={busyId === p.id}
                             variant="secondary"
@@ -233,7 +234,7 @@ export default function AdminProducts() {
                             {p.is_sponsored ? "Unsponsor" : "Sponsor"}
                         </Button>
 
-                        <Button
+                        <Button loading={busyId === p.id}
                             onClick={() => toggleActive(p)}
                             disabled={busyId === p.id}
                             variant="secondary"

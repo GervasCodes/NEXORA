@@ -4,13 +4,15 @@ import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import PageMeta from "../../components/PageMeta";
 import { useToast } from "../../context/ToastContext";
+import useAdminPagedList from "../../hooks/useAdminPagedList";
+import AdminListControls from "../../components/admin/AdminListControls";
+import AdminPager from "../../components/admin/AdminPager";
+import Spinner from "../../components/ui/Spinner";
 
 const emptyForm = { first_name: "", last_name: "", email: "", phone: "", password: "", admin_level: "admin" };
 
 export default function AdminManageAdmins() {
     const { user } = useAuth();
-    const [admins, setAdmins] = useState([]);
-    const [loading, setLoading] = useState(true);
     const toast = useToast();
     const [busyId, setBusyId] = useState(null);
     const [form, setForm] = useState(emptyForm);
@@ -18,11 +20,9 @@ export default function AdminManageAdmins() {
 
     const isSuperAdmin = user?.admin_level === "super_admin";
 
-    const load = () => {
-        api.get("/admin/admins").then(({ data }) => setAdmins(data.data)).catch((err) => toast?.error(extractErrorMessage(err))).finally(() => setLoading(false));
-    };
-
-    useEffect(() => { if (isSuperAdmin) load(); else setLoading(false); }, [isSuperAdmin]);
+    const list = useAdminPagedList("/admin/admins", { onError: (m) => toast?.error(m), enabled: isSuperAdmin });
+    const { items: admins, loading, meta } = list;
+    const load = list.reload;
 
     if (!isSuperAdmin) {
         return (
@@ -101,11 +101,20 @@ export default function AdminManageAdmins() {
                     <option value="super_admin">Super Admin (full control)</option>
                 </select>
 
-                <button type="submit" disabled={creating}
-                    className="sm:col-span-2 bg-ink text-paper py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
+                <button aria-busy={creating || undefined} type="submit" disabled={creating}
+                    className="sm:col-span-2 bg-ink text-paper py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">{creating && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                     {creating ? "Creating…" : "Create admin"}
                 </button>
             </form>
+
+            <AdminListControls
+                searchValue={list.searchInput}
+                onSearchChange={list.setSearchInput}
+                onSubmit={list.submitSearch}
+                placeholder="Search name or email"
+                ariaLabel="Search admins"
+                filters={[{ key: "status", label: "Filter by status", value: list.filters.status || "", options: [{ value: "", label: "All admins" },{ value: "active", label: "Active" },{ value: "inactive", label: "Inactive" }], onChange: (v) => list.applyFilters({ ...list.filters, status: v }) }]}
+            />
 
             {loading ? <p className="text-ash">Loading admins…</p> : (
                 <ul className="divide-y divide-line border-y border-line">
@@ -123,7 +132,7 @@ export default function AdminManageAdmins() {
                             </span>
 
                             <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                                <Button
+                                <Button loading={busyId === a.id}
                                     onClick={() => changeLevel(a.id, a.admin_level === "super_admin" ? "admin" : "super_admin")}
                                     disabled={busyId === a.id}
                                     variant="secondary"
@@ -133,11 +142,11 @@ export default function AdminManageAdmins() {
                                     {a.admin_level === "super_admin" ? "Demote to Admin" : "Promote to Super Admin"}
                                 </Button>
 
-                                <button
+                                <button aria-busy={busyId === a.id || undefined}
                                     onClick={() => remove(a.id)}
                                     disabled={busyId === a.id || a.id === user.id}
                                     className="flex-1 sm:flex-initial text-xs border border-coral text-coral px-3 py-1.5 rounded-md hover:bg-coral/10 transition-colors disabled:opacity-50"
-                                >
+                                >{busyId === a.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Remove
                                 </button>
                             </div>
@@ -145,6 +154,8 @@ export default function AdminManageAdmins() {
                     ))}
                 </ul>
             )}
+
+            <AdminPager meta={meta} onChange={list.changePage} disabled={loading} label="Admin pages" />
         </div>
     );
 }

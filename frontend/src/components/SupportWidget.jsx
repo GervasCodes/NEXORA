@@ -4,6 +4,8 @@ import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { formatDate } from "../utils/format";
 import { ChatIcon, CloseIcon } from "./Icons";
+import Spinner from "./ui/Spinner";
+import { SkeletonText } from "./Skeleton";
 
 const CATEGORIES = [
     { value: "order", label: "Order" },
@@ -84,12 +86,9 @@ export default function SupportWidget() {
     };
 
     return (
-        // Bottom-left, opposite corner from NexoraAIButton (bottom-right) -
-        // the two used to share the same right-side corner and stack on
-        // top of each other. Same mobile safe-area offset NexoraAIButton
-        // already uses, so this also clears MobileBottomNav on mobile
-        // instead of sitting under it.
-        <div className="fixed left-5 z-40 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-5">
+        // Stacked with NexoraAIButton inside the shared FloatingActions
+        // wrapper, which handles positioning and the mobile safe-area offset.
+        <div className="relative">
             {open && (
                 <div className="mb-3 w-80 max-w-[90vw] max-h-[28rem] flex flex-col bg-paper border border-line rounded-lg shadow-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-line">
@@ -146,7 +145,7 @@ export default function SupportWidget() {
                                 />
                             </form>
                         ) : tickets === null ? (
-                            <p className="text-xs text-ash">Loading…</p>
+                            <div role="status"><span className="sr-only">Loading…</span><SkeletonText lines={3} /></div>
                         ) : tickets.length === 0 ? (
                             <p className="text-xs text-ash">No tickets yet. Start a new one below.</p>
                         ) : (
@@ -175,21 +174,21 @@ export default function SupportWidget() {
                                     placeholder="Type a reply…"
                                     className="flex-1 border border-line rounded-md px-2.5 py-1.5 text-sm focus-ring"
                                 />
-                                <button
+                                <button aria-busy={busy || undefined}
                                     type="submit"
                                     disabled={busy}
                                     className="bg-ink text-paper px-3 py-1.5 rounded-md text-xs font-semibold disabled:opacity-60"
-                                >
+                                >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                     Send
                                 </button>
                             </form>
                         ) : creating ? (
-                            <button
+                            <button aria-busy={busy || undefined}
                                 type="submit"
                                 form="support-new-ticket-form"
                                 disabled={busy}
                                 className="w-full bg-ink text-paper px-3 py-2 rounded-md text-xs font-semibold disabled:opacity-60"
-                            >
+                            >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {busy ? "Sending…" : "Send"}
                             </button>
                         ) : (

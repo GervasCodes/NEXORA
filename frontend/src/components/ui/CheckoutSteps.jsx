@@ -1,3 +1,5 @@
+import ProgressBar from "./ProgressBar";
+
 /**
  * Shared CheckoutSteps component - Phase 0 (UI/UX remediation).
  *
@@ -20,6 +22,8 @@ export default function CheckoutSteps({ steps = [], currentIndex = 0 }) {
     if (!steps.length) return null;
 
     return (
+        <>
+        <ProgressBar value={Math.round(((currentIndex + 1) / steps.length) * 100)} label="Progress" hideLabel size="xs" tone="teal" className="mb-3" />
         <ol className="flex items-center gap-2 mb-6" aria-label="Progress">
             {steps.map((label, i) => {
                 const complete = i < currentIndex;
@@ -51,5 +55,6 @@ export default function CheckoutSteps({ steps = [], currentIndex = 0 }) {
                 );
             })}
         </ol>
+        </>
     );
 }

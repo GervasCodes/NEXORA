@@ -7,19 +7,22 @@ import cookiePolicy from "../legal/cookie-policy.md?raw";
 import vendorAgreement from "../legal/vendor-agreement.md?raw";
 import deliveryLiabilityPolicy from "../legal/delivery-liability-policy.md?raw";
 import insurancePolicy from "../legal/insurance-policy.md?raw";
+import companyInformation from "../legal/company-information.md?raw";
 
 export const LEGAL_DOCS = {
     "terms-of-service": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Terms of Service",
         shortTitle: "Terms",
         content: termsOfService
     },
     "privacy-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Privacy Policy",
         shortTitle: "Privacy",
         content: privacyPolicy
     },
-    // Phase 2 (Legal & Consumer Trust): the refund rules used to live
+    // (Legal & Consumer Trust): the refund rules used to live
     // only inside terms-of-service.md Section 5. They're now a standalone
     // document (the ToS section summarizes and links here instead of
     // duplicating the text), so a buyer can be pointed straight at the
@@ -28,29 +31,56 @@ export const LEGAL_DOCS = {
     // right after Privacy so the three documents a buyer consents to at
     // checkout (Terms, Privacy, Refund) sit together in LEGAL_DOC_LIST.
     "refund-policy": {
+        audience: ["buyers", "sellers"],
         title: "Refund Policy",
         shortTitle: "Refunds",
         content: refundPolicy
     },
     "cookie-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Cookie Policy",
         shortTitle: "Cookies",
         content: cookiePolicy
     },
     "vendor-agreement": {
+        audience: ["sellers"],
         title: "Vendor Agreement",
         shortTitle: "Vendor Agreement",
         content: vendorAgreement
     },
     "delivery-liability-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Delivery Liability Policy",
         shortTitle: "Delivery Liability",
         content: deliveryLiabilityPolicy
     },
     "insurance-policy": {
+        audience: ["buyers", "sellers", "delivery"],
         title: "Insurance Policy",
         shortTitle: "Insurance",
         content: insurancePolicy
+    },
+    // (Legal & Consumer Trust): legal-entity disclosure, moved
+    // here from the footer so it sits with the other legal documents.
+    //
+    // **EVERY VALUE IN company-information.md IS A PLACEHOLDER.** These
+    // are real business facts that exist nowhere in this repository -
+    // there is no settings table, env var, or config file holding the
+    // registered company name, BRELA registration number, TIN, or a
+    // physical address (checked backend/src/modules/settings, config/,
+    // and the .env examples). They have to come from the business owner
+    // before launch. Inventing real-looking values would be worse than
+    // leaving the gap visible, so they are deliberately loud.
+    //
+    // Consumer-facing marketplaces are generally expected to disclose
+    // the legal entity behind the site and a way to reach it; a footer
+    // that says only "NEXORA" identifies no one a buyer could actually
+    // pursue.
+    "company-information": {
+        audience: ["buyers", "sellers", "delivery"],
+        title: "Company Information",
+        shortTitle: "Company",
+        content: companyInformation
     }
 };
 

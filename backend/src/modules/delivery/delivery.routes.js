@@ -7,6 +7,12 @@ const validationMiddleware = require("../../middleware/validation.middleware");
 
 const deliveryController = require("./delivery.controller");
 const requireApprovedDeliveryAgent = require("../../middleware/requireApprovedDeliveryAgent.middleware");
+// Delivery proof (Phase 5) - the photo+GPS fallback (used when the
+// buyer can't/won't give the rider the handover code) and the pickup
+// confirmation step both attach a photo, so both routes below take the
+// same image-upload middleware every other photo upload in this
+// codebase uses.
+const upload = require("../../middleware/upload.middleware");
 const {
     orderIdValidation,
     updateDeliveryStatusValidation,
@@ -71,9 +77,26 @@ router.put(
     authMiddleware,
     authorize("delivery_agent"),
     requireApprovedDeliveryAgent,
+    upload.single("dropoff_photo"),
     updateDeliveryStatusValidation,
     validationMiddleware,
     deliveryController.updateDeliveryStatus
+);
+
+// Pickup confirmation photo (Phase 5, P1) - a separate step from the
+// status transition itself (status already moves to "picked_up" via
+// the route above with no photo required), so a rider who forgets to
+// snap one doesn't get blocked mid-pickup; this just attaches proof to
+// an already-picked-up delivery.
+router.post(
+    "/:orderId/pickup-photo",
+    authMiddleware,
+    authorize("delivery_agent"),
+    requireApprovedDeliveryAgent,
+    upload.single("photo"),
+    orderIdValidation,
+    validationMiddleware,
+    deliveryController.confirmPickupPhoto
 );
 
 // Shared route - buyer, seller (with item in order), or assigned agent

@@ -2,6 +2,7 @@ const userRepository = require("./auth.repository");
 const accountRepository = require("../account/account.repository");
 const hashPassword = require("../../utils/hashPassword");
 const otpService = require("../otp/otp.service");
+const loginLockoutService = require("./loginLockout.service");
 
 // request a reset code by email. Always responds the same way
 // whether or not the email exists - this deliberately does NOT throw for
@@ -13,14 +14,21 @@ const otpService = require("../otp/otp.service");
 // lookup), so handing it to the frontend for a countdown doesn't
 // reopen the account-enumeration gap this function's early-return
 // deliberately avoids.
-exports.requestPasswordReset = async (email) => {
+exports.requestPasswordReset = async (email, channel = "email") => {
     const user = await userRepository.findByEmail(email);
 
     if (user) {
-        await otpService.requestOtp(user, "password_reset");
+        await otpService.requestOtp(user, "password_reset", { channel });
     }
 
-    return { expiresInSeconds: otpService.OTP_EXPIRY_SECONDS };
+    // Per-account delivery is never returned here, so the response can't
+    // reveal whether the email has an account. channelUnavailable depends only
+    // on server configuration.
+    return {
+        expiresInSeconds: otpService.OTP_EXPIRY_SECONDS,
+        channel,
+        channelUnavailable: !otpService.channelConfigured(channel)
+    };
 };
 
 //  verify the code and set the new password in one call - unlike
@@ -40,4 +48,9 @@ exports.resetPassword = async (email, code, newPassword) => {
 
     const hashed = await hashPassword(newPassword);
     await accountRepository.updatePassword(user.id, hashed);
+
+    // Proving control of the account's email is the escape hatch from a
+    // login lockout (see loginLockout.service.js) - someone locked out by
+    // guesses that weren't theirs can get back in without waiting it out.
+    await loginLockoutService.clearFailures(user);
 };

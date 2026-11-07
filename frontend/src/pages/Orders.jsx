@@ -1,25 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { SkeletonList } from "../components/Skeleton";
+import PulseBar from "../components/ui/PulseBar";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import ListFilters from "../components/ui/ListFilters";
+import StatusBadge from "../components/ui/StatusBadge";
 import PageMeta from "../components/PageMeta";
 import { OrdersIcon } from "../components/NavIcons";
+import PullToRefresh from "../components/ui/PullToRefresh";
+import InfiniteScrollFooter from "../components/ui/InfiniteScrollFooter";
+import useInfiniteScroll from "../hooks/useInfiniteScroll";
 
-const statusStyles = {
-    pending: "bg-line text-ash",
-    processing: "bg-mango/20 text-mango-dark",
-    shipped: "bg-teal/10 text-teal",
-    delivered: "bg-teal text-white",
-    cancelled: "bg-coral/10 text-coral"
-};
-
-const STATUS_OPTIONS = ["pending", "processing", "shipped", "delivered", "cancelled"];
+// Buyer-facing tabs mapped onto the order statuses the API already filters by.
+const TABS = [
+    { key: "all", status: undefined, labelKey: "orders.tab.all" },
+    { key: "pay", status: "pending", labelKey: "orders.tab.toPay" },
+    { key: "ship", status: "processing", labelKey: "orders.tab.toShip" },
+    { key: "receive", status: "shipped", labelKey: "orders.tab.toReceive" },
+    { key: "delivered", status: "delivered", labelKey: "orders.tab.delivered" }
+];
 
 const SORT_OPTIONS = [
     { value: "newest", label: "Newest first" },
@@ -44,18 +48,44 @@ export default function Orders() {
     const [filters, setFilters] = useState({});
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    // Refetch with the list already on screen (pull-to-refresh): keeps the content and shows a PulseBar.
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(false);
+    // A failed next page: separate from the full-page error so the loaded
+    // rows stay on screen and the footer offers a Retry.
+    const [moreError, setMoreError] = useState(false);
+    // Bumped per first-page fetch so a slow "next page" can't append onto a
+    // list that has since been re-filtered or refreshed.
+    const seq = useRef(0);
 
-    const load = (page = 1, append = false) => {
-        if (append) setLoadingMore(true); else setLoading(true);
-        setError(false);
-        api.get("/orders", { params: { ...filters, page } })
+    const load = (page = 1, append = false, silent = false) => {
+        const mySeq = append ? seq.current : ++seq.current;
+        if (append) {
+            setLoadingMore(true);
+            setMoreError(false);
+        } else {
+            setLoadingMore(false);
+            setMoreError(false);
+            if (silent) setRefreshing(true); else setLoading(true);
+        }
+        if (!append) setError(false);
+        return api.get("/orders", { params: { ...filters, page } })
             .then(({ data }) => {
+                if (mySeq !== seq.current) return;
                 setOrders((prev) => (append ? [...prev, ...data.data.orders] : data.data.orders));
                 setPagination(data.data.pagination);
             })
-            .catch(() => setError(true))
-            .finally(() => { setLoading(false); setLoadingMore(false); });
+            .catch(() => {
+                if (mySeq !== seq.current) return;
+                if (append) { setMoreError(true); return; }
+                if (!silent || !orders.length) setError(true);
+            })
+            .finally(() => {
+                if (mySeq !== seq.current) return;
+                setLoading(false);
+                setLoadingMore(false);
+                setRefreshing(false);
+            });
     };
 
     useEffect(() => {
@@ -64,7 +94,15 @@ export default function Orders() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filters]);
 
+    const hasMore = Boolean(pagination && pagination.page < pagination.totalPages);
+    const loadMore = () => {
+        if (loadingMore || !pagination) return;
+        load(pagination.page + 1, true);
+    };
+    const { sentinelRef } = useInfiniteScroll({ hasMore, loading: loadingMore, error: moreError, onLoadMore: loadMore });
+
     const hasActiveFilters = Boolean(filters.status || filters.from || filters.to || filters.q);
+    const activeTab = TABS.find((tab) => tab.status === filters.status) || TABS[0];
 
     if (loading) {
         return (
@@ -84,70 +122,107 @@ export default function Orders() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
-            <PageMeta title="My Orders" noIndex />
-            <h1 className="font-display text-3xl mb-6">{t("orders.title")}</h1>
+        <PullToRefresh onRefresh={() => load(1, false, true)}>
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
+                <PageMeta title="My Orders" noIndex />
+                <PulseBar active={refreshing} label={t("pulse.refreshing")} className="mb-3" />
+                <h1 className="font-display text-3xl mb-6">{t("orders.title")}</h1>
 
-            <ListFilters
-                statusOptions={STATUS_OPTIONS}
-                sortOptions={SORT_OPTIONS}
-                filters={filters}
-                onChange={setFilters}
-                searchPlaceholder="Search order number or product…"
-            />
+                <div className="flex gap-1 overflow-x-auto -mx-1 px-1 mb-4" role="tablist" aria-label={t("orders.tab.label")}>
+                    {TABS.map((tab) => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab.key === tab.key}
+                            onClick={() => setFilters({ ...filters, status: tab.status })}
+                            className={`shrink-0 text-sm px-3 py-1.5 rounded-full transition-colors ${
+                                activeTab.key === tab.key ? "bg-ink text-paper" : "text-ash hover:bg-line/50"
+                            }`}
+                        >
+                            {t(tab.labelKey)}
+                        </button>
+                    ))}
+                    <Link
+                        to="/returns"
+                        className="shrink-0 text-sm px-3 py-1.5 rounded-full text-ash hover:bg-line/50 transition-colors"
+                    >
+                        {t("orders.tab.returns")}
+                    </Link>
+                </div>
 
-            {orders.length === 0 ? (
-                <EmptyState
-                    title={hasActiveFilters ? "No orders match those filters" : t("orders.empty")}
-                    tone="mango"
-                    icon={<OrdersIcon className="w-7 h-7" />}
-                    action={
-                        hasActiveFilters
-                            ? <button onClick={() => setFilters({})} className="text-teal hover:underline text-sm">Clear filters</button>
-                            : <Link to="/" className="text-teal hover:underline text-sm">{t("common.startShopping")}</Link>
-                    }
+                <ListFilters
+                    sortOptions={SORT_OPTIONS}
+                    filters={filters}
+                    onChange={setFilters}
+                    searchPlaceholder="Search order number or product…"
                 />
-            ) : (
-                <>
-                    <ul className="divide-y divide-line border-y border-line">
-                        {orders.map((order, i) => (
-                            <li key={order.id} className="animate-slide-up" style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
-                                <Link to={`/orders/${order.id}`} className="py-4 flex items-center justify-between gap-4 hover:bg-line/20 active:scale-[0.99] transition-all -mx-2 px-2 rounded-md">
-                                    <div>
-                                        <p className="text-sm font-medium price">{order.order_number}</p>
-                                        {order.primary_item_name && (
-                                            <p className="text-xs text-ash mt-0.5 truncate max-w-[12rem]">{order.primary_item_name}</p>
-                                        )}
-                                        <p className="text-xs text-ash mt-0.5">{formatDate(order.created_at)}</p>
-                                    </div>
-                                    {order.is_parent ? (
-                                        <span className="text-xs font-medium px-2.5 py-1 rounded-full capitalize bg-teal/10 text-teal">
-                                            {t("orders.vendorsBadge", { count: order.vendor_count })}
-                                        </span>
-                                    ) : (
-                                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize transition-colors ${statusStyles[order.status] || "bg-line text-ash"}`}>
-                                            {order.status}
-                                        </span>
-                                    )}
-                                    <p className="price text-sm font-medium">{format(order.total_amount)}</p>
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
 
-                    {pagination && pagination.page < pagination.totalPages && (
-                        <div className="text-center mt-6">
-                            <button
-                                onClick={() => load(pagination.page + 1, true)}
-                                disabled={loadingMore}
-                                className="text-sm text-teal hover:underline disabled:opacity-50"
-                            >
-                                {loadingMore ? "Loading…" : "Load more"}
-                            </button>
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
+                {orders.length === 0 ? (
+                    <EmptyState
+                        title={hasActiveFilters ? "No orders match those filters" : t("orders.empty")}
+                        tone="mango"
+                        icon={<OrdersIcon className="w-7 h-7" />}
+                        action={
+                            hasActiveFilters
+                                ? <button onClick={() => setFilters({})} className="text-teal hover:underline text-sm">Clear filters</button>
+                                : <Link to="/" className="text-teal hover:underline text-sm">{t("common.startShopping")}</Link>
+                        }
+                    />
+                ) : (
+                    <>
+                        <ul className="divide-y divide-line border-y border-line">
+                            {orders.map((order, i) => (
+                                <li key={order.id} className="animate-slide-up" style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
+                                    <Link to={`/orders/${order.id}`} className="py-4 flex items-center justify-between gap-4 hover:bg-line/20 active:scale-[0.99] transition-all -mx-2 px-2 rounded-md">
+                                        <div>
+                                            <p className="text-sm font-medium price">{order.order_number}</p>
+                                            {order.primary_item_name && (
+                                                <p className="text-xs text-ash mt-0.5 truncate max-w-[12rem]">{order.primary_item_name}</p>
+                                            )}
+                                            <p className="text-xs text-ash mt-0.5">{formatDate(order.created_at)}</p>
+                                        </div>
+                                        {order.is_parent ? (
+                                            <span className="text-xs font-medium px-2.5 py-1 rounded-full capitalize bg-teal/10 text-teal">
+                                                {t("orders.vendorsBadge", { count: order.vendor_count })}
+                                            </span>
+                                        ) : (
+                                            // (Phase 4 remediation): was a
+                                            // raw, untranslated `order.status`
+                                            // string in a locally-styled pill -
+                                            // now the shared StatusBadge, same
+                                            // table as booking/dispute/return/
+                                            // group-buy statuses.
+                                            <StatusBadge domain="order" status={order.status} />
+                                        )}
+                                        <p className="price text-sm font-medium">{format(order.total_amount)}</p>
+                                    </Link>
+                                    {!order.is_parent && order.status !== "cancelled" && (
+                                        <div className="flex gap-4 pb-3 text-xs">
+                                            <Link to={`/orders/${order.id}`} className="text-teal hover:underline">
+                                                {order.status === "shipped" || order.status === "processing" ? t("orders.trackOrder") : t("orders.viewDetails")}
+                                            </Link>
+                                            <Link to={`/disputes/new?order_id=${order.id}`} className="text-ash hover:text-ink hover:underline">
+                                                {t("orders.helpWithOrder")}
+                                            </Link>
+                                        </div>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+
+                        <InfiniteScrollFooter
+                            sentinelRef={sentinelRef}
+                            hasMore={hasMore}
+                            loading={loadingMore}
+                            error={moreError}
+                            onLoadMore={loadMore}
+                            skeleton={<SkeletonList rows={2} />}
+                            className="mt-4"
+                        />
+                    </>
+                )}
+            </div>
+        </PullToRefresh>
     );
 }

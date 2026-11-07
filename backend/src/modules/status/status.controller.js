@@ -9,6 +9,26 @@ exports.getPublicStatus = async (req, res) => {
     }
 };
 
+// Always answers the same way, so the form can't be used to find out
+// which addresses are already subscribed.
+exports.subscribe = async (req, res) => {
+    try {
+        await statusService.subscribe(req.body.email);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Couldn't subscribe right now. Try again later." });
+    }
+};
+
+exports.unsubscribe = async (req, res) => {
+    try {
+        const removed = await statusService.unsubscribe(String(req.body.token || ""));
+        res.json({ success: true, data: { removed } });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Couldn't unsubscribe right now. Try again later." });
+    }
+};
+
 exports.listForAdmin = async (req, res) => {
     try {
         const data = await statusService.listRecent();

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/client";
 import ServiceCategoryCard from "../components/ServiceCategoryCard";
 import PageMeta from "../components/PageMeta";
+import { useLanguage } from "../context/LanguageContext";
 
 function ServiceCategoryCardSkeleton() {
     return (
@@ -20,6 +21,7 @@ function ServiceCategoryCardSkeleton() {
 // category - mirroring how DepartmentPage.jsx scopes ProductFilters to one
 // department after Home.jsx's department grid.
 export default function ServicesBrowse() {
+    const { t } = useLanguage();
     const [categories, setCategories] = useState([]);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [error, setError] = useState("");
@@ -33,7 +35,7 @@ export default function ServicesBrowse() {
 
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
-            <PageMeta title="Services" description="Accommodation, transportation, tours and more — booked directly through NEXORA." />
+            <PageMeta title={t("seo.servicesHub.title")} description={t("seo.servicesHub.description")} />
             <div className="mb-8 animate-slide-up">
                 <h1 className="font-display text-3xl mb-1">Services</h1>
                 <p className="text-ash text-sm">

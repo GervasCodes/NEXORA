@@ -20,15 +20,31 @@ exports.getSummary = async (buyerId) => {
         buyerWalletRepository.getWallet(buyerId),
         buyerWalletRepository.findTransactions(buyerId)
     ]);
-    return { balance: Number(wallet.balance), transactions };
+    // Min/max single top-up, shown as guidance on the wallet page. The
+    // server still enforces them at top-up time; a failure to read them
+    // must not break the wallet summary.
+    let topUpLimits = null;
+    try {
+        const { minAmount, maxAmount } = await require("../settings/settings.service").getTopUpLimits();
+        if (Number.isFinite(minAmount) && Number.isFinite(maxAmount)) topUpLimits = { minAmount, maxAmount };
+    } catch {
+        topUpLimits = null;
+    }
+    return { balance: Number(wallet.balance), lastTopupPhone: wallet.last_topup_phone || null, topUpLimits, transactions };
 };
 
 // Called once a top-up's payment provider confirms success (see
-// payment.service.js#_handleWalletTopupWebhook).
-exports.creditFromTopUp = async (buyerId, amount, topupId) => {
-    const connection = await db.getConnection();
+// payment.service.js#_handleWalletTopupWebhook, which now runs this as
+// part of ONE transaction together with claiming the payment and marking
+// the top-up completed - see that function's comment. `executor` lets it
+// join that caller-managed transaction instead of opening its own; called
+// with no executor (e.g. from a manual admin/reconciliation retry) it
+// still manages its own transaction exactly as before.
+exports.creditFromTopUp = async (buyerId, amount, topupId, executor) => {
+    const manageOwnTransaction = !executor;
+    const connection = executor || await db.getConnection();
     try {
-        await connection.beginTransaction();
+        if (manageOwnTransaction) await connection.beginTransaction();
 
         await buyerWalletRepository.ensureWallet(buyerId, connection);
         await buyerWalletRepository.getWalletForUpdate(buyerId, connection);
@@ -44,12 +60,12 @@ exports.creditFromTopUp = async (buyerId, amount, topupId) => {
             description: `Wallet top-up #${topupId}`
         }, connection);
 
-        await connection.commit();
+        if (manageOwnTransaction) await connection.commit();
     } catch (error) {
-        await connection.rollback();
+        if (manageOwnTransaction) await connection.rollback();
         throw error;
     } finally {
-        connection.release();
+        if (manageOwnTransaction) connection.release();
     }
 };
 
@@ -58,10 +74,22 @@ exports.creditFromTopUp = async (buyerId, amount, topupId) => {
 // the balance doesn't cover it - the caller surfaces that as a normal
 // checkout/payment error, same as a declined card or a failed USSD
 // prompt would be.
-exports.debitForOrder = async (buyerId, amount, orderId) => {
-    const connection = await db.getConnection();
+//
+// Wallet order payment atomic (Phase 2, P0): `paymentId` is stored on the
+// ledger row and is what buyer_wallet_transactions.dedupe_key is built
+// from for this reference type (see migration 120) - one debit per
+// payment ATTEMPT, ever, which is what actually needs to be unique (a
+// pre-order's deposit and balance legs share one order_id but are two
+// separate payment attempts and must each be allowed to debit once).
+// `executor` lets this join a caller-managed transaction that also locks
+// the order row and marks it paid, so the whole "check order payable,
+// debit wallet, mark order paid" sequence commits or rolls back together
+// - see initiateWalletOrderPayment for why that matters.
+exports.debitForOrder = async (buyerId, amount, orderId, paymentId, executor) => {
+    const manageOwnTransaction = !executor;
+    const connection = executor || await db.getConnection();
     try {
-        await connection.beginTransaction();
+        if (manageOwnTransaction) await connection.beginTransaction();
 
         await buyerWalletRepository.ensureWallet(buyerId, connection);
         const wallet = await buyerWalletRepository.getWalletForUpdate(buyerId, connection);
@@ -78,16 +106,17 @@ exports.debitForOrder = async (buyerId, amount, orderId) => {
             balanceAfter,
             referenceType: "order_payment",
             referenceId: orderId,
+            paymentId,
             description: `Paid for order #${orderId} from wallet balance`
         }, connection);
 
-        await connection.commit();
+        if (manageOwnTransaction) await connection.commit();
         return { balanceAfter };
     } catch (error) {
-        await connection.rollback();
+        if (manageOwnTransaction) await connection.rollback();
         throw error;
     } finally {
-        connection.release();
+        if (manageOwnTransaction) connection.release();
     }
 };
 

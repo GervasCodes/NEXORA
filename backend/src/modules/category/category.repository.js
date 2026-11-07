@@ -1,4 +1,25 @@
 const db = require("../../config/db");
+const { VERIFIED_BADGE_SELECT, VERIFIED_BADGE_ORDER, VERIFIED_BADGE_SQL } = require("../../utils/verifiedBadge");
+
+// Home.jsx's hero trust strip ("X verified sellers", "Y products") - see
+// category.service.js#getTrustStats. Uses the same VERIFIED_BADGE_SQL
+// every listing/ranking query already uses (utils/verifiedBadge.js), so
+// this count can never drift from what "Verified Seller" means anywhere
+// else in the app. Product count mirrors product.repository.js's own
+// public-browse gate (p.is_active = 1 only) - draft/suspended/deactivated
+// products never count toward either figure.
+exports.countTrustStats = async () => {
+    const [[{ verified_sellers }]] = await db.query(
+        `SELECT COUNT(*) AS verified_sellers FROM seller_profiles sp WHERE ${VERIFIED_BADGE_SQL}`
+    );
+    const [[{ active_products }]] = await db.query(
+        "SELECT COUNT(*) AS active_products FROM products WHERE is_active = 1"
+    );
+    return {
+        verifiedSellers: Number(verified_sellers),
+        activeProducts: Number(active_products)
+    };
+};
 
 // Only genuinely 'active' departments - a department in 'maintenance' or
 // 'deactivated' status must never appear here (this backs every public
@@ -12,14 +33,16 @@ exports.findAllActive = async () => {
 
 // The 'services' row (migration 065) only exists so /departments/services
 // resolves via getDepartmentBySlug/findBySlug below - it isn't a real,
-// admin-manageable department. The homepage already excludes it from the
-// department grid (Home.jsx) and renders its own purpose-built Services
-// tile instead, so toggling this row's is_active or uploading a cover
-// image here has no visible effect anywhere. Excluding it from the admin
-// list too (this feeds both AdminCategories.jsx's "Categories" screen and
-// the Maintenance Management overview) removes a control that looked
-// live but did nothing - "Services" is reachable from exactly one place,
-// its homepage tile, same as the header nav link removed in 065.
+// admin-manageable department (no products, no maintenance/status
+// meaning the way a real department has). It's still excluded from this
+// admin list - toggling is_active/maintenance/display_order here has no
+// visible effect, since Home.jsx renders its own purpose-built Services
+// tile rather than looping it in with the department grid. Its cover
+// image is the one exception: that field IS wired up (round-3 phase 2 -
+// see category.service.js#getServicesTile and
+// AdminServiceCategories.jsx), uploaded through the same generic
+// /categories/:id/cover endpoint every other department uses, just not
+// surfaced in this particular list.
 exports.findAllForAdmin = async () => {
     const [rows] = await db.query("SELECT * FROM categories WHERE slug != 'services' ORDER BY display_order ASC, name ASC");
     return rows;
@@ -45,7 +68,7 @@ exports.findTrendingByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -70,7 +93,7 @@ exports.findRecentByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock, p.created_at,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -107,7 +130,7 @@ exports.findPromotionsByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -133,7 +156,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
             p.id, p.name, p.slug, p.price, p.discount_price, p.stock,
-            sp.store_name, sp.is_verified,
+            sp.store_name, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             (
                 SELECT pi.image_url FROM product_images pi
                 WHERE pi.product_id = p.id AND pi.is_primary = 1
@@ -143,7 +166,8 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS review_count
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
-        WHERE p.category_id = ? AND p.is_active = 1 AND p.is_sponsored = 1
+        JOIN users seller ON seller.id = p.seller_id
+        WHERE p.category_id = ? AND p.is_active = 1 AND p.is_sponsored = 1 AND p.stock > 0 AND seller.suspended_at IS NULL AND seller.is_active = 1 AND seller.verification_tier <> 'none'
         ORDER BY p.created_at DESC
         LIMIT ?`,
         [categoryId, limit]
@@ -169,7 +193,7 @@ exports.findSponsoredByCategory = async (categoryId, limit) => {
 exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             COUNT(DISTINCT p.id) AS product_count,
             (
                 SELECT AVG(r.rating) FROM reviews r
@@ -183,42 +207,9 @@ exports.findFeaturedStoresByCategory = async (categoryId, limit) => {
             ON sfc.seller_id = sp.user_id AND sfc.category_id = ?
             AND sfc.status = 'active' AND sfc.ends_at > NOW()
         GROUP BY sp.id, sfc.id
-        ORDER BY is_featured DESC, sp.is_verified DESC, average_rating DESC, product_count DESC
+        ORDER BY is_featured DESC, ${VERIFIED_BADGE_ORDER}, average_rating DESC, product_count DESC
         LIMIT ?`,
         [categoryId, categoryId, categoryId, limit]
-    );
-    return rows;
-};
-
-// Homepage department grid, with  Department Sponsorship applied.
-// Same organic ordering findAllActive always used (display_order ASC, name
-// ASC), but any department with a currently-active, unexpired campaign in
-// department_sponsorship_campaigns is bumped to the front first.
-//
-// A department isn't owned by any one seller (several sellers active in
-// the same department could each independently sponsor it), so - like
-// findFeaturedStoresByCategory and unlike products.is_sponsored
-// there's no flag on `categories` itself to keep in sync.
-// This LEFT JOINs the campaigns table live and derives `is_sponsored` from
-// whether *any* matching row exists, so starting/cancelling/expiring a
-// campaign never needs a second write anywhere else.
-//
-// Deliberately a separate function from findAllActive rather than a
-// widening of it: findAllActive backs the plain `GET /categories` list
-// (category dropdowns on forms elsewhere in the app), where a purchased
-// reordering would be a confusing, moving-target UX. Only the homepage
-// department grid (category.service.js#listDepartments) should reflect
-// paid placement.
-exports.findAllActiveWithSponsorship = async () => {
-    const [rows] = await db.query(
-        `SELECT c.*, (COUNT(dsc.id) > 0) AS is_sponsored
-        FROM categories c
-        LEFT JOIN department_sponsorship_campaigns dsc
-            ON dsc.category_id = c.id
-            AND dsc.status = 'active' AND dsc.ends_at > NOW()
-        WHERE c.status = 'active'
-        GROUP BY c.id
-        ORDER BY is_sponsored DESC, c.display_order ASC, c.name ASC`
     );
     return rows;
 };
@@ -264,7 +255,8 @@ exports.findGlobalSponsored = async (limit) => {
             ) AS image_url
         FROM products p
         JOIN seller_profiles sp ON sp.user_id = p.seller_id
-        WHERE p.is_active = 1 AND p.is_sponsored = 1
+        JOIN users seller ON seller.id = p.seller_id
+        WHERE p.is_active = 1 AND p.is_sponsored = 1 AND p.stock > 0 AND seller.suspended_at IS NULL AND seller.is_active = 1 AND seller.verification_tier <> 'none'
         ORDER BY p.created_at DESC
         LIMIT ?`,
         [limit]
@@ -278,7 +270,7 @@ exports.findGlobalSponsored = async (limit) => {
 exports.findGlobalFeaturedStores = async (limit) => {
     const [rows] = await db.query(
         `SELECT
-            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified,
+            sp.user_id, sp.store_name, sp.store_slug, sp.store_logo, sp.store_banner, sp.is_verified, sp.is_business_verified, ${VERIFIED_BADGE_SELECT},
             MAX(sfc.id IS NOT NULL) AS is_featured
         FROM seller_profiles sp
         JOIN products p ON p.seller_id = sp.user_id AND p.is_active = 1
@@ -286,7 +278,7 @@ exports.findGlobalFeaturedStores = async (limit) => {
             ON sfc.seller_id = sp.user_id
             AND sfc.status = 'active' AND sfc.ends_at > NOW()
         GROUP BY sp.id
-        ORDER BY is_featured DESC, sp.is_verified DESC
+        ORDER BY is_featured DESC, ${VERIFIED_BADGE_ORDER}
         LIMIT ?`,
         [limit]
     );

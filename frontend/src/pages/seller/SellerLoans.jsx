@@ -4,6 +4,7 @@ import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import { formatMoney, formatDate } from "../../utils/format";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
 
 const STATUS_STYLES = {
     active: "bg-mango/20 text-mango-dark",
@@ -92,11 +93,11 @@ export default function SellerLoans() {
                     {message && <p className="text-sm text-teal">{message}</p>}
                     {error && <p className="text-sm text-coral">{error}</p>}
 
-                    <button
+                    <button aria-busy={submitting || undefined}
                         type="submit"
                         disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? "Requesting…" : "Get advance"}
                     </button>
                 </form>

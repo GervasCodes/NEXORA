@@ -59,3 +59,30 @@ exports.submitInvoice = async ({ sellerTin, sellerVrn, buyerName, buyerPhone, it
         raw: data
     };
 };
+
+// Best-effort structure, same caveat as submitInvoice above - CONFIRM
+// THE ACTUAL CREDIT-NOTE/VOID ENDPOINT AND PAYLOAD SHAPE WITH TRA before
+// this runs against anything but simulate.provider.js.
+exports.submitCreditNote = async ({ fiscalReceiptNumber, verificationCode, orderNumber, reason }) => {
+    const response = await fetch(`${BASE_URL}/api/vfd/credit-notes`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+            originalReceiptNumber: fiscalReceiptNumber,
+            originalVerificationCode: verificationCode,
+            reference: orderNumber,
+            reason
+        })
+    });
+
+    if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        return { success: false, error: `TRA VFD API returned ${response.status}: ${body}`.slice(0, 500) };
+    }
+
+    const data = await response.json();
+    return { success: true, creditNoteNumber: data.creditNoteNumber, raw: data };
+};

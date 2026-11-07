@@ -26,9 +26,20 @@ describe("brevoWebhook.handleEvent", () => {
             eventType: "delivered",
             recipientEmail: "a@x.com",
             brevoMessageId: "<abc@brevo>",
+            broadcastId: null,
             rawEvent: req.body
         });
         expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it("attributes an event to its broadcast via the broadcast-<id> tag", async () => {
+        const req = { body: { event: "delivered", email: "a@x.com", tags: ["other", "broadcast-42"] } };
+
+        await brevoWebhookController.handleEvent(req, mockRes());
+
+        expect(broadcastRepository.recordDeliveryEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ broadcastId: 42 })
+        );
     });
 
     it.each([

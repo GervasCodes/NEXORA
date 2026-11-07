@@ -20,7 +20,8 @@
     "test:unit": "cross-env NODE_ENV=test jest --runInBand tests/unit",
     "test:integration": "cross-env NODE_ENV=test jest --runInBand tests/integration",
     "test:db": "cross-env NODE_ENV=test jest --config jest.db.config.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "loadtest": "artillery run loadtest/nexora-load-test.yml"
   },
   "keywords": [],
   "author": "",
@@ -39,6 +40,8 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "express-validator": "^7.3.2",
+    "fflate": "^0.8.3",
+    "google-auth-library": "^11.3.1",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
@@ -48,15 +51,23 @@
     "pdfkit": "^0.20.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.3",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "artillery": "^2.0.34",
     "cross-env": "^7.0.3",
     "eslint": "^8.57.1",
-    "jest": "^29.7.0",
+    "jest": "^30.5.2",
     "nodemon": "^3.1.14",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.1.0"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "bcrypt@6.0.0": true,
+    "msgpackr-extract@3.0.4": true,
+    "unrs-resolver@1.12.2": true
   }
 }

@@ -1,0 +1,32 @@
+%% NEXORA logical architecture - audit 2026-10-29. Edges marked (stated) come from docs/DEPLOYMENT.md and were not verified against a live environment.
+flowchart LR
+    subgraph Client
+        B["Browser / PWA: React 18 + Vite, Tailwind, Leaflet, socket.io-client"]
+        SW["Service worker: offline shell, web push"]
+    end
+    subgraph Web["Web process: backend/server.js (Express 5)"]
+        MW["Middleware: helmet, cors, compression, cookie-parser, CSRF, locale, rate limit"]
+        API["66 mounted route files (+2 stock sub-routers) under /api/v1 + 14 app-level routes"]
+        WS["Socket.IO: chat, order tracking, agent location, offers"]
+        WH["Webhooks: raw-body signature checks"]
+    end
+    subgraph Worker["Worker process: backend/worker.js"]
+        J["node-cron jobs (24 scheduled) with MySQL advisory locks"]
+        Q["BullMQ dispatch worker (offer expiry)"]
+    end
+    DB[("MySQL / MariaDB: 131 tables, 160 migrations")]
+    R[("Redis (optional): cache, BullMQ")]
+    B -->|"HTTPS JSON + cookie"| MW --> API --> DB
+    B <-->|"WebSocket"| WS --> DB
+    API --> R
+    Q --> R
+    J --> DB
+    API --> CL["Cloudinary (media)"]
+    API --> PAY["Payments: Selcom, AzamPay, Snippe, MalipoPay, PayPal"]
+    PAY -->|"webhooks"| WH --> DB
+    API --> MSG["Brevo email, SMS gateway, WhatsApp Cloud API, Web Push"]
+    API --> AI["AI providers: Anthropic, OpenAI, Gemini, Groq, OpenRouter"]
+    API --> OS["OSRM routing"]
+    API --> TRA["TRA VFD (EFD)"]
+    API --> AV["ClamAV (optional)"]
+    API --> SE["Sentry"]

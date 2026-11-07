@@ -17,14 +17,19 @@ vi.mock("../../src/hooks/useUnreadMessagesCount", () => ({
     useUnreadMessagesCount: () => 0
 }));
 
-// SearchBox/NotificationBell/MobileBottomNav pull in their own API calls
-// and aren't what this test is about - stub them out so this stays
-// focused on Header's own nav-link wiring (A2). NotificationBell now
-// covers what AdminNotificationBell used to (Phase 3 notification
-// consolidation) - there's no separate component to mock anymore.
+// ThemeToggle (rendered inside Header) reads this - without a mock
+// useTheme() returns the real context's null default and crashes.
+vi.mock("../../src/context/ThemeContext", () => ({
+    useTheme: () => ({ theme: "system", setTheme: vi.fn() })
+}));
+
+// SearchBox/NotificationBell pull in their own API calls and aren't
+// what this test is about - stub them out so this stays focused on
+// Header's own nav-link wiring (A2). NotificationBell now covers what
+// AdminNotificationBell used to (Phase 3 notification consolidation) -
+// there's no separate component to mock anymore.
 vi.mock("../../src/components/SearchBox", () => ({ default: () => null }));
 vi.mock("../../src/components/NotificationBell", () => ({ default: () => null }));
-vi.mock("../../src/components/MobileBottomNav", () => ({ default: () => null }));
 
 import Header from "../../src/components/Header";
 

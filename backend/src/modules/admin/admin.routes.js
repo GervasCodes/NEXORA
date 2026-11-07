@@ -1,4 +1,5 @@
 const express = require("express");
+const { param } = require("express-validator");
 const router = express.Router();
 
 const authMiddleware = require("../../middleware/auth.middleware");
@@ -16,11 +17,8 @@ const {
     orderIdValidation,
     bookingIdValidation,
     updateSettingsValidation,
-    updateMonetizationSettingsValidation,
-    createMonetizationScheduleValidation,
     bulkProductStatusValidation,
     bulkServiceStatusValidation,
-    monetizationScheduleIdValidation,
     createAdminValidation,
     updateAdminPermissionsValidation,
     manualAssignDeliveryValidation
@@ -28,12 +26,17 @@ const {
 router.use(authMiddleware, authorize("admin"));
 
 router.get("/dashboard", adminController.getDashboard);
+router.get("/queue-counts", adminController.getQueueCounts);
 router.get("/dispatch", adminController.getDispatchOverview);
 
 // Roadmap (Predictive Coverage Dashboard for Ops) - read-only
 // historical demand-vs-coverage heatmap, separate from the live
 // dispatch overview above.
 router.get("/dispatch/coverage-heatmap", adminController.getCoverageHeatmap);
+
+// Phase 2: sellers drivers can't be dispatched to (no usable store pin) or
+// whose pin was placed by hand rather than from a GPS fix.
+router.get("/dispatch/sellers-without-pin", adminController.getSellersWithoutPin);
 
 // (Admin Manual Override & Ops Visibility)
 router.put(
@@ -66,7 +69,7 @@ router.get("/analytics/advanced/export", adminController.exportAdvancedAnalytics
 // admin.controller.js so the subscription domain's logic isn't split
 // across two controllers.
 const subscriptionController = require("../subscription/subscription.controller");
-const { createPlanValidation, updatePlanValidation } = require("../subscription/subscription.validator");
+const { createPlanValidation, updatePlanValidation, extendTrialValidation } = require("../subscription/subscription.validator");
 router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
 // Only super_admin may create or modify subscription plans - regular admins
 // can read them (for the subscriptions view) but must not change pricing,
@@ -76,6 +79,8 @@ router.get("/subscription-plans", subscriptionController.listAllPlansForAdmin);
 router.post("/subscription-plans", requireSuperAdmin, createPlanValidation, validationMiddleware, subscriptionController.createPlan);
 router.put("/subscription-plans/:id", requireSuperAdmin, updatePlanValidation, validationMiddleware, subscriptionController.updatePlan);
 router.get("/subscriptions", subscriptionController.listAllSubscriptions);
+// Give one seller extra free-trial days (audit-logged, seller is notified).
+router.post("/sellers/:id/extend-trial", extendTrialValidation, validationMiddleware, subscriptionController.extendSellerTrial);
 router.get("/fraud-flags", adminController.listFraudFlags);
 router.put("/fraud-flags/:id/resolve", adminController.resolveFraudFlag);
 
@@ -163,31 +168,7 @@ router.put("/bookings/:id/release-escrow", bookingIdValidation, validationMiddle
 
 router.get("/settings", adminController.getSettings);
 router.put("/settings", updateSettingsValidation, validationMiddleware, adminController.updateSettings);
-
-// Monetization Master Switch (Admin Billing Control Center) - lets
-// NEXORA launch free and turn each monetization stream on later without
-// a redeploy. See settings.service.js#isXMonetizationEnabled for the
-// enforcement points.
-router.get("/monetization", adminController.getMonetizationStatus);
-router.put(
-    "/monetization",
-    updateMonetizationSettingsValidation,
-    validationMiddleware,
-    adminController.updateMonetizationSettings
-);
-router.get("/monetization/schedule", adminController.listMonetizationSchedule);
-router.post(
-    "/monetization/schedule",
-    createMonetizationScheduleValidation,
-    validationMiddleware,
-    adminController.createMonetizationSchedule
-);
-router.delete(
-    "/monetization/schedule/:id",
-    monetizationScheduleIdValidation,
-    validationMiddleware,
-    adminController.cancelMonetizationSchedule
-);
+router.get("/settings/:key/history", param("key").matches(/^[a-z0-9_]{1,100}$/), validationMiddleware, adminController.getSettingHistory);
 
 // Read-only oversight of seller-paid sponsorship campaigns (Phase 8A).
 // The manual sponsor/unsponsor toggle above (/products/:id/sponsor) stays
@@ -202,17 +183,13 @@ router.get("/sponsorship-campaigns", adminController.listSponsorshipCampaigns);
 // category.repository.js#findFeaturedStoresByCategory).
 router.get("/featured-store-campaigns", adminController.listFeaturedStoreCampaigns);
 
-// Read-only oversight of seller-paid department-sponsorship campaigns
-// (Phase 8C). Same reasoning as Featured Stores above - a department's
-// homepage placement is derived live from the
-// department_sponsorship_campaigns table (see
-// category.repository.js#findAllActiveWithSponsorship).
-router.get("/department-sponsorship-campaigns", adminController.listDepartmentSponsorshipCampaigns);
-
 router.get("/withdrawals", adminController.listWithdrawals);
+router.get("/withdrawals/:id/context", withdrawalIdValidation, validationMiddleware, adminController.getWithdrawalContext);
+router.get("/withdrawals/:id/payout-details", withdrawalIdValidation, validationMiddleware, adminController.revealWithdrawalPayoutDetails);
 router.put("/withdrawals/:id/approve", withdrawalIdValidation, validationMiddleware, adminController.approveWithdrawal);
 router.put("/withdrawals/:id/reject", withdrawalIdValidation, validationMiddleware, adminController.rejectWithdrawal);
 router.put("/withdrawals/:id/paid", withdrawalIdValidation, validationMiddleware, adminController.markWithdrawalPaid);
+router.get("/wallets/negative-balance", adminController.listNegativeBalanceSellers);
 
 // --- Admin management (super admin only) ---
 router.get("/admins", requireSuperAdmin, adminController.listAdmins);

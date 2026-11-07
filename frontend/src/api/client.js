@@ -12,7 +12,7 @@ const api = axios.create({
     withCredentials: true
 });
 
-// Phase 4: reads the CSRF token out of the (deliberately non-httpOnly)
+// reads the CSRF token out of the (deliberately non-httpOnly)
 // nexora_csrf cookie the backend sets alongside the session cookie at
 // login - see backend/src/middleware/csrf.middleware.js for the
 // double-submit pattern this is half of. document.cookie is a flat
@@ -79,8 +79,99 @@ export const registerCsrfExpiredHandler = (handler) => {
     csrfExpiredHandler = handler;
 };
 
+// ---- Retry + "server is waking up" state (Reliability phase) -------------
+// The API runs on a host that can go to sleep when idle. The first requests
+// after a sleep fail with a closed connection or a 502/503/504 until the
+// server is back (tens of seconds). Previously each failed GET stayed
+// failed, so the page sat static until a manual reload. Now an idempotent
+// GET is retried with growing delays - long enough in total to outlast a
+// typical wake-up - while the UI is told (see NetworkStatusNotice.jsx) so
+// it can show a calm "waking up" notice instead of an error.
+//
+// ONLY GET requests are ever retried. A POST/PUT/PATCH/DELETE (checkout,
+// payments, auth, cart changes ...) is never replayed automatically,
+// because a replay could double-charge or double-submit.
+const RETRY_DELAYS_MS = [1500, 3000, 6000, 10000, 15000];
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+let retryingCount = 0;
+const wakingListeners = new Set();
+const notifyWaking = () => {
+    const waking = retryingCount > 0;
+    wakingListeners.forEach((listener) => listener(waking));
+};
+
+// True while at least one request is waiting to be retried.
+export const getServerWaking = () => retryingCount > 0;
+export const subscribeServerWaking = (listener) => {
+    wakingListeners.add(listener);
+    return () => wakingListeners.delete(listener);
+};
+
+// ---- Circuit breaker for "no response at all" failures -------------------
+// A dropped connection, a timeout, a sleeping free-tier server AND a
+// misconfigured CORS origin all look identical from here: axios reports
+// no error.response for any of them, and the browser deliberately hides
+// which one it was. Retrying a single stalled request a handful of times
+// is the right call for "one request hit a blip" - but if that keeps
+// happening across many different requests in a row, it isn't a blip
+// anymore, it's systemic (an outage, a bad CORS_ORIGIN deploy), and
+// retrying each one up to RETRY_DELAYS_MS.length+1 times just multiplies
+// every failed request several-fold - flooding the console and burning
+// through apiLimiter's per-IP budget for calls that were never going to
+// succeed. Once several distinct requests fail this way in a short
+// window, pause retries for a cooldown instead of retrying every single
+// one; a real blip (one request, then recovery) never trips this.
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_WINDOW_MS = 10000;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 20000;
+
+let noResponseFailureTimestamps = [];
+let circuitOpenUntil = 0;
+
+const resetFailureStreak = () => {
+    noResponseFailureTimestamps = [];
+};
+
+const recordNoResponseFailure = () => {
+    const now = Date.now();
+    noResponseFailureTimestamps = noResponseFailureTimestamps.filter(
+        (t) => now - t < CIRCUIT_BREAKER_WINDOW_MS
+    );
+    noResponseFailureTimestamps.push(now);
+    if (noResponseFailureTimestamps.length >= CIRCUIT_BREAKER_THRESHOLD) {
+        circuitOpenUntil = now + CIRCUIT_BREAKER_COOLDOWN_MS;
+    }
+};
+
+const isRetryable = (error) => {
+    const config = error?.config;
+    if (!config || config.skipRetry) return false;
+    if ((config.method || "get").toLowerCase() !== "get") return false;
+    if (axios.isCancel(error)) return false;
+    // Truly offline: retrying is pointless and NetworkStatusNotice already
+    // tells the person. The browser's "online" event brings them back.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+    // Server answered: only the "gateway/unavailable" family is worth
+    // retrying, and a real answer (of any kind) means the connection
+    // itself is fine, so it clears the no-response failure streak.
+    if (error.response) {
+        resetFailureStreak();
+        return RETRYABLE_STATUS.has(error.response.status);
+    }
+    // No response at all. Only count a request's FIRST no-response failure
+    // toward the systemic signal above - otherwise a single request's own
+    // retries of itself (same request, same config) would trip the
+    // breaker on their own regardless of anything else going on.
+    if (!(config._retryCount > 0)) {
+        recordNoResponseFailure();
+    }
+    if (Date.now() < circuitOpenUntil) return false;
+    return true;
+};
+
 api.interceptors.request.use((config) => {
-    // Phase 4 (Testing & Session Hardening): no more reading a token out
+    // (Testing & Session Hardening): no more reading a token out
     // of localStorage to build an Authorization header - the httpOnly
     // session cookie is attached automatically by the browser via
     // withCredentials above. What DOES still need explicit JS is the
@@ -119,8 +210,30 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // A successful response proves the connection (and CORS, and the
+        // server) are actually fine right now - clear the failure streak
+        // so a breaker tripped by an earlier, now-resolved problem doesn't
+        // keep blocking retries for later requests.
+        resetFailureStreak();
+        return response;
+    },
     (error) => {
+        if (isRetryable(error)) {
+            const attempt = error.config._retryCount || 0;
+            if (attempt < RETRY_DELAYS_MS.length) {
+                error.config._retryCount = attempt + 1;
+                retryingCount += 1;
+                notifyWaking();
+                return new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+                    .then(() => api(error.config))
+                    .finally(() => {
+                        retryingCount -= 1;
+                        notifyWaking();
+                    });
+            }
+        }
+
         if (error.response?.data?.code === "ACCOUNT_SUSPENDED") {
             localStorage.removeItem("nexora_user");
             localStorage.removeItem("nexora_last_activity");
@@ -137,6 +250,22 @@ api.interceptors.response.use(
             error.response?.status === 403 &&
             error.response?.data?.code === "CSRF_TOKEN_INVALID"
         ) {
+            // One silent recovery: re-issue the CSRF token for this (still
+            // valid) session and replay the request. Only if that fails does
+            // the person see the blocking "please refresh" prompt.
+            const original = error.config;
+            if (original && !original._csrfRetried) {
+                original._csrfRetried = true;
+                return api.get("/auth/csrf")
+                    .then(({ data }) => {
+                        setCsrfToken(data?.data?.csrfToken || null);
+                        return api(original);
+                    })
+                    .catch(() => {
+                        csrfExpiredHandler?.();
+                        return Promise.reject(error);
+                    });
+            }
             csrfExpiredHandler?.();
             return Promise.reject(error);
         }

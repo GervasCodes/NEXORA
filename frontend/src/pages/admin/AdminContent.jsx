@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import PageMeta from "../../components/PageMeta";
 import PageLoader from "../../components/PageLoader";
 import EmptyState from "../../components/ui/EmptyState";
+import Spinner from "../../components/ui/Spinner";
 
 const EMPTY_FORM = { title: "", excerpt: "", seoMetaDescription: "", coverImageUrl: "", bodyMarkdown: "" };
 
@@ -68,7 +69,7 @@ export default function AdminContent() {
 
                 {error && <p className="text-sm text-coral">{error}</p>}
 
-                <button type="submit" disabled={creating} className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
+                <button aria-busy={creating || undefined} type="submit" disabled={creating} className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">{creating && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                     {creating ? "Creating…" : "Create draft"}
                 </button>
             </form>
@@ -84,11 +85,11 @@ export default function AdminContent() {
                                 <p className="font-medium text-sm">{a.title}</p>
                                 <p className="text-ash text-xs">/guides/{a.slug}</p>
                             </div>
-                            <button
+                            <button aria-busy={busyId === a.id || undefined}
                                 disabled={busyId === a.id}
                                 onClick={() => toggleStatus(a)}
                                 className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-60 ${a.status === "published" ? "border-teal text-teal" : "border-line text-ash"}`}
-                            >
+                            >{busyId === a.id && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                                 {a.status === "published" ? "Published" : "Draft"}
                             </button>
                         </li>

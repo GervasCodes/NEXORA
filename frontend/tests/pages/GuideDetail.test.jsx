@@ -11,6 +11,10 @@ vi.mock("../../src/api/client", () => ({
     default: { get: vi.fn() }
 }));
 
+vi.mock("../../src/context/LanguageContext", () => ({
+    useLanguage: () => ({ t: (key) => key })
+}));
+
 import api from "../../src/api/client";
 import GuideDetail from "../../src/pages/GuideDetail";
 

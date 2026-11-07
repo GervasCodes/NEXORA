@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate, useSearchParams, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import DepartmentCard from "../components/DepartmentCard";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import RecommendedProducts from "../components/RecommendedProducts";
+import HomeRails from "../components/HomeRails";
+import RecentlyViewedRail from "../components/RecentlyViewedRail";
+import PaymentTrustBar from "../components/PaymentTrustBar";
 import HomeCarousel from "../components/HomeCarousel";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import PageMeta from "../components/PageMeta";
+import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION } from "../utils/seo";
 import { ServicesIcon } from "../components/NavIcons";
+import PullToRefresh from "../components/ui/PullToRefresh";
 
 function DepartmentCardSkeleton() {
     return (
@@ -21,15 +26,17 @@ function DepartmentCardSkeleton() {
 
 
 function DepartmentDiscovery() {
+    const { t } = useLanguage();
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [error, setError] = useState(false);
     const [serviceCount, setServiceCount] = useState(null);
+    const [servicesCover, setServicesCover] = useState(null);
 
     useEffect(() => {
         api.get("/categories/departments")
             .then(({ data }) => setDepartments(data.data))
-            .catch(() => setError("Couldn't load departments right now."))
+            .catch(() => setError(true))
             .finally(() => setLoading(false));
     }, []);
 
@@ -42,6 +49,16 @@ function DepartmentDiscovery() {
             .catch(() => {});
     }, []);
 
+    // Admin-set cover for the Services tile below (AdminServiceCategories.jsx
+    // > "Services tile (homepage)") - falls back to the gradient+icon design
+    // when unset, same fallback pattern DepartmentCard.jsx uses. Round-3
+    // phase 2.
+    useEffect(() => {
+        api.get("/categories/services-tile")
+            .then(({ data }) => setServicesCover(data.data?.coverUrl || null))
+            .catch(() => {});
+    }, []);
+
     if (loading) {
         return (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
@@ -50,7 +67,7 @@ function DepartmentDiscovery() {
         );
     }
 
-    if (error) return <p className="text-coral">{error}</p>;
+    if (error) return <p className="text-coral">{t("home.departmentsError")}</p>;
 
     return (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
@@ -74,18 +91,28 @@ function DepartmentDiscovery() {
                 to="/services"
                 className="group block bg-paper border border-line rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
-                <div className="aspect-[4/3] relative overflow-hidden" style={{ background: "linear-gradient(135deg, #111827 0%, #1D4ED8 100%)" }}>
-                    <div className="w-full h-full flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-9 h-9 text-frost/90">
-                            <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
-                            <path d="M3.5 9.5h17M8 3v3M16 3v3" />
-                        </svg>
-                    </div>
+                <div className="aspect-[4/3] relative overflow-hidden" style={!servicesCover ? { background: "linear-gradient(135deg, #111827 0%, #1D4ED8 100%)" } : undefined}>
+                    {servicesCover ? (
+                        <img
+                            src={servicesCover}
+                            alt={t("home.services")}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-9 h-9 text-frost/90">
+                                <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+                                <path d="M3.5 9.5h17M8 3v3M16 3v3" />
+                            </svg>
+                        </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-abyss/70 via-abyss/0 to-abyss/0" />
                     <div className="absolute bottom-3 left-3 right-3">
-                        <h3 className="font-display text-lg text-frost leading-tight mb-0.5">Services</h3>
+                        <h3 className="font-display text-lg text-frost leading-tight mb-0.5">{t("home.services")}</h3>
                         <p className="text-frost/75 text-xs">
-                            {serviceCount === null ? "Bookable providers" : `${serviceCount} ${serviceCount === 1 ? "service" : "services"}`}
+                            {serviceCount === null ? t("home.bookableProviders") : `${serviceCount} ${serviceCount === 1 ? t("home.serviceOne") : t("home.serviceMany")}`}
                         </p>
                     </div>
                 </div>
@@ -97,10 +124,49 @@ function DepartmentDiscovery() {
 export default function Home() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { user } = useAuth();
+    // The 7-day-trial call to action is for people who could start selling:
+    // visitors and buyers. Sellers get a shortcut to their dashboard instead;
+    // admins and delivery agents get neither.
+    const canStartSelling = !user || user.role === "buyer";
+    const isSeller = user?.role === "seller";
+
+    // Hero trust strip counts (verified sellers / active products) -
+    // see category.service.js#getTrustStats. null while loading or if the
+    // call fails; the strip falls back to its static copy in that case
+    // rather than showing a placeholder number.
+    const [trustStats, setTrustStats] = useState(null);
+    useEffect(() => {
+        api.get("/categories/trust-stats")
+            .then(({ data }) => setTrustStats(data.data))
+            .catch(() => {});
+    }, []);
     const search = searchParams.get("search") || "";
+    const queryKey = searchParams.toString();
+
+    // Price/sort intent extracted from a natural-language header search
+    // (see SearchBox.jsx). Layered *under* the ProductFilters values in
+    // the ProductGrid params below, so a manual filter change always wins.
+    const urlFilters = useMemo(() => {
+        const out = {};
+        const min = searchParams.get("min_price");
+        const max = searchParams.get("max_price");
+        const sort = searchParams.get("sort");
+        if (min !== null && min !== "" && Number.isFinite(Number(min))) out.min_price = Number(min);
+        if (max !== null && max !== "" && Number.isFinite(Number(max))) out.max_price = Number(max);
+        if (["newest", "price_low", "price_high", "rating"].includes(sort)) out.sort = sort;
+        return out;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [queryKey]);
     const [resultCount, setResultCount] = useState(null);
+    // Bumped by pull-to-refresh; the rails and the product grid refetch in place.
+    const [refreshToken, setRefreshToken] = useState(0);
+    const refreshHome = () => {
+        setRefreshToken((n) => n + 1);
+        // The rails and grid fetch independently, so give them a short window to land.
+        return new Promise((resolve) => { setTimeout(resolve, 900); });
+    };
     const [filters, setFilters] = useState({});
 
     // Reset the count and any active filters whenever the search term
@@ -109,155 +175,242 @@ export default function Home() {
     useEffect(() => {
         setResultCount(null);
         setFilters({});
-    }, [search]);
+    }, [queryKey]);
+
+    // Search results moved to /search (SearchResults.jsx). Old /?search=
+    // links - bookmarks, shared links, anything already indexed - keep working.
+    if (search) {
+        return <Navigate to={`/search?${searchParams.toString()}`} replace />;
+    }
 
     return (
-        <div>
-            <PageMeta titleOverride={search ? `${search} · NEXORA` : "NEXORA — Marketplace"} />
-            {!search && (
-                <div className="bg-abyss text-frost relative overflow-hidden">
-                    <div
-                        className="absolute inset-0 opacity-40"
-                        style={{
-                            background: "radial-gradient(60% 100% at 15% 0%, rgba(110,168,254,0.35) 0%, rgba(7,9,18,0) 60%), radial-gradient(50% 90% at 100% 100%, rgba(29,78,216,0.35) 0%, rgba(7,9,18,0) 60%)"
-                        }}
-                    />
-                    <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 grid lg:grid-cols-[1.1fr_0.9fr] gap-6 lg:gap-10 items-center">
-                        <div>
-                            <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">The regional marketplace</p>
-                            {user?.first_name && (
-                                <p className="text-frost text-sm sm:text-base mb-2">Welcome back, {user.first_name}.</p>
-                            )}
-                            <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
-                                Everything You Need, From The Sellers You Trust.
-                            </h1>
-                            <p className="text-frost/60 max-w-md text-sm sm:text-base mb-8 sm:mb-10">
-                                Shop thousands of products from local vendors, with delivery tracked door to door.
-                            </p>
-
-                            <div className="flex flex-wrap gap-x-8 gap-y-3">
-                                {[
-                                    { label: "Verified sellers", icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
-                                    { label: "service booking", icon: "M8 2v4M16 2v4M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 10h18" },
-                                    { label: "Delivery tracked door to door", icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
-                                    { label: "Local vendors, regional reach", icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
-                                ].map((item) => (
-                                    <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
-                                            <path d={item.icon} />
-                                        </svg>
-                                        {item.label}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/*
-                          Phase 11 (Home Redesign) replaced the static
-                          three-photo collage this hero briefly shipped
-                          with (a stopgap for placeholder paths under
-                          /public/images/hero/ that were never filled in)
-                          with a real, live carousel - promo videos,
-                          sponsored/on-sale products, and featured stores,
-                          each linking straight to the product/store page
-                          (see GET /categories/home-highlights). Unlike the
-                          old collage, which only showed above `lg` and
-                          fell back to a text-only hero on small screens,
-                          this is real marketing content sellers are
-                          paying to place, so it's shown at every
-                          breakpoint - stacked below the hero text on
-                          mobile, side-by-side with it from `lg` up. It
-                          renders its own skeleton/fallback if the API has
-                          no live campaigns yet, so there's no empty-state
-                          gap to handle here.
-                        */}
-                        <HomeCarousel />
-                    </div>
-                </div>
-            )}
-
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        <PullToRefresh onRefresh={refreshHome}>
+            <div>
+                <PageMeta
+                    titleOverride={search ? `${search} · NEXORA` : HOME_TITLE}
+                    description={HOME_DESCRIPTION}
+                    // Search results / filtered views are not separate pages worth
+                    // indexing - keep them out of the index but let links be followed.
+                    // The canonical (see PageMeta) already collapses to "/".
+                    noIndexFollow={Boolean(search || urlFilters.min_price !== undefined || urlFilters.max_price !== undefined || urlFilters.sort)}
+                    jsonLd={{
+                        "@context": "https://schema.org",
+                        "@type": "WebSite",
+                        "@id": `${SITE_URL}/#website`,
+                        url: `${SITE_URL}/`,
+                        name: SITE_NAME,
+                        inLanguage: language,
+                        publisher: { "@id": `${SITE_URL}/#organization` },
+                        // Describes the real search page (/search?search=...) so
+                        // search engines can offer the sitelinks search box when
+                        // they choose to. It does not make that appear.
+                        potentialAction: {
+                            "@type": "SearchAction",
+                            target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/search?search={search_term_string}` },
+                            "query-input": "required name=search_term_string"
+                        }
+                    }}
+                />
                 {!search && (
-                    <>
-                        <div className="mb-6">
-                            <h2 className="font-display text-2xl mb-1">Shop by department</h2>
-                            <p className="text-ash text-sm">Browse everything on NEXORA, organized the way you shop.</p>
-                        </div>
-                        <DepartmentDiscovery />
-
-                        <div className="text-center mt-8">
-                            <Link to="/products" className="text-sm text-teal hover:underline">
-                                Or browse every product →
-                            </Link>
-                        </div>
-
-                        {/* Services now lives only here, not in the global header
-                            (see Header.jsx) - the header was carrying it as a
-                            permanent icon for every page/role even though it's
-                            really a homepage-discovery entry point. */}
-                        <Link
-                            to="/services"
-                            className="mt-10 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-azure/5 hover:bg-azure/10 transition-colors px-6 py-5"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="w-11 h-11 rounded-xl bg-azure/15 flex items-center justify-center shrink-0">
-                                    <ServicesIcon className="w-5 h-5 text-azure" />
-                                </div>
-                                <div>
-                                    <p className="font-display text-lg">Looking for a service, not a product?</p>
-                                    <p className="text-ash text-sm">Book trusted local pros for home, events, and more.</p>
-                                </div>
-                            </div>
-                            <span className="text-sm text-teal shrink-0 hidden sm:inline">Browse services →</span>
-                        </Link>
-
-                        <RecommendedProducts endpoint="/recommendations/for-me" title="Recommended for you" />
-                    </>
-                )}
-
-                {search && (
-                    <>
-                        <div className="mb-8 flex items-end justify-between flex-wrap gap-2">
+                    <div className="bg-abyss text-frost relative overflow-hidden">
+                        <div
+                            className="absolute inset-0 opacity-40"
+                            style={{
+                                background: "radial-gradient(60% 100% at 15% 0%, rgba(110,168,254,0.35) 0%, rgba(7,9,18,0) 60%), radial-gradient(50% 90% at 100% 100%, rgba(29,78,216,0.35) 0%, rgba(7,9,18,0) 60%)"
+                            }}
+                        />
+                        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-10 grid lg:grid-cols-[0.85fr_1.15fr] gap-4 lg:gap-8 items-center">
                             <div>
-                                <p className="text-xs uppercase tracking-widest text-ash mb-1">
-                                    {t("search.resultsFor", { term: search })}
+                                <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">{t("home.eyebrow")}</p>
+                                {(user?.username || user?.first_name) && (
+                                    <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full border border-frost/20 bg-frost/5 text-frost/80 text-xs font-medium">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                                        </svg>
+                                        {t("home.welcomeBack", { name: user.username || user.first_name })}
+                                    </div>
+                                )}
+                                <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
+                                    {t("home.heroTitle")}
+                                </h1>
+                                <p className="text-frost/60 max-w-md text-sm sm:text-base mb-6">
+                                    {t("home.heroSub")}
                                 </p>
-                                <h1 className="font-display text-3xl">Search results</h1>
-                                {resultCount !== null && (
-                                    <p className="text-ash text-sm mt-1">
-                                        {resultCount === 1 ? t("search.resultCountOne") : t("search.resultCountMany", { count: resultCount })}
+
+                                <div className="flex flex-wrap gap-3 mb-8">
+                                    <Link to="/feed" className="inline-flex items-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold">
+                                        {t("home.ctaShop")}
+                                    </Link>
+                                    {canStartSelling && (
+                                        <Link to="/sell" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
+                                            {t("home.ctaSell")}
+                                        </Link>
+                                    )}
+                                    {isSeller && (
+                                        <Link to="/seller" className="inline-flex items-center h-11 px-5 rounded-full border border-frost/30 text-frost text-sm font-medium hover:border-frost">
+                                            {t("home.ctaDashboard")}
+                                        </Link>
+                                    )}
+                                </div>
+
+                                {trustStats && (
+                                    <p className="text-frost/50 text-xs sm:text-sm mb-3">
+                                        {t("home.trustLiveStats", {
+                                            sellers: trustStats.verifiedSellers.toLocaleString(),
+                                            products: trustStats.activeProducts.toLocaleString()
+                                        })}
                                     </p>
                                 )}
-                            </div>
-                            <button
-                                onClick={() => navigate("/")}
-                                className="text-sm text-teal hover:underline shrink-0"
-                            >
-                                {t("search.clearSearch")}
-                            </button>
-                        </div>
 
-                        <ProductFilters onChange={setFilters} />
-
-                        <ProductGrid
-                            params={{ search, ...filters }}
-                            onResults={setResultCount}
-                            emptyTitle={t("search.noResultsTitle", { term: search })}
-                            emptyHint={t("search.noResultsHint")}
-                            emptyAction={
-                                <div className="flex items-center justify-center gap-4 mt-4">
-                                    <Link to="/" className="text-sm text-teal hover:underline">
-                                        {t("search.browseDepartments")}
-                                    </Link>
-                                    <Link to="/products" className="text-sm text-teal hover:underline">
-                                        {t("search.browseAll")}
-                                    </Link>
+                                <div className="flex flex-wrap gap-x-8 gap-y-3">
+                                    {[
+                                        { label: t("home.trustVerified"), icon: "M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 5.1-5.1 1.4 1.4-6.5 6.5Z" },
+                                        { label: t("home.trustServices"), icon: "M8 2v4M16 2v4M3 4h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 10h18" },
+                                        { label: t("home.trustDelivery"), icon: "M3 3h11v10H3zM14 8h4l3 3v2h-7zM6.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm12 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" },
+                                        { label: t("home.trustVendors"), icon: "M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Zm0-9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" }
+                                    ].map((item) => (
+                                        <div key={item.label} className="flex items-center gap-2 text-frost/70 text-xs sm:text-sm">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4 text-azure-light shrink-0">
+                                                <path d={item.icon} />
+                                            </svg>
+                                            {item.label}
+                                        </div>
+                                    ))}
                                 </div>
-                            }
-                        />
-                    </>
+                            </div>
+
+                            {/*
+                              Phase 11 (Home Redesign) replaced the static
+                              three-photo collage this hero briefly shipped
+                              with (a stopgap for placeholder paths under
+                              /public/images/hero/ that were never filled in)
+                              with a real, live carousel - promo videos,
+                              sponsored/on-sale products, and featured stores,
+                              each linking straight to the product/store page
+                              (see GET /categories/home-highlights). Unlike the
+                              old collage, which only showed above `lg` and
+                              fell back to a text-only hero on small screens,
+                              this is real marketing content sellers are
+                              paying to place, so it's shown at every
+                              breakpoint - stacked below the hero text on
+                              mobile, side-by-side with it from `lg` up. It
+                              renders its own skeleton/fallback if the API has
+                              no live campaigns yet, so there's no empty-state
+                              gap to handle here.
+
+                              Every homepage - buyer, seller, logged-out - gets
+                              this same full-size carousel (the old 3D hero was
+                              removed in Phase 1).
+                            */}
+                            <HomeCarousel />
+                        </div>
+                    </div>
                 )}
+
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+                    {!search && (
+                        <>
+                            <div className="mb-6">
+                                <h2 className="font-display text-2xl mb-1">{t("home.shopByDept")}</h2>
+                                <p className="text-ash text-sm">{t("home.shopByDeptSub")}</p>
+                            </div>
+                            <PaymentTrustBar />
+
+                            <DepartmentDiscovery />
+
+                            {canStartSelling && (
+                                <Link
+                                    to="/sell"
+                                    className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-mango/50 bg-mango/10 hover:bg-mango/15 transition-colors px-5 sm:px-6 py-5"
+                                >
+                                    <div>
+                                        <p className="font-display text-xl">{t("home.sellTitle")}</p>
+                                        <p className="text-ash text-sm mt-1 max-w-xl">{t("home.sellSub")}</p>
+                                    </div>
+                                    <span className="inline-flex items-center justify-center h-11 px-5 rounded-full bg-mango text-abyss text-sm font-semibold shrink-0 self-start sm:self-auto">
+                                        {t("home.sellCta")} →
+                                    </span>
+                                </Link>
+                            )}
+
+                            <div className="mt-12">
+                                <HomeRails refreshToken={refreshToken} />
+                            </div>
+
+                            <div className="mt-10">
+                                <RecentlyViewedRail />
+                            </div>
+
+                            {/* Services now lives only here, not in the global header
+                                (see Header.jsx) - the header was carrying it as a
+                                permanent icon for every page/role even though it's
+                                really a homepage-discovery entry point. */}
+                            <Link
+                                to="/services"
+                                className="mt-10 flex items-center justify-between gap-4 rounded-2xl border border-line/60 bg-azure/5 hover:bg-azure/10 transition-colors px-6 py-5"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-11 h-11 rounded-xl bg-azure/15 flex items-center justify-center shrink-0">
+                                        <ServicesIcon className="w-5 h-5 text-azure" />
+                                    </div>
+                                    <div>
+                                        <p className="font-display text-lg">{t("home.serviceCta")}</p>
+                                        <p className="text-ash text-sm">{t("home.serviceCtaSub")}</p>
+                                    </div>
+                                </div>
+                                <span className="text-sm text-teal shrink-0 hidden sm:inline">{t("home.browseServices")} →</span>
+                            </Link>
+
+                            <RecommendedProducts endpoint="/recommendations/for-me" title={t("home.recommended")} />
+
+                        </>
+                    )}
+
+                    {search && (
+                        <>
+                            <div className="mb-8 flex items-end justify-between flex-wrap gap-2">
+                                <div>
+                                    <p className="text-xs uppercase tracking-widest text-ash mb-1">
+                                        {t("search.resultsFor", { term: search })}
+                                    </p>
+                                    <h1 className="font-display text-3xl">{t("home.searchResults")}</h1>
+                                    {resultCount !== null && (
+                                        <p className="text-ash text-sm mt-1">
+                                            {resultCount === 1 ? t("search.resultCountOne") : t("search.resultCountMany", { count: resultCount })}
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => navigate("/")}
+                                    className="text-sm text-teal hover:underline shrink-0"
+                                >
+                                    {t("search.clearSearch")}
+                                </button>
+                            </div>
+
+                            <ProductFilters onChange={setFilters} />
+
+                            <ProductGrid
+                                params={{ search, ...urlFilters, ...filters }}
+                                onResults={setResultCount}
+                                refreshToken={refreshToken}
+                                emptyTitle={t("search.noResultsTitle", { term: search })}
+                                emptyHint={t("search.noResultsHint")}
+                                emptyAction={
+                                    <div className="flex items-center justify-center gap-4 mt-4">
+                                        <Link to="/" className="text-sm text-teal hover:underline">
+                                            {t("search.browseDepartments")}
+                                        </Link>
+                                        <Link to="/feed" className="text-sm text-teal hover:underline">
+                                            {t("search.browseAll")}
+                                        </Link>
+                                    </div>
+                                }
+                            />
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
+        </PullToRefresh>
     );
 }

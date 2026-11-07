@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Button from "../components/ui/Button";
+import FullScreenLoader from "../components/ui/FullScreenLoader";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
+import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 
 //  (OTP resend/expiry UX) - fallbacks only, used if a response
 // ever omits expiresInSeconds (e.g. an old cached bundle mid-deploy
@@ -22,10 +24,32 @@ const formatCountdown = (totalSeconds) => {
     return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
+// Only an in-app relative path is accepted (Phase 4 remediation) -
+// `returnTo` is attacker-controllable (anyone can link to
+// /login?returnTo=...), so a bare "send the user there after login"
+// would be an open-redirect vector. Must start with a single "/" and
+// not "//" (protocol-relative, i.e. a disguised external host).
+const sanitizeReturnTo = (value) => {
+    if (!value) return null;
+    if (!value.startsWith("/") || value.startsWith("//")) return null;
+    return value;
+};
+
 export default function Login() {
-    const { login, verifyLoginOtp, resendLoginOtp } = useAuth();
+    const { login, verifyLoginOtp, resendLoginOtp, loginWithGoogle } = useAuth();
     const { t } = useLanguage();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Guests redirected here from an action that needs an account (e.g.
+    // joining a group buy - see GroupBuyDetail.jsx) arrive with
+    // ?returnTo=<path> so they land back where they were instead of at
+    // the homepage after logging in.
+    const returnTo = sanitizeReturnTo(new URLSearchParams(location.search).get("returnTo"));
+
+    // What the guest was trying to do (set by product cards). Display only.
+    const intentParam = new URLSearchParams(location.search).get("intent");
+    const intent = ["add-to-cart", "save"].includes(intentParam) ? intentParam : null;
 
     const [form, setForm] = useState({ email: "", password: "" });
     const [step, setStep] = useState("credentials"); // 'credentials' | 'otp'
@@ -35,6 +59,7 @@ export default function Login() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [googleBusy, setGoogleBusy] = useState(false);
     //  (OTP resend/expiry UX) - live "expires in mm:ss" and a
     // resend-button cooldown, both driven off the real values the API
     // returns (see AuthContext.jsx's login/resendLoginOtp) rather than
@@ -83,7 +108,30 @@ export default function Login() {
         // away). It only kicks in after an actual resend, per the spec's
         // "after each resend" wording, in handleResend below.
         setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
+        if (result.codeDelivered === false) setError(t("auth.otp.initialSendFailed"));
         setStep("otp");
+    };
+
+    // Phase 7 (round 5): one-tap Google sign-in. A returning/linked Google user
+    // is signed in straight away (no OTP - Google already verified them); a new
+    // one continues on the register page to add phone, username and terms.
+    const handleGoogleCredential = async (credential) => {
+        setError("");
+        setSubmitting(true);
+        setGoogleBusy(true);
+        const result = await loginWithGoogle(credential);
+        setSubmitting(false);
+        setGoogleBusy(false);
+
+        if (!result.success) {
+            setError(result.message);
+            return;
+        }
+        if (result.status === "signed_in") {
+            navigate(returnTo || "/");
+            return;
+        }
+        navigate("/register", { state: { googleTicket: result.ticket, googleProfile: result.profile, returnTo } });
     };
 
     const handleOtp = async (e) => {
@@ -96,17 +144,27 @@ export default function Login() {
         setSubmitting(false);
 
         if (result.success) {
-            navigate("/");
+            navigate(returnTo || "/");
         } else {
             setError(result.message);
         }
     };
 
-    const handleResend = async () => {
+    const handleResend = async (channel = "email") => {
         if (resendCooldown > 0) return;
         setError("");
         setNotice("");
-        const result = await resendLoginOtp(preAuthToken);
+        const result = await resendLoginOtp(preAuthToken, channel);
+        // `delivered` is only ever explicitly false (see AuthContext's
+        // resendLoginOtp, which sets it from `... !== false`) - treat a
+        // missing/undefined value as delivered rather than as a silent
+        // failure, so a successful resend doesn't get misread as needing
+        // another channel.
+        if (result.success && result.delivered === false) {
+            // Not a block: the user picks another method right away (no cooldown).
+            setError(result.message);
+            return;
+        }
         setNotice(result.success ? t("auth.otp.resendSuccess") : "");
         if (result.success) {
             setExpiresIn(result.expiresInSeconds || OTP_EXPIRY_FALLBACK_SECONDS);
@@ -119,6 +177,7 @@ export default function Login() {
     if (step === "otp") {
         return (
             <div className="max-w-sm mx-auto px-4 py-20">
+            <FullScreenLoader open={googleBusy} message={t("account.finishingSignIn")} />
                 <h1 className="font-display text-2xl mb-1">{t("auth.otp.title")}</h1>
                 <p className="text-ash text-sm mb-8">
                     {(() => {
@@ -135,8 +194,9 @@ export default function Login() {
 
                 <form onSubmit={handleOtp} className="space-y-4">
                     <div>
-                        <label className="block text-sm mb-1">{t("auth.otp.codeLabel")}</label>
+                        <label htmlFor="login-otp-code" className="block text-sm mb-1">{t("auth.otp.codeLabel")}</label>
                         <input
+                            id="login-otp-code"
                             type="text"
                             inputMode="numeric"
                             autoComplete="one-time-code"
@@ -158,7 +218,7 @@ export default function Login() {
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
 
-                    <Button
+                    <Button loading={submitting}
                         type="submit"
                         disabled={submitting || code.length !== 6}
                         fullWidth
@@ -175,16 +235,25 @@ export default function Login() {
                     >
                         ← {t("auth.otp.useDifferentAccount")}
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleResend}
-                        disabled={resendCooldown > 0}
-                        className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
-                    >
-                        {resendCooldown > 0
-                            ? t("auth.otp.resendIn", { seconds: resendCooldown })
-                            : t("auth.otp.resendCode")}
-                    </button>
+                    <div className="text-right">
+                        <p className="text-xs text-ash mb-1">{t("auth.otp.channelLabel")}</p>
+                        <div className="flex gap-3 justify-end">
+                            {["email", "sms", "whatsapp"].map((channel) => (
+                                <button
+                                    key={channel}
+                                    type="button"
+                                    onClick={() => handleResend(channel)}
+                                    disabled={resendCooldown > 0}
+                                    className="text-teal hover:underline disabled:text-ash disabled:no-underline disabled:cursor-not-allowed"
+                                >
+                                    {t(`auth.otp.channel.${channel}`)}
+                                </button>
+                            ))}
+                        </div>
+                        {resendCooldown > 0 && (
+                            <p className="text-xs text-ash mt-1">{t("auth.otp.resendIn", { seconds: resendCooldown })}</p>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -192,8 +261,9 @@ export default function Login() {
 
     return (
         <div className="max-w-sm mx-auto px-4 py-20">
-            <PageMeta title="Sign In" />
+            <PageMeta title="Sign In" noIndexFollow />
             <h1 className="font-display text-2xl mb-1">{t("auth.welcomeBack")}</h1>
+            {intent && <p className="text-sm text-ash mb-4">{t(intent === "save" ? "auth.intentSave" : "auth.intentCart")}</p>}
             <p className="text-ash text-sm mb-8">{t("auth.signInSubtitle")}</p>
 
             <form onSubmit={handleCredentials} className="space-y-4">
@@ -201,17 +271,21 @@ export default function Login() {
                     label={t("auth.emailLabel")}
                     type="email"
                     required
+                    autoComplete="email"
+                    inputMode="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
                 <div>
                     <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-sm font-medium text-ink">{t("auth.passwordLabel")}</label>
+                        <label htmlFor="login-password" className="block text-sm font-medium text-ink">{t("auth.passwordLabel")}</label>
                         <Link to="/forgot-password" className="text-xs text-teal hover:underline">{t("auth.forgotPasswordLink")}</Link>
                     </div>
                     <Input
+                        id="login-password"
                         type="password"
                         required
+                        autoComplete="current-password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
                         showPasswordLabel={t("auth.showPassword")}
@@ -221,16 +295,26 @@ export default function Login() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button
+                <Button loading={submitting}
                     type="submit"
                     disabled={submitting}
                     fullWidth
                     className="gap-2"
                 >
-                    {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? t("auth.signingIn") : t("auth.signInButton")}
                 </Button>
             </form>
+
+            {isGoogleSignInConfigured && (
+                <div className="mt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="flex-1 border-t border-line" />
+                        <span className="text-xs text-ash">{t("auth.google.or")}</span>
+                        <span className="flex-1 border-t border-line" />
+                    </div>
+                    <GoogleSignInButton text="signin_with" onCredential={handleGoogleCredential} disabled={submitting} />
+                </div>
+            )}
 
             <p className="text-sm text-ash mt-6">
                 {t("auth.newHere")} <Link to="/register" className="text-teal hover:underline">{t("auth.registerLink")}</Link>

@@ -33,23 +33,39 @@ exports.listForAdmin = async () => {
     return categoryRepository.findAllForAdmin();
 };
 
+// The homepage's hardcoded "Services" tile (Home.jsx's DepartmentDiscovery)
+// needs a cover image without pulling in the rest of a department object
+// (product counts/trending/etc. don't apply to it) and without the
+// 'services' row's other admin-facing fields, which stay deliberately
+// unused (see findAllForAdmin's comment) - id is included so
+// AdminServiceCategories.jsx can POST straight to the existing
+// /categories/:id/cover upload endpoint, no new upload route needed.
+// Round-3 phase 2.
+exports.getServicesTile = async () => {
+    return cache.getOrSet(CACHE_NAMESPACE, "servicesTile", async () => {
+        const category = await categoryRepository.findBySlug("services");
+        if (!category) return null;
+        return { id: category.id, coverUrl: category.cover_image_url };
+    });
+};
+
+// Home.jsx's hero trust strip: live counts of verified sellers and active
+// products platform-wide. 30s TTL (shorter than this file's other
+// cache.getOrSet calls, which default to ~45s) since these are the two
+// numbers on the page most literally promising "live" to the shopper.
+exports.getTrustStats = async () => {
+    return cache.getOrSet(CACHE_NAMESPACE, "trustStats", () => categoryRepository.countTrustStats(), 30);
+};
+
 // Homepage department cards: each active category plus its live product
 // count, a trending-products preview, recent products, and a "new this
 // week" count. N+1 by design - there are only a handful of departments,
 // so a few extra queries per card is simpler and clearer than one large
-// aggregate query.
-//
-// (Department Sponsorship) is what pulls in
-// findAllActiveWithSponsorship instead of findAllActive here: a
-// currently-active department_sponsorship_campaigns row for a category
-// bumps it to the front of this list and sets `is_sponsored` on the
-// response, which DepartmentCard.jsx uses to show a "Sponsored" badge.
-// See that function's comment in category.repository.js for why this is
-// a separate query from the plain findAllActive the `GET /categories`
-// dropdown endpoint still uses.
+// aggregate query. Order is the admin-set display_order, then name
+// (findAllActive) - departments can no longer be bought into the front.
 exports.listDepartments = async () => {
     return cache.getOrSet(CACHE_NAMESPACE, "listDepartments", async () => {
-        const categories = await categoryRepository.findAllActiveWithSponsorship();
+        const categories = await categoryRepository.findAllActive();
 
         return Promise.all(
             categories.map(async (category) => {
@@ -192,7 +208,7 @@ exports.getHomeHighlights = async () => {
             ...featuredStores.map((s) => ({
                 type: "featured_store",
                 title: s.store_name,
-                subtitle: s.is_verified ? "Verified store" : "Featured store",
+                subtitle: s.show_verified_badge ? "Verified store" : "Featured store",
                 imageUrl: s.store_banner || s.store_logo,
                 videoUrl: null,
                 href: `/stores/${s.store_slug}`,

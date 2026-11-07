@@ -17,5 +17,11 @@ exports.claimValidation = [
     body("shipping_city").notEmpty().withMessage("Shipping city is required"),
     body("shipping_region").notEmpty().withMessage("Shipping region is required"),
     body("shipping_phone").notEmpty().withMessage("Shipping phone is required"),
-    body("payment_method").notEmpty().withMessage("Payment method is required")
+    body("payment_method").notEmpty().withMessage("Payment method is required"),
+    // Same required consent gate as order.validator.js#checkoutValidation
+    // (boolean true or the string "true") - a claim creates a real order, so
+    // it records the same checkout-terms consent a regular checkout does.
+    body("checkout_terms_accepted")
+        .custom((value) => value === true || value === "true")
+        .withMessage("You must accept the Terms of Service, Privacy Policy, and Refund Policy")
 ];

@@ -22,19 +22,27 @@ exports.create = async (sellerData) => {
         store_name,
         store_slug,
         store_description,
-        store_type_id
+        store_type_id,
+        merchant_type
     } = sellerData;
 
+    // merchant_type (Phase 4 remediation): included in the same INSERT
+    // as store creation so onboarding is one request instead of a
+    // create-then-PUT pair where the second call could fail after the
+    // store already exists (see SellerSetup.jsx). `|| null` lets the
+    // column's own DEFAULT 'product' apply when the seller didn't pick
+    // a non-default option, same as the store_type_id pattern above.
     const [result] = await db.query(
         `INSERT INTO seller_profiles
-        (user_id, store_name, store_slug, store_description, store_type_id)
-        VALUES (?, ?, ?, ?, ?)`,
+        (user_id, store_name, store_slug, store_description, store_type_id, merchant_type)
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, 'product'))`,
         [
             user_id,
             store_name,
             store_slug,
             store_description,
-            store_type_id || null
+            store_type_id || null,
+            merchant_type || null
         ]
     );
 
@@ -50,8 +58,8 @@ exports.update = async (userId, data) => {
     const allowed = [
         "store_name", "store_description", "business_email",
         "business_phone", "country", "region", "city", "address", "store_type_id",
-        "pickup_lat", "pickup_lng", "store_theme",
-        "store_tagline", "social_instagram", "social_facebook", "social_whatsapp",
+        "pickup_lat", "pickup_lng", "pickup_accuracy_m", "pickup_pin_verified_at", "store_theme",
+        "store_tagline", "social_instagram", "social_facebook", "social_whatsapp", "public_phone",
         "accepts_preorders", "preorder_deposit_percent", "preorder_default_lead_time_days"
     ];
 
@@ -252,28 +260,26 @@ exports.removeProductFromCollection = async (collectionId, productId) => {
     return result.affectedRows;
 };
 
-// --- Verification fee / paid badge ---
+// --- Approved-to-sell flag ---
 // (The old document-based verification_status flow was removed in
-// migration 029 - account-level verification now lives on `users`,
-// see accountVerification module. This fee/badge pair is the separate,
-// still-needed concept.)
+// migration 029 - account-level verification now lives on `users`, see
+// accountVerification module.)
 
-exports.setVerificationFeePaid = async (userId, amount, reference) => {
-    await db.query(
-        `UPDATE seller_profiles
-        SET verification_fee_amount = ?, verification_fee_paid = TRUE,
-            verification_fee_reference = ?, verification_fee_paid_at = NOW()
-        WHERE user_id = ?`,
-        [amount, reference, userId]
-    );
-};
-
-// Awards/removes the paid "Verified Seller" badge once both approval and
-// fee payment are true (or either becomes false again).
+// Keeps is_verified ("ID approved, allowed to sell") in step with account
+// approval. This is NOT the public badge - see utils/verifiedBadge.js.
+//
+// is_business_verified (seller KYC approved, the thing that earns the
+// "Verified Seller" badge) follows it: it can only be 1 while is_verified is
+// 1, and comes back with it when the account's tier is still
+// business_verified.
 exports.setBadge = async (userId, isVerified) => {
     await db.query(
-        "UPDATE seller_profiles SET is_verified = ? WHERE user_id = ?",
-        [isVerified, userId]
+        `UPDATE seller_profiles sp
+        JOIN users u ON u.id = sp.user_id
+        SET sp.is_verified = ?,
+            sp.is_business_verified = (? = 1 AND u.verification_tier = 'business_verified')
+        WHERE sp.user_id = ?`,
+        [isVerified, isVerified ? 1 : 0, userId]
     );
 };
 
@@ -444,4 +450,96 @@ exports.getTopCustomers = async (sellerId, limit = 5) => {
         [sellerId, limit]
     );
     return rows;
+};
+
+// Seller overview summary (Phase 13b). Each query is scoped to one seller
+// and to an optional created_at range. `to` is exclusive (the service passes
+// the day after the picked end date).
+const rangeClause = (column, range) => {
+    const parts = [];
+    const params = [];
+    if (range.from) {
+        parts.push(`${column} >= ?`);
+        params.push(range.from);
+    }
+    if (range.toExclusive) {
+        parts.push(`${column} < ?`);
+        params.push(range.toExclusive);
+    }
+    return { sql: parts.map((p) => ` AND ${p}`).join(""), params };
+};
+
+exports.getOverviewProductCounts = async (sellerId) => {
+    const [[row]] = await db.query(
+        `SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(is_active), 0) AS active,
+            COALESCE(SUM(is_draft), 0) AS drafts,
+            COALESCE(SUM(CASE WHEN is_active AND NOT is_draft AND stock <= COALESCE((SELECT si.reorder_level FROM stock_items si WHERE si.link_key = CONCAT(products.id, '-0')), 5) THEN 1 ELSE 0 END), 0) AS low_stock
+        FROM products WHERE seller_id = ?`,
+        [sellerId]
+    );
+    return row;
+};
+
+exports.getOverviewOrderCounts = async (sellerId) => {
+    const [[row]] = await db.query(
+        `SELECT
+            COUNT(DISTINCT o.id) AS total,
+            COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.id END) AS pending,
+            COUNT(DISTINCT CASE WHEN o.status = 'pending' AND o.created_at < NOW() - INTERVAL 1 DAY THEN o.id END) AS pending_over_day
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE oi.seller_id = ?`,
+        [sellerId]
+    );
+    return row;
+};
+
+exports.getOverviewProductRevenue = async (sellerId, range) => {
+    const r = rangeClause("o.created_at", range);
+    const [[row]] = await db.query(
+        `SELECT
+            COALESCE(SUM(oi.subtotal), 0) AS gross,
+            COALESCE(SUM(CASE WHEN oi.wallet_credited THEN oi.seller_net_amount ELSE 0 END), 0) AS net
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.seller_id = ? AND o.payment_status = 'paid'${r.sql}`,
+        [sellerId, ...r.params]
+    );
+    return row;
+};
+
+exports.getOverviewServiceCounts = async (providerId) => {
+    const [[row]] = await db.query(
+        `SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(is_active), 0) AS active,
+            COALESCE(SUM(status = 'draft'), 0) AS drafts
+        FROM services WHERE provider_id = ?`,
+        [providerId]
+    );
+    return row;
+};
+
+exports.getOverviewBookingCounts = async (providerId) => {
+    const [[row]] = await db.query(
+        `SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(status = 'pending'), 0) AS pending
+        FROM bookings WHERE provider_id = ?`,
+        [providerId]
+    );
+    return row;
+};
+
+// Booking amounts have no commission split yet, so only gross is returned.
+exports.getOverviewBookingRevenue = async (providerId, range) => {
+    const r = rangeClause("created_at", range);
+    const [[row]] = await db.query(
+        `SELECT COALESCE(SUM(amount), 0) AS gross
+        FROM bookings WHERE provider_id = ? AND payment_status = 'paid'${r.sql}`,
+        [providerId, ...r.params]
+    );
+    return row;
 };

@@ -27,6 +27,7 @@ const storeController = require("./store.controller");
 router.get("/", storeController.search);
 
 router.get("/:slug/collections", storeController.getStoreCollections);
+router.get("/:slug/services", storeController.getStoreServices);
 
 // Store follows (UI/UX remediation) - same "extra path segment
 // past /:slug, no ordering ambiguity" reasoning as /:slug/collections

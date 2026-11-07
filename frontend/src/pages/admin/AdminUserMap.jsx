@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../../api/client";
 import { useSocket } from "../../context/SocketContext";
-import { DEFAULT_CENTER, buyerMapIcon, sellerMapIcon } from "../../utils/mapConfig";
+import { DEFAULT_CENTER } from "../../utils/mapConfig";
 import PageLoader from "../../components/PageLoader";
 import PageMeta from "../../components/PageMeta";
+import { ClusteredMarkers, HeatLayer, MapLegend } from "../../components/admin/AdminMapLayers";
 
 // Same auto-fit behavior as AdminDispatchMap.jsx - fits to whatever's
 // currently plotted whenever the *set* of points changes, without
@@ -39,6 +40,8 @@ export default function AdminUserMap() {
     const [points, setPoints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [roleFilter, setRoleFilter] = useState("all");
+    // "clusters" groups nearby users into numbered bubbles; "heat" shows density.
+    const [layerMode, setLayerMode] = useState("clusters");
 
     useEffect(() => {
         api.get("/admin/users/map")
@@ -91,11 +94,16 @@ export default function AdminUserMap() {
 
     const points2d = useMemo(() => markers.map((m) => [m.lat, m.lng]), [markers]);
 
+    const layerButtons = [
+        { value: "clusters", label: "Clusters" },
+        { value: "heat", label: "Heatmap" }
+    ];
+
     if (loading) return <PageLoader />;
 
     return (
         <div className="p-4 space-y-4">
-            <PageMeta title="User map" />
+            <PageMeta title="User map" noIndex />
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="font-display text-xl">User map</h1>
@@ -104,7 +112,7 @@ export default function AdminUserMap() {
                     </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     {["all", "buyer", "seller"].map((option) => (
                         <button
                             key={option}
@@ -116,8 +124,26 @@ export default function AdminUserMap() {
                             {option === "all" ? "All" : option === "buyer" ? "Buyers" : "Sellers"}
                         </button>
                     ))}
+                    <span className="w-px bg-line mx-1" aria-hidden="true" />
+                    <div role="group" aria-label="Map layer" className="flex border border-line rounded-md overflow-hidden">
+                        {layerButtons.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                aria-pressed={layerMode === option.value}
+                                onClick={() => setLayerMode(option.value)}
+                                className={`px-3 py-1.5 text-sm transition-colors ${
+                                    layerMode === option.value ? "bg-ink text-paper" : "hover:bg-mist"
+                                }`}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
+
+            <MapLegend mode={layerMode} />
 
             <div className="rounded-lg overflow-hidden border border-line" style={{ height: 560 }}>
                 <MapContainer center={DEFAULT_CENTER} zoom={12} style={{ height: "100%", width: "100%" }}>
@@ -126,16 +152,7 @@ export default function AdminUserMap() {
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     <FitToPoints points={points2d} />
-                    {markers.map((m) => (
-                        <Marker key={m.key} position={[m.lat, m.lng]} icon={m.role === "seller" ? sellerMapIcon : buyerMapIcon}>
-                            <Popup>
-                                <div className="text-sm">
-                                    <div className="font-semibold">{m.name}</div>
-                                    <div className="text-ash capitalize">{m.role} {m.isOnline ? "• online now" : ""}</div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
+                    {layerMode === "heat" ? <HeatLayer markers={markers} /> : <ClusteredMarkers markers={markers} />}
                 </MapContainer>
             </div>
 

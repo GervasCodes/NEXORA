@@ -12,7 +12,7 @@ const toFacebookUrl = (value) => {
     return `https://facebook.com/${trimmed}`;
 };
 
-const toWhatsappUrl = (value) => {
+export const toWhatsappUrl = (value) => {
     const digits = value.replace(/[^\d]/g, "");
     return `https://wa.me/${digits}`;
 };

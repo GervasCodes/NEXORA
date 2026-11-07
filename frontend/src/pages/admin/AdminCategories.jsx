@@ -120,7 +120,7 @@ export default function AdminCategories() {
                     onChange={(e) => setForm({ ...form, display_order: Number(e.target.value) })}
                     className="border border-line rounded-md px-3 py-2 text-sm focus-ring w-20"
                 />
-                <Button type="submit" disabled={submitting}>
+                <Button loading={submitting} type="submit" disabled={submitting}>
                     {submitting ? "Saving…" : editingId ? "Save changes" : "Add category"}
                 </Button>
                 {editingId && (
@@ -168,7 +168,7 @@ export default function AdminCategories() {
                             Edit
                         </button>
 
-                        <Button
+                        <Button loading={busyId === c.id}
                             onClick={() => toggleActive(c)}
                             disabled={busyId === c.id}
                             variant="secondary"

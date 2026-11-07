@@ -17,6 +17,7 @@ vi.mock("../../src/context/LanguageContext", () => ({
                 "products.viewGrid": "Grid view",
                 "products.viewList": "List view",
                 "common.loading": "Loading…",
+                "loading.store": "Loading store",
                 "common.browseMarketplace": "Browse the marketplace",
                 "store.notFoundTitle": "Store not found",
                 "store.noLogo": "No logo",
@@ -56,8 +57,9 @@ vi.mock("../../src/context/CurrencyContext", () => ({
     useCurrency: () => ({ currency: "TZS", toTzs: (v) => (v === "" ? null : Number(v)), format: (v) => `TZS ${v}` })
 }));
 
+const mockAuth = vi.hoisted(() => ({ user: null }));
 vi.mock("../../src/context/AuthContext", () => ({
-    useAuth: () => ({ user: null })
+    useAuth: () => ({ user: mockAuth.user })
 }));
 
 vi.mock("../../src/context/WishlistContext", () => ({
@@ -118,6 +120,7 @@ const mockEmptyCatalog = () => {
 
 beforeEach(() => {
     api.get.mockReset();
+    mockAuth.user = null;
 });
 
 describe("StorePage (Phase 5A)", () => {
@@ -125,7 +128,8 @@ describe("StorePage (Phase 5A)", () => {
         api.get.mockReturnValue(new Promise(() => {})); // never resolves
         renderPage();
 
-        expect(screen.getByText("Loading…")).toBeInTheDocument();
+        // The page shows a skeleton whose accessible label is "loading.store".
+        expect(screen.getByRole("status")).toHaveTextContent("Loading store");
     });
 
     it("fetches by slug and renders the store's basics", async () => {
@@ -533,5 +537,37 @@ describe("StorePage collections (Phase 7C)", () => {
 
         await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
         expect(screen.queryByText("New Arrivals")).not.toBeInTheDocument();
+    });
+});
+
+// Phase 8: sticky mobile CTA.
+describe("StorePage - sticky mobile CTA", () => {
+    it("shows a phone-only 'shop this store' bar that links to the store's feed", async () => {
+        mockEmptyCatalog();
+        renderPage();
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
+
+        const cta = screen.getByRole("link", { name: "store.stickyShop" });
+        expect(cta).toHaveAttribute("href", "/feed?seller_id=42");
+        expect(cta.parentElement.className).toContain("md:hidden");
+        expect(cta.parentElement.className).toContain("bottom-[var(--bottom-inset)]");
+    });
+
+    it("shows the bar to signed-in buyers too", async () => {
+        mockAuth.user = { id: 7, role: "buyer" };
+        mockEmptyCatalog();
+        renderPage();
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
+
+        expect(screen.getByRole("link", { name: "store.stickyShop" })).toBeInTheDocument();
+    });
+
+    it("does not show the bar to the store's owner", async () => {
+        mockAuth.user = { id: 42, role: "seller" };
+        mockEmptyCatalog();
+        renderPage();
+        await waitFor(() => expect(screen.getByRole("heading", { name: "Mama Ntilie's Kitchen" })).toBeInTheDocument());
+
+        expect(screen.queryByRole("link", { name: "store.stickyShop" })).not.toBeInTheDocument();
     });
 });

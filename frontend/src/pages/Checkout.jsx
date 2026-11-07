@@ -5,20 +5,28 @@ import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
+import FullScreenLoader from "../components/ui/FullScreenLoader";
 import { useToast } from "../context/ToastContext";
 import LocationPicker from "../components/LocationPicker";
 import PhoneInput from "../components/PhoneInput";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import FieldError from "../components/ui/FieldError";
 import CheckoutSteps from "../components/ui/CheckoutSteps";
 import PageMeta from "../components/PageMeta";
 import { getStoredAffiliateClickToken } from "../components/AffiliateClickTracker";
 import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
+import useFormErrors from "../hooks/useFormErrors";
+import { composeAddressWithLandmark } from "../utils/geolocation";
 
 const initialForm = {
     shipping_address: "",
     shipping_city: "",
     shipping_region: "",
+    // Phase 7: UI-only. Sent to the API folded into shipping_address (there is
+    // no landmark column), never as its own field.
+    shipping_landmark: "",
     shipping_phone: "",
     payment_method: "mobile_money",
     buyer_protection_addon: false,
@@ -58,8 +66,8 @@ const estimateBuyerProtectionFee = (subtotal) => {
 };
 
 // Non-card, non-provider-agnostic options - these keep their own fixed
-// label/checkout wiring below. The card rail (one "card" entry; the gateway
-// behind it is configured on the server) are NOT listed here - they're generated from
+// label/checkout wiring below. Card providers (Snippe, MalipoPay Card,
+// and any future card rail) are NOT listed here - they're generated from
 // GET /payments/methods at render time (see cardPaymentMethods below) so
 // checkout never needs a frontend change to pick up a newly-configured
 // card gateway. Split into "before" and "after" so the dynamic card
@@ -70,7 +78,7 @@ const estimateBuyerProtectionFee = (subtotal) => {
 const paymentLogosFor = (value) => {
     if (value === "mobile_money") return ["mpesa", "mixx", "airtel_money", "halopesa"];
     if (value === "paypal") return ["paypal"];
-    if (/card/i.test(value)) return ["visa", "mastercard"];
+    if (/card|snippe/i.test(value)) return ["visa", "mastercard"];
     return [];
 };
 
@@ -88,15 +96,12 @@ const PAYMENT_METHODS_AFTER_CARDS = [
 // are (card rails are filtered separately - see cardPaymentMethods).
 const PROVIDER_GATED_METHODS = new Set(["mobile_money", "paypal"]);
 
-// Methods that go through an external payment gateway - hidden while
-// payments are under maintenance. Cash on delivery and wallet stay available.
-const ONLINE_GATEWAY_METHODS = new Set(["mobile_money", "card", "paypal"]);
-
 // Human-friendly labels for known card provider keys - falls back to the
 // registry's own `label` for any key not listed here, so a brand-new
 // card rail still renders sensibly with zero frontend changes.
 const CARD_PROVIDER_LABELS = {
-    card: "Card"
+    malipopay_card: "Card (MalipoPay)",
+    snippe: "Card (Snippe)"
 };
 
 // Fail-open fallback for the card rails specifically. If GET
@@ -122,10 +127,21 @@ export default function Checkout() {
     const { t } = useLanguage();
     const toast = useToast();
     const [form, setForm] = useState(initialForm);
+    // Phase 6 form-error pattern: per-field messages under each control and
+    // focus on the first invalid one (replaces the old toast-only messages).
+    const { formRef, errors: fieldErrors, showErrors, clearError, clearErrors, hasErrors } = useFormErrors();
+    // Phase 7: true once the address fields were suggested from a pin. The
+    // buyer must then tick "this is correct" before ordering (reset whenever a
+    // new suggestion lands, since the values just changed).
+    const [addressAutofilled, setAddressAutofilled] = useState(false);
+    const [addressConfirmed, setAddressConfirmed] = useState(false);
     const [pin, setPin] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
-    // (Resilience & Growth), extended for the card rail: null =
+    // The order that exists while we hand the buyer to a gateway, so the loader's "taking too long"
+    // escape hatch can send them to it (payment can be retried there).
+    const [handoffOrderId, setHandoffOrderId] = useState(null);
+    // (Resilience & Growth), extended for MalipoPay Card: null =
     // still loading / endpoint unavailable - in either case every method
     // stays visible (fail-open), so this lookup can never make checkout
     // show FEWER options than it did before this phase if something's
@@ -134,7 +150,6 @@ export default function Checkout() {
     // reports, instead of a hardcoded card provider list.
     const [configuredProviders, setConfiguredProviders] = useState(null);
     const [providersFetchFailed, setProvidersFetchFailed] = useState(false);
-    const [paymentsMaintenance, setPaymentsMaintenance] = useState(null);
     const configuredKeys = configuredProviders && configuredProviders.map((provider) => provider.key);
 
     // Loyalty points redemption  - fetched once; the server
@@ -221,6 +236,7 @@ export default function Checkout() {
     const selectSavedAddress = (id, list = savedAddresses) => {
         const addr = list.find((a) => String(a.id) === String(id));
         if (!addr) return;
+        clearErrors();
         setAddingNewAddress(false);
         setForm((f) => ({
             ...f,
@@ -233,13 +249,17 @@ export default function Checkout() {
     };
 
     const startNewAddress = () => {
+        clearErrors();
         setAddingNewAddress(true);
+        setAddressAutofilled(false);
+        setAddressConfirmed(false);
         setForm((f) => ({
             ...f,
             address_id: "",
             shipping_address: "",
             shipping_city: "",
             shipping_region: "",
+            shipping_landmark: "",
             shipping_phone: ""
         }));
     };
@@ -273,6 +293,7 @@ export default function Checkout() {
     }, [deliveryType, pin?.lat, pin?.lng]);
 
     const selectPickupPoint = (id) => {
+        clearError("pickup_point_id");
         const point = pickupPoints.find((p) => String(p.id) === String(id));
         if (!point) {
             setForm((f) => ({ ...f, pickup_point_id: "" }));
@@ -306,9 +327,6 @@ export default function Checkout() {
             .then(({ data }) => {
                 if (cancelled) return;
                 setConfiguredProviders(data.data);
-                // Set while the gateways are being tested: online payments are
-                // switched off for ordinary buyers (see paymentsMaintenance.middleware.js).
-                if (data.maintenance?.active) setPaymentsMaintenance(data.maintenance);
             })
             .catch(() => {
                 if (cancelled) return;
@@ -326,7 +344,8 @@ export default function Checkout() {
 
     // Card payment providers, loaded dynamically from the centralized
     // registry (GET /payments/methods) rather than hardcoded here - if
-    // a card gateway is configured the card option shows up; another card rail (added
+    // both Snippe and MalipoPay Card are enabled/configured, both show
+    // up; if only one is, only that one does; a third card rail (added
     // server-side per docs/PAYMENT_PROVIDERS.md §4) would appear with no
     // frontend change at all. While still loading, no card rows render
     // (rather than guessing) - they appear as soon as the registry
@@ -337,8 +356,10 @@ export default function Checkout() {
         .map((provider) => ({
             value: provider.key,
             label: CARD_PROVIDER_LABELS[provider.key] || provider.label,
-            // Matches the route segments registered in payment.routes.js
-            // (POST /:orderId/<segment>/checkout) - "card" -> /card/checkout.
+            // "malipopay_card" -> "malipopay-card" to match the route
+            // segments registered in payment.routes.js (POST
+            // /:orderId/<segment>/checkout) - Snippe's own key already
+            // matches its route segment with no translation needed.
             routeSegment: provider.key.replace(/_/g, "-")
         }));
 
@@ -353,7 +374,7 @@ export default function Checkout() {
         ...(walletBalance > 0 ? [{ value: "wallet", label: `Wallet balance (${format(walletBalance)})` }] : []),
         ...cardPaymentMethods,
         ...filterStatic(PAYMENT_METHODS_AFTER_CARDS)
-    ].filter((method) => !(paymentsMaintenance && ONLINE_GATEWAY_METHODS.has(method.value)));
+    ];
 
     // Preselect the method this buyer used last time, if it is still offered.
     useEffect(() => {
@@ -381,27 +402,39 @@ export default function Checkout() {
             setForm((current) => ({ ...current, payment_method: visiblePaymentMethods[0].value }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [configuredProviders, paymentsMaintenance]);
+    }, [configuredProviders]);
 
-    const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
+    const update = (field) => (e) => { clearError(field); setForm({ ...form, [field]: e.target.value }); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Client-side guard so the buyer gets an immediate, in-context
-        // message instead of a 400 from the API. The backend enforces
-        // this independently (order.validator.js + order.repository.js) -
-        // this is convenience, not the control.
-        if (phoneProblem(form.shipping_phone)) {
-            toast?.error(t("checkout.phoneInvalid"));
-            return;
+        // message under the offending field (and focus on the first one)
+        // instead of a 400 from the API. The backend enforces this
+        // independently (order.validator.js + order.repository.js) - this is
+        // convenience, not the control. Only fields actually on screen are
+        // checked: a chosen saved address has no visible inputs.
+        const problems = {};
+        if (deliveryType === "pickup") {
+            if (!form.pickup_point_id) problems.pickup_point_id = t("checkout.error.pickupRequired");
+        } else if (addingNewAddress || savedAddresses.length === 0) {
+            if (!form.shipping_address.trim()) problems.shipping_address = t("checkout.error.addressRequired");
+            if (!form.shipping_city.trim()) problems.shipping_city = t("checkout.error.cityRequired");
+            if (!form.shipping_region.trim()) problems.shipping_region = t("checkout.error.regionRequired");
+            // A typed address (no GPS suggestion) has no street numbers to go on
+            // in much of the country, so a landmark is the fallback the rider uses.
+            if (!addressAutofilled && !form.shipping_landmark.trim()) problems.shipping_landmark = t("checkout.error.landmarkRequired");
+            if (addressAutofilled && !addressConfirmed) problems.address_confirmed = t("checkout.error.addressConfirmRequired");
         }
-        try { localStorage.setItem(LAST_PAYMENT_KEY, form.payment_method); } catch { /* storage unavailable */ }
+        if (!String(form.shipping_phone || "").trim()) problems.shipping_phone = t("checkout.error.phoneRequired");
+        else if (phoneProblem(form.shipping_phone)) problems.shipping_phone = t("checkout.phoneInvalid");
+        if (!form.checkout_terms_accepted) problems.checkout_terms_accepted = t("checkout.error.termsRequired");
 
-        if (!form.checkout_terms_accepted) {
-            toast?.error("Please accept the Terms of Service, Privacy Policy, and Refund Policy to place your order");
-            return;
-        }
+        showErrors(problems);
+        if (Object.keys(problems).length > 0) return;
+
+        try { localStorage.setItem(LAST_PAYMENT_KEY, form.payment_method); } catch { /* storage unavailable */ }
 
         setSubmitting(true);
 
@@ -414,8 +447,16 @@ export default function Checkout() {
         let orderId = null;
 
         try {
+            // Landmark rides inside the address text for a newly typed/suggested
+            // home address; a saved address or pickup point keeps its own text.
+            const { shipping_landmark: landmark, ...formFields } = form;
+            const usingNewHomeAddress = deliveryType === "home" && (addingNewAddress || savedAddresses.length === 0);
+            const shippingAddress = usingNewHomeAddress
+                ? composeAddressWithLandmark(form.shipping_address, landmark, t("checkout.landmarkNear"))
+                : form.shipping_address;
             const payload = {
-                ...form,
+                ...formFields,
+                shipping_address: shippingAddress,
                 pickup_point_id: form.pickup_point_id || undefined,
                 address_id: form.address_id || undefined,
                 coupon_code: appliedCoupon?.code || undefined,
@@ -434,7 +475,7 @@ export default function Checkout() {
             if (saveNewAddress && !form.address_id && deliveryType === "home") {
                 api.post("/addresses", {
                     label: "Address",
-                    address: form.shipping_address,
+                    address: shippingAddress,
                     city: form.shipping_city,
                     region: form.shipping_region,
                     phone: form.shipping_phone
@@ -453,15 +494,19 @@ export default function Checkout() {
                 await api.post(`/payments/${orderId}/wallet`);
 
             } else if (selectedCardMethod) {
-                // Drives the selected card rail through the same
+                // Drives whichever card rail was selected (Snippe,
+                // MalipoPay Card, or any future one) through the same
                 // hosted-checkout request shape - no provider-specific
                 // branch needed here.
                 const origin = window.location.origin;
                 const { data: checkout } = await api.post(`/payments/${orderId}/${selectedCardMethod.routeSegment}/checkout`, {
-                    successUrl: `${origin}/orders/${orderId}?payment=success`,
+                    // Success lands on the confirmation page (it waits for the
+                    // provider's webhook itself); cancel goes back to the order.
+                    successUrl: `${origin}/order-confirmed/${orderId}?payment=success`,
                     cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
                 });
                 await refresh();
+                setHandoffOrderId(orderId);
                 setRedirecting(true);
                 window.location.href = checkout.data.url;
                 return;
@@ -473,6 +518,7 @@ export default function Checkout() {
                     cancelUrl: `${origin}/orders/${orderId}?payment=cancelled`
                 });
                 await refresh();
+                setHandoffOrderId(orderId);
                 setRedirecting(true);
                 window.location.href = checkout.data.url;
                 return;
@@ -480,7 +526,7 @@ export default function Checkout() {
 
             await refresh();
             notifyMeaningfulAction();
-            navigate(`/orders/${orderId}`, { state: { justPlaced: true } });
+            navigate(`/order-confirmed/${orderId}`, { replace: true });
 
         } catch (err) {
             toast?.error(extractErrorMessage(err));
@@ -537,8 +583,17 @@ export default function Checkout() {
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-5 gap-10 animate-fade-in">
+            <FullScreenLoader
+                open={submitting || redirecting}
+                message={redirecting ? t("checkout.redirectingToPayment") : t("checkout.placingOrder")}
+                onCancel={redirecting && handoffOrderId ? () => {
+                    window.stop?.();
+                    setRedirecting(false);
+                    navigate(`/orders/${handoffOrderId}`, { state: { paymentFailed: true } });
+                } : undefined}
+            />
             <PageMeta title="Checkout" noIndex />
-            <form id="checkout-form" onSubmit={handleSubmit} className="md:col-span-3 space-y-4 animate-slide-up pb-28 md:pb-0">
+            <form id="checkout-form" ref={formRef} onSubmit={handleSubmit} noValidate className="md:col-span-3 space-y-4 animate-slide-up pb-28 md:pb-0">
                 <h1 className="font-display text-2xl mb-2">{t("checkout.title")}</h1>
 
                 <CheckoutSteps steps={[t("checkout.step.delivery"), t("checkout.step.payment"), t("checkout.step.review")]} currentIndex={checkoutStepIndex} />
@@ -546,14 +601,14 @@ export default function Checkout() {
                 <div className="flex gap-2 mb-2">
                     <button
                         type="button"
-                        onClick={() => { setDeliveryType("home"); setForm({ ...form, pickup_point_id: "" }); }}
+                        onClick={() => { clearErrors(); setDeliveryType("home"); setForm({ ...form, pickup_point_id: "" }); }}
                         className={`flex-1 border rounded-md px-3 py-2 text-sm transition-colors ${deliveryType === "home" ? "border-ink bg-ink text-paper" : "border-line"}`}
                     >
                         Deliver to my address
                     </button>
                     <button
                         type="button"
-                        onClick={() => setDeliveryType("pickup")}
+                        onClick={() => { clearErrors(); setDeliveryType("pickup"); }}
                         className={`flex-1 border rounded-md px-3 py-2 text-sm transition-colors ${deliveryType === "pickup" ? "border-ink bg-ink text-paper" : "border-line"}`}
                     >
                         Pickup point / kiosk
@@ -562,19 +617,19 @@ export default function Checkout() {
 
                 {deliveryType === "pickup" ? (
                     <div>
-                        <label htmlFor="checkout-pickup-point" className="block text-sm mb-1">Choose a pickup point</label>
-                        <select
+                        <Select
                             id="checkout-pickup-point"
-                            required
+                            label="Choose a pickup point"
+                            aria-required="true"
                             value={form.pickup_point_id}
+                            error={fieldErrors.pickup_point_id}
                             onChange={(e) => selectPickupPoint(e.target.value)}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
                         >
                             <option value="" disabled>Select a location</option>
                             {pickupPoints.map((p) => (
                                 <option key={p.id} value={p.id}>{p.name} — {p.city}</option>
                             ))}
-                        </select>
+                        </Select>
                         {form.pickup_point_id && (
                             <p className="text-xs text-ash mt-1">{form.shipping_address}, {form.shipping_city}</p>
                         )}
@@ -626,6 +681,7 @@ export default function Checkout() {
                                     required
                                     autoComplete="street-address"
                                     value={form.shipping_address}
+                                    error={fieldErrors.shipping_address}
                                     onChange={update("shipping_address")}
                                 />
 
@@ -635,6 +691,7 @@ export default function Checkout() {
                                         required
                                         autoComplete="address-level2"
                                         value={form.shipping_city}
+                                        error={fieldErrors.shipping_city}
                                         onChange={update("shipping_city")}
                                     />
                                     <Input
@@ -642,9 +699,40 @@ export default function Checkout() {
                                         required
                                         autoComplete="address-level1"
                                         value={form.shipping_region}
+                                        error={fieldErrors.shipping_region}
                                         onChange={update("shipping_region")}
                                     />
                                 </div>
+
+                                <Input
+                                    label={t("checkout.landmark")}
+                                    required={!addressAutofilled}
+                                    placeholder={t("checkout.landmarkPlaceholder")}
+                                    hint={t("checkout.landmarkHint")}
+                                    maxLength={80}
+                                    value={form.shipping_landmark}
+                                    error={fieldErrors.shipping_landmark}
+                                    onChange={update("shipping_landmark")}
+                                />
+
+                                {addressAutofilled && (
+                                    <div className="border border-teal/30 bg-teal/5 rounded-md px-3 py-2.5 animate-fade-in">
+                                        <p className="text-xs text-ash">{t("checkout.addressConfirm.note")}</p>
+                                        <label htmlFor="checkout-address-confirmed" className="flex items-start gap-2 mt-2 text-sm cursor-pointer">
+                                            <input
+                                                id="checkout-address-confirmed"
+                                                type="checkbox"
+                                                checked={addressConfirmed}
+                                                onChange={(e) => { clearError("address_confirmed"); setAddressConfirmed(e.target.checked); }}
+                                                aria-invalid={fieldErrors.address_confirmed ? "true" : undefined}
+                                                aria-describedby={fieldErrors.address_confirmed ? "checkout-address-confirmed-error" : undefined}
+                                                className="mt-1 focus-ring"
+                                            />
+                                            <span>{t("checkout.addressConfirm.label")}</span>
+                                        </label>
+                                        <FieldError id="checkout-address-confirmed">{fieldErrors.address_confirmed}</FieldError>
+                                    </div>
+                                )}
 
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <input
@@ -665,16 +753,15 @@ export default function Checkout() {
                         id="checkout-phone"
                         required
                         value={form.shipping_phone}
-                        onChange={(shipping_phone) => setForm({ ...form, shipping_phone })}
+                        error={fieldErrors.shipping_phone || (phoneInvalid ? t("checkout.phoneInvalid") : undefined)}
+                        onChange={(shipping_phone) => { clearError("shipping_phone"); setForm({ ...form, shipping_phone }); }}
                     />
-                    {phoneInvalid && (
-                        <p role="alert" className="text-coral text-xs mt-1">{t("checkout.phoneInvalid")}</p>
-                    )}
                 </div>
 
                 <LocationPicker
                     value={pin}
                     onChange={setPin}
+                    showPrompt={deliveryType === "home" && (addingNewAddress || savedAddresses.length === 0)}
                     onAddressResolved={({ address, city, region }) => {
                         // Only auto-fills the free-text fields when they're
                         // actually the ones on screen (a new address being
@@ -682,6 +769,15 @@ export default function Checkout() {
                         // moving the pin shouldn't silently overwrite the
                         // address they already chose.
                         if (!addingNewAddress && savedAddresses.length > 0) return;
+                        if (address || city || region) {
+                            setAddressAutofilled(true);
+                            setAddressConfirmed(false);
+                            clearError("address_confirmed");
+                            clearError("shipping_landmark");
+                        }
+                        if (address) clearError("shipping_address");
+                        if (city) clearError("shipping_city");
+                        if (region) clearError("shipping_region");
                         setForm((f) => ({
                             ...f,
                             shipping_address: address || f.shipping_address,
@@ -713,12 +809,6 @@ export default function Checkout() {
                         ) : (
                             <p className="text-xs text-ash mt-0.5">{t("checkout.deliveryEstimate.unknown")}</p>
                         )}
-                    </div>
-                )}
-
-                {paymentsMaintenance && (
-                    <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
-                        {paymentsMaintenance.message}
                     </div>
                 )}
 
@@ -792,7 +882,9 @@ export default function Checkout() {
                         type="checkbox"
                         id="checkout_terms_accepted"
                         checked={form.checkout_terms_accepted}
-                        onChange={(e) => setForm({ ...form, checkout_terms_accepted: e.target.checked })}
+                        onChange={(e) => { clearError("checkout_terms_accepted"); setForm({ ...form, checkout_terms_accepted: e.target.checked }); }}
+                        aria-invalid={fieldErrors.checkout_terms_accepted ? "true" : undefined}
+                        aria-describedby={fieldErrors.checkout_terms_accepted ? "checkout_terms_accepted-error" : undefined}
                         className="mt-1 focus-ring"
                         required
                     />
@@ -812,10 +904,11 @@ export default function Checkout() {
                         .
                     </label>
                 </div>
+                <FieldError id="checkout_terms_accepted">{fieldErrors.checkout_terms_accepted}</FieldError>
+                {hasErrors && <p className="text-coral text-sm">{t("form.error.fixHighlighted")}</p>}
 
                 <div className="hidden md:block">
-                    <Button type="submit" disabled={busy || !form.checkout_terms_accepted || phoneInvalid} fullWidth className="gap-2 active:scale-[0.99]">
-                        {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                    <Button loading={busy} type="submit" disabled={busy} fullWidth className="gap-2 active:scale-[0.99]">
                         {busy ? t("checkout.placingOrder") : `${t("checkout.placeOrderButton")} · ${format(grandTotal)}`}
                     </Button>
                 </div>
@@ -828,8 +921,7 @@ export default function Checkout() {
                         <p className="text-xs text-ash">{t("common.total")}</p>
                         <p className="price font-medium">{format(grandTotal)}</p>
                     </div>
-                    <Button type="submit" form="checkout-form" disabled={busy || !form.checkout_terms_accepted || phoneInvalid} fullWidth className="gap-2">
-                        {busy && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                    <Button loading={busy} type="submit" form="checkout-form" disabled={busy} fullWidth className="gap-2">
                         {busy ? t("checkout.placingOrder") : t("checkout.placeOrderButton")}
                     </Button>
                 </div>
@@ -857,7 +949,7 @@ export default function Checkout() {
                                 onChange={(e) => setCouponInput(e.target.value)}
                                 className="flex-1"
                             />
-                            <Button type="button" variant="secondary" size="md" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()}>
+                            <Button loading={couponBusy} type="button" variant="secondary" size="md" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()}>
                                 {couponBusy ? "Checking…" : "Apply"}
                             </Button>
                         </div>

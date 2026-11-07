@@ -16,6 +16,9 @@ const fraudService = require("../fraud/fraud.service");
 const adminService = require("../admin/admin.service");
 const { haversineKm } = require("../../utils/geo");
 const logger = require("../../utils/logger");
+const { getKnowledgeText } = require("./knowledge/nexoraKnowledge");
+const { buildChatSystemPrompt } = require("./knowledge/chatPrompt");
+const { buildFallback } = require("./knowledge/fallback");
 
 // Prepended to every system prompt this module sends, regardless of
 // feature. Global constraint (roadmap Part B): user-generated content
@@ -183,38 +186,13 @@ exports.getQualityOverview = async () => {
 
 // ---  FAQ / support assistant --------------------------------
 
-// Small, hand-curated knowledge base rather than letting the model
-// answer from general training knowledge - keeps FAQ answers accurate
-// to NEXORA's actual policies instead of a plausible-sounding guess.
-// Mirrors the topics covered in frontend/src/legal/*.md at a summary
-// level; the legal pages remain the authoritative full text.
-const FAQ_KNOWLEDGE = [
-    { q: "how do I track my order", a: "Open Orders from your account menu, tap the order, then \"Track order\" for live delivery status." },
-    { q: "how do refunds work", a: "Refunds are handled through Disputes - open the order and select \"Report a problem\" to start one. See our Refunds policy for timelines." },
-    { q: "what payment methods are accepted", a: "NEXORA supports mobile money, card payments, and cash on delivery where available - options shown at checkout depend on your seller and location." },
-    { q: "how do I become a seller", a: "Register an account, then choose \"Become a seller\" from your account menu to start the seller setup flow." },
-    { q: "how do I cancel an order", a: "You can cancel from Orders while the order is still pending or processing - once it ships, cancellation is no longer available and you'd use Disputes instead." },
-    { q: "how do bookings work", a: "For services, pick an available time on the provider's page and confirm - you'll see booking status and updates under Bookings." }
-];
-
-const findFaqMatch = (question) => {
-    const lower = question.toLowerCase();
-    let best = null;
-    let bestScore = 0;
-    for (const entry of FAQ_KNOWLEDGE) {
-        const words = entry.q.split(" ").filter((w) => w.length > 3);
-        const score = words.filter((w) => lower.includes(w)).length;
-        if (score > bestScore) {
-            bestScore = score;
-            best = entry;
-        }
-    }
-    return bestScore > 0 ? best : null;
-};
-
-// General chatbot shell - handles free-form questions. Grounds itself in
-// FAQ_KNOWLEDGE (passed as data) rather than letting the model invent
-// policy details.
+// General chatbot shell - handles free-form questions. Phase 2: grounds
+// itself in the curated, role-gated knowledge pack (knowledge/
+// nexoraKnowledge.js) instead of the six FAQ entries, and is information
+// only - see knowledge/chatPrompt.js for the behaviour rules. When the
+// model cannot answer, knowledge/fallback.js supplies a free, bilingual
+// reply (Phase 3): template for greetings/thanks, a short answer for a
+// clearly matched topic, otherwise "not sure" plus suggested-topic ids.
 // priorReply is optional and drives the drawer's "Show more" follow-up
 // call (see NexoraAIDrawer.jsx): when present, it's the previous,
 // truncated reply to the same question, passed back as assistant
@@ -232,8 +210,13 @@ const findFaqMatch = (question) => {
 const CHAT_MAX_TOKENS = 700;
 const MAX_HISTORY_MESSAGES = 6;
 
-exports.chat = async ({ userId, message, history, priorReply }) => {
-    const context = FAQ_KNOWLEDGE.map((entry) => `Q: ${entry.q}\nA: ${entry.a}`).join("\n\n");
+// role is the caller's role from the verified JWT (null when signed out);
+// it only selects which knowledge sections the model may see.
+exports.chat = async ({ userId, role = null, language, message, history, priorReply }) => {
+    // getKnowledgeText never throws (falls back to number-free wording).
+    // If it still comes back empty, don't call the model with nothing to
+    // ground on - use the non-AI fallback instead of risking invention.
+    const knowledgeText = await getKnowledgeText({ role });
     const isContinuation = Boolean(priorReply);
     const safePriorReply = isContinuation ? String(priorReply).slice(0, 4000) : null;
 
@@ -247,23 +230,33 @@ exports.chat = async ({ userId, message, history, priorReply }) => {
         ]
         : conversation;
 
-    const result = await callProvider({
-        userId,
-        feature: "chat",
-        system: `Answer the buyer's question about NEXORA using only the facts in this FAQ knowledge base. If the question isn't covered by it, say you're not sure and suggest contacting support, rather than guessing.\n\nFAQ knowledge base:\n${context}`,
-        userMessage: message,
-        messages,
-        maxTokens: isContinuation ? CHAT_MAX_TOKENS * 2 : CHAT_MAX_TOKENS
-    });
+    const result = knowledgeText
+        ? await callProvider({
+            userId,
+            feature: "chat",
+            system: buildChatSystemPrompt({ knowledgeText, signedIn: Boolean(userId) }),
+            userMessage: message,
+            messages,
+            maxTokens: isContinuation ? CHAT_MAX_TOKENS * 2 : CHAT_MAX_TOKENS
+        })
+        : { text: null, unavailableReason: null };
     const reply = result?.text || null;
 
     if (reply) return { reply, aiGenerated: true, truncated: Boolean(result?.truncated) };
 
-    const match = findFaqMatch(message);
+    // Non-AI path: AI off, capped, no provider, provider error or empty pack.
+    // A "Show more" continuation has nothing sensible to add without the
+    // model, so it returns an empty reply (the drawer then keeps the
+    // existing bubble unchanged) instead of appending a fallback message.
+    if (isContinuation) {
+        return { reply: "", aiGenerated: false, truncated: false, unavailableReason: result?.unavailableReason || null };
+    }
+    const fallback = buildFallback({ message, language });
     return {
-        reply: match ? match.a : "I'm not sure about that one - please reach out to support from your Account page and we'll help directly.",
+        reply: fallback.reply,
         aiGenerated: false,
         truncated: false,
+        suggestedTopics: fallback.suggestedTopics,
         unavailableReason: result?.unavailableReason || null
     };
 };

@@ -30,7 +30,10 @@ import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
 //              rendering a visible label.
 //   required, placeholder, className - passed through to the number
 //              <input>.
-export default function PhoneInput({ value, onChange, required = false, disabled = false, placeholder = "712 345 678", className = "", id, ariaLabel }) {
+//   error    - (Phase 6) message shown under the field. Marks the number
+//              input aria-invalid, links it with aria-describedby and turns
+//              the border coral; needs `id` so the message has a stable id.
+export default function PhoneInput({ value, onChange, required = false, disabled = false, placeholder = "712 345 678", className = "", id, ariaLabel, error }) {
     const { t } = useLanguage();
     const [dial, setDial] = useState(() => splitIncoming(value).dial);
     const [national, setNational] = useState(() => splitIncoming(value).national);
@@ -70,7 +73,10 @@ export default function PhoneInput({ value, onChange, required = false, disabled
         onChange(next);
     };
 
+    const errorId = error && id ? `${id}-error` : undefined;
+
     return (
+        <div>
         <div className="flex gap-2">
             <select
                 value={dial}
@@ -94,13 +100,19 @@ export default function PhoneInput({ value, onChange, required = false, disabled
                 disabled={disabled}
                 placeholder={placeholder}
                 aria-label={id ? undefined : (ariaLabel || t("auth.phoneLabel"))}
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={errorId}
                 value={national}
                 onChange={(e) => {
                     setNational(e.target.value);
                     emit(dial, e.target.value);
                 }}
-                className={`flex-1 border border-line rounded-md px-3 py-2 text-base focus-ring disabled:opacity-60 ${className}`}
+                className={`flex-1 border rounded-md px-3 py-2 text-base focus-ring disabled:opacity-60 ${error ? "border-coral focus:border-coral" : "border-line"} ${className}`}
             />
+        </div>
+        {error && (
+            <p id={errorId} className="mt-1 text-xs text-coral" role="alert">{error}</p>
+        )}
         </div>
     );
 }

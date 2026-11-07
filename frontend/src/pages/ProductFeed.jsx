@@ -4,6 +4,7 @@ import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import { useLanguage } from "../context/LanguageContext";
 import { feedLink } from "../utils/feedLink";
+import PageMeta from "../components/PageMeta";
 
 // Full-screen swipe feed at its own URL (/feed?<filters>). Filters come from
 // the query string, so a shared or bookmarked feed link reopens the same set.
@@ -47,7 +48,11 @@ export default function ProductFeed() {
         else navigate("/", { replace: true });
     }, [location.key, navigate]);
 
+    // Indexable: /feed is the main browse destination. PageMeta's canonical drops
+    // the query string, so every filtered/store-scoped feed variant points at /feed.
     return (
+        <>
+        <PageMeta title={t("browse.title")} description={t("browse.metaDescription")} />
         <ProductGrid
             params={params}
             feedPage
@@ -58,5 +63,6 @@ export default function ProductFeed() {
             emptyTitle={t("store.noProductsTitle")}
             emptyHint={t("browse.noProductsHint")}
         />
+        </>
     );
 }

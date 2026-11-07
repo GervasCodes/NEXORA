@@ -29,7 +29,8 @@ export default function UsernameField({
     disabled = false,
     id,
     label,
-    hint
+    hint,
+    error: externalError
 }) {
     const { t } = useLanguage();
     const [status, setStatus] = useState("idle");
@@ -81,7 +82,9 @@ export default function UsernameField({
         reserved: t("username.reserved"),
         taken: t("username.taken")
     };
-    const error = messages[status] || "";
+    // A submit-time message (Phase 6) shows only while the live check has
+    // nothing more specific to say.
+    const error = messages[status] || externalError || "";
     const statusLine = status === "available"
         ? t("username.available")
         : status === "checking"

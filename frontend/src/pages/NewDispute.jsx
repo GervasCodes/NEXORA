@@ -5,6 +5,11 @@ import PageMeta from "../components/PageMeta";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import PageLoader from "../components/PageLoader";
+import Spinner from "../components/ui/Spinner";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import useFormErrors from "../hooks/useFormErrors";
+import { rules, validateFields } from "../utils/formErrors";
 
 const TYPE_KEYS = [
     "damaged_item",
@@ -14,6 +19,13 @@ const TYPE_KEYS = [
     "missing_delivery",
     "other"
 ];
+
+// Per-field rules (Phase 6 form-error pattern). The item picker is optional.
+const DISPUTE_RULES = {
+    type: [rules.requiredChoice("dispute.error.typeRequired")],
+    subject: [rules.required("dispute.error.subjectRequired")],
+    description: [rules.required("dispute.error.detailsRequired")]
+};
 
 export default function NewDispute() {
     const { format } = useCurrency();
@@ -34,6 +46,7 @@ export default function NewDispute() {
     });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const { formRef, errors: fieldErrors, showErrors, clearError, hasErrors } = useFormErrors();
 
     useEffect(() => {
         if (!orderId) {
@@ -47,10 +60,20 @@ export default function NewDispute() {
             .finally(() => setLoading(false));
     }, [orderId, t]);
 
+    const setField = (field) => (e) => {
+        clearError(field);
+        setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    };
+
     const submit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError("");
+
+        const problems = validateFields(DISPUTE_RULES, form, t);
+        showErrors(problems);
+        if (Object.keys(problems).length > 0) return;
+
+        setSubmitting(true);
         try {
             const { data } = await api.post("/disputes", {
                 order_id: Number(orderId),
@@ -88,77 +111,72 @@ export default function NewDispute() {
                 {t("dispute.new.intro")}
             </p>
 
-            <form onSubmit={submit} className="space-y-4">
+            <form ref={formRef} onSubmit={submit} noValidate className="space-y-4">
                 {order.items?.length > 0 && (
-                    <div>
-                        <label htmlFor="dispute-item" className="block text-sm mb-1">{t("dispute.new.itemLabel")}</label>
-                        <select
-                            id="dispute-item"
-                            value={form.order_item_id}
-                            onChange={(e) => setForm({ ...form, order_item_id: e.target.value })}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
-                        >
-                            <option value="">{t("dispute.new.wholeOrderOption")}</option>
-                            {order.items.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name} × {item.quantity} — {format(item.subtotal)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <Select
+                        id="dispute-item"
+                        label={t("dispute.new.itemLabel")}
+                        value={form.order_item_id}
+                        onChange={setField("order_item_id")}
+                    >
+                        <option value="">{t("dispute.new.wholeOrderOption")}</option>
+                        {order.items.map((item) => (
+                            <option key={item.id} value={item.id}>
+                                {item.name} × {item.quantity} — {format(item.subtotal)}
+                            </option>
+                        ))}
+                    </Select>
                 )}
 
-                <div>
-                    <label htmlFor="dispute-type" className="block text-sm mb-1">{t("dispute.new.typeLabel")}</label>
-                    <select
-                        id="dispute-type"
-                        required
-                        value={form.type}
-                        onChange={(e) => setForm({ ...form, type: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
-                    >
-                        <option value="" disabled>{t("dispute.new.selectCategory")}</option>
-                        {TYPE_KEYS.map((key) => (
-                            <option key={key} value={key}>{t(`dispute.type.${key}`)}</option>
-                        ))}
-                    </select>
-                </div>
+                {/* aria-required instead of `required`: the visible asterisk would
+                    change the label text, and this form has never shown one. */}
+                <Select
+                    id="dispute-type"
+                    label={t("dispute.new.typeLabel")}
+                    aria-required="true"
+                    value={form.type}
+                    error={fieldErrors.type}
+                    onChange={setField("type")}
+                >
+                    <option value="" disabled>{t("dispute.new.selectCategory")}</option>
+                    {TYPE_KEYS.map((key) => (
+                        <option key={key} value={key}>{t(`dispute.type.${key}`)}</option>
+                    ))}
+                </Select>
 
-                <div>
-                    <label htmlFor="dispute-subject" className="block text-sm mb-1">{t("dispute.new.subjectLabel")}</label>
-                    <input
-                        id="dispute-subject"
-                        required
-                        maxLength={150}
-                        placeholder={t("dispute.new.subjectPlaceholder")}
-                        value={form.subject}
-                        onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring"
-                    />
-                </div>
+                <Input
+                    id="dispute-subject"
+                    label={t("dispute.new.subjectLabel")}
+                    aria-required="true"
+                    maxLength={150}
+                    placeholder={t("dispute.new.subjectPlaceholder")}
+                    value={form.subject}
+                    error={fieldErrors.subject}
+                    onChange={setField("subject")}
+                />
 
-                <div>
-                    <label htmlFor="dispute-description" className="block text-sm mb-1">{t("dispute.new.detailsLabel")}</label>
-                    <textarea
-                        id="dispute-description"
-                        required
-                        rows={5}
-                        maxLength={2000}
-                        placeholder={t("dispute.new.detailsPlaceholder")}
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
-                    />
-                </div>
+                <Input
+                    as="textarea"
+                    id="dispute-description"
+                    label={t("dispute.new.detailsLabel")}
+                    aria-required="true"
+                    rows={5}
+                    maxLength={2000}
+                    placeholder={t("dispute.new.detailsPlaceholder")}
+                    value={form.description}
+                    error={fieldErrors.description}
+                    onChange={setField("description")}
+                />
 
-                {error && <p className="text-sm text-coral">{error}</p>}
+                {error && <p role="alert" className="text-sm text-coral">{error}</p>}
+                {hasErrors && <p className="text-sm text-coral">{t("form.error.fixHighlighted")}</p>}
 
                 <div className="flex gap-3">
-                    <button
+                    <button aria-busy={submitting || undefined}
                         type="submit"
                         disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? t("dispute.new.submitting") : t("dispute.new.submit")}
                     </button>
                     <Link

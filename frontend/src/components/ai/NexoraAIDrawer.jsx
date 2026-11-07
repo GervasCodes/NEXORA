@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAIAssistant } from "../../context/AIAssistantContext";
+import { useLanguage } from "../../context/LanguageContext";
 import { sendChatMessage, explainOrderStatus, explainProduct, explainBooking } from "../../api/ai";
 import AssistantSparkleIcon from "./AssistantSparkleIcon";
 
@@ -23,16 +24,24 @@ function TypingDots() {
 // spend guard specifically blocked the call, never for any other kind
 // of AI-unavailable case) to a short note shown under the fallback
 // bubble. Any other/missing reason renders no extra note.
+// Values are i18n keys (assistant.note.*), resolved with t() at render.
 const UNAVAILABLE_REASON_NOTES = {
-    AI_DISABLED: "Nexora Assistant is currently turned off.",
-    USER_DAILY_CAP: "Nexora Assistant has reached today's usage limit — please try again tomorrow.",
-    GLOBAL_DAILY_CAP: "Nexora Assistant has reached today's usage limit — please try again tomorrow.",
-    USER_MONTHLY_CAP: "Nexora Assistant has reached this month's usage limit.",
-    GLOBAL_MONTHLY_CAP: "Nexora Assistant has reached this month's usage limit."
+    AI_DISABLED: "assistant.note.disabled",
+    USER_DAILY_CAP: "assistant.note.dailyCap",
+    GLOBAL_DAILY_CAP: "assistant.note.dailyCap",
+    USER_MONTHLY_CAP: "assistant.note.monthlyCap",
+    GLOBAL_MONTHLY_CAP: "assistant.note.monthlyCap"
 };
+
+// Topic ids the backend may return in `suggestedTopics` (see backend
+// knowledge/fallback.js#SUGGESTED_TOPIC_IDS). Each has i18n keys
+// assistant.topic.<id>.label and assistant.topic.<id>.question; tapping
+// the button sends that question. Unknown ids from the server are ignored.
+const TOPIC_IDS = ["track_order", "refunds", "payments", "cancel_order", "become_seller", "support"];
 
 export default function NexoraAIDrawer() {
     const assistant = useAIAssistant();
+    const { t, language } = useLanguage();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [sending, setSending] = useState(false);
@@ -56,7 +65,7 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: "I couldn't load that order's status right now — please check the Orders page directly.", aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: t("assistant.error.order"), aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else if (context?.type === "product") {
@@ -66,7 +75,7 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: "I couldn't load that product's details right now — please check the product page directly.", aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: t("assistant.error.product"), aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else if (context?.type === "booking") {
@@ -76,11 +85,11 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: "I couldn't load that booking's status right now — please check the Bookings page directly.", aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: t("assistant.error.booking"), aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else {
-            setMessages([{ role: "assistant", text: "Hi! I'm Nexora Assistant. Ask me about orders, delivery, refunds, or finding a product.", aiGenerated: false }]);
+            setMessages([{ role: "assistant", text: t("assistant.welcome"), aiGenerated: false, suggestedTopics: TOPIC_IDS }]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
@@ -105,9 +114,13 @@ export default function NexoraAIDrawer() {
 
     if (!assistant || !isOpen) return null;
 
-    const handleSend = async (e) => {
+    const handleSend = (e) => {
         e.preventDefault();
-        const text = input.trim();
+        return sendText(input.trim());
+    };
+
+    // Shared by the form and the suggested-topic buttons.
+    const sendText = async (text) => {
         if (!text || sending) return;
 
         // Existing messages state, mapped to the {role, content} shape
@@ -121,19 +134,20 @@ export default function NexoraAIDrawer() {
         setInput("");
         setSending(true);
         try {
-            const result = await sendChatMessage(text, { history });
+            const result = await sendChatMessage(text, { history, language });
             setMessages((prev) => [...prev, {
                 role: "assistant",
                 text: result.reply,
                 aiGenerated: result.aiGenerated,
                 truncated: result.truncated,
                 unavailableReason: result.unavailableReason,
+                suggestedTopics: Array.isArray(result.suggestedTopics) ? result.suggestedTopics : [],
                 sourceQuestion: text
             }]);
         } catch {
             setMessages((prev) => [...prev, {
                 role: "assistant",
-                text: "Nexora Assistant is temporarily unavailable — please try again or reach out to support from your Account page.",
+                text: t("assistant.error.unavailable"),
                 aiGenerated: false,
                 error: true
             }]);
@@ -153,7 +167,7 @@ export default function NexoraAIDrawer() {
 
         setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, loadingMore: true } : m)));
         try {
-            const result = await sendChatMessage(message.sourceQuestion, { priorReply: message.text });
+            const result = await sendChatMessage(message.sourceQuestion, { priorReply: message.text, language });
             setMessages((prev) => prev.map((m, i) => (i === index
                 ? {
                     ...m,
@@ -214,7 +228,7 @@ export default function NexoraAIDrawer() {
                 ref={panelRef}
                 role="dialog"
                 aria-modal="true"
-                aria-label="Nexora Assistant"
+                aria-label={t("assistant.title")}
                 onKeyDown={handlePanelKeyDown}
                 className="
                     relative w-full sm:w-[400px] sm:mr-6 sm:mb-6
@@ -233,14 +247,14 @@ export default function NexoraAIDrawer() {
                             <AssistantSparkleIcon className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                            <p className="font-semibold text-sm text-ink leading-tight">Nexora Assistant</p>
-                            <p className="text-[10px] text-azure/80 uppercase tracking-widest leading-tight">Always here to help</p>
+                            <p className="font-semibold text-sm text-ink leading-tight">{t("assistant.title")}</p>
+                            <p className="text-[10px] text-azure/80 uppercase tracking-widest leading-tight">{t("assistant.tagline")}</p>
                         </div>
                     </div>
                     <button
                         type="button"
                         onClick={assistant.close}
-                        aria-label="Close Nexora Assistant"
+                        aria-label={t("assistant.close")}
                         className="w-11 h-11 flex items-center justify-center rounded-lg text-ash hover:text-ink hover:bg-line/50 transition-colors"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
@@ -279,13 +293,27 @@ export default function NexoraAIDrawer() {
                                         disabled={m.loadingMore}
                                         className="mt-1 ml-1 text-xs text-azure hover:underline disabled:opacity-50 disabled:cursor-wait"
                                     >
-                                        {m.loadingMore ? "Loading more…" : "Show more"}
+                                        {m.loadingMore ? t("assistant.loadingMore") : t("assistant.showMore")}
                                     </button>
                                 )}
                                 {m.role === "assistant" && UNAVAILABLE_REASON_NOTES[m.unavailableReason] && (
                                     <p className="mt-1 ml-1 text-xs text-ash">
-                                        {UNAVAILABLE_REASON_NOTES[m.unavailableReason]}
+                                        {t(UNAVAILABLE_REASON_NOTES[m.unavailableReason])}
                                     </p>
+                                )}
+                                {m.role === "assistant" && i === messages.length - 1 && !sending && Array.isArray(m.suggestedTopics) && (
+                                    <div role="group" aria-label={t("assistant.topics.heading")} className="mt-2 flex flex-wrap gap-2">
+                                        {m.suggestedTopics.filter((id) => TOPIC_IDS.includes(id)).map((id) => (
+                                            <button
+                                                key={id}
+                                                type="button"
+                                                onClick={() => sendText(t(`assistant.topic.${id}.question`))}
+                                                className="text-xs border border-azure/30 text-azure px-3 py-2 rounded-full hover:bg-azure/8 transition-colors text-left"
+                                            >
+                                                {t(`assistant.topic.${id}.label`)}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -306,25 +334,6 @@ export default function NexoraAIDrawer() {
                     <div ref={bottomRef} />
                 </div>
 
-                {/* Suggested prompts — shown before first user message */}
-                {messages.length <= 1 && !sending && (
-                    <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-none shrink-0">
-                        {["Where's my order?", "How do I return?", "Find me a product"].map((prompt) => (
-                            <button
-                                key={prompt}
-                                type="button"
-                                onClick={() => {
-                                    setInput(prompt);
-                                    inputRef.current?.focus();
-                                }}
-                                className="shrink-0 text-xs border border-azure/30 text-azure px-3 py-1.5 rounded-full hover:bg-azure/8 transition-colors whitespace-nowrap"
-                            >
-                                {prompt}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
                 {/* Input */}
                 <form
                     onSubmit={handleSend}
@@ -336,7 +345,7 @@ export default function NexoraAIDrawer() {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Ask Nexora Assistant…"
+                            placeholder={t("assistant.placeholder")}
                             maxLength={1000}
                             rows={1}
                             className="
@@ -354,7 +363,7 @@ export default function NexoraAIDrawer() {
                     <button
                         type="submit"
                         disabled={sending || !input.trim()}
-                        aria-label="Send"
+                        aria-label={t("assistant.send")}
                         className="
                             w-10 h-10 flex items-center justify-center shrink-0
                             rounded-xl bg-gradient-to-br from-azure-light to-azure-deep

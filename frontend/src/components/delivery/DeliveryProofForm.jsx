@@ -1,10 +1,11 @@
 import { useState } from "react";
 import Button from "../ui/Button";
+import ProgressBar from "../ui/ProgressBar";
 import { useLanguage } from "../../context/LanguageContext";
 
 // Proof of delivery: the buyer's handover code, or - when the buyer
 // can't give it - a drop-off photo plus the rider's GPS position.
-export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
+export default function DeliveryProofForm({ busy, uploadProgress = null, onSubmit, onCancel }) {
     const { t } = useLanguage();
     const [mode, setMode] = useState("code");
     const [code, setCode] = useState("");
@@ -79,8 +80,8 @@ export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
                         className="w-full border border-line rounded-md px-3 py-3 text-xl tracking-[0.4em] text-center focus-ring bg-paper"
                     />
                     <div className="flex gap-2">
-                        <Button type="submit" size="sm" disabled={busy}>{t("delivery.agent.proof.confirm")}</Button>
-                        <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
+                        <Button loading={busy} type="submit" size="sm" disabled={busy}>{t("delivery.agent.proof.confirm")}</Button>
+                        <Button loading={busy} type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
                     </div>
                 </form>
             ) : (
@@ -95,11 +96,14 @@ export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
                         className="w-full text-sm"
                     />
                     <p className="text-xs text-ash">{t("delivery.agent.proof.photoHint")}</p>
+                    {busy && uploadProgress !== null && (
+                        <ProgressBar value={uploadProgress} label={t("upload.progress")} showValue />
+                    )}
                     <div className="flex gap-2">
-                        <Button type="submit" size="sm" disabled={busy || locating}>
+                        <Button loading={busy} type="submit" size="sm" disabled={busy || locating}>
                             {locating ? t("delivery.agent.proof.locating") : t("delivery.agent.proof.confirm")}
                         </Button>
-                        <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
+                        <Button loading={busy} type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
                     </div>
                 </form>
             )}

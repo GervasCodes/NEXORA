@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { SkeletonList } from "../../components/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
 import Button from "../../components/ui/Button";
+import PulseBar from "../../components/ui/PulseBar";
 import DeliveryProofForm from "../../components/delivery/DeliveryProofForm";
 import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
 import PageMeta from "../../components/PageMeta";
@@ -10,6 +11,8 @@ import { googleMapsUrl, wazeUrl, telUrl, whatsappUrl } from "../../utils/contact
 import { enqueueStatus, getQueue, isNetworkError, removeFromQueue } from "../../utils/deliveryStatusQueue";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
+import PullToRefresh from "../../components/ui/PullToRefresh";
+import useUploadProgress from "../../hooks/useUploadProgress";
 
 const NEXT_STATUS = {
     assigned: [{ value: "picked_up", labelKey: "delivery.agent.mine.markPickedUp" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }],
@@ -28,14 +31,14 @@ const statusStyles = {
 const linkBtn = "text-xs border border-line px-3 py-2 rounded-md hover:border-ink transition-colors";
 
 // Sends one status update. Photo proof is multipart; everything else is JSON-like.
-const sendStatus = (orderId, { status, handoverCode, lat, lng, photo }) => {
+const sendStatus = (orderId, { status, handoverCode, lat, lng, photo }, onUploadProgress) => {
     if (photo) {
         const body = new FormData();
         body.append("status", status);
         body.append("dropoff_photo", photo);
         if (lat != null) body.append("delivery_lat", String(lat));
         if (lng != null) body.append("delivery_lng", String(lng));
-        return api.put(`/delivery/${orderId}/status`, body);
+        return api.put(`/delivery/${orderId}/status`, body, onUploadProgress ? { onUploadProgress } : undefined);
     }
     return api.put(`/delivery/${orderId}/status`, {
         status,
@@ -52,18 +55,21 @@ export default function DeliveryMine() {
     const [loadError, setLoadError] = useState(false);
     const [busyId, setBusyId] = useState(null);
     const [proofOrderId, setProofOrderId] = useState(null);
+    const photoUpload = useUploadProgress();
     const [queuedIds, setQueuedIds] = useState(() => getQueue().map((i) => String(i.orderId)));
     const toast = useToast();
     const [routeRefresh, setRouteRefresh] = useState(0);
     const flushing = useRef(false);
+    const [syncing, setSyncing] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     const load = useCallback((silent = false) => {
-        if (!silent) setLoading(true);
+        if (silent) setRefreshing(true); else setLoading(true);
         setLoadError(false);
         return api.get("/delivery/my/list")
             .then(({ data }) => setDeliveries(data.data))
             .catch(() => setLoadError(true))
-            .finally(() => setLoading(false));
+            .finally(() => { setLoading(false); setRefreshing(false); });
     }, []);
 
     useEffect(() => { load(); }, [load]);
@@ -73,6 +79,7 @@ export default function DeliveryMine() {
     const flushQueue = useCallback(async () => {
         if (flushing.current) return;
         flushing.current = true;
+        setSyncing(true);
         try {
             for (const item of getQueue()) {
                 try {
@@ -86,6 +93,7 @@ export default function DeliveryMine() {
             }
         } finally {
             flushing.current = false;
+            setSyncing(false);
             setQueuedIds(getQueue().map((i) => String(i.orderId)));
             load(true);
             setRouteRefresh((n) => n + 1);
@@ -101,7 +109,7 @@ export default function DeliveryMine() {
     const updateStatus = async (orderId, payload) => {
         setBusyId(orderId);
         try {
-            await sendStatus(orderId, payload);
+            await sendStatus(orderId, payload, payload.photo ? photoUpload.onUploadProgress : undefined);
             setProofOrderId(null);
             load(true);
             setRouteRefresh((n) => n + 1);
@@ -117,6 +125,7 @@ export default function DeliveryMine() {
                 toast?.error(extractErrorMessage(err));
             }
         } finally {
+            photoUpload.reset();
             setBusyId(null);
         }
     };
@@ -139,80 +148,84 @@ export default function DeliveryMine() {
     }
 
     return (
-        <div>
-            <PageMeta title="My Deliveries" noIndex />
+        <PullToRefresh onRefresh={() => load(true)}>
+            <div>
+                <PageMeta title="My Deliveries" noIndex />
+                <PulseBar active={syncing || refreshing} label={t(syncing ? "pulse.syncingQueue" : "pulse.refreshing")} className="mb-3" />
 
-            {queuedIds.length > 0 && (
-                <div role="status" className="flex items-center justify-between gap-3 border border-mango/40 bg-mango/10 rounded-lg px-3 py-2 mb-4 text-sm">
-                    <span>{t("delivery.agent.mine.queuedBanner", { count: queuedIds.length })}</span>
-                    <button type="button" onClick={flushQueue} className="text-xs underline shrink-0">{t("delivery.agent.mine.retryNow")}</button>
-                </div>
-            )}
+                {queuedIds.length > 0 && (
+                    <div role="status" className="flex items-center justify-between gap-3 border border-mango/40 bg-mango/10 rounded-lg px-3 py-2 mb-4 text-sm">
+                        <span>{t("delivery.agent.mine.queuedBanner", { count: queuedIds.length })}</span>
+                        <button type="button" onClick={flushQueue} className="text-xs underline shrink-0">{t("delivery.agent.mine.retryNow")}</button>
+                    </div>
+                )}
 
-            <NexoraRouteAssist refreshToken={routeRefresh} />
+                <NexoraRouteAssist refreshToken={routeRefresh} />
 
-            <ul className="space-y-4">
-                {deliveries.map((d) => {
-                    const address = [d.shipping_address, d.shipping_city, d.shipping_region].filter(Boolean).join(", ");
-                    const dest = { lat: d.delivery_lat, lng: d.delivery_lng, address };
-                    const mapsHref = googleMapsUrl(dest);
-                    const wazeHref = wazeUrl(dest);
-                    const active = Boolean(NEXT_STATUS[d.status]);
-                    const queued = queuedIds.includes(String(d.order_id));
+                <ul className="space-y-4">
+                    {deliveries.map((d) => {
+                        const address = [d.shipping_address, d.shipping_city, d.shipping_region].filter(Boolean).join(", ");
+                        const dest = { lat: d.delivery_lat, lng: d.delivery_lng, address };
+                        const mapsHref = googleMapsUrl(dest);
+                        const wazeHref = wazeUrl(dest);
+                        const active = Boolean(NEXT_STATUS[d.status]);
+                        const queued = queuedIds.includes(String(d.order_id));
 
-                    return (
-                        <li key={d.id} className="border border-line rounded-lg p-4">
-                            <div className="flex items-center justify-between gap-3 mb-2">
-                                <p className="price text-sm font-medium">{d.order_number}</p>
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${statusStyles[d.status] || "bg-line text-ash"}`}>
-                                    {d.status.replace("_", " ")}
-                                </span>
-                            </div>
-
-                            <p className="text-sm text-ink/80 mb-1">{address}</p>
-                            <p className="text-xs text-ash mb-3">{t("delivery.agent.mine.contact")}: {d.shipping_phone}</p>
-                            {queued && <p className="text-xs text-mango-dark mb-2">{t("delivery.agent.mine.waitingToSync")}</p>}
-
-                            {active && (
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                    {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.googleMaps")}</a>}
-                                    {wazeHref && <a href={wazeHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.waze")}</a>}
-                                    {telUrl(d.shipping_phone) && <a href={telUrl(d.shipping_phone)} className={linkBtn}>{t("delivery.agent.nav.call")}</a>}
-                                    {whatsappUrl(d.shipping_phone) && (
-                                        <a href={whatsappUrl(d.shipping_phone)} target="_blank" rel="noopener noreferrer" className={linkBtn}>
-                                            {t("delivery.agent.nav.whatsapp")}
-                                        </a>
-                                    )}
+                        return (
+                            <li key={d.id} className="border border-line rounded-lg p-4">
+                                <div className="flex items-center justify-between gap-3 mb-2">
+                                    <p className="price text-sm font-medium">{d.order_number}</p>
+                                    <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${statusStyles[d.status] || "bg-line text-ash"}`}>
+                                        {d.status.replace("_", " ")}
+                                    </span>
                                 </div>
-                            )}
 
-                            <div className="flex flex-wrap gap-2">
-                                {(NEXT_STATUS[d.status] || []).map((next) => (
-                                    <Button
-                                        key={next.value}
-                                        onClick={() => onNext(d, next)}
-                                        disabled={busyId === d.order_id}
-                                        variant="secondary"
-                                        size="sm"
-                                    >
-                                        {t(next.labelKey)}
-                                    </Button>
-                                ))}
-                            </div>
+                                <p className="text-sm text-ink/80 mb-1">{address}</p>
+                                <p className="text-xs text-ash mb-3">{t("delivery.agent.mine.contact")}: {d.shipping_phone}</p>
+                                {queued && <p className="text-xs text-mango-dark mb-2">{t("delivery.agent.mine.waitingToSync")}</p>}
 
-                            {proofOrderId === d.order_id && (
-                                <DeliveryProofForm
-                                    busy={busyId === d.order_id}
-                                    onCancel={() => setProofOrderId(null)}
-                                    onSubmit={({ handoverCode, photo, lat, lng }) =>
-                                        updateStatus(d.order_id, { status: "delivered", handoverCode, photo, lat, lng })
-                                    }
-                                />
-                            )}
-                        </li>
-                    );
-                })}
-            </ul>
-        </div>
+                                {active && (
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                        {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.googleMaps")}</a>}
+                                        {wazeHref && <a href={wazeHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.waze")}</a>}
+                                        {telUrl(d.shipping_phone) && <a href={telUrl(d.shipping_phone)} className={linkBtn}>{t("delivery.agent.nav.call")}</a>}
+                                        {whatsappUrl(d.shipping_phone) && (
+                                            <a href={whatsappUrl(d.shipping_phone)} target="_blank" rel="noopener noreferrer" className={linkBtn}>
+                                                {t("delivery.agent.nav.whatsapp")}
+                                            </a>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="flex flex-wrap gap-2">
+                                    {(NEXT_STATUS[d.status] || []).map((next) => (
+                                        <Button loading={busyId === d.order_id}
+                                            key={next.value}
+                                            onClick={() => onNext(d, next)}
+                                            disabled={busyId === d.order_id}
+                                            variant="secondary"
+                                            size="sm"
+                                        >
+                                            {t(next.labelKey)}
+                                        </Button>
+                                    ))}
+                                </div>
+
+                                {proofOrderId === d.order_id && (
+                                    <DeliveryProofForm
+                                        busy={busyId === d.order_id}
+                                        uploadProgress={photoUpload.progress}
+                                        onCancel={() => setProofOrderId(null)}
+                                        onSubmit={({ handoverCode, photo, lat, lng }) =>
+                                            updateStatus(d.order_id, { status: "delivered", handoverCode, photo, lat, lng })
+                                        }
+                                    />
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        </PullToRefresh>
     );
 }

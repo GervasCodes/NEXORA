@@ -2575,5 +2575,21 @@ export default {
         "seller.serviceReviews.replyPlaceholder": "Write a response to this review…",
         "seller.serviceReviews.posting": "Posting…",
         "seller.serviceReviews.postReply": "Post reply",
-        "seller.serviceReviews.loadMore": "Load more reviews"
+        "seller.serviceReviews.loadMore": "Load more reviews",
+        "common.tryAgain": "Try again",
+        "loader.working": "Working on it…",
+        "loader.progress": "Progress",
+        "loader.slow": "This is taking longer than usual. Please keep this screen open.",
+        "infinite.loadMore": "Load more",
+        "infinite.error": "Couldn't load more. Check your connection and try again.",
+        "infinite.end": "You've reached the end.",
+        "ptr.pull": "Pull to refresh",
+        "ptr.release": "Release to refresh",
+        "ptr.refreshing": "Refreshing…",
+        "ptr.updated": "Updated",
+        "ptr.refresh": "Refresh",
+        "pulse.syncingQueue": "Sending saved updates…",
+        "pulse.refreshing": "Refreshing…",
+        "upload.progress": "Upload progress",
+        "account.finishingSignIn": "Finishing sign-in…"
 };

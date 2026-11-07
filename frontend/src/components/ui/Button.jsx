@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import Spinner from "./Spinner";
 
 /**
  * Shared Button component - Phase 1 Design System Extraction.
@@ -26,6 +27,12 @@ import { forwardRef } from "react";
  * disabled:shadow-none drops the elevation together with the existing
  * disabled:opacity dimming, so a disabled button doesn't look "liftable".
  *
+ * Loading: `loading` shows a Spinner before the label, disables the
+ * button (blocks double-submits), sets aria-busy and suppresses the
+ * primary hover-lift. `loadingText` optionally swaps the label (e.g.
+ * "Saving…"); without it the original label stays so the button's width
+ * doesn't jump. With `as={Link}` the link is made inert via aria-disabled.
+ *
  * Sizes:
  *  - sm: text-xs, px-3 py-1.5   (dense table/row actions)
  *  - md: text-sm, px-5 py-2.5   (default - forms, page-level actions)
@@ -51,7 +58,7 @@ function cx(...parts) {
 }
 
 const Button = forwardRef(function Button(
-    { variant = "primary", size = "md", fullWidth = false, className = "", type = "button", as: Tag = "button", children, ...rest },
+    { variant = "primary", size = "md", fullWidth = false, className = "", type = "button", as: Tag = "button", loading = false, loadingText, disabled, onClick, children, ...rest },
     ref
 ) {
     // When rendered as something other than a native <button> (e.g. React
@@ -59,12 +66,24 @@ const Button = forwardRef(function Button(
     // right-click/middle-click, and SEO), the `type` attribute doesn't
     // apply and shouldn't be forwarded.
     const typeProp = Tag === "button" ? { type } : {};
+    const isButton = Tag === "button";
+    const stateProps = isButton
+        ? { disabled: disabled || loading }
+        : { "aria-disabled": disabled || loading ? true : undefined };
+    const handleClick = !isButton && (disabled || loading)
+        ? (e) => e.preventDefault()
+        : onClick;
     return (
         <Tag
             ref={ref}
             {...typeProp}
+            {...stateProps}
+            aria-busy={loading || undefined}
+            onClick={handleClick}
             className={cx(
                 "inline-flex items-center justify-center transition-all duration-150 ease-out focus-ring",
+                loading && "gap-2 cursor-progress hover:!translate-y-0",
+                !isButton && (disabled || loading) && "pointer-events-none opacity-60",
                 VARIANT_CLASSES[variant] || VARIANT_CLASSES.primary,
                 SIZE_CLASSES[size] || SIZE_CLASSES.md,
                 fullWidth && "w-full",
@@ -72,7 +91,8 @@ const Button = forwardRef(function Button(
             )}
             {...rest}
         >
-            {children}
+            {loading && <Spinner size="sm" tone="current" />}
+            {loading && loadingText ? loadingText : children}
         </Tag>
     );
 });

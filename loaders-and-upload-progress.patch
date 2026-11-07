@@ -1,0 +1,1979 @@
+diff --git a/frontend/src/components/delivery/DeliveryProofForm.jsx b/frontend/src/components/delivery/DeliveryProofForm.jsx
+index f4e4281..5f20d90 100644
+--- a/frontend/src/components/delivery/DeliveryProofForm.jsx
++++ b/frontend/src/components/delivery/DeliveryProofForm.jsx
+@@ -1,10 +1,11 @@
+ import { useState } from "react";
+ import Button from "../ui/Button";
++import ProgressBar from "../ui/ProgressBar";
+ import { useLanguage } from "../../context/LanguageContext";
+ 
+ // Proof of delivery: the buyer's handover code, or - when the buyer
+ // can't give it - a drop-off photo plus the rider's GPS position.
+-export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
++export default function DeliveryProofForm({ busy, uploadProgress = null, onSubmit, onCancel }) {
+     const { t } = useLanguage();
+     const [mode, setMode] = useState("code");
+     const [code, setCode] = useState("");
+@@ -79,8 +80,8 @@ export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
+                         className="w-full border border-line rounded-md px-3 py-3 text-xl tracking-[0.4em] text-center focus-ring bg-paper"
+                     />
+                     <div className="flex gap-2">
+-                        <Button type="submit" size="sm" disabled={busy}>{t("delivery.agent.proof.confirm")}</Button>
+-                        <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
++                        <Button loading={busy} type="submit" size="sm" disabled={busy}>{t("delivery.agent.proof.confirm")}</Button>
++                        <Button loading={busy} type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
+                     </div>
+                 </form>
+             ) : (
+@@ -95,11 +96,14 @@ export default function DeliveryProofForm({ busy, onSubmit, onCancel }) {
+                         className="w-full text-sm"
+                     />
+                     <p className="text-xs text-ash">{t("delivery.agent.proof.photoHint")}</p>
++                    {busy && uploadProgress !== null && (
++                        <ProgressBar value={uploadProgress} label={t("upload.progress")} showValue />
++                    )}
+                     <div className="flex gap-2">
+-                        <Button type="submit" size="sm" disabled={busy || locating}>
++                        <Button loading={busy} type="submit" size="sm" disabled={busy || locating}>
+                             {locating ? t("delivery.agent.proof.locating") : t("delivery.agent.proof.confirm")}
+                         </Button>
+-                        <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
++                        <Button loading={busy} type="button" size="sm" variant="secondary" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
+                     </div>
+                 </form>
+             )}
+diff --git a/frontend/src/components/ui/Button.jsx b/frontend/src/components/ui/Button.jsx
+index 177c72b..4a6496c 100644
+--- a/frontend/src/components/ui/Button.jsx
++++ b/frontend/src/components/ui/Button.jsx
+@@ -1,4 +1,5 @@
+ import { forwardRef } from "react";
++import Spinner from "./Spinner";
+ 
+ /**
+  * Shared Button component - Phase 1 Design System Extraction.
+@@ -26,6 +27,12 @@ import { forwardRef } from "react";
+  * disabled:shadow-none drops the elevation together with the existing
+  * disabled:opacity dimming, so a disabled button doesn't look "liftable".
+  *
++ * Loading: `loading` shows a Spinner before the label, disables the
++ * button (blocks double-submits), sets aria-busy and suppresses the
++ * primary hover-lift. `loadingText` optionally swaps the label (e.g.
++ * "Saving…"); without it the original label stays so the button's width
++ * doesn't jump. With `as={Link}` the link is made inert via aria-disabled.
++ *
+  * Sizes:
+  *  - sm: text-xs, px-3 py-1.5   (dense table/row actions)
+  *  - md: text-sm, px-5 py-2.5   (default - forms, page-level actions)
+@@ -51,7 +58,7 @@ function cx(...parts) {
+ }
+ 
+ const Button = forwardRef(function Button(
+-    { variant = "primary", size = "md", fullWidth = false, className = "", type = "button", as: Tag = "button", children, ...rest },
++    { variant = "primary", size = "md", fullWidth = false, className = "", type = "button", as: Tag = "button", loading = false, loadingText, disabled, onClick, children, ...rest },
+     ref
+ ) {
+     // When rendered as something other than a native <button> (e.g. React
+@@ -59,12 +66,24 @@ const Button = forwardRef(function Button(
+     // right-click/middle-click, and SEO), the `type` attribute doesn't
+     // apply and shouldn't be forwarded.
+     const typeProp = Tag === "button" ? { type } : {};
++    const isButton = Tag === "button";
++    const stateProps = isButton
++        ? { disabled: disabled || loading }
++        : { "aria-disabled": disabled || loading ? true : undefined };
++    const handleClick = !isButton && (disabled || loading)
++        ? (e) => e.preventDefault()
++        : onClick;
+     return (
+         <Tag
+             ref={ref}
+             {...typeProp}
++            {...stateProps}
++            aria-busy={loading || undefined}
++            onClick={handleClick}
+             className={cx(
+                 "inline-flex items-center justify-center transition-all duration-150 ease-out focus-ring",
++                loading && "gap-2 cursor-progress hover:!translate-y-0",
++                !isButton && (disabled || loading) && "pointer-events-none opacity-60",
+                 VARIANT_CLASSES[variant] || VARIANT_CLASSES.primary,
+                 SIZE_CLASSES[size] || SIZE_CLASSES.md,
+                 fullWidth && "w-full",
+@@ -72,7 +91,8 @@ const Button = forwardRef(function Button(
+             )}
+             {...rest}
+         >
+-            {children}
++            {loading && <Spinner size="sm" tone="current" />}
++            {loading && loadingText ? loadingText : children}
+         </Tag>
+     );
+ });
+diff --git a/frontend/src/components/ui/FullScreenLoader.jsx b/frontend/src/components/ui/FullScreenLoader.jsx
+new file mode 100644
+index 0000000..6e97e0f
+--- /dev/null
++++ b/frontend/src/components/ui/FullScreenLoader.jsx
+@@ -0,0 +1,99 @@
++import { useEffect, useRef, useState } from "react";
++import Spinner from "./Spinner";
++import ProgressBar from "./ProgressBar";
++import Button from "./Button";
++import useT from "./useT";
++
++/**
++ * FullScreenLoader - a blocking overlay for moments the user must not
++ * interact through or navigate away from: handing off to a payment
++ * gateway, publishing a product, finalising an order. Ordinary data
++ * fetches should use skeletons instead.
++ *
++ *  - `open`      controls visibility.
++ *  - `delay`     (ms) hides it for quick actions so it never flashes.
++ *  - `progress`  optional 0-100; omit for an indeterminate bar.
++ *  - `slowAfter` (ms) shows a "taking longer than usual" note, plus a
++ *                Cancel button when `onCancel` is supplied, so people are
++ *                never trapped behind it.
++ *
++ * Locks page scroll while visible and respects safe-area insets (same
++ * approach as SplashScreen).
++ */
++export default function FullScreenLoader({
++    open,
++    message,
++    progress,
++    delay = 250,
++    slowAfter = 15000,
++    onCancel
++}) {
++    const t = useT();
++    const [visible, setVisible] = useState(false);
++    const [slow, setSlow] = useState(false);
++    const panelRef = useRef(null);
++
++    useEffect(() => {
++        if (!open) {
++            setVisible(false);
++            setSlow(false);
++            return undefined;
++        }
++        const show = setTimeout(() => setVisible(true), delay);
++        const slowTimer = setTimeout(() => setSlow(true), slowAfter);
++        return () => {
++            clearTimeout(show);
++            clearTimeout(slowTimer);
++        };
++    }, [open, delay, slowAfter]);
++
++    useEffect(() => {
++        if (!visible) return undefined;
++        const prev = document.body.style.overflow;
++        document.body.style.overflow = "hidden";
++        panelRef.current?.focus();
++        return () => { document.body.style.overflow = prev; };
++    }, [visible]);
++
++    if (!open || !visible) return null;
++
++    return (
++        <div
++            ref={panelRef}
++            tabIndex={-1}
++            role="alertdialog"
++            aria-modal="true"
++            aria-busy="true"
++            aria-live="polite"
++            aria-label={message || t("loader.working")}
++            className="fixed inset-0 z-[var(--z-modal)] flex flex-col items-center justify-center bg-abyss/85 backdrop-blur-sm text-frost animate-fade-in focus:outline-none"
++            style={{
++                height: "100dvh",
++                width: "100dvw",
++                paddingTop: "env(safe-area-inset-top)",
++                paddingBottom: "env(safe-area-inset-bottom)",
++                paddingLeft: "env(safe-area-inset-left)",
++                paddingRight: "env(safe-area-inset-right)"
++            }}
++        >
++            <div className="flex flex-col items-center gap-5 px-6 text-center max-w-xs w-full">
++                <span className="font-display italic text-3xl tracking-tight drop-shadow-[0_2px_16px_rgba(124,58,237,0.5)]" aria-hidden="true">NEXORA</span>
++                <Spinner size="lg" tone="mango" />
++                <p className="text-sm text-frost/90">{message || t("loader.working")}</p>
++                {typeof progress === "number" && (
++                    <ProgressBar value={progress} label={t("loader.progress")} showValue className="w-full" />
++                )}
++                {slow && (
++                    <div className="space-y-3 animate-fade-in">
++                        <p className="text-xs text-frost/70">{t("loader.slow")}</p>
++                        {onCancel && (
++                            <Button variant="secondary" size="sm" onClick={onCancel} className="!text-frost !border-frost/40">
++                                {t("common.cancel")}
++                            </Button>
++                        )}
++                    </div>
++                )}
++            </div>
++        </div>
++    );
++}
+diff --git a/frontend/src/components/ui/InfiniteScrollFooter.jsx b/frontend/src/components/ui/InfiniteScrollFooter.jsx
+new file mode 100644
+index 0000000..7267af5
+--- /dev/null
++++ b/frontend/src/components/ui/InfiniteScrollFooter.jsx
+@@ -0,0 +1,67 @@
++import Button from "./Button";
++import Spinner from "./Spinner";
++import useT from "./useT";
++
++/**
++ * InfiniteScrollFooter - renders the bottom of any paginated list in one
++ * of four states:
++ *   loading -> `skeleton` if given (rows/cards), otherwise a Spinner row
++ *   error   -> message + Retry (so a failed page is never silent)
++ *   idle    -> a manual "Load more" button (fallback for browsers that
++ *              block IntersectionObserver, and the primary control when
++ *              data-saver turns auto-load off)
++ *   end     -> an optional end-of-list note
++ *
++ * Put `sentinelRef` (from useInfiniteScroll) on the sentinel it renders.
++ * `error` may be a boolean or a message string; `errorMessage` overrides
++ * the default copy.
++ */
++export default function InfiniteScrollFooter({
++    sentinelRef,
++    hasMore,
++    loading,
++    error,
++    errorMessage,
++    onLoadMore,
++    skeleton,
++    showEnd = false,
++    endMessage,
++    loadMoreLabel,
++    className = ""
++}) {
++    const t = useT();
++    return (
++        <div className={className}>
++            <div ref={sentinelRef} aria-hidden="true" />
++            {loading && (
++                skeleton ? (
++                    <div role="status" aria-busy="true">
++                        <span className="sr-only">{t("common.loading")}</span>
++                        {skeleton}
++                    </div>
++                ) : (
++                    <div role="status" className="flex items-center justify-center gap-2 py-6 text-ash text-sm">
++                        <Spinner size="sm" />
++                        <span>{t("common.loading")}</span>
++                    </div>
++                )
++            )}
++            {!loading && error && (
++                <div role="alert" className="text-center py-6 space-y-2">
++                    <p className="text-sm text-ash">{typeof error === "string" && error ? error : errorMessage || t("infinite.error")}</p>
++                    <Button variant="secondary" size="sm" onClick={onLoadMore}>{t("common.tryAgain")}</Button>
++                </div>
++            )}
++            {!loading && !error && hasMore && (
++                <div className="text-center mt-6">
++                    <Button variant="secondary" size="sm" onClick={onLoadMore} className="!rounded-full !px-5">
++                        {loadMoreLabel || t("infinite.loadMore")}
++                    </Button>
++                </div>
++            )}
++            {!loading && !error && !hasMore && showEnd && (
++                <p className="text-center text-ash text-xs mt-6">{endMessage || t("infinite.end")}</p>
++            )}
++        </div>
++    );
++}
+diff --git a/frontend/src/components/ui/ProgressBar.jsx b/frontend/src/components/ui/ProgressBar.jsx
+new file mode 100644
+index 0000000..dd2fac7
+--- /dev/null
++++ b/frontend/src/components/ui/ProgressBar.jsx
+@@ -0,0 +1,41 @@
++/**
++ * Shared ProgressBar.
++ *
++ *  - `value` 0-100  -> determinate fill (uploads, multi-step flows)
++ *  - `value` omitted -> indeterminate sliding segment (unknown duration)
++ *
++ * Always exposes role="progressbar"; aria-valuenow is left off when
++ * indeterminate, as the ARIA spec asks.
++ */
++const HEIGHT = { xs: "h-1", sm: "h-1.5", md: "h-2.5" };
++const TONE = { mango: "bg-mango", teal: "bg-teal", azure: "bg-azure", coral: "bg-coral", ink: "bg-ink" };
++
++export default function ProgressBar({ value, label, size = "sm", tone = "mango", showValue = false, hideLabel = false, className = "" }) {
++    const determinate = typeof value === "number" && Number.isFinite(value);
++    const pct = determinate ? Math.max(0, Math.min(100, Math.round(value))) : undefined;
++    const fill = TONE[tone] || TONE.mango;
++    return (
++        <div className={className}>
++            {((label && !hideLabel) || (showValue && determinate)) && (
++                <div className="flex items-center justify-between text-xs text-ash mb-1">
++                    <span>{hideLabel ? "" : label}</span>
++                    {showValue && determinate && <span aria-hidden="true">{pct}%</span>}
++                </div>
++            )}
++            <div
++                role="progressbar"
++                aria-label={label || undefined}
++                aria-valuemin={0}
++                aria-valuemax={100}
++                aria-valuenow={pct}
++                className={`relative w-full overflow-hidden rounded-full bg-line ${HEIGHT[size] || HEIGHT.sm}`}
++            >
++                {determinate ? (
++                    <div className={`h-full rounded-full ${fill} transition-[width] duration-200 ease-out`} style={{ width: `${pct}%` }} />
++                ) : (
++                    <div className={`absolute inset-y-0 left-0 w-1/3 rounded-full ${fill} animate-indeterminate`} />
++                )}
++            </div>
++        </div>
++    );
++}
+diff --git a/frontend/src/components/ui/PullToRefresh.jsx b/frontend/src/components/ui/PullToRefresh.jsx
+new file mode 100644
+index 0000000..1f195db
+--- /dev/null
++++ b/frontend/src/components/ui/PullToRefresh.jsx
+@@ -0,0 +1,72 @@
++import { useState } from "react";
++import usePullToRefresh, { isTouchDevice, prefersReducedMotion } from "../../hooks/usePullToRefresh";
++import Spinner from "./Spinner";
++import Button from "./Button";
++import useT from "./useT";
++
++/**
++ * PullToRefresh - wraps a page body. On touch devices pulling down at the
++ * top of the page shows an arrow that turns into a Spinner and calls
++ * `onRefresh()` (return a promise so the indicator stays until it
++ * resolves). Existing content stays on screen throughout - pair it with a
++ * refetch that doesn't flip the page back to a skeleton (useFetch's
++ * `refresh`).
++ *
++ * Touch devices with reduced-motion on get a plain "Refresh" button
++ * instead of the gesture; non-touch devices get neither.
++ */
++export default function PullToRefresh({ onRefresh, enabled = true, children, className = "" }) {
++    const t = useT();
++    const { containerRef, pull, status, active } = usePullToRefresh({ onRefresh, enabled });
++    const [manualBusy, setManualBusy] = useState(false);
++
++    const showManual = enabled && !active && isTouchDevice() && prefersReducedMotion();
++    const runManual = async () => {
++        setManualBusy(true);
++        try { await onRefresh?.(); } finally { setManualBusy(false); }
++    };
++
++    const label = status === "ready" ? t("ptr.release")
++        : status === "refreshing" ? t("ptr.refreshing")
++        : status === "done" ? t("ptr.updated")
++        : t("ptr.pull");
++
++    return (
++        <div ref={containerRef} className={className}>
++            {showManual && (
++                <div className="flex justify-end px-4 pt-2">
++                    <Button variant="ghost" size="sm" loading={manualBusy} onClick={runManual}>{t("ptr.refresh")}</Button>
++                </div>
++            )}
++            {active && (
++                <div
++                    aria-hidden={pull === 0}
++                    role={pull > 0 ? "status" : undefined}
++                    className="overflow-hidden flex items-end justify-center text-ash text-xs"
++                    style={{ height: pull, transition: status === "pulling" || status === "ready" ? "none" : "height 0.25s ease-out" }}
++                >
++                    {pull > 0 && (
++                        <div className="flex items-center gap-2 pb-2">
++                            {status === "refreshing" ? (
++                                <Spinner size="sm" tone="mango" />
++                            ) : status === "done" ? (
++                                <svg viewBox="0 0 24 24" className="w-4 h-4 text-teal" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M5 12l5 5 9-10" strokeLinecap="round" strokeLinejoin="round" /></svg>
++                            ) : (
++                                <svg
++                                    viewBox="0 0 24 24"
++                                    className="w-4 h-4 transition-transform duration-150"
++                                    style={{ transform: status === "ready" ? "rotate(180deg)" : "none" }}
++                                    fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"
++                                >
++                                    <path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
++                                </svg>
++                            )}
++                            <span>{label}</span>
++                        </div>
++                    )}
++                </div>
++            )}
++            {children}
++        </div>
++    );
++}
+diff --git a/frontend/src/components/ui/PulseBar.jsx b/frontend/src/components/ui/PulseBar.jsx
+new file mode 100644
+index 0000000..366b2c8
+--- /dev/null
++++ b/frontend/src/components/ui/PulseBar.jsx
+@@ -0,0 +1,19 @@
++/**
++ * PulseBar - a thin, non-blocking, breathing bar for background activity
++ * (refetching with content already on screen, offline-queue sync, socket
++ * reconnecting). It never replaces content and never takes focus; it only
++ * says "still working".
++ *
++ *  - position="inline": sits in normal flow (top of a list/section)
++ *  - position="top":    fixed to the viewport top, under the route bar
++ */
++export default function PulseBar({ active, position = "inline", label, className = "" }) {
++    if (!active) return null;
++    const place = position === "top" ? "fixed top-[3px] left-0 right-0 z-[var(--z-float)] pointer-events-none" : "relative w-full";
++    return (
++        <div role="status" className={`${place} h-0.5 overflow-hidden ${className}`}>
++            <span className="sr-only">{label}</span>
++            <div aria-hidden="true" className="h-full w-full origin-left bg-gradient-to-r from-azure via-mango to-coral animate-pulse-bar" />
++        </div>
++    );
++}
+diff --git a/frontend/src/components/ui/Spinner.jsx b/frontend/src/components/ui/Spinner.jsx
+new file mode 100644
+index 0000000..b79d76b
+--- /dev/null
++++ b/frontend/src/components/ui/Spinner.jsx
+@@ -0,0 +1,45 @@
++/**
++ * Shared Spinner - the one ring every inline "something is happening"
++ * spot uses (buttons, load-more footers, small panels). Replaces the
++ * hand-rolled `<span className="… animate-spin">` copies that had drifted
++ * across Login, Register, Checkout and Cart.
++ *
++ * Decorative by default (aria-hidden): pair it with visible text, or pass
++ * `label` to render an sr-only announcement inside a role="status".
++ *
++ * `tone="current"` inherits the surrounding text colour, which is what a
++ * button wants (abyss on mango, ink on a secondary button, and so on).
++ */
++const SIZE = { xs: "w-3 h-3", sm: "w-4 h-4", md: "w-6 h-6", lg: "w-9 h-9" };
++const TONE = {
++    current: "text-current",
++    mango: "text-mango",
++    abyss: "text-abyss",
++    frost: "text-frost",
++    ash: "text-ash"
++};
++
++export default function Spinner({ size = "sm", tone = "current", label, className = "" }) {
++    const ring = (
++        <svg
++            xmlns="http://www.w3.org/2000/svg"
++            viewBox="0 0 24 24"
++            fill="none"
++            stroke="currentColor"
++            strokeWidth="3"
++            className={`${SIZE[size] || SIZE.sm} ${TONE[tone] || TONE.current} animate-spin shrink-0 ${className}`}
++            aria-hidden="true"
++            focusable="false"
++        >
++            <circle cx="12" cy="12" r="9" opacity="0.25" />
++            <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
++        </svg>
++    );
++    if (!label) return ring;
++    return (
++        <span role="status" className="inline-flex items-center">
++            {ring}
++            <span className="sr-only">{label}</span>
++        </span>
++    );
++}
+diff --git a/frontend/src/components/ui/index.js b/frontend/src/components/ui/index.js
+index 38b4e5c..1840054 100644
+--- a/frontend/src/components/ui/index.js
++++ b/frontend/src/components/ui/index.js
+@@ -8,3 +8,9 @@ export { default as StatusBadge } from "./StatusBadge";
+ export { default as Breadcrumbs } from "./Breadcrumbs";
+ export { default as CheckoutSteps } from "./CheckoutSteps";
+ export { default as PasswordStrengthMeter } from "./PasswordStrengthMeter";
++export { default as Spinner } from "./Spinner";
++export { default as ProgressBar } from "./ProgressBar";
++export { default as PulseBar } from "./PulseBar";
++export { default as FullScreenLoader } from "./FullScreenLoader";
++export { default as InfiniteScrollFooter } from "./InfiniteScrollFooter";
++export { default as PullToRefresh } from "./PullToRefresh";
+diff --git a/frontend/src/components/ui/useT.js b/frontend/src/components/ui/useT.js
+new file mode 100644
+index 0000000..5f76f4e
+--- /dev/null
++++ b/frontend/src/components/ui/useT.js
+@@ -0,0 +1,19 @@
++import { useLanguage } from "../../context/LanguageContext";
++import en from "../../i18n/en";
++
++/**
++ * Translation helper for the shared loader components. Behaves like
++ * `useLanguage().t`, but still renders English text when the component is
++ * mounted outside a <LanguageProvider> (isolated unit tests, error
++ * boundaries that render above the provider).
++ */
++const fallbackT = (key, params) => {
++    const template = en[key] || key;
++    if (!params) return template;
++    return template.replace(/\{(\w+)\}/g, (m, k) => (params[k] !== undefined && params[k] !== null ? String(params[k]) : ""));
++};
++
++export default function useT() {
++    const ctx = useLanguage();
++    return ctx?.t || fallbackT;
++}
+diff --git a/frontend/src/context/AuthContext.jsx b/frontend/src/context/AuthContext.jsx
+index e1b874d..6ed22eb 100644
+--- a/frontend/src/context/AuthContext.jsx
++++ b/frontend/src/context/AuthContext.jsx
+@@ -262,11 +262,14 @@ export function AuthProvider({ children }) {
+         }
+     }, []);
+ 
+-    const register = useCallback(async (payload) => {
++    // `options.onUploadProgress` (axios progress callback) is only forwarded
++    // for multipart payloads - the seller/agent document upload on Register.
++    const register = useCallback(async (payload, options = {}) => {
+         try {
+             const isFormData = payload instanceof FormData;
+             await api.post("/auth/register", payload, isFormData ? {
+-                headers: { "Content-Type": "multipart/form-data" }
++                headers: { "Content-Type": "multipart/form-data" },
++                ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {})
+             } : undefined);
+             return { success: true };
+         } catch (error) {
+diff --git a/frontend/src/hooks/useInfiniteScroll.js b/frontend/src/hooks/useInfiniteScroll.js
+new file mode 100644
+index 0000000..1bc8bca
+--- /dev/null
++++ b/frontend/src/hooks/useInfiniteScroll.js
+@@ -0,0 +1,47 @@
++import { useCallback, useEffect, useRef, useState } from "react";
++import { useDataSaver } from "../context/DataSaverContext";
++
++/**
++ * useInfiniteScroll - the sentinel + IntersectionObserver pattern that
++ * ProductGrid and ServiceGrid used to hand-roll, extracted so every
++ * paginated list behaves the same.
++ *
++ *   const { sentinelRef } = useInfiniteScroll({ hasMore, loading, error, onLoadMore });
++ *   ...render list...
++ *   <div ref={sentinelRef} />        // or <InfiniteScrollFooter sentinelRef={sentinelRef} />
++ *
++ * Safeguards:
++ *  - never fires while a page is already loading (no double fetch);
++ *  - never fires while `error` is set, so a failing request doesn't loop -
++ *    the footer's Retry button is what resumes loading;
++ *  - auto-load is switched off when data-saver is on (or `disabled` is
++ *    passed), leaving the manual "Load more" button in
++ *    InfiniteScrollFooter in charge;
++ *  - the sentinel is tracked with a callback ref, so if the list is
++ *    unmounted and remounted (e.g. a skeleton swap on filter change) the
++ *    observer re-attaches to the new node instead of watching a detached one.
++ * `rootMargin` prefetches ahead of the viewport (default 400px).
++ *
++ * Works without a DataSaverProvider (unit tests, error boundaries).
++ */
++export default function useInfiniteScroll({ hasMore, loading, error, onLoadMore, disabled = false, rootMargin = "400px" }) {
++    const saver = useDataSaver();
++    const [node, setNode] = useState(null);
++    const sentinelRef = useCallback((el) => setNode(el), []);
++    const loadRef = useRef(onLoadMore);
++    loadRef.current = onLoadMore;
++
++    const autoLoad = Boolean(hasMore) && !loading && !error && !disabled && !saver?.enabled;
++
++    useEffect(() => {
++        if (!node || !autoLoad || typeof IntersectionObserver === "undefined") return undefined;
++        const observer = new IntersectionObserver(
++            (entries) => { if (entries.some((e) => e.isIntersecting)) loadRef.current?.(); },
++            { rootMargin }
++        );
++        observer.observe(node);
++        return () => observer.disconnect();
++    }, [node, autoLoad, rootMargin]);
++
++    return { sentinelRef, autoLoad };
++}
+diff --git a/frontend/src/hooks/usePullToRefresh.js b/frontend/src/hooks/usePullToRefresh.js
+new file mode 100644
+index 0000000..ec8ac49
+--- /dev/null
++++ b/frontend/src/hooks/usePullToRefresh.js
+@@ -0,0 +1,119 @@
++import { useCallback, useEffect, useRef, useState } from "react";
++
++const RESISTANCE = 0.5;
++const MAX_PULL = 120;
++
++const matches = (query) => {
++    try { return typeof window !== "undefined" && window.matchMedia(query).matches; } catch { return false; }
++};
++export const isTouchDevice = () => matches("(pointer: coarse)");
++export const prefersReducedMotion = () => matches("(prefers-reduced-motion: reduce)");
++
++// A touch that starts in one of these must keep its normal behaviour:
++// forms, maps, the swipe feed, dialogs, or anything opted out with
++// data-no-ptr.
++const BLOCKED = "input, textarea, select, [contenteditable=true], .leaflet-container, [role=dialog], [aria-modal=true], [data-no-ptr]";
++
++// True when the touch began inside an element that can still scroll up
++// (so the gesture belongs to that scroller, not to us) or sideways.
++function insideOtherScroller(target, boundary) {
++    let el = target;
++    while (el && el !== boundary && el !== document.body) {
++        const style = window.getComputedStyle(el);
++        const y = /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight;
++        if (y && el.scrollTop > 0) return true;
++        const x = /(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth;
++        if (x) return true;
++        el = el.parentElement;
++    }
++    return false;
++}
++
++/**
++ * usePullToRefresh - touch-only pull-down-to-refresh for a page.
++ *
++ *   const { containerRef, pull, status } = usePullToRefresh({ onRefresh });
++ *
++ * Arms only when the page is scrolled to the very top, the touch starts
++ * outside blocked/other scrollers, and the first movement is vertical.
++ * Applies resistance, fires `onRefresh()` past `threshold`, and awaits the
++ * returned promise. `status`: idle | pulling | ready | refreshing | done.
++ * Disabled on non-touch devices and when `enabled` is false.
++ */
++export default function usePullToRefresh({ onRefresh, enabled = true, threshold = 70 }) {
++    const containerRef = useRef(null);
++    const [pull, setPull] = useState(0);
++    const [status, setStatus] = useState("idle");
++    const refreshRef = useRef(onRefresh);
++    refreshRef.current = onRefresh;
++    const statusRef = useRef("idle");
++    const setStatusBoth = useCallback((s) => { statusRef.current = s; setStatus(s); }, []);
++
++    const active = enabled && isTouchDevice() && !prefersReducedMotion();
++
++    useEffect(() => {
++        const node = containerRef.current;
++        if (!node || !active) return undefined;
++
++        // Stop the browser's own pull-to-refresh / rubber-band from
++        // fighting ours while this page is mounted.
++        const root = document.documentElement;
++        const prevOverscroll = root.style.overscrollBehaviorY;
++        root.style.overscrollBehaviorY = "contain";
++
++        let startY = 0;
++        let startX = 0;
++        let tracking = false;
++        let decided = false;
++
++        const onStart = (e) => {
++            if (statusRef.current === "refreshing" || e.touches.length !== 1) return;
++            if (window.scrollY > 0 || e.target.closest?.(BLOCKED) || insideOtherScroller(e.target, node)) return;
++            startY = e.touches[0].clientY;
++            startX = e.touches[0].clientX;
++            tracking = true;
++            decided = false;
++        };
++
++        const onMove = (e) => {
++            if (!tracking) return;
++            const dy = e.touches[0].clientY - startY;
++            const dx = e.touches[0].clientX - startX;
++            if (!decided) {
++                if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
++                decided = true;
++                if (Math.abs(dx) > Math.abs(dy) || dy < 0) { tracking = false; return; }
++            }
++            if (window.scrollY > 0) { tracking = false; setPull(0); setStatusBoth("idle"); return; }
++            if (e.cancelable) e.preventDefault();
++            const distance = Math.min(MAX_PULL, dy * RESISTANCE);
++            setPull(distance);
++            setStatusBoth(distance >= threshold ? "ready" : "pulling");
++        };
++
++        const onEnd = async () => {
++            if (!tracking) return;
++            tracking = false;
++            if (statusRef.current !== "ready") { setPull(0); setStatusBoth("idle"); return; }
++            setStatusBoth("refreshing");
++            setPull(threshold * 0.7);
++            try { await refreshRef.current?.(); } catch { /* the page shows its own error */ }
++            setStatusBoth("done");
++            setTimeout(() => { setPull(0); setStatusBoth("idle"); }, 600);
++        };
++
++        node.addEventListener("touchstart", onStart, { passive: true });
++        node.addEventListener("touchmove", onMove, { passive: false });
++        node.addEventListener("touchend", onEnd);
++        node.addEventListener("touchcancel", onEnd);
++        return () => {
++            node.removeEventListener("touchstart", onStart);
++            node.removeEventListener("touchmove", onMove);
++            node.removeEventListener("touchend", onEnd);
++            node.removeEventListener("touchcancel", onEnd);
++            root.style.overscrollBehaviorY = prevOverscroll;
++        };
++    }, [active, threshold, setStatusBoth]);
++
++    return { containerRef, pull, status, active };
++}
+diff --git a/frontend/src/hooks/useUploadProgress.js b/frontend/src/hooks/useUploadProgress.js
+new file mode 100644
+index 0000000..43d554b
+--- /dev/null
++++ b/frontend/src/hooks/useUploadProgress.js
+@@ -0,0 +1,23 @@
++import { useCallback, useState } from "react";
++
++/**
++ * useUploadProgress - bookkeeping for a single axios upload.
++ *
++ *   const { progress, onUploadProgress, reset } = useUploadProgress();
++ *   await api.post(url, formData, { onUploadProgress });
++ *   ...finally { reset(); }
++ *   {progress !== null && <ProgressBar value={progress} />}
++ *
++ * `progress` is 0-100 while bytes are being sent and null when idle.
++ * (It reports bytes *sent*; the brief server-side processing afterwards
++ * is covered by the caller's own busy state.)
++ */
++export default function useUploadProgress() {
++    const [progress, setProgress] = useState(null);
++    const onUploadProgress = useCallback((e) => {
++        if (e && e.total) setProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)));
++        else setProgress((p) => (p === null ? 0 : p));
++    }, []);
++    const reset = useCallback(() => setProgress(null), []);
++    return { progress, onUploadProgress, reset };
++}
+diff --git a/frontend/src/i18n/en.js b/frontend/src/i18n/en.js
+index 5b5de3c..69ea021 100644
+--- a/frontend/src/i18n/en.js
++++ b/frontend/src/i18n/en.js
+@@ -2575,5 +2575,21 @@ export default {
+         "seller.serviceReviews.replyPlaceholder": "Write a response to this review…",
+         "seller.serviceReviews.posting": "Posting…",
+         "seller.serviceReviews.postReply": "Post reply",
+-        "seller.serviceReviews.loadMore": "Load more reviews"
++        "seller.serviceReviews.loadMore": "Load more reviews",
++        "common.tryAgain": "Try again",
++        "loader.working": "Working on it…",
++        "loader.progress": "Progress",
++        "loader.slow": "This is taking longer than usual. Please keep this screen open.",
++        "infinite.loadMore": "Load more",
++        "infinite.error": "Couldn't load more. Check your connection and try again.",
++        "infinite.end": "You've reached the end.",
++        "ptr.pull": "Pull to refresh",
++        "ptr.release": "Release to refresh",
++        "ptr.refreshing": "Refreshing…",
++        "ptr.updated": "Updated",
++        "ptr.refresh": "Refresh",
++        "pulse.syncingQueue": "Sending saved updates…",
++        "pulse.refreshing": "Refreshing…",
++        "upload.progress": "Upload progress",
++        "account.finishingSignIn": "Finishing sign-in…"
+ };
+diff --git a/frontend/src/i18n/sw.js b/frontend/src/i18n/sw.js
+index ca1274c..7501d28 100644
+--- a/frontend/src/i18n/sw.js
++++ b/frontend/src/i18n/sw.js
+@@ -2578,5 +2578,21 @@ export default {
+         "seller.serviceReviews.replyPlaceholder": "Andika jibu kwa tathmini hii…",
+         "seller.serviceReviews.posting": "Inachapisha…",
+         "seller.serviceReviews.postReply": "Tuma jibu",
+-        "seller.serviceReviews.loadMore": "Pakia tathmini zaidi"
++        "seller.serviceReviews.loadMore": "Pakia tathmini zaidi",
++        "common.tryAgain": "Jaribu tena",
++        "loader.working": "Inashughulikia…",
++        "loader.progress": "Maendeleo",
++        "loader.slow": "Inachukua muda zaidi ya kawaida. Tafadhali acha skrini hii wazi.",
++        "infinite.loadMore": "Pakia zaidi",
++        "infinite.error": "Imeshindwa kupakia zaidi. Angalia mtandao wako kisha ujaribu tena.",
++        "infinite.end": "Umefika mwisho.",
++        "ptr.pull": "Vuta ili kuonyesha upya",
++        "ptr.release": "Achia ili kuonyesha upya",
++        "ptr.refreshing": "Inaonyesha upya…",
++        "ptr.updated": "Imesasishwa",
++        "ptr.refresh": "Onyesha upya",
++        "pulse.syncingQueue": "Inatuma masasisho yaliyohifadhiwa…",
++        "pulse.refreshing": "Inaonyesha upya…",
++        "upload.progress": "Maendeleo ya upakiaji",
++        "account.finishingSignIn": "Inakamilisha kuingia…"
+ };
+diff --git a/frontend/src/pages/Register.jsx b/frontend/src/pages/Register.jsx
+index d86bfca..50a0719 100644
+--- a/frontend/src/pages/Register.jsx
++++ b/frontend/src/pages/Register.jsx
+@@ -4,12 +4,15 @@ import { useAuth } from "../context/AuthContext";
+ import { useLanguage } from "../context/LanguageContext";
+ import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL } from "../data/countryCodes";
+ import Button from "../components/ui/Button";
++import FullScreenLoader from "../components/ui/FullScreenLoader";
+ import Input from "../components/ui/Input";
++import ProgressBar from "../components/ui/ProgressBar";
+ import PasswordStrengthMeter from "../components/ui/PasswordStrengthMeter";
+ import PageMeta from "../components/PageMeta";
+ import UsernameField from "../components/UsernameField";
+ import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
+ import GoogleCompleteProfile from "../components/GoogleCompleteProfile";
++import useUploadProgress from "../hooks/useUploadProgress";
+ import { isValidUsernameFormat, randomSuggestionDigits, suggestUsername } from "../utils/username";
+ 
+ const initialForm = {
+@@ -63,6 +66,7 @@ export default function Register() {
+     const [step, setStep] = useState(STEP_ACCOUNT);
+     const [error, setError] = useState("");
+     const [submitting, setSubmitting] = useState(false);
++    const docUpload = useUploadProgress();
+     const [usernameStatus, setUsernameStatus] = useState("idle");
+     // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
+     // finishing phone/username/terms; it can arrive from the Login page via
+@@ -224,7 +228,10 @@ export default function Register() {
+             payload = formData;
+         }
+ 
+-        const result = await register(payload);
++        const result = needsDocuments
++            ? await register(payload, { onUploadProgress: docUpload.onUploadProgress })
++            : await register(payload);
++        docUpload.reset();
+         setSubmitting(false);
+ 
+         if (result.success) {
+@@ -264,6 +271,8 @@ export default function Register() {
+     if (step === STEP_DOCUMENTS) {
+         return (
+             <div className="max-w-sm mx-auto px-4 py-16">
++            {/* Sellers and agents only prefill from Google (nothing is created), so only buyers get the blocking loader. */}
++            <FullScreenLoader open={googleBusy && form.role === "buyer"} message={t("account.finishingSignIn")} />
+                 <h1 className="font-display text-2xl mb-1">{t("auth.verify.title")}</h1>
+                 <p className="text-ash text-sm mb-8">
+                     {form.role === "seller"
+@@ -351,6 +360,10 @@ export default function Register() {
+ 
+                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
+ 
++                    {submitting && docUpload.progress !== null && (
++                        <ProgressBar value={docUpload.progress} label={t("upload.progress")} showValue />
++                    )}
++
+                     <div className="flex gap-3 pt-2">
+                         <Button
+                             type="button"
+@@ -360,12 +373,11 @@ export default function Register() {
+                         >
+                             {t("auth.verify.back")}
+                         </Button>
+-                        <Button
++                        <Button loading={submitting}
+                             type="submit"
+                             disabled={submitting}
+                             className="flex-1 gap-2"
+                         >
+-                            {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
+                             {submitting ? t("auth.verify.submitting") : t("auth.verify.submitForReview")}
+                         </Button>
+                     </div>
+@@ -540,8 +552,7 @@ export default function Register() {
+ 
+                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
+ 
+-                <Button type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
+-                    {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
++                <Button loading={submitting} type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
+                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
+                 </Button>
+             </form>
+diff --git a/frontend/src/pages/delivery/DeliveryMine.jsx b/frontend/src/pages/delivery/DeliveryMine.jsx
+index 53ac864..ca13342 100644
+--- a/frontend/src/pages/delivery/DeliveryMine.jsx
++++ b/frontend/src/pages/delivery/DeliveryMine.jsx
+@@ -3,6 +3,7 @@ import api, { extractErrorMessage } from "../../api/client";
+ import { SkeletonList } from "../../components/Skeleton";
+ import ErrorState from "../../components/ui/ErrorState";
+ import Button from "../../components/ui/Button";
++import PulseBar from "../../components/ui/PulseBar";
+ import DeliveryProofForm from "../../components/delivery/DeliveryProofForm";
+ import NexoraRouteAssist from "../../components/ai/NexoraRouteAssist";
+ import PageMeta from "../../components/PageMeta";
+@@ -10,6 +11,8 @@ import { googleMapsUrl, wazeUrl, telUrl, whatsappUrl } from "../../utils/contact
+ import { enqueueStatus, getQueue, isNetworkError, removeFromQueue } from "../../utils/deliveryStatusQueue";
+ import { useLanguage } from "../../context/LanguageContext";
+ import { useToast } from "../../context/ToastContext";
++import PullToRefresh from "../../components/ui/PullToRefresh";
++import useUploadProgress from "../../hooks/useUploadProgress";
+ 
+ const NEXT_STATUS = {
+     assigned: [{ value: "picked_up", labelKey: "delivery.agent.mine.markPickedUp" }, { value: "failed", labelKey: "delivery.agent.mine.reportFailed" }],
+@@ -28,14 +31,14 @@ const statusStyles = {
+ const linkBtn = "text-xs border border-line px-3 py-2 rounded-md hover:border-ink transition-colors";
+ 
+ // Sends one status update. Photo proof is multipart; everything else is JSON-like.
+-const sendStatus = (orderId, { status, handoverCode, lat, lng, photo }) => {
++const sendStatus = (orderId, { status, handoverCode, lat, lng, photo }, onUploadProgress) => {
+     if (photo) {
+         const body = new FormData();
+         body.append("status", status);
+         body.append("dropoff_photo", photo);
+         if (lat != null) body.append("delivery_lat", String(lat));
+         if (lng != null) body.append("delivery_lng", String(lng));
+-        return api.put(`/delivery/${orderId}/status`, body);
++        return api.put(`/delivery/${orderId}/status`, body, onUploadProgress ? { onUploadProgress } : undefined);
+     }
+     return api.put(`/delivery/${orderId}/status`, {
+         status,
+@@ -52,18 +55,21 @@ export default function DeliveryMine() {
+     const [loadError, setLoadError] = useState(false);
+     const [busyId, setBusyId] = useState(null);
+     const [proofOrderId, setProofOrderId] = useState(null);
++    const photoUpload = useUploadProgress();
+     const [queuedIds, setQueuedIds] = useState(() => getQueue().map((i) => String(i.orderId)));
+     const toast = useToast();
+     const [routeRefresh, setRouteRefresh] = useState(0);
+     const flushing = useRef(false);
++    const [syncing, setSyncing] = useState(false);
++    const [refreshing, setRefreshing] = useState(false);
+ 
+     const load = useCallback((silent = false) => {
+-        if (!silent) setLoading(true);
++        if (silent) setRefreshing(true); else setLoading(true);
+         setLoadError(false);
+         return api.get("/delivery/my/list")
+             .then(({ data }) => setDeliveries(data.data))
+             .catch(() => setLoadError(true))
+-            .finally(() => setLoading(false));
++            .finally(() => { setLoading(false); setRefreshing(false); });
+     }, []);
+ 
+     useEffect(() => { load(); }, [load]);
+@@ -73,6 +79,7 @@ export default function DeliveryMine() {
+     const flushQueue = useCallback(async () => {
+         if (flushing.current) return;
+         flushing.current = true;
++        setSyncing(true);
+         try {
+             for (const item of getQueue()) {
+                 try {
+@@ -86,6 +93,7 @@ export default function DeliveryMine() {
+             }
+         } finally {
+             flushing.current = false;
++            setSyncing(false);
+             setQueuedIds(getQueue().map((i) => String(i.orderId)));
+             load(true);
+             setRouteRefresh((n) => n + 1);
+@@ -101,7 +109,7 @@ export default function DeliveryMine() {
+     const updateStatus = async (orderId, payload) => {
+         setBusyId(orderId);
+         try {
+-            await sendStatus(orderId, payload);
++            await sendStatus(orderId, payload, payload.photo ? photoUpload.onUploadProgress : undefined);
+             setProofOrderId(null);
+             load(true);
+             setRouteRefresh((n) => n + 1);
+@@ -117,6 +125,7 @@ export default function DeliveryMine() {
+                 toast?.error(extractErrorMessage(err));
+             }
+         } finally {
++            photoUpload.reset();
+             setBusyId(null);
+         }
+     };
+@@ -139,80 +148,84 @@ export default function DeliveryMine() {
+     }
+ 
+     return (
+-        <div>
+-            <PageMeta title="My Deliveries" noIndex />
+-
+-            {queuedIds.length > 0 && (
+-                <div role="status" className="flex items-center justify-between gap-3 border border-mango/40 bg-mango/10 rounded-lg px-3 py-2 mb-4 text-sm">
+-                    <span>{t("delivery.agent.mine.queuedBanner", { count: queuedIds.length })}</span>
+-                    <button type="button" onClick={flushQueue} className="text-xs underline shrink-0">{t("delivery.agent.mine.retryNow")}</button>
+-                </div>
+-            )}
+-
+-            <NexoraRouteAssist refreshToken={routeRefresh} />
+-
+-            <ul className="space-y-4">
+-                {deliveries.map((d) => {
+-                    const address = [d.shipping_address, d.shipping_city, d.shipping_region].filter(Boolean).join(", ");
+-                    const dest = { lat: d.delivery_lat, lng: d.delivery_lng, address };
+-                    const mapsHref = googleMapsUrl(dest);
+-                    const wazeHref = wazeUrl(dest);
+-                    const active = Boolean(NEXT_STATUS[d.status]);
+-                    const queued = queuedIds.includes(String(d.order_id));
+-
+-                    return (
+-                        <li key={d.id} className="border border-line rounded-lg p-4">
+-                            <div className="flex items-center justify-between gap-3 mb-2">
+-                                <p className="price text-sm font-medium">{d.order_number}</p>
+-                                <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${statusStyles[d.status] || "bg-line text-ash"}`}>
+-                                    {d.status.replace("_", " ")}
+-                                </span>
+-                            </div>
+-
+-                            <p className="text-sm text-ink/80 mb-1">{address}</p>
+-                            <p className="text-xs text-ash mb-3">{t("delivery.agent.mine.contact")}: {d.shipping_phone}</p>
+-                            {queued && <p className="text-xs text-mango-dark mb-2">{t("delivery.agent.mine.waitingToSync")}</p>}
+-
+-                            {active && (
+-                                <div className="flex flex-wrap gap-2 mb-3">
+-                                    {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.googleMaps")}</a>}
+-                                    {wazeHref && <a href={wazeHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.waze")}</a>}
+-                                    {telUrl(d.shipping_phone) && <a href={telUrl(d.shipping_phone)} className={linkBtn}>{t("delivery.agent.nav.call")}</a>}
+-                                    {whatsappUrl(d.shipping_phone) && (
+-                                        <a href={whatsappUrl(d.shipping_phone)} target="_blank" rel="noopener noreferrer" className={linkBtn}>
+-                                            {t("delivery.agent.nav.whatsapp")}
+-                                        </a>
+-                                    )}
++        <PullToRefresh onRefresh={() => load(true)}>
++            <div>
++                <PageMeta title="My Deliveries" noIndex />
++                <PulseBar active={syncing || refreshing} label={t(syncing ? "pulse.syncingQueue" : "pulse.refreshing")} className="mb-3" />
++
++                {queuedIds.length > 0 && (
++                    <div role="status" className="flex items-center justify-between gap-3 border border-mango/40 bg-mango/10 rounded-lg px-3 py-2 mb-4 text-sm">
++                        <span>{t("delivery.agent.mine.queuedBanner", { count: queuedIds.length })}</span>
++                        <button type="button" onClick={flushQueue} className="text-xs underline shrink-0">{t("delivery.agent.mine.retryNow")}</button>
++                    </div>
++                )}
++
++                <NexoraRouteAssist refreshToken={routeRefresh} />
++
++                <ul className="space-y-4">
++                    {deliveries.map((d) => {
++                        const address = [d.shipping_address, d.shipping_city, d.shipping_region].filter(Boolean).join(", ");
++                        const dest = { lat: d.delivery_lat, lng: d.delivery_lng, address };
++                        const mapsHref = googleMapsUrl(dest);
++                        const wazeHref = wazeUrl(dest);
++                        const active = Boolean(NEXT_STATUS[d.status]);
++                        const queued = queuedIds.includes(String(d.order_id));
++
++                        return (
++                            <li key={d.id} className="border border-line rounded-lg p-4">
++                                <div className="flex items-center justify-between gap-3 mb-2">
++                                    <p className="price text-sm font-medium">{d.order_number}</p>
++                                    <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${statusStyles[d.status] || "bg-line text-ash"}`}>
++                                        {d.status.replace("_", " ")}
++                                    </span>
+                                 </div>
+-                            )}
+-
+-                            <div className="flex flex-wrap gap-2">
+-                                {(NEXT_STATUS[d.status] || []).map((next) => (
+-                                    <Button
+-                                        key={next.value}
+-                                        onClick={() => onNext(d, next)}
+-                                        disabled={busyId === d.order_id}
+-                                        variant="secondary"
+-                                        size="sm"
+-                                    >
+-                                        {t(next.labelKey)}
+-                                    </Button>
+-                                ))}
+-                            </div>
+-
+-                            {proofOrderId === d.order_id && (
+-                                <DeliveryProofForm
+-                                    busy={busyId === d.order_id}
+-                                    onCancel={() => setProofOrderId(null)}
+-                                    onSubmit={({ handoverCode, photo, lat, lng }) =>
+-                                        updateStatus(d.order_id, { status: "delivered", handoverCode, photo, lat, lng })
+-                                    }
+-                                />
+-                            )}
+-                        </li>
+-                    );
+-                })}
+-            </ul>
+-        </div>
++
++                                <p className="text-sm text-ink/80 mb-1">{address}</p>
++                                <p className="text-xs text-ash mb-3">{t("delivery.agent.mine.contact")}: {d.shipping_phone}</p>
++                                {queued && <p className="text-xs text-mango-dark mb-2">{t("delivery.agent.mine.waitingToSync")}</p>}
++
++                                {active && (
++                                    <div className="flex flex-wrap gap-2 mb-3">
++                                        {mapsHref && <a href={mapsHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.googleMaps")}</a>}
++                                        {wazeHref && <a href={wazeHref} target="_blank" rel="noopener noreferrer" className={linkBtn}>{t("delivery.agent.nav.waze")}</a>}
++                                        {telUrl(d.shipping_phone) && <a href={telUrl(d.shipping_phone)} className={linkBtn}>{t("delivery.agent.nav.call")}</a>}
++                                        {whatsappUrl(d.shipping_phone) && (
++                                            <a href={whatsappUrl(d.shipping_phone)} target="_blank" rel="noopener noreferrer" className={linkBtn}>
++                                                {t("delivery.agent.nav.whatsapp")}
++                                            </a>
++                                        )}
++                                    </div>
++                                )}
++
++                                <div className="flex flex-wrap gap-2">
++                                    {(NEXT_STATUS[d.status] || []).map((next) => (
++                                        <Button loading={busyId === d.order_id}
++                                            key={next.value}
++                                            onClick={() => onNext(d, next)}
++                                            disabled={busyId === d.order_id}
++                                            variant="secondary"
++                                            size="sm"
++                                        >
++                                            {t(next.labelKey)}
++                                        </Button>
++                                    ))}
++                                </div>
++
++                                {proofOrderId === d.order_id && (
++                                    <DeliveryProofForm
++                                        busy={busyId === d.order_id}
++                                        uploadProgress={photoUpload.progress}
++                                        onCancel={() => setProofOrderId(null)}
++                                        onSubmit={({ handoverCode, photo, lat, lng }) =>
++                                            updateStatus(d.order_id, { status: "delivered", handoverCode, photo, lat, lng })
++                                        }
++                                    />
++                                )}
++                            </li>
++                        );
++                    })}
++                </ul>
++            </div>
++        </PullToRefresh>
+     );
+ }
+diff --git a/frontend/tests/components/DeliveryProofForm.test.jsx b/frontend/tests/components/DeliveryProofForm.test.jsx
+new file mode 100644
+index 0000000..a722325
+--- /dev/null
++++ b/frontend/tests/components/DeliveryProofForm.test.jsx
+@@ -0,0 +1,64 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
++import { render, screen, fireEvent } from "@testing-library/react";
++import userEvent from "@testing-library/user-event";
++
++vi.mock("../../src/context/LanguageContext", () => ({
++    useLanguage: () => ({ t: (key) => key })
++}));
++
++import DeliveryProofForm from "../../src/components/delivery/DeliveryProofForm";
++
++const openPhotoTab = async (user) => {
++    await user.click(screen.getByRole("tab", { name: "delivery.agent.proof.usePhoto" }));
++};
++
++describe("DeliveryProofForm - photo upload progress", () => {
++    let originalGeo;
++    beforeEach(() => { originalGeo = navigator.geolocation; });
++    afterEach(() => {
++        Object.defineProperty(navigator, "geolocation", { value: originalGeo, configurable: true });
++    });
++
++    it("shows no progress bar before an upload starts", async () => {
++        const user = userEvent.setup();
++        render(<DeliveryProofForm busy={false} uploadProgress={null} onSubmit={() => {}} onCancel={() => {}} />);
++        await openPhotoTab(user);
++        expect(screen.queryByRole("progressbar")).toBeNull();
++    });
++
++    it("shows a determinate progress bar while the photo is uploading", async () => {
++        const user = userEvent.setup();
++        render(<DeliveryProofForm busy uploadProgress={64} onSubmit={() => {}} onCancel={() => {}} />);
++        await openPhotoTab(user);
++        const bar = screen.getByRole("progressbar", { name: "upload.progress" });
++        expect(bar).toHaveAttribute("aria-valuenow", "64");
++        expect(screen.getByText("64%")).toBeInTheDocument();
++    });
++
++    it("hides the bar when not busy even if a stale progress value is passed", async () => {
++        const user = userEvent.setup();
++        render(<DeliveryProofForm busy={false} uploadProgress={100} onSubmit={() => {}} onCancel={() => {}} />);
++        await openPhotoTab(user);
++        expect(screen.queryByRole("progressbar")).toBeNull();
++    });
++
++    it("does not show the bar on the handover-code tab (nothing is uploaded)", () => {
++        render(<DeliveryProofForm busy uploadProgress={30} onSubmit={() => {}} onCancel={() => {}} />);
++        expect(screen.queryByRole("progressbar")).toBeNull();
++    });
++
++    it("still submits the photo with GPS coordinates", async () => {
++        const user = userEvent.setup();
++        const onSubmit = vi.fn();
++        Object.defineProperty(navigator, "geolocation", {
++            value: { getCurrentPosition: (ok) => ok({ coords: { latitude: -6.8, longitude: 39.28 } }) },
++            configurable: true
++        });
++        render(<DeliveryProofForm busy={false} onSubmit={onSubmit} onCancel={() => {}} />);
++        await openPhotoTab(user);
++        const file = new File(["x"], "drop.jpg", { type: "image/jpeg" });
++        await user.upload(document.getElementById("dropoff-photo"), file);
++        fireEvent.submit(document.getElementById("dropoff-photo").closest("form"));
++        expect(onSubmit).toHaveBeenCalledWith({ photo: file, lat: -6.8, lng: 39.28 });
++    });
++});
+diff --git a/frontend/tests/components/ui/Button.test.jsx b/frontend/tests/components/ui/Button.test.jsx
+index 63f216c..ff1daf4 100644
+--- a/frontend/tests/components/ui/Button.test.jsx
++++ b/frontend/tests/components/ui/Button.test.jsx
+@@ -1,5 +1,7 @@
+-import { describe, it, expect } from "vitest";
++import { createRef } from "react";
++import { describe, it, expect, vi } from "vitest";
+ import { render, screen } from "@testing-library/react";
++import userEvent from "@testing-library/user-event";
+ 
+ import Button from "../../../src/components/ui/Button";
+ 
+@@ -48,3 +50,92 @@ describe("Button elevation classes", () => {
+         expect(button.className).not.toMatch(/-translate-y-0\.5/);
+     });
+ });
++
++describe("Button behaviour", () => {
++    it("defaults to type=button so it never submits a form by accident", () => {
++        render(<Button>Go</Button>);
++        expect(screen.getByRole("button", { name: "Go" })).toHaveAttribute("type", "button");
++    });
++
++    it("forwards type=submit", () => {
++        render(<Button type="submit">Save</Button>);
++        expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute("type", "submit");
++    });
++
++    it("calls onClick, but not when disabled", async () => {
++        const onClick = vi.fn();
++        const user = userEvent.setup();
++        const { rerender } = render(<Button onClick={onClick}>Go</Button>);
++        await user.click(screen.getByRole("button"));
++        expect(onClick).toHaveBeenCalledTimes(1);
++        rerender(<Button onClick={onClick} disabled>Go</Button>);
++        await user.click(screen.getByRole("button"));
++        expect(onClick).toHaveBeenCalledTimes(1);
++    });
++
++    it("applies size classes and falls back to md for unknown sizes", () => {
++        const { rerender } = render(<Button size="sm">A</Button>);
++        expect(screen.getByRole("button")).toHaveClass("text-xs", "px-3");
++        rerender(<Button size="lg">A</Button>);
++        expect(screen.getByRole("button")).toHaveClass("w-full");
++        rerender(<Button size="xxl">A</Button>);
++        expect(screen.getByRole("button")).toHaveClass("text-sm", "px-5");
++    });
++
++    it("falls back to primary for an unknown variant", () => {
++        render(<Button variant="weird">A</Button>);
++        expect(screen.getByRole("button")).toHaveClass("bg-mango");
++    });
++
++    it("fullWidth and className are merged", () => {
++        render(<Button fullWidth className="extra">A</Button>);
++        expect(screen.getByRole("button")).toHaveClass("w-full", "extra");
++    });
++
++    it("loading disables the button, sets aria-busy and blocks clicks", async () => {
++        const onClick = vi.fn();
++        const user = userEvent.setup();
++        render(<Button loading onClick={onClick}>Save</Button>);
++        const button = screen.getByRole("button");
++        expect(button).toBeDisabled();
++        expect(button).toHaveAttribute("aria-busy", "true");
++        await user.click(button);
++        expect(onClick).not.toHaveBeenCalled();
++    });
++
++    it("loadingText replaces the label only while loading", () => {
++        const { rerender } = render(<Button loading loadingText="Saving…">Save</Button>);
++        expect(screen.getByRole("button")).toHaveTextContent("Saving…");
++        rerender(<Button loadingText="Saving…">Save</Button>);
++        expect(screen.getByRole("button")).toHaveTextContent("Save");
++        expect(screen.getByRole("button")).not.toHaveAttribute("aria-busy");
++    });
++
++    it("keeps the original label while loading when no loadingText is given", () => {
++        render(<Button loading>Save</Button>);
++        expect(screen.getByRole("button")).toHaveTextContent("Save");
++    });
++
++    it("renders a polymorphic link with aria-disabled and prevents navigation when inert", () => {
++        const onClick = vi.fn();
++        const Anchor = ({ children, ...p }) => <a {...p}>{children}</a>;
++        const { rerender } = render(<Button as={Anchor} href="/x" onClick={onClick}>Open</Button>);
++        const link = screen.getByRole("link", { name: "Open" });
++        expect(link).not.toHaveAttribute("type");
++        expect(link).not.toHaveAttribute("aria-disabled");
++
++        rerender(<Button as={Anchor} href="/x" loading onClick={onClick}>Open</Button>);
++        const inert = screen.getByRole("link", { name: "Open" });
++        expect(inert).toHaveAttribute("aria-disabled", "true");
++        const event = new MouseEvent("click", { bubbles: true, cancelable: true });
++        inert.dispatchEvent(event);
++        expect(event.defaultPrevented).toBe(true);
++        expect(onClick).not.toHaveBeenCalled();
++    });
++
++    it("forwards refs to the underlying element", () => {
++        const ref = createRef();
++        render(<Button ref={ref}>A</Button>);
++        expect(ref.current).toBeInstanceOf(HTMLButtonElement);
++    });
++});
+diff --git a/frontend/tests/components/ui/FullScreenLoader.test.jsx b/frontend/tests/components/ui/FullScreenLoader.test.jsx
+new file mode 100644
+index 0000000..77f4b17
+--- /dev/null
++++ b/frontend/tests/components/ui/FullScreenLoader.test.jsx
+@@ -0,0 +1,61 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
++import { render, screen, act, fireEvent } from "@testing-library/react";
++
++import FullScreenLoader from "../../../src/components/ui/FullScreenLoader";
++
++vi.mock("../../../src/components/ui/useT", () => ({ default: () => (k) => k }));
++
++describe("FullScreenLoader", () => {
++    beforeEach(() => { vi.useFakeTimers(); });
++    afterEach(() => { vi.useRealTimers(); document.body.style.overflow = ""; });
++
++    it("renders nothing when closed", () => {
++        render(<FullScreenLoader open={false} message="Working" />);
++        expect(screen.queryByRole("alertdialog")).toBeNull();
++    });
++
++    it("waits for the delay so quick actions never flash it", () => {
++        render(<FullScreenLoader open message="Taking you to secure payment…" delay={250} />);
++        act(() => { vi.advanceTimersByTime(200); });
++        expect(screen.queryByRole("alertdialog")).toBeNull();
++        act(() => { vi.advanceTimersByTime(100); });
++        const dialog = screen.getByRole("alertdialog");
++        expect(dialog).toHaveAttribute("aria-busy", "true");
++        expect(dialog).toHaveAttribute("aria-modal", "true");
++        expect(screen.getByText("Taking you to secure payment…")).toBeInTheDocument();
++    });
++
++    it("never shows if the action finishes inside the delay", () => {
++        const { rerender } = render(<FullScreenLoader open message="x" delay={250} />);
++        act(() => { vi.advanceTimersByTime(100); });
++        rerender(<FullScreenLoader open={false} message="x" delay={250} />);
++        act(() => { vi.advanceTimersByTime(1000); });
++        expect(screen.queryByRole("alertdialog")).toBeNull();
++    });
++
++    it("locks page scroll while visible and restores it afterwards", () => {
++        const { rerender } = render(<FullScreenLoader open message="x" delay={0} />);
++        act(() => { vi.advanceTimersByTime(10); });
++        expect(document.body.style.overflow).toBe("hidden");
++        rerender(<FullScreenLoader open={false} message="x" delay={0} />);
++        expect(document.body.style.overflow).not.toBe("hidden");
++    });
++
++    it("offers a cancel escape hatch only after the slow threshold", () => {
++        const onCancel = vi.fn();
++        render(<FullScreenLoader open message="x" delay={0} slowAfter={15000} onCancel={onCancel} />);
++        act(() => { vi.advanceTimersByTime(14000); });
++        expect(screen.queryByText("loader.slow")).toBeNull();
++        act(() => { vi.advanceTimersByTime(2000); });
++        expect(screen.getByText("loader.slow")).toBeInTheDocument();
++        fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
++        expect(onCancel).toHaveBeenCalledTimes(1);
++    });
++
++    it("shows the slow note but no cancel button when nothing can be cancelled", () => {
++        render(<FullScreenLoader open message="x" delay={0} slowAfter={1000} />);
++        act(() => { vi.advanceTimersByTime(1500); });
++        expect(screen.getByText("loader.slow")).toBeInTheDocument();
++        expect(screen.queryByRole("button")).toBeNull();
++    });
++});
+diff --git a/frontend/tests/components/ui/ProgressBar.test.jsx b/frontend/tests/components/ui/ProgressBar.test.jsx
+new file mode 100644
+index 0000000..2d7083d
+--- /dev/null
++++ b/frontend/tests/components/ui/ProgressBar.test.jsx
+@@ -0,0 +1,69 @@
++import { describe, it, expect } from "vitest";
++import { render, screen } from "@testing-library/react";
++
++import ProgressBar from "../../../src/components/ui/ProgressBar";
++
++describe("ProgressBar", () => {
++    it("exposes role=progressbar with aria-valuenow when determinate", () => {
++        render(<ProgressBar value={42} label="Upload progress" />);
++        const bar = screen.getByRole("progressbar", { name: "Upload progress" });
++        expect(bar).toHaveAttribute("aria-valuemin", "0");
++        expect(bar).toHaveAttribute("aria-valuemax", "100");
++        expect(bar).toHaveAttribute("aria-valuenow", "42");
++    });
++
++    it("omits aria-valuenow when indeterminate (no value)", () => {
++        render(<ProgressBar label="Working" />);
++        expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
++    });
++
++    it("treats null, NaN and non-numbers as indeterminate", () => {
++        for (const value of [null, NaN, "50", Infinity]) {
++            const { unmount } = render(<ProgressBar value={value} />);
++            expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
++            unmount();
++        }
++    });
++
++    it("clamps to 0-100 and rounds to a whole number", () => {
++        const { rerender } = render(<ProgressBar value={150} />);
++        expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
++        rerender(<ProgressBar value={-20} />);
++        expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
++        rerender(<ProgressBar value={33.6} />);
++        expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "34");
++    });
++
++    it("sets the fill width from the value", () => {
++        const { container } = render(<ProgressBar value={60} />);
++        expect(container.querySelector("[style]")).toHaveStyle({ width: "60%" });
++    });
++
++    it("shows the percentage only when showValue is set and determinate", () => {
++        const { rerender } = render(<ProgressBar value={75} label="Upload" showValue />);
++        expect(screen.getByText("75%")).toBeInTheDocument();
++        rerender(<ProgressBar label="Upload" showValue />);
++        expect(screen.queryByText(/%/)).toBeNull();
++        rerender(<ProgressBar value={75} label="Upload" />);
++        expect(screen.queryByText("75%")).toBeNull();
++    });
++
++    it("hideLabel keeps the aria-label but drops the visible text", () => {
++        render(<ProgressBar value={10} label="Upload" hideLabel />);
++        expect(screen.getByRole("progressbar", { name: "Upload" })).toBeInTheDocument();
++        expect(screen.queryByText("Upload")).toBeNull();
++    });
++
++    it("falls back to defaults for unknown size/tone and merges className", () => {
++        const { container } = render(<ProgressBar value={20} size="huge" tone="neon" className="max-w-xs" />);
++        expect(container.firstChild).toHaveClass("max-w-xs");
++        expect(screen.getByRole("progressbar")).toHaveClass("h-1.5");
++        expect(container.querySelector(".bg-mango")).not.toBeNull();
++    });
++
++    it("applies the requested tone", () => {
++        const { container } = render(<ProgressBar value={20} tone="teal" />);
++        expect(container.querySelector(".bg-teal")).not.toBeNull();
++        expect(container.querySelector(".bg-mango")).toBeNull();
++    });
++});
+diff --git a/frontend/tests/components/ui/PullToRefresh.test.jsx b/frontend/tests/components/ui/PullToRefresh.test.jsx
+new file mode 100644
+index 0000000..0c93989
+--- /dev/null
++++ b/frontend/tests/components/ui/PullToRefresh.test.jsx
+@@ -0,0 +1,216 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
++import { render, screen, fireEvent, act } from "@testing-library/react";
++
++vi.mock("../../../src/components/ui/useT", () => ({ default: () => (k) => k }));
++
++import PullToRefresh from "../../../src/components/ui/PullToRefresh";
++
++// jsdom has no matchMedia. Install one that answers per media query.
++const setMedia = ({ touch = false, reduced = false } = {}) => {
++    window.matchMedia = vi.fn((query) => ({
++        matches: query.includes("pointer: coarse") ? touch : query.includes("prefers-reduced-motion") ? reduced : false,
++        media: query,
++        addEventListener: () => {},
++        removeEventListener: () => {}
++    }));
++};
++
++const touch = (clientX, clientY) => ({ touches: [{ clientX, clientY }] });
++
++// Drag gesture helper: start at y=0, move down by `dy` (pull = dy * 0.5, ready at >=70 i.e. dy >= 140).
++const startPull = (el, dy, { x = 0 } = {}) => {
++    fireEvent.touchStart(el, touch(x, 0));
++    fireEvent.touchMove(el, touch(x, dy));
++};
++
++const deferred = () => {
++    let resolve;
++    const promise = new Promise((r) => { resolve = r; });
++    return { promise, resolve };
++};
++
++describe("PullToRefresh", () => {
++    beforeEach(() => { vi.useFakeTimers(); });
++    afterEach(() => { vi.useRealTimers(); delete window.matchMedia; });
++
++    it("renders children only on non-touch devices (no indicator, no button)", () => {
++        setMedia({ touch: false });
++        render(<PullToRefresh onRefresh={() => {}}><p>content</p></PullToRefresh>);
++        expect(screen.getByText("content")).toBeInTheDocument();
++        expect(screen.queryByRole("button")).toBeNull();
++        expect(screen.queryByRole("status")).toBeNull();
++    });
++
++    it("renders only children when disabled, even on touch", () => {
++        setMedia({ touch: true, reduced: true });
++        render(<PullToRefresh enabled={false} onRefresh={() => {}}><p>content</p></PullToRefresh>);
++        expect(screen.getByText("content")).toBeInTheDocument();
++        expect(screen.queryByRole("button")).toBeNull();
++    });
++
++    it("applies className to the wrapper", () => {
++        setMedia();
++        const { container } = render(<PullToRefresh className="page" onRefresh={() => {}}>x</PullToRefresh>);
++        expect(container.firstChild).toHaveClass("page");
++    });
++
++    describe("touch + reduced motion: manual Refresh button", () => {
++        beforeEach(() => setMedia({ touch: true, reduced: true }));
++
++        it("shows a Refresh button instead of the gesture", () => {
++            render(<PullToRefresh onRefresh={() => {}}><p>content</p></PullToRefresh>);
++            expect(screen.getByRole("button", { name: "ptr.refresh" })).toBeInTheDocument();
++        });
++
++        it("calls onRefresh and shows a busy state until it resolves", async () => {
++            const d = deferred();
++            const onRefresh = vi.fn(() => d.promise);
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            fireEvent.click(screen.getByRole("button", { name: "ptr.refresh" }));
++            expect(onRefresh).toHaveBeenCalledTimes(1);
++            expect(screen.getByRole("button")).toHaveAttribute("aria-busy", "true");
++            await act(async () => { d.resolve(); await d.promise; });
++            expect(screen.getByRole("button")).not.toHaveAttribute("aria-busy");
++        });
++
++        it("clears the busy state even when onRefresh rejects", async () => {
++            const onRefresh = vi.fn(() => Promise.reject(new Error("nope")));
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            // The component's finally block resets the state; the rejection itself
++            // propagates from the click handler, so swallow it here.
++            const onUnhandled = (e) => e.preventDefault?.();
++            process.on("unhandledRejection", onUnhandled);
++            await act(async () => {
++                fireEvent.click(screen.getByRole("button", { name: "ptr.refresh" }));
++                await Promise.resolve();
++                await Promise.resolve();
++            });
++            process.off("unhandledRejection", onUnhandled);
++            expect(screen.getByRole("button")).not.toHaveAttribute("aria-busy");
++        });
++    });
++
++    describe("touch gesture", () => {
++        beforeEach(() => setMedia({ touch: true, reduced: false }));
++
++        // RTL wraps the render in a <div>; the component root is its first child.
++        const container = () => document.body.firstChild.firstChild;
++
++        it("shows 'pull' hint while dragging below the threshold", () => {
++            render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++            act(() => startPull(container(), 60)); // pull = 30
++            expect(screen.getByRole("status")).toHaveTextContent("ptr.pull");
++        });
++
++        it("switches to 'release' once past the threshold", () => {
++            render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++            act(() => startPull(container(), 200)); // pull = 100
++            expect(screen.getByRole("status")).toHaveTextContent("ptr.release");
++        });
++
++        it("does not refresh when released below the threshold", () => {
++            const onRefresh = vi.fn();
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            act(() => startPull(container(), 60));
++            act(() => { fireEvent.touchEnd(container()); });
++            expect(onRefresh).not.toHaveBeenCalled();
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("refreshes on release past the threshold: refreshing -> updated -> idle", async () => {
++            const d = deferred();
++            const onRefresh = vi.fn(() => d.promise);
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            act(() => startPull(container(), 200));
++            await act(async () => { fireEvent.touchEnd(container()); });
++            expect(onRefresh).toHaveBeenCalledTimes(1);
++            expect(screen.getByRole("status")).toHaveTextContent("ptr.refreshing");
++
++            await act(async () => { d.resolve(); await d.promise; });
++            expect(screen.getByRole("status")).toHaveTextContent("ptr.updated");
++
++            await act(async () => { vi.advanceTimersByTime(700); });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("still finishes (and does not throw) when onRefresh rejects", async () => {
++            const onRefresh = vi.fn(() => Promise.reject(new Error("fail")));
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            act(() => startPull(container(), 200));
++            await act(async () => { fireEvent.touchEnd(container()); });
++            expect(screen.getByRole("status")).toHaveTextContent("ptr.updated");
++            await act(async () => { vi.advanceTimersByTime(700); });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("ignores a second pull while a refresh is running", async () => {
++            const d = deferred();
++            const onRefresh = vi.fn(() => d.promise);
++            render(<PullToRefresh onRefresh={onRefresh}>x</PullToRefresh>);
++            act(() => startPull(container(), 200));
++            await act(async () => { fireEvent.touchEnd(container()); });
++            act(() => startPull(container(), 200));
++            await act(async () => { fireEvent.touchEnd(container()); });
++            expect(onRefresh).toHaveBeenCalledTimes(1);
++            await act(async () => { d.resolve(); await d.promise; });
++        });
++
++        it("ignores mostly-horizontal drags", () => {
++            render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++            act(() => {
++                fireEvent.touchStart(container(), touch(0, 0));
++                fireEvent.touchMove(container(), touch(100, 20));
++            });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("ignores upward drags", () => {
++            render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++            act(() => {
++                fireEvent.touchStart(container(), touch(0, 100));
++                fireEvent.touchMove(container(), touch(0, 20));
++            });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("does not arm when the page is already scrolled", () => {
++            Object.defineProperty(window, "scrollY", { value: 50, configurable: true });
++            try {
++                render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++                act(() => startPull(container(), 200));
++                expect(screen.queryByRole("status")).toBeNull();
++            } finally {
++                Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
++            }
++        });
++
++        it("does not arm when the touch starts inside a form field", () => {
++            const onRefresh = vi.fn();
++            render(<PullToRefresh onRefresh={onRefresh}><input aria-label="name" /></PullToRefresh>);
++            const input = screen.getByLabelText("name");
++            act(() => {
++                fireEvent.touchStart(input, touch(0, 0));
++                fireEvent.touchMove(input, touch(0, 200));
++            });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("does not arm when the touch starts inside a data-no-ptr region", () => {
++            render(<PullToRefresh onRefresh={() => {}}><div data-no-ptr data-testid="blocked">map</div></PullToRefresh>);
++            const blocked = screen.getByTestId("blocked");
++            act(() => {
++                fireEvent.touchStart(blocked, touch(0, 0));
++                fireEvent.touchMove(blocked, touch(0, 200));
++            });
++            expect(screen.queryByRole("status")).toBeNull();
++        });
++
++        it("restores the document's overscroll-behavior on unmount", () => {
++            document.documentElement.style.overscrollBehaviorY = "auto";
++            const { unmount } = render(<PullToRefresh onRefresh={() => {}}>x</PullToRefresh>);
++            expect(document.documentElement.style.overscrollBehaviorY).toBe("contain");
++            unmount();
++            expect(document.documentElement.style.overscrollBehaviorY).toBe("auto");
++        });
++    });
++});
+diff --git a/frontend/tests/context/AuthContext.test.jsx b/frontend/tests/context/AuthContext.test.jsx
+index 76ca252..9e22da8 100644
+--- a/frontend/tests/context/AuthContext.test.jsx
++++ b/frontend/tests/context/AuthContext.test.jsx
+@@ -225,6 +225,40 @@ describe("AuthContext", () => {
+         });
+     });
+ 
++    it("register() forwards onUploadProgress for a FormData payload", async () => {
++        api.post.mockResolvedValue({});
++        let hookResult;
++        function Capture() {
++            hookResult = useAuth();
++            return null;
++        }
++        render(<AuthProvider><Capture /></AuthProvider>);
++
++        const formData = new FormData();
++        formData.append("email", "seller@nexora.tz");
++        const onUploadProgress = vi.fn();
++        await hookResult.register(formData, { onUploadProgress });
++
++        expect(api.post).toHaveBeenCalledWith("/auth/register", formData, {
++            headers: { "Content-Type": "multipart/form-data" },
++            onUploadProgress
++        });
++    });
++
++    it("register() ignores onUploadProgress for a plain JSON payload", async () => {
++        api.post.mockResolvedValue({});
++        let hookResult;
++        function Capture() {
++            hookResult = useAuth();
++            return null;
++        }
++        render(<AuthProvider><Capture /></AuthProvider>);
++
++        await hookResult.register({ email: "new@nexora.tz" }, { onUploadProgress: vi.fn() });
++
++        expect(api.post).toHaveBeenCalledWith("/auth/register", { email: "new@nexora.tz" }, undefined);
++    });
++
+     it("register() returns a failure result when registration fails", async () => {
+         api.post.mockRejectedValue({ response: { data: { message: "Email already in use" } } });
+         let hookResult;
+diff --git a/frontend/tests/hooks/useInfiniteScroll.test.jsx b/frontend/tests/hooks/useInfiniteScroll.test.jsx
+new file mode 100644
+index 0000000..313e86e
+--- /dev/null
++++ b/frontend/tests/hooks/useInfiniteScroll.test.jsx
+@@ -0,0 +1,142 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
++import { render, act } from "@testing-library/react";
++
++let saverState = null;
++vi.mock("../../src/context/DataSaverContext", () => ({
++    useDataSaver: () => saverState
++}));
++
++import useInfiniteScroll from "../../src/hooks/useInfiniteScroll";
++
++// The shared test setup stubs IntersectionObserver with a no-op class. Here
++// we need to observe construction and trigger the callback by hand.
++let observers;
++class FakeObserver {
++    constructor(cb, options) {
++        this.cb = cb;
++        this.options = options;
++        this.observed = [];
++        this.disconnected = false;
++        observers.push(this);
++    }
++    observe(el) { this.observed.push(el); }
++    unobserve() {}
++    disconnect() { this.disconnected = true; }
++    trigger(isIntersecting = true) { this.cb([{ isIntersecting }]); }
++}
++
++function Harness({ showSentinel = true, onResult, ...opts }) {
++    const result = useInfiniteScroll(opts);
++    onResult?.(result);
++    return showSentinel ? <div data-testid="sentinel" ref={result.sentinelRef} /> : null;
++}
++
++const live = () => observers.filter((o) => !o.disconnected);
++
++describe("useInfiniteScroll", () => {
++    let original;
++    beforeEach(() => {
++        original = global.IntersectionObserver;
++        observers = [];
++        saverState = null;
++        global.IntersectionObserver = FakeObserver;
++    });
++    afterEach(() => { global.IntersectionObserver = original; });
++
++    it("observes the sentinel and loads more when it intersects", () => {
++        const onLoadMore = vi.fn();
++        const { getByTestId } = render(<Harness hasMore loading={false} onLoadMore={onLoadMore} />);
++        expect(live()).toHaveLength(1);
++        expect(live()[0].observed[0]).toBe(getByTestId("sentinel"));
++        act(() => live()[0].trigger(true));
++        expect(onLoadMore).toHaveBeenCalledTimes(1);
++    });
++
++    it("ignores non-intersecting entries", () => {
++        const onLoadMore = vi.fn();
++        render(<Harness hasMore loading={false} onLoadMore={onLoadMore} />);
++        act(() => live()[0].trigger(false));
++        expect(onLoadMore).not.toHaveBeenCalled();
++    });
++
++    it("uses a 400px rootMargin by default and accepts an override", () => {
++        render(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        expect(live()[0].options.rootMargin).toBe("400px");
++        observers = [];
++        render(<Harness hasMore loading={false} onLoadMore={() => {}} rootMargin="50px" />);
++        expect(live()[0].options.rootMargin).toBe("50px");
++    });
++
++    it.each([
++        ["there is nothing more to load", { hasMore: false }],
++        ["a page is already loading", { loading: true }],
++        ["an error is set", { error: new Error("boom") }],
++        ["it is explicitly disabled", { disabled: true }]
++    ])("does not observe when %s", (_label, override) => {
++        let result;
++        render(<Harness hasMore loading={false} onLoadMore={() => {}} {...override} onResult={(r) => { result = r; }} />);
++        expect(live()).toHaveLength(0);
++        expect(result.autoLoad).toBe(false);
++    });
++
++    it("turns auto-load off in data-saver mode", () => {
++        saverState = { enabled: true };
++        let result;
++        render(<Harness hasMore loading={false} onLoadMore={() => {}} onResult={(r) => { result = r; }} />);
++        expect(live()).toHaveLength(0);
++        expect(result.autoLoad).toBe(false);
++    });
++
++    it("works without a DataSaverProvider (context is null)", () => {
++        saverState = null;
++        let result;
++        render(<Harness hasMore loading={false} onLoadMore={() => {}} onResult={(r) => { result = r; }} />);
++        expect(result.autoLoad).toBe(true);
++    });
++
++    it("calls the latest onLoadMore without re-creating the observer", () => {
++        const first = vi.fn();
++        const second = vi.fn();
++        const { rerender } = render(<Harness hasMore loading={false} onLoadMore={first} />);
++        const before = observers.length;
++        rerender(<Harness hasMore loading={false} onLoadMore={second} />);
++        expect(observers).toHaveLength(before);
++        act(() => live()[0].trigger(true));
++        expect(first).not.toHaveBeenCalled();
++        expect(second).toHaveBeenCalledTimes(1);
++    });
++
++    it("disconnects when loading starts and re-attaches when it ends", () => {
++        const { rerender } = render(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        const first = live()[0];
++        rerender(<Harness hasMore loading onLoadMore={() => {}} />);
++        expect(first.disconnected).toBe(true);
++        expect(live()).toHaveLength(0);
++        rerender(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        expect(live()).toHaveLength(1);
++    });
++
++    it("re-attaches to a new sentinel node after the list is remounted", () => {
++        const { rerender, getByTestId } = render(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        const firstNode = getByTestId("sentinel");
++        rerender(<Harness hasMore loading={false} onLoadMore={() => {}} showSentinel={false} />);
++        expect(live()).toHaveLength(0);
++        rerender(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        const secondNode = getByTestId("sentinel");
++        expect(secondNode).not.toBe(firstNode);
++        expect(live()).toHaveLength(1);
++        expect(live()[0].observed[0]).toBe(secondNode);
++    });
++
++    it("disconnects on unmount", () => {
++        const { unmount } = render(<Harness hasMore loading={false} onLoadMore={() => {}} />);
++        const obs = live()[0];
++        unmount();
++        expect(obs.disconnected).toBe(true);
++    });
++
++    it("does not throw when IntersectionObserver is unavailable", () => {
++        delete global.IntersectionObserver;
++        expect(() => render(<Harness hasMore loading={false} onLoadMore={() => {}} />)).not.toThrow();
++    });
++});
+diff --git a/frontend/tests/pages/RegisterUploadProgress.test.jsx b/frontend/tests/pages/RegisterUploadProgress.test.jsx
+new file mode 100644
+index 0000000..d477e8f
+--- /dev/null
++++ b/frontend/tests/pages/RegisterUploadProgress.test.jsx
+@@ -0,0 +1,90 @@
++import { describe, it, expect, vi, beforeEach } from "vitest";
++import { render, screen, act, waitFor, fireEvent } from "@testing-library/react";
++import userEvent from "@testing-library/user-event";
++import { MemoryRouter } from "react-router-dom";
++
++const mockRegister = vi.fn();
++vi.mock("../../src/context/AuthContext", () => ({
++    useAuth: () => ({ register: mockRegister })
++}));
++vi.mock("../../src/context/LanguageContext", () => ({
++    useLanguage: () => ({ t: (key) => key })
++}));
++vi.mock("../../src/api/client", () => ({
++    default: { get: vi.fn(() => Promise.resolve({ data: { data: { available: true } } })) }
++}));
++
++import Register from "../../src/pages/Register";
++
++const byLabel = (key) => screen.getByLabelText(new RegExp(`^${key}`));
++
++const fillAccountAndContinue = async (user) => {
++    await user.selectOptions(screen.getByLabelText(/auth\.roleLabel/), "seller");
++    await user.type(byLabel("auth.firstNameLabel"), "Amina");
++    await user.type(byLabel("auth.lastNameLabel"), "Mrisho");
++    await user.type(byLabel("username.label"), "amina_m");
++    await screen.findByText("username.available");
++    await user.type(byLabel("auth.emailLabel"), "amina@example.com");
++    await user.type(screen.getByPlaceholderText("712 345 678"), "712345678");
++    await user.type(byLabel("auth.passwordLabel"), "supersecret1");
++    await user.type(byLabel("auth.confirmPasswordLabel"), "supersecret1");
++    await user.click(screen.getByLabelText(/terms_accepted|auth\.termsPrefix/i, { selector: "input" }));
++    await user.click(screen.getByRole("button", { name: "auth.continueToVerification" }));
++};
++
++// jsdom's native `required` validation does not see files attached through
++// user.upload, so submit the form directly (the component's own checks still run).
++const submitDocuments = (container) => {
++    fireEvent.submit(container.querySelector('input[type="file"]').closest("form"));
++};
++
++const attachDocuments = async (user, container) => {
++    const [photo, idDoc] = container.querySelectorAll('input[type="file"]');
++    await user.upload(photo, new File(["p"], "me.jpg", { type: "image/jpeg" }));
++    await user.upload(idDoc, new File(["d"], "id.pdf", { type: "application/pdf" }));
++};
++
++describe("Register - document upload progress", () => {
++    beforeEach(() => { mockRegister.mockReset(); });
++
++    it("passes an onUploadProgress callback and shows a progress bar while documents upload", async () => {
++        let finish;
++        mockRegister.mockImplementation((_payload, options) => new Promise((resolve) => {
++            options.onUploadProgress({ loaded: 40, total: 100 });
++            finish = () => resolve({ success: true });
++        }));
++
++        const user = userEvent.setup();
++        const { container } = render(<MemoryRouter><Register /></MemoryRouter>);
++        await fillAccountAndContinue(user);
++        expect(screen.queryByRole("progressbar")).toBeNull();
++
++        await attachDocuments(user, container);
++        submitDocuments(container);
++
++        const bar = await screen.findByRole("progressbar", { name: "upload.progress" });
++        expect(bar).toHaveAttribute("aria-valuenow", "40");
++        expect(mockRegister.mock.calls[0][0]).toBeInstanceOf(FormData);
++        expect(typeof mockRegister.mock.calls[0][1].onUploadProgress).toBe("function");
++
++        await act(async () => { finish(); });
++        await waitFor(() => expect(screen.queryByRole("progressbar")).toBeNull());
++        expect(screen.getByText("auth.verify.accountCreated")).toBeInTheDocument();
++    });
++
++    it("removes the progress bar and shows the error when the upload fails", async () => {
++        mockRegister.mockImplementation(async (_payload, options) => {
++            options.onUploadProgress({ loaded: 10, total: 100 });
++            return { success: false, message: "Upload failed" };
++        });
++
++        const user = userEvent.setup();
++        const { container } = render(<MemoryRouter><Register /></MemoryRouter>);
++        await fillAccountAndContinue(user);
++        await attachDocuments(user, container);
++        submitDocuments(container);
++
++        expect(await screen.findByText("Upload failed")).toBeInTheDocument();
++        expect(screen.queryByRole("progressbar")).toBeNull();
++    });
++});

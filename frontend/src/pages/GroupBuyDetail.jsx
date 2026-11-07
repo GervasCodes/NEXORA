@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import PageMeta from "../components/PageMeta";
-import PageLoader from "../components/PageLoader";
 import PhoneInput from "../components/PhoneInput";
 import StatusBadge from "../components/ui/StatusBadge";
 import { WhatsAppShareButton, NativeShareButton } from "../components/ShareButtons";
@@ -10,6 +9,9 @@ import { useAuth } from "../context/AuthContext";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatTimeRemaining } from "../utils/format";
+import Spinner from "../components/ui/Spinner";
+import StickyMobileCta from "../components/StickyMobileCta";
+import { SkeletonDetail } from "../components/Skeleton";
 
 // Status -> buyer-facing explanation (Phase 4 remediation) - a status
 // badge alone ("Failed") doesn't tell a buyer who already joined what
@@ -105,7 +107,7 @@ export default function GroupBuyDetail() {
         }
     };
 
-    if (!group && !error) return <PageLoader />;
+    if (!group && !error) return <SkeletonDetail />;
     if (!group) {
         return (
             <div className="max-w-xl mx-auto px-6 py-24 text-center">
@@ -176,11 +178,11 @@ export default function GroupBuyDetail() {
                 signed-out visitor. */}
             {(!user || user.role === "buyer") && group.status === "open" && (
                 <div>
-                    <button
+                    <button aria-busy={busy || undefined}
                         disabled={busy}
                         onClick={join}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {busy ? "Joining…" : "Join - no payment yet"}
                     </button>
                     <p className="text-xs text-ash mt-2">
@@ -199,7 +201,7 @@ export default function GroupBuyDetail() {
             )}
 
             {showClaimForm && (
-                <form onSubmit={claim} className="space-y-3 mt-4 border border-line rounded-lg p-4">
+                <form id="group-claim-form" onSubmit={claim} className="space-y-3 mt-4 border border-line rounded-lg p-4">
                     <p className="text-sm font-medium">Delivery details - payment of {format(group.group_price)} happens on the next step</p>
                     <input required placeholder="Delivery address" value={form.shipping_address} onChange={(e) => setForm({ ...form, shipping_address: e.target.value })} className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring" />
                     <div className="grid grid-cols-2 gap-3">
@@ -223,14 +225,52 @@ export default function GroupBuyDetail() {
                             <Link to="/terms#refund-policy" target="_blank" className="text-teal hover:underline">Refund Policy</Link>.
                         </label>
                     </div>
-                    <button
+                    <button aria-busy={busy || undefined}
                         type="submit"
                         disabled={busy || !form.checkout_terms_accepted}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{busy && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {busy ? "Creating order…" : `Pay ${format(group.group_price)}`}
                     </button>
                 </form>
+            )}
+
+            {/* Phones: Join / Claim stays in reach while reading the page. */}
+            {(!user || user.role === "buyer") && group.status === "open" && !message && (
+                <StickyMobileCta>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs text-ash">{t("group.sticky.priceLabel")}</p>
+                        <p className="price font-medium">{format(group.group_price)}</p>
+                    </div>
+                    <button
+                        type="button"
+                        aria-busy={busy || undefined}
+                        disabled={busy}
+                        onClick={join}
+                        className="inline-flex h-11 items-center justify-center rounded-md bg-ink text-paper px-4 text-sm font-semibold disabled:opacity-60"
+                    >
+                        {busy && <Spinner size="xs" className="inline-block mr-1.5" />}
+                        {busy ? t("group.sticky.joining") : t("group.sticky.join")}
+                    </button>
+                </StickyMobileCta>
+            )}
+            {user?.role === "buyer" && group.status === "successful" && !showClaimForm && (
+                <StickyMobileCta>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs text-ash">{t("group.sticky.priceLabel")}</p>
+                        <p className="price font-medium">{format(group.group_price)}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowClaimForm(true);
+                            setTimeout(() => document.getElementById("group-claim-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+                        }}
+                        className="inline-flex h-11 items-center justify-center rounded-md bg-ink text-paper px-4 text-sm font-semibold"
+                    >
+                        {t("group.sticky.claim")}
+                    </button>
+                </StickyMobileCta>
             )}
         </div>
     );

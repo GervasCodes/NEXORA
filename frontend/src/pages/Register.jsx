@@ -13,6 +13,9 @@ import UsernameField from "../components/UsernameField";
 import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 import GoogleCompleteProfile from "../components/GoogleCompleteProfile";
 import useUploadProgress from "../hooks/useUploadProgress";
+import useFormErrors from "../hooks/useFormErrors";
+import FieldError from "../components/ui/FieldError";
+import { rules, validateFields } from "../utils/formErrors";
 import { isValidUsernameFormat, randomSuggestionDigits, suggestUsername } from "../utils/username";
 
 const initialForm = {
@@ -67,6 +70,10 @@ export default function Register() {
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const docUpload = useUploadProgress();
+    // Phase 6 form-error pattern: per-field messages, focus on the first
+    // invalid control. One instance serves both steps (only one form is
+    // mounted at a time).
+    const { formRef, errors: fieldErrors, showErrors, clearError, clearErrors, hasErrors } = useFormErrors();
     const [usernameStatus, setUsernameStatus] = useState("idle");
     // Phase 7 (round 5) - Google. `googleComplete` = a NEW Google user (buyer)
     // finishing phone/username/terms; it can arrive from the Login page via
@@ -87,9 +94,9 @@ export default function Register() {
         ? suggestUsername(form.first_name, suggestionDigits)
         : "";
 
-    const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-    const updateCheckbox = (field) => (e) => setForm({ ...form, [field]: e.target.checked });
-    const updateFile = (field) => (e) => setFiles({ ...files, [field]: e.target.files?.[0] || null });
+    const update = (field) => (e) => { clearError(field); setForm({ ...form, [field]: e.target.value }); };
+    const updateCheckbox = (field) => (e) => { clearError(field); setForm({ ...form, [field]: e.target.checked }); };
+    const updateFile = (field) => (e) => { clearError(field); setFiles({ ...files, [field]: e.target.files?.[0] || null }); };
 
     // A business-tools-only seller skips the marketplace identity review.
     const toolsOnly = form.role === "seller" && form.seller_mode === "business_tools";
@@ -132,35 +139,32 @@ export default function Register() {
         e.preventDefault();
         setError("");
 
+        const problems = validateFields({
+            first_name: [rules.required()],
+            last_name: [rules.required()],
+            email: [rules.required(), rules.email()],
+            // A Google-prefilled seller/agent has no password of its own.
+            ...(googleLocked ? {} : {
+                password: [rules.required("auth.error.passwordRequired"), rules.minLength(8)],
+                confirm_password: [rules.required("auth.error.confirmPasswordRequired"), rules.matches("password", "auth.passwordMismatchError")]
+            }),
+            terms_accepted: [rules.requiredTrue("auth.termsRequiredError")]
+        }, form, t);
+
         const username = form.username.trim();
         if (!username) {
-            setError(t("username.required"));
-            return;
-        }
-        if (!isValidUsernameFormat(username) || ["invalid", "reserved", "taken"].includes(usernameStatus)) {
-            setError(t("username.pickAvailable"));
-            return;
-        }
-        if (usernameStatus === "checking") {
-            setError(t("username.stillChecking"));
-            return;
+            problems.username = t("username.required");
+        } else if (!isValidUsernameFormat(username) || ["invalid", "reserved", "taken"].includes(usernameStatus)) {
+            problems.username = t("username.pickAvailable");
+        } else if (usernameStatus === "checking") {
+            problems.username = t("username.stillChecking");
         }
 
         const digitsOnly = form.phone.trim().replace(/[^\d]/g, "");
-        if (digitsOnly.length < 7) {
-            setError(t("auth.invalidPhoneError"));
-            return;
-        }
+        if (digitsOnly.length < 7) problems.phone = t("auth.invalidPhoneError");
 
-        if (form.password !== form.confirm_password) {
-            setError(t("auth.passwordMismatchError"));
-            return;
-        }
-
-        if (!form.terms_accepted) {
-            setError(t("auth.termsRequiredError"));
-            return;
-        }
+        showErrors(problems);
+        if (Object.keys(problems).length > 0) return;
 
         if (needsDocuments) {
             setStep(STEP_DOCUMENTS);
@@ -174,26 +178,25 @@ export default function Register() {
         e.preventDefault();
         setError("");
 
+        const problems = {};
         for (const doc of requiredDocs) {
             if (doc.field === "id_document") continue; // checked separately below
             if (!files[doc.field]) {
-                setError(t("auth.verify.uploadRequired", { label: t(doc.labelKey).toLowerCase() }));
-                return;
+                problems[doc.field] = t("auth.verify.uploadRequired", { label: t(doc.labelKey).toLowerCase() });
             }
         }
         if (!files.id_document) {
-            setError(t("auth.verify.idDocumentRequired"));
-            return;
-        }
-        if (files.id_document.type !== "application/pdf") {
-            setError(t("auth.verify.idDocumentPdfOnly"));
-            return;
+            problems.id_document = t("auth.verify.idDocumentRequired");
+        } else if (files.id_document.type !== "application/pdf") {
+            problems.id_document = t("auth.verify.idDocumentPdfOnly");
         }
 
         if (form.role === "delivery_agent" && !form.vehicle_plate_number.trim()) {
-            setError(t("auth.verify.plateNumberRequired"));
-            return;
+            problems.vehicle_plate_number = t("auth.verify.plateNumberRequired");
         }
+
+        showErrors(problems);
+        if (Object.keys(problems).length > 0) return;
 
         submitRegistration();
     };
@@ -280,16 +283,20 @@ export default function Register() {
                         : t("auth.verify.introDeliveryAgent")}
                 </p>
 
-                <form onSubmit={handleDocumentsStepSubmit} className="space-y-4">
+                <form ref={formRef} onSubmit={handleDocumentsStepSubmit} noValidate className="space-y-4">
                     <div>
-                        <label className="block text-sm mb-1">{t("auth.verify.ownerPhotoSeller")}</label>
+                        <label htmlFor="register-owner-photo" className="block text-sm mb-1">{t("auth.verify.ownerPhotoSeller")}</label>
                         <input
+                            id="register-owner-photo"
                             type="file"
                             accept="image/*"
                             required
+                            aria-invalid={fieldErrors.owner_photo ? "true" : undefined}
+                            aria-describedby={fieldErrors.owner_photo ? "register-owner-photo-error" : undefined}
                             onChange={updateFile("owner_photo")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                            className={`w-full border rounded-md px-3 py-2 text-base focus-ring bg-paper ${fieldErrors.owner_photo ? "border-coral" : "border-line"}`}
                         />
+                        <FieldError id="register-owner-photo">{fieldErrors.owner_photo}</FieldError>
                     </div>
 
                     <div>
@@ -304,25 +311,34 @@ export default function Register() {
                             <option value="voter_id">{t("auth.verify.voterId")}</option>
                         </select>
                         <input
+                            id="register-id-document"
                             type="file"
                             accept="application/pdf"
                             required
+                            aria-label={t("auth.verify.idDocument")}
+                            aria-invalid={fieldErrors.id_document ? "true" : undefined}
+                            aria-describedby={fieldErrors.id_document ? "register-id-document-error" : undefined}
                             onChange={updateFile("id_document")}
-                            className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                            className={`w-full border rounded-md px-3 py-2 text-base focus-ring bg-paper ${fieldErrors.id_document ? "border-coral" : "border-line"}`}
                         />
+                        <FieldError id="register-id-document">{fieldErrors.id_document}</FieldError>
                         <p className="text-xs text-ash mt-1">{t("auth.verify.idDocumentHint")}</p>
                     </div>
 
                     {form.role === "delivery_agent" && (
                         <div>
-                            <label className="block text-sm mb-1">{t("auth.verify.driversLicense")}</label>
+                            <label htmlFor="register-drivers-license" className="block text-sm mb-1">{t("auth.verify.driversLicense")}</label>
                             <input
+                                id="register-drivers-license"
                                 type="file"
                                 accept="application/pdf"
                                 required
+                                aria-invalid={fieldErrors.drivers_license ? "true" : undefined}
+                                aria-describedby={fieldErrors.drivers_license ? "register-drivers-license-error" : undefined}
                                 onChange={updateFile("drivers_license")}
-                                className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
+                                className={`w-full border rounded-md px-3 py-2 text-base focus-ring bg-paper ${fieldErrors.drivers_license ? "border-coral" : "border-line"}`}
                             />
+                            <FieldError id="register-drivers-license">{fieldErrors.drivers_license}</FieldError>
                             <p className="text-xs text-ash mt-1">{t("auth.verify.driversLicenseHint")}</p>
                         </div>
                     )}
@@ -345,20 +361,19 @@ export default function Register() {
                                     <option value="truck">{t("auth.verify.truck")}</option>
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-sm mb-1">{t("auth.verify.plateNumberLabel")}</label>
-                                <input
-                                    required
-                                    placeholder="e.g. T123 ABC"
-                                    value={form.vehicle_plate_number}
-                                    onChange={update("vehicle_plate_number")}
-                                    className="w-full border border-line rounded-md px-3 py-2 text-base focus-ring bg-paper"
-                                />
-                            </div>
+                            <Input
+                                label={t("auth.verify.plateNumberLabel")}
+                                required
+                                placeholder="e.g. T123 ABC"
+                                value={form.vehicle_plate_number}
+                                error={fieldErrors.vehicle_plate_number}
+                                onChange={update("vehicle_plate_number")}
+                            />
                         </div>
                     )}
 
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
+                    {hasErrors && <p className="text-coral text-sm">{t("form.error.fixHighlighted")}</p>}
 
                     {submitting && docUpload.progress !== null && (
                         <ProgressBar value={docUpload.progress} label={t("upload.progress")} showValue />
@@ -367,7 +382,7 @@ export default function Register() {
                     <div className="flex gap-3 pt-2">
                         <Button
                             type="button"
-                            onClick={() => setStep(STEP_ACCOUNT)}
+                            onClick={() => { clearErrors(); setStep(STEP_ACCOUNT); }}
                             variant="secondary"
                             className="flex-1 hover:bg-line/50"
                         >
@@ -392,13 +407,14 @@ export default function Register() {
             <h1 className="font-display text-2xl mb-1">{t("auth.registerTitle")}</h1>
             <p className="text-ash text-sm mb-8">{t("auth.registerSubtitle")}</p>
 
-            <form onSubmit={handleAccountStepSubmit} className="space-y-4">
+            <form ref={formRef} onSubmit={handleAccountStepSubmit} noValidate className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                     <Input
                         label={t("auth.firstNameLabel")}
                         required
                         autoComplete="given-name"
                         value={form.first_name}
+                        error={fieldErrors.first_name}
                         onChange={update("first_name")}
                     />
                     <Input
@@ -406,6 +422,7 @@ export default function Register() {
                         required
                         autoComplete="family-name"
                         value={form.last_name}
+                        error={fieldErrors.last_name}
                         onChange={update("last_name")}
                     />
                 </div>
@@ -413,7 +430,8 @@ export default function Register() {
                 <UsernameField
                     id="registerUsername"
                     value={form.username}
-                    onChange={(username) => setForm((prev) => ({ ...prev, username }))}
+                    onChange={(username) => { clearError("username"); setForm((prev) => ({ ...prev, username })); }}
+                    error={fieldErrors.username}
                     onStatusChange={setUsernameStatus}
                     suggestion={usernameSuggestion}
                 />
@@ -426,12 +444,13 @@ export default function Register() {
                     inputMode="email"
                     readOnly={googleLocked}
                     value={form.email}
+                    error={fieldErrors.email}
                     onChange={update("email")}
                     hint={googleLocked ? t("auth.google.prefilledNotice") : undefined}
                 />
 
                 <div>
-                    <label className="block text-sm font-medium text-ink mb-1.5">{t("auth.phoneLabel")}</label>
+                    <label htmlFor="register-phone" className="block text-sm font-medium text-ink mb-1.5">{t("auth.phoneLabel")}</label>
                     <div className="flex gap-2">
                         <select
                             value={countryDial}
@@ -446,8 +465,10 @@ export default function Register() {
                             ))}
                         </select>
                         <Input
+                            id="register-phone"
                             type="tel"
                             required
+                            error={fieldErrors.phone}
                             inputMode="numeric"
                             autoComplete="tel-national"
                             placeholder="712 345 678"
@@ -473,6 +494,7 @@ export default function Register() {
                         minLength={8}
                         autoComplete="new-password"
                         value={form.password}
+                        error={fieldErrors.password}
                         onChange={update("password")}
                         hint={t("auth.passwordHint")}
                         showPasswordLabel={t("auth.showPassword")}
@@ -496,7 +518,7 @@ export default function Register() {
                     autoComplete="new-password"
                     value={form.confirm_password}
                     onChange={update("confirm_password")}
-                    error={passwordsMismatch ? t("auth.passwordMismatchError") : undefined}
+                    error={fieldErrors.confirm_password || (passwordsMismatch ? t("auth.passwordMismatchError") : undefined)}
                     showPasswordLabel={t("auth.showPassword")}
                     hidePasswordLabel={t("auth.hidePassword")}
                 />
@@ -536,6 +558,8 @@ export default function Register() {
                         id="terms_accepted"
                         checked={form.terms_accepted}
                         onChange={updateCheckbox("terms_accepted")}
+                        aria-invalid={fieldErrors.terms_accepted ? "true" : undefined}
+                        aria-describedby={fieldErrors.terms_accepted ? "terms_accepted-error" : undefined}
                         className="mt-1 focus-ring"
                     />
                     <label htmlFor="terms_accepted" className="text-xs text-ash">
@@ -549,10 +573,12 @@ export default function Register() {
                         </Link>.
                     </label>
                 </div>
+                <FieldError id="terms_accepted">{fieldErrors.terms_accepted}</FieldError>
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
+                {hasErrors && <p className="text-coral text-sm">{t("form.error.fixHighlighted")}</p>}
 
-                <Button loading={submitting} type="submit" disabled={submitting || passwordsMismatch} fullWidth className="gap-2">
+                <Button loading={submitting} type="submit" disabled={submitting} fullWidth className="gap-2">
                     {submitting ? t("auth.creatingAccount") : needsDocuments ? t("auth.continueToVerification") : t("auth.createAccountButton")}
                 </Button>
             </form>

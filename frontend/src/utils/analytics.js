@@ -19,7 +19,10 @@ export const ANALYTICS_CONSENT_EVENT = "nexora:analytics-consent";
 const PRIVATE_PREFIXES = [
     "/account", "/cart", "/checkout", "/orders", "/bookings", "/disputes", "/returns",
     "/saved", "/loyalty", "/affiliate", "/messages", "/seller", "/delivery", "/admin",
-    "/login", "/register", "/forgot-password", "/track"
+    "/login", "/register", "/forgot-password", "/track",
+    // Order confirmation page: its path carries an order id, so page views
+    // are never sent. Its one `purchase` event goes through trackPurchase.
+    "/order-confirmed"
 ];
 
 export const isPrivatePath = (pathname = "/") =>
@@ -95,4 +98,58 @@ export const trackPageView = (pathname, title) => {
 export const trackEvent = (name, params = {}) => {
     if (!canSend() || isPrivatePath(window.location.pathname)) return;
     window.gtag("event", name, params);
+};
+
+// ---- purchase event -------------------------------------------------------
+//
+// One GA4 `purchase` event per order, from the order-confirmation page only.
+// Same gating as everything else here: needs a configured measurement id AND
+// the visitor's "Accept". Deliberately minimal, to stay within the cookie
+// policy ("never ... order details"): no items, names, address or phone, and
+// the order id is sent only as a one-way hash (GA needs some transaction_id
+// to avoid counting the same purchase twice), never the order number.
+// A purchase is reported once per browser: a reload or revisit does nothing.
+
+const PURCHASE_SENT_PREFIX = "nexora_purchase_sent_";
+
+const fallbackHash = (text) => {
+    let h = 5381;
+    for (let i = 0; i < text.length; i += 1) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+    return h.toString(16).padStart(8, "0");
+};
+
+export const hashTransactionId = async (orderId) => {
+    const text = `nexora-order:${orderId}`;
+    try {
+        if (typeof crypto !== "undefined" && crypto.subtle) {
+            const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+            return Array.from(new Uint8Array(digest)).slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
+    } catch { /* fall through to the simple hash */ }
+    return fallbackHash(text);
+};
+
+const wasPurchaseSent = (orderId) => {
+    try { return localStorage.getItem(`${PURCHASE_SENT_PREFIX}${orderId}`) === "1"; } catch { return false; }
+};
+const markPurchaseSent = (orderId) => {
+    try { localStorage.setItem(`${PURCHASE_SENT_PREFIX}${orderId}`, "1"); } catch { /* storage unavailable */ }
+};
+
+// Resolves true when the event was sent, false when it was skipped
+// (no GA id, no consent, GA not loaded, already sent, or bad input).
+export const trackPurchase = async ({ orderId, value, currency = "TZS", paymentType } = {}) => {
+    const amount = Number(value);
+    if (!orderId || !Number.isFinite(amount) || amount <= 0) return false;
+    if (!canSend() || wasPurchaseSent(orderId)) return false;
+    // Mark first so two quick renders cannot both send it.
+    markPurchaseSent(orderId);
+    const transactionId = await hashTransactionId(orderId);
+    window.gtag("event", "purchase", {
+        transaction_id: transactionId,
+        value: amount,
+        currency,
+        ...(paymentType ? { payment_type: String(paymentType) } : {})
+    });
+    return true;
 };

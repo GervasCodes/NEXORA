@@ -178,3 +178,53 @@ describe("Login page", () => {
         expect(screen.getByText("Welcome back")).toBeInTheDocument();
     });
 });
+
+// Phase 6 form-error pattern: per-field messages, aria-invalid /
+// aria-describedby, focus on the first invalid field. (The mocked t() above
+// returns the key itself for anything it does not list, so messages are
+// asserted by key.)
+describe("Login page - field errors", () => {
+    it("shows a message under each empty field, marks them invalid and focuses the first", async () => {
+        const user = userEvent.setup();
+        renderLogin();
+
+        await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+        expect(mockLogin).not.toHaveBeenCalled();
+
+        const email = getEmailField();
+        const password = getPasswordField();
+        expect(email).toHaveAttribute("aria-invalid", "true");
+        expect(email).toHaveAttribute("aria-describedby", screen.getByText("form.error.required").id);
+        expect(password).toHaveAttribute("aria-invalid", "true");
+        expect(password).toHaveAttribute("aria-describedby", screen.getByText("auth.error.passwordRequired").id);
+        await waitFor(() => expect(email).toHaveFocus());
+    });
+
+    it("rejects a malformed email address", async () => {
+        const user = userEvent.setup();
+        renderLogin();
+
+        await user.type(getEmailField(), "not-an-email");
+        await user.type(getPasswordField(), "secret123");
+        await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+        expect(mockLogin).not.toHaveBeenCalled();
+        expect(screen.getByText("form.error.emailInvalid")).toBeInTheDocument();
+        expect(getPasswordField()).not.toHaveAttribute("aria-invalid");
+    });
+
+    it("clears a field's message as soon as that field is edited", async () => {
+        const user = userEvent.setup();
+        renderLogin();
+
+        await user.click(screen.getByRole("button", { name: "Sign in" }));
+        expect(screen.getByText("auth.error.passwordRequired")).toBeInTheDocument();
+
+        await user.type(getPasswordField(), "x");
+
+        expect(screen.queryByText("auth.error.passwordRequired")).not.toBeInTheDocument();
+        expect(getPasswordField()).not.toHaveAttribute("aria-invalid");
+        expect(screen.getByText("form.error.required")).toBeInTheDocument();
+    });
+});

@@ -4,22 +4,24 @@ const aiService = require("./ai.service");
 // Chat/search/recommendations personalize if the caller happens to be
 // signed in but don't require it - same reasoning and same permissive-
 // decode shape as recommendation.controller.js#getOptionalBuyerId.
-const getOptionalUserId = (req) => {
+const getOptionalAuth = (req) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return { userId: null, role: null };
 
     try {
         const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
-        return decoded.id || null;
+        return { userId: decoded.id || null, role: decoded.role || null };
     } catch {
-        return null;
+        return { userId: null, role: null };
     }
 };
 
+const getOptionalUserId = (req) => getOptionalAuth(req).userId;
+
 exports.chat = async (req, res) => {
     try {
-        const userId = getOptionalUserId(req);
-        const result = await aiService.chat({ userId, message: req.body.message, history: req.body.history, priorReply: req.body.priorReply });
+        const { userId, role } = getOptionalAuth(req);
+        const result = await aiService.chat({ userId, role, language: req.body.language, message: req.body.message, history: req.body.history, priorReply: req.body.priorReply });
         res.json({ success: true, data: result });
     } catch (error) {
         // A genuinely broken request path shouldn't happen here (the

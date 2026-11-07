@@ -4,11 +4,12 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SuspendedScreen from "./components/SuspendedScreen";
-import PageLoader from "./components/PageLoader";
+import RouteFallback from "./components/RouteFallback";
 import PageTransition from "./components/PageTransition";
 import RouteProgressBar from "./components/RouteProgressBar";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
+import SocketStatusBar from "./components/SocketStatusBar";
 import InstallPrompt from "./components/InstallPrompt";
 import CookieConsentBanner from "./components/CookieConsentBanner";
 import AnalyticsTracker from "./components/AnalyticsTracker";
@@ -55,6 +56,7 @@ const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
 const OrderDetail = lazy(() => import("./pages/OrderDetail"));
+const OrderConfirmed = lazy(() => import("./pages/OrderConfirmed"));
 const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const BookingDetail = lazy(() => import("./pages/BookingDetail"));
@@ -294,6 +296,7 @@ export default function App() {
         <div className="min-h-screen flex flex-col">
             {cookieAcknowledged && <UpdateAvailableBanner onVisibilityChange={setUpdateVisible} />}
             <NetworkStatusNotice />
+            <SocketStatusBar />
             {cookieAcknowledged && !updateVisible && <InstallPrompt guestLanding={isGuestLandingRoute} />}
             <AnalyticsTracker />
             {!isAdminRoute && <CookieConsentBanner onAcknowledged={() => setCookieAcknowledged(true)} />}
@@ -310,7 +313,7 @@ export default function App() {
             <RouteProgressBar />
 
             <main id="main-content" tabIndex={-1} className="flex-1">
-                <Suspense fallback={<PageLoader />}>
+                <Suspense fallback={<RouteFallback />}>
                     <PageTransition>
                         <Routes>
                         <Route path="/" element={<Home />} />
@@ -329,6 +332,7 @@ export default function App() {
                         <Route path="/cart" element={<RequireBuyer><Cart /></RequireBuyer>} />
                         <Route path="/checkout" element={<RequireBuyer><Checkout /></RequireBuyer>} />
                         <Route path="/orders" element={<RequireBuyer><Orders /></RequireBuyer>} />
+                        <Route path="/order-confirmed/:id" element={<RequireBuyer><OrderConfirmed /></RequireBuyer>} />
                         <Route path="/orders/:id" element={<RequireBuyer><OrderDetail /></RequireBuyer>} />
                         <Route path="/orders/:id/tracking" element={<RequireBuyer><OrderTrackingPage /></RequireBuyer>} />
                         <Route path="/bookings" element={<RequireBuyer><Bookings /></RequireBuyer>} />

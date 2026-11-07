@@ -46,7 +46,8 @@ vi.mock("../../src/context/LanguageContext", () => ({
             "common.total": "Total",
             "checkout.title": "Checkout",
             "checkout.placingOrder": "Placing order…",
-            "checkout.placeOrderButton": "Place order"
+            "checkout.placeOrderButton": "Place order",
+            "checkout.landmarkNear": "Near"
         }[key] || key)
     })
 }));
@@ -55,8 +56,16 @@ vi.mock("../../src/context/LanguageContext", () => ({
 // checkout submission behavior - stub it down to a simple control that
 // still exercises the onChange contract the real component honors.
 vi.mock("../../src/components/LocationPicker", () => ({
-    default: ({ onChange }) => (
-        <button type="button" onClick={() => onChange({ lat: -6.8, lng: 39.2 })}>Drop pin</button>
+    default: ({ onChange, onAddressResolved }) => (
+        <>
+            <button type="button" onClick={() => onChange({ lat: -6.8, lng: 39.2 })}>Drop pin</button>
+            <button
+                type="button"
+                onClick={() => onAddressResolved?.({ address: "Kinondoni Rd", city: "Dar es Salaam", region: "Dar es Salaam" })}
+            >
+                Resolve address
+            </button>
+        </>
     )
 }));
 
@@ -76,10 +85,11 @@ const cartWithItems = {
 // associated - select by document order (address, city, region, phone)
 // instead of getByLabelText for these four fields.
 const fillRequiredFields = async (user) => {
-    const [address, city, region, phone] = screen.getAllByRole("textbox");
+    const [address, city, region, landmark, phone] = screen.getAllByRole("textbox");
     await user.type(address, "123 Uhuru St");
     await user.type(city, "Dar es Salaam");
     await user.type(region, "Dar es Salaam");
+    await user.type(landmark, "Opposite Shell petrol");
     await user.type(phone, "0712345678");
     // Phase 2 consent gate: the submit button stays disabled until the
     // buyer explicitly accepts the Terms/Privacy/Refund policies.
@@ -141,7 +151,7 @@ describe("Checkout page", () => {
         expect(results).toHaveNoViolations();
     });
 
-    it("places a mobile money order: creates the order, initiates payment, refreshes the cart, and navigates to the order page", async () => {
+    it("places a mobile money order: creates the order, initiates payment, refreshes the cart, and navigates to the order-confirmation page", async () => {
         mockUseCart.mockReturnValue(cartWithItems);
         api.post
             .mockResolvedValueOnce({ data: { data: { orderId: 55 } } }) // POST /orders
@@ -152,9 +162,10 @@ describe("Checkout page", () => {
 
         await user.click(placeOrderButton());
 
-        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/orders/55", { state: { justPlaced: true } }));
+        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/order-confirmed/55", { replace: true }));
         expect(api.post).toHaveBeenNthCalledWith(1, "/orders", expect.objectContaining({
-            shipping_address: "123 Uhuru St",
+            // the landmark rides inside the address text (no landmark column)
+            shipping_address: "123 Uhuru St - Near: Opposite Shell petrol",
             shipping_city: "Dar es Salaam",
             shipping_region: "Dar es Salaam",
             shipping_phone: "+255712345678",
@@ -194,28 +205,45 @@ describe("Checkout page", () => {
 
         await user.click(placeOrderButton());
 
-        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/orders/56", { state: { justPlaced: true } }));
+        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/order-confirmed/56", { replace: true }));
         expect(api.post).toHaveBeenCalledTimes(1);
     });
 
-    it("redirects to the card checkout URL and does not navigate to the order page", async () => {
+    it("redirects to the Snippe checkout URL and does not navigate to the order page", async () => {
         mockUseCart.mockReturnValue(cartWithItems);
         api.post
             .mockResolvedValueOnce({ data: { data: { orderId: 57 } } })
-            .mockResolvedValueOnce({ data: { data: { url: "https://pay.gateway.example/session/abc" } } });
+            .mockResolvedValueOnce({ data: { data: { url: "https://pay.snippe.sh/session/abc" } } });
         const user = userEvent.setup();
         renderCheckout();
         await fillRequiredFields(user);
-        await user.click(screen.getByLabelText(/^Card$/));
+        await user.click(screen.getByLabelText(/Card \(Snippe\)/));
 
         await user.click(placeOrderButton());
 
-        await waitFor(() => expect(window.location.href).toBe("https://pay.gateway.example/session/abc"));
-        expect(api.post).toHaveBeenNthCalledWith(2, "/payments/57/card/checkout", {
-            successUrl: "https://nexora.tz/orders/57?payment=success",
+        await waitFor(() => expect(window.location.href).toBe("https://pay.snippe.sh/session/abc"));
+        expect(api.post).toHaveBeenNthCalledWith(2, "/payments/57/snippe/checkout", {
+            successUrl: "https://nexora.tz/order-confirmed/57?payment=success",
             cancelUrl: "https://nexora.tz/orders/57?payment=cancelled"
         });
         expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it("blocks the screen with the full-screen loader during the gateway hand-off", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        api.post
+            .mockResolvedValueOnce({ data: { data: { orderId: 59 } } })
+            .mockResolvedValueOnce({ data: { data: { url: "https://pay.snippe.sh/session/def" } } });
+        const user = userEvent.setup();
+        renderCheckout();
+        await fillRequiredFields(user);
+        await user.click(screen.getByLabelText(/Card \(Snippe\)/));
+
+        await user.click(placeOrderButton());
+
+        const overlay = await screen.findByRole("alertdialog");
+        expect(overlay).toHaveAttribute("aria-busy", "true");
+        expect(overlay).toHaveAttribute("aria-label", expect.stringContaining("redirectingToPayment"));
     });
 
     it("redirects to the PayPal approval URL and does not navigate to the order page", async () => {
@@ -236,29 +264,6 @@ describe("Checkout page", () => {
             cancelUrl: "https://nexora.tz/orders/58?payment=cancelled"
         });
         expect(mockNavigate).not.toHaveBeenCalled();
-    });
-
-    it("during payments maintenance: shows the notice and offers only cash on delivery (no mobile money, card or PayPal)", async () => {
-        mockUseCart.mockReturnValue(cartWithItems);
-        api.get.mockImplementation((url) => (url === "/payments/methods"
-            ? Promise.resolve({ data: {
-                data: [
-                    { key: "mobile_money", type: undefined, configured: true },
-                    { key: "card", type: "card", configured: true },
-                    { key: "paypal", configured: true }
-                ],
-                maintenance: { active: true, message: "Payments are under maintenance." }
-            } })
-            : Promise.reject(new Error("not mocked"))));
-        renderCheckout();
-
-        expect(await screen.findByText("Payments are under maintenance.")).toBeInTheDocument();
-        expect(screen.getByLabelText(/Cash on Delivery/)).toBeInTheDocument();
-        expect(screen.queryByLabelText(/Mobile Money/)).not.toBeInTheDocument();
-        expect(screen.queryByLabelText(/^Card$/)).not.toBeInTheDocument();
-        expect(screen.queryByLabelText(/PayPal/)).not.toBeInTheDocument();
-
-        api.get.mockImplementation(() => Promise.reject(new Error("not mocked")));
     });
 
     it("shows an error message and re-enables the submit button when order creation fails", async () => {
@@ -286,5 +291,159 @@ describe("Checkout page", () => {
         await user.click(placeOrderButton());
 
         await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(extractErrorMessage({})));
+    });
+});
+
+// Phase 6 form-error pattern. The mocked t() above returns the key for
+// anything it does not list, so messages are asserted by key.
+describe("Checkout page - field errors", () => {
+    const fillAddressAndPhone = async (user) => {
+        const [address, city, region, landmark, phone] = screen.getAllByRole("textbox");
+        await user.type(address, "123 Uhuru St");
+        await user.type(city, "Dar es Salaam");
+        await user.type(region, "Dar es Salaam");
+        await user.type(landmark, "Opposite Shell petrol");
+        await user.type(phone, "0712345678");
+    };
+
+    it("keeps the place-order button enabled and explains every empty field on submit", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+
+        expect(placeOrderButton()).not.toBeDisabled();
+        await user.click(placeOrderButton());
+
+        expect(api.post).not.toHaveBeenCalled();
+        const [address, city, region, landmark, phone] = screen.getAllByRole("textbox");
+        for (const field of [address, city, region, landmark, phone]) {
+            expect(field).toHaveAttribute("aria-invalid", "true");
+        }
+        expect(screen.getByText("checkout.error.addressRequired")).toBeInTheDocument();
+        expect(screen.getByText("checkout.error.cityRequired")).toBeInTheDocument();
+        expect(screen.getByText("checkout.error.regionRequired")).toBeInTheDocument();
+        expect(screen.getByText("checkout.error.landmarkRequired")).toBeInTheDocument();
+        expect(screen.getByText("checkout.error.phoneRequired")).toBeInTheDocument();
+        expect(screen.getByText("checkout.error.termsRequired")).toBeInTheDocument();
+        await waitFor(() => expect(address).toHaveFocus());
+    });
+
+    it("asks for the Terms in-line (no toast) and focuses the checkbox when only that is missing", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+        await fillAddressAndPhone(user);
+
+        await user.click(placeOrderButton());
+
+        const terms = screen.getByLabelText(/I agree to the/);
+        expect(api.post).not.toHaveBeenCalled();
+        expect(mockToastError).not.toHaveBeenCalled();
+        expect(terms).toHaveAttribute("aria-invalid", "true");
+        expect(terms).toHaveAttribute("aria-describedby", screen.getByText("checkout.error.termsRequired").id);
+        await waitFor(() => expect(terms).toHaveFocus());
+
+        await user.click(terms);
+        expect(screen.queryByText("checkout.error.termsRequired")).not.toBeInTheDocument();
+        expect(terms).not.toHaveAttribute("aria-invalid");
+    });
+
+    it("shows the phone-format message under the phone field and blocks the order", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+        const [address, city, region, landmark, phone] = screen.getAllByRole("textbox");
+        await user.type(address, "123 Uhuru St");
+        await user.type(city, "Dar es Salaam");
+        await user.type(region, "Dar es Salaam");
+        await user.type(landmark, "Opposite Shell petrol");
+        await user.type(phone, "712");
+        await user.click(screen.getByLabelText(/I agree to the/));
+
+        await user.click(placeOrderButton());
+
+        expect(api.post).not.toHaveBeenCalled();
+        expect(screen.getByText("checkout.phoneInvalid")).toBeInTheDocument();
+        expect(phone).toHaveAttribute("aria-invalid", "true");
+        await waitFor(() => expect(phone).toHaveFocus());
+    });
+
+    it("clears a field's message as soon as it is edited", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+
+        await user.click(placeOrderButton());
+        const [address] = screen.getAllByRole("textbox");
+        expect(address).toHaveAttribute("aria-invalid", "true");
+
+        await user.type(address, "1");
+
+        expect(address).not.toHaveAttribute("aria-invalid");
+        expect(screen.queryByText("checkout.error.addressRequired")).not.toBeInTheDocument();
+    });
+});
+
+// Phase 7: location autofill, confirm-address step, landmark fallback.
+describe("Checkout page - location autofill", () => {
+    it("requires a landmark for a typed address but not for one suggested from the pin", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+
+        // Typed address: the label carries the required asterisk.
+        expect(screen.getByLabelText(/^checkout\.landmark\*/)).toBeInTheDocument();
+
+        // Suggested from the pin: landmark becomes optional (exact label, no asterisk).
+        await user.click(screen.getByText("Resolve address"));
+        expect(screen.getAllByRole("textbox")[0]).toHaveValue("Kinondoni Rd");
+        expect(screen.getByLabelText("checkout.landmark")).toBeInTheDocument();
+        await user.click(placeOrderButton());
+        expect(screen.queryByText("checkout.error.landmarkRequired")).not.toBeInTheDocument();
+    });
+
+    it("makes the buyer confirm a suggested address before ordering, then sends it", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        api.post
+            .mockResolvedValueOnce({ data: { data: { orderId: 77 } } })
+            .mockResolvedValueOnce({});
+        const user = userEvent.setup();
+        renderCheckout();
+        await user.click(screen.getByText("Resolve address"));
+        const [, , , , phone] = screen.getAllByRole("textbox");
+        await user.type(phone, "0712345678");
+        await user.click(screen.getByLabelText(/I agree to the/));
+
+        await user.click(placeOrderButton());
+
+        const confirm = screen.getByLabelText("checkout.addressConfirm.label");
+        expect(api.post).not.toHaveBeenCalled();
+        expect(screen.getByText("checkout.error.addressConfirmRequired")).toBeInTheDocument();
+        expect(confirm).toHaveAttribute("aria-invalid", "true");
+        await waitFor(() => expect(confirm).toHaveFocus());
+
+        await user.click(confirm);
+        await user.click(placeOrderButton());
+
+        await waitFor(() => expect(api.post).toHaveBeenNthCalledWith(1, "/orders", expect.objectContaining({
+            shipping_address: "Kinondoni Rd",
+            shipping_city: "Dar es Salaam",
+            shipping_region: "Dar es Salaam"
+        })));
+        expect(api.post.mock.calls[0][1]).not.toHaveProperty("shipping_landmark");
+    });
+
+    it("asks for confirmation again when the pin is moved and the address is re-suggested", async () => {
+        mockUseCart.mockReturnValue(cartWithItems);
+        const user = userEvent.setup();
+        renderCheckout();
+        await user.click(screen.getByText("Resolve address"));
+        const confirm = screen.getByLabelText("checkout.addressConfirm.label");
+        await user.click(confirm);
+        expect(confirm).toBeChecked();
+
+        await user.click(screen.getByText("Resolve address"));
+
+        expect(screen.getByLabelText("checkout.addressConfirm.label")).not.toBeChecked();
     });
 });

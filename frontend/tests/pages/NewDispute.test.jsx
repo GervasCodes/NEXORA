@@ -126,3 +126,39 @@ describe("NewDispute page", () => {
         expect(results).toHaveNoViolations();
     });
 });
+
+// Phase 6 form-error pattern.
+describe("NewDispute page - field errors", () => {
+    it("explains each missing required field, keeps the order untouched and focuses the first", async () => {
+        api.get.mockResolvedValueOnce({ data: { data: order } });
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText("Order ORD-2026-00055")).toBeInTheDocument());
+
+        await user.click(screen.getByRole("button", { name: "Submit dispute" }));
+
+        expect(api.post).not.toHaveBeenCalled();
+        const type = screen.getByLabelText("What's the issue?");
+        expect(type).toHaveAttribute("aria-invalid", "true");
+        expect(type).toHaveAttribute("aria-describedby", screen.getByText("Choose what the issue is.").id);
+        expect(screen.getByLabelText("Subject")).toHaveAttribute("aria-invalid", "true");
+        expect(screen.getByLabelText("Details")).toHaveAttribute("aria-invalid", "true");
+        expect(screen.getByText("Give your dispute a short subject.")).toBeInTheDocument();
+        expect(screen.getByText("Describe what went wrong so we can help.")).toBeInTheDocument();
+        await waitFor(() => expect(type).toHaveFocus());
+    });
+
+    it("clears a field's message once it is filled in", async () => {
+        api.get.mockResolvedValueOnce({ data: { data: order } });
+        const user = userEvent.setup();
+        renderPage();
+        await waitFor(() => expect(screen.getByText("Order ORD-2026-00055")).toBeInTheDocument());
+
+        await user.click(screen.getByRole("button", { name: "Submit dispute" }));
+        await user.selectOptions(screen.getByLabelText("What's the issue?"), "other");
+
+        expect(screen.queryByText("Choose what the issue is.")).not.toBeInTheDocument();
+        expect(screen.getByLabelText("What's the issue?")).not.toHaveAttribute("aria-invalid");
+        expect(screen.getByLabelText("Subject")).toHaveAttribute("aria-invalid", "true");
+    });
+});

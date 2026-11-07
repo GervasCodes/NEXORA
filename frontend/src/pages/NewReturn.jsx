@@ -5,6 +5,11 @@ import PageMeta from "../components/PageMeta";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import PageLoader from "../components/PageLoader";
+import Spinner from "../components/ui/Spinner";
+import Input from "../components/ui/Input";
+import Select from "../components/ui/Select";
+import useFormErrors from "../hooks/useFormErrors";
+import { rules, validateFields } from "../utils/formErrors";
 
 const REASON_KEYS = [
     "damaged_item",
@@ -14,6 +19,12 @@ const REASON_KEYS = [
     "changed_mind",
     "other"
 ];
+
+// Per-field rules (Phase 6 form-error pattern). The item picker and the
+// details box are optional.
+const RETURN_RULES = {
+    reason: [rules.requiredChoice("return.error.reasonRequired")]
+};
 
 export default function NewReturn() {
     const { format } = useCurrency();
@@ -33,6 +44,7 @@ export default function NewReturn() {
     });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const { formRef, errors: fieldErrors, showErrors, clearError, hasErrors } = useFormErrors();
 
     useEffect(() => {
         if (!orderId) {
@@ -46,10 +58,20 @@ export default function NewReturn() {
             .finally(() => setLoading(false));
     }, [orderId, t]);
 
+    const setField = (field) => (e) => {
+        clearError(field);
+        setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    };
+
     const submit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError("");
+
+        const problems = validateFields(RETURN_RULES, form, t);
+        showErrors(problems);
+        if (Object.keys(problems).length > 0) return;
+
+        setSubmitting(true);
         try {
             const { data } = await api.post("/returns", {
                 order_id: Number(orderId),
@@ -86,63 +108,57 @@ export default function NewReturn() {
                 {t("return.new.intro")}
             </p>
 
-            <form onSubmit={submit} className="space-y-4">
+            <form ref={formRef} onSubmit={submit} noValidate className="space-y-4">
                 {order.items?.length > 0 && (
-                    <div>
-                        <label htmlFor="return-item" className="block text-sm mb-1">{t("return.new.itemLabel")}</label>
-                        <select
-                            id="return-item"
-                            value={form.order_item_id}
-                            onChange={(e) => setForm({ ...form, order_item_id: e.target.value })}
-                            className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
-                        >
-                            <option value="">{t("return.new.wholeOrderOption")}</option>
-                            {order.items.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name} × {item.quantity} — {format(item.subtotal)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    <Select
+                        id="return-item"
+                        label={t("return.new.itemLabel")}
+                        value={form.order_item_id}
+                        onChange={setField("order_item_id")}
+                    >
+                        <option value="">{t("return.new.wholeOrderOption")}</option>
+                        {order.items.map((item) => (
+                            <option key={item.id} value={item.id}>
+                                {item.name} × {item.quantity} — {format(item.subtotal)}
+                            </option>
+                        ))}
+                    </Select>
                 )}
 
-                <div>
-                    <label htmlFor="return-reason" className="block text-sm mb-1">{t("return.new.reasonLabel")}</label>
-                    <select
-                        id="return-reason"
-                        required
-                        value={form.reason}
-                        onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring bg-paper"
-                    >
-                        <option value="" disabled>{t("return.new.reasonLabel")}</option>
-                        {REASON_KEYS.map((key) => (
-                            <option key={key} value={key}>{t(`return.reason.${key}`)}</option>
-                        ))}
-                    </select>
-                </div>
+                <Select
+                    id="return-reason"
+                    label={t("return.new.reasonLabel")}
+                    aria-required="true"
+                    value={form.reason}
+                    error={fieldErrors.reason}
+                    onChange={setField("reason")}
+                >
+                    <option value="" disabled>{t("return.new.reasonLabel")}</option>
+                    {REASON_KEYS.map((key) => (
+                        <option key={key} value={key}>{t(`return.reason.${key}`)}</option>
+                    ))}
+                </Select>
 
-                <div>
-                    <label htmlFor="return-description" className="block text-sm mb-1">{t("return.new.detailsLabel")}</label>
-                    <textarea
-                        id="return-description"
-                        rows={5}
-                        maxLength={2000}
-                        placeholder={t("return.new.detailsPlaceholder")}
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="w-full border border-line rounded-md px-3 py-2 text-sm focus-ring resize-none"
-                    />
-                </div>
+                <Input
+                    as="textarea"
+                    id="return-description"
+                    label={t("return.new.detailsLabel")}
+                    rows={5}
+                    maxLength={2000}
+                    placeholder={t("return.new.detailsPlaceholder")}
+                    value={form.description}
+                    onChange={setField("description")}
+                />
 
-                {error && <p className="text-sm text-coral">{error}</p>}
+                {error && <p role="alert" className="text-sm text-coral">{error}</p>}
+                {hasErrors && <p className="text-sm text-coral">{t("form.error.fixHighlighted")}</p>}
 
                 <div className="flex gap-3">
-                    <button
+                    <button aria-busy={submitting || undefined}
                         type="submit"
                         disabled={submitting}
                         className="bg-ink text-paper px-5 py-2.5 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
-                    >
+                    >{submitting && <Spinner size="xs" className="inline-block mr-1.5 align-[-2px]" />}
                         {submitting ? t("return.new.submitting") : t("return.new.submit")}
                     </button>
                     <Link

@@ -4,9 +4,10 @@ import api from "./client";
 // so the UI can show a "no AI available right now" state without that
 // ever meaning the feature itself stops working (backend always returns
 // a template/fallback value too - see ai.service.js).
-export const sendChatMessage = (message, { history, priorReply } = {}) =>
+export const sendChatMessage = (message, { history, priorReply, language } = {}) =>
     api.post("/ai/chat", {
         message,
+        ...(language === "en" || language === "sw" ? { language } : {}),
         ...(history && history.length ? { history } : {}),
         ...(priorReply ? { priorReply } : {})
     }).then((res) => res.data.data);

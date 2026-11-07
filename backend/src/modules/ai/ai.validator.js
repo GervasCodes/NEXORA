@@ -10,6 +10,9 @@ exports.chatValidation = [
         .trim()
         .notEmpty().withMessage("Message is required")
         .isLength({ max: 1000 }).withMessage("Message is too long"),
+    body("language")
+        .optional()
+        .isIn(["en", "sw"]).withMessage("Language must be 'en' or 'sw'"),
     body("history")
         .optional()
         .isArray({ max: 6 }).withMessage("History must be an array of at most 6 messages"),

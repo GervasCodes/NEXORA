@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import PageMeta from "../components/PageMeta";
 import ProductGrid from "../components/ProductGrid";
 import ProductFilters from "../components/ProductFilters";
 import { useLanguage } from "../context/LanguageContext";
 import { feedLink } from "../utils/feedLink";
-import PageMeta from "../components/PageMeta";
 
 // Full-screen swipe feed at its own URL (/feed?<filters>). Filters come from
 // the query string, so a shared or bookmarked feed link reopens the same set.
@@ -48,21 +48,22 @@ export default function ProductFeed() {
         else navigate("/", { replace: true });
     }, [location.key, navigate]);
 
-    // Indexable: /feed is the main browse destination. PageMeta's canonical drops
-    // the query string, so every filtered/store-scoped feed variant points at /feed.
     return (
         <>
-        <PageMeta title={t("browse.title")} description={t("browse.metaDescription")} />
-        <ProductGrid
-            params={params}
-            feedPage
-            initialIndex={initialIndex}
-            onIndexChange={handleIndexChange}
-            onFeedClose={handleClose}
-            feedFilterPanel={<ProductFilters onChange={handleFilterChange} />}
-            emptyTitle={t("store.noProductsTitle")}
-            emptyHint={t("browse.noProductsHint")}
-        />
+            {/* Without its own title this page kept whatever the previous page had set
+                (for example "Returns"), which also mislabelled it in analytics. Filtered
+                feeds are many near-duplicate URLs, so keep them out of the index. */}
+            <PageMeta title={t("search.browseAll")} noIndexFollow />
+            <ProductGrid
+                params={params}
+                feedPage
+                initialIndex={initialIndex}
+                onIndexChange={handleIndexChange}
+                onFeedClose={handleClose}
+                feedFilterPanel={<ProductFilters onChange={handleFilterChange} />}
+                emptyTitle={t("store.noProductsTitle")}
+                emptyHint={t("browse.noProductsHint")}
+            />
         </>
     );
 }

@@ -120,7 +120,6 @@ export default function SellerSetup() {
                 <Input
                     label={t("seller.setup.storeName")}
                     required minLength={3} maxLength={150}
-                    autoFocus
                     autoComplete="organization"
                     value={form.store_name}
                     onChange={(e) => setForm({ ...form, store_name: e.target.value })}

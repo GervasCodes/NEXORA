@@ -12,23 +12,39 @@
  * and this column exists purely for an automated refund to read back,
  * not for display.
  *
- * AES-256-GCM, key derived from JWT_SECRET via SHA-256 rather than a
- * brand new required env var - JWT_SECRET is already a mandatory,
- * already-rotated-with-care secret (see config/envCheck.js), so this
- * piggybacks on it instead of adding another required secret for this
- * phase. (A dedicated PHONE_ENCRYPTION_KEY would let this be rotated
- * independently of session invalidation - worth doing if/when that
- * becomes a real operational need; flagged, not built, here.)
+ * AES-256-GCM. Two formats exist, and both stay readable:
+ *
+ *   legacy  `iv.tag.data`            key = SHA-256(JWT_SECRET)
+ *   v2      `v2:<keyId>:iv.tag.data` key = SHA-256("nexora:phone:v2:" + PHONE_ENCRYPTION_KEY)
+ *
+ * With no PHONE_ENCRYPTION_KEY configured nothing changes: new values are
+ * written in the legacy format. Once PHONE_ENCRYPTION_KEY is set, new values
+ * are written as v2, so the phone data no longer depends on JWT_SECRET (a
+ * leaked or rotated session secret no longer exposes or destroys it).
+ * Existing legacy values keep decrypting with the JWT-derived key until they
+ * are converted with `node scripts/reencryptPhones.js --apply`.
+ *
+ * Rotation: set PHONE_ENCRYPTION_KEY to the new key, move the old one to
+ * PHONE_ENCRYPTION_KEY_PREVIOUS (and give the new one a new
+ * PHONE_ENCRYPTION_KEY_ID), then run the re-encryption script.
  */
 
 const crypto = require("crypto");
 
-const getKey = () => crypto.createHash("sha256").update(String(process.env.JWT_SECRET || "")).digest();
+const V2_PREFIX = "v2:";
 
-exports.encryptPhone = (phone) => {
-    if (!phone) return null;
+const sha256 = (value) => crypto.createHash("sha256").update(value).digest();
+
+// Legacy key: derived from the session secret (kept so old rows stay readable).
+const legacyKey = () => sha256(String(process.env.JWT_SECRET || ""));
+
+const dedicatedKey = (secret) => sha256(`nexora:phone:v2:${secret}`);
+
+const currentKeyId = () => (process.env.PHONE_ENCRYPTION_KEY_ID || "k1").replace(/[^A-Za-z0-9_-]/g, "") || "k1";
+
+const seal = (key, phone) => {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv("aes-256-gcm", getKey(), iv);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
     const encrypted = Buffer.concat([cipher.update(String(phone), "utf8"), cipher.final()]);
     const authTag = cipher.getAuthTag();
     // iv.authTag.ciphertext, each base64 - self-contained, no separate
@@ -36,17 +52,47 @@ exports.encryptPhone = (phone) => {
     return `${iv.toString("base64")}.${authTag.toString("base64")}.${encrypted.toString("base64")}`;
 };
 
+const open = (key, body) => {
+    const [ivB64, tagB64, dataB64] = body.split(".");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivB64, "base64"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(dataB64, "base64")), decipher.final()]).toString("utf8");
+};
+
+exports.isV2 = (payload) => typeof payload === "string" && payload.startsWith(V2_PREFIX);
+
+exports.encryptPhone = (phone) => {
+    if (!phone) return null;
+    if (process.env.PHONE_ENCRYPTION_KEY) {
+        return `${V2_PREFIX}${currentKeyId()}:${seal(dedicatedKey(process.env.PHONE_ENCRYPTION_KEY), phone)}`;
+    }
+    return seal(legacyKey(), phone);
+};
+
 exports.decryptPhone = (payload) => {
     if (!payload) return null;
     try {
-        const [ivB64, tagB64, dataB64] = payload.split(".");
-        const iv = Buffer.from(ivB64, "base64");
-        const authTag = Buffer.from(tagB64, "base64");
-        const data = Buffer.from(dataB64, "base64");
-        const decipher = crypto.createDecipheriv("aes-256-gcm", getKey(), iv);
-        decipher.setAuthTag(authTag);
-        return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+        if (exports.isV2(payload)) {
+            const body = payload.split(":").slice(2).join(":");
+            const candidates = [process.env.PHONE_ENCRYPTION_KEY, process.env.PHONE_ENCRYPTION_KEY_PREVIOUS].filter(Boolean);
+            for (const secret of candidates) {
+                try {
+                    return open(dedicatedKey(secret), body);
+                } catch {
+                    // try the next key
+                }
+            }
+            return null;
+        }
+        return open(legacyKey(), payload);
     } catch {
         return null;
     }
+};
+
+// For the re-encryption script: returns the payload in the current format, or
+// null when it cannot be decrypted (the script then leaves the row alone).
+exports.reencryptPhone = (payload) => {
+    const plain = exports.decryptPhone(payload);
+    return plain === null ? null : exports.encryptPhone(plain);
 };

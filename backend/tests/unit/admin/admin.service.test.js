@@ -293,8 +293,8 @@ describe("admin.service settings & withdrawal passthroughs", () => {
     });
 
     it("withdrawal actions delegate to walletService.processWithdrawal with the right action", async () => {
-        await adminService.approveWithdrawal(1, "ok");
-        expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "approve", "ok");
+        await adminService.approveWithdrawal(1, "ok", 7);
+        expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "approve", "ok", null, { adminId: 7 });
 
         await adminService.rejectWithdrawal(1, "insufficient docs");
         expect(walletService.processWithdrawal).toHaveBeenCalledWith(1, "reject", "insufficient docs");

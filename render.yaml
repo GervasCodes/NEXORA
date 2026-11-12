@@ -1,0 +1,47 @@
+# Render Blueprint for the Nexora API (decision 2: always-on).
+# A "starter" web service never sleeps, so first-time visitors do not see an
+# empty grid while the server wakes and payment webhooks are never missed.
+# Secrets are marked sync: false - set them once in the Render dashboard.
+# The frontend is a static site; Render does not read frontend/public/_headers,
+# so paste the rules from that file into the static site's Headers tab.
+services:
+  - type: web
+    name: nexora-api
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PAYOUT_DUAL_APPROVAL_THRESHOLD
+        value: "1000000"
+      - key: ADMIN_SESSION_TTL
+        value: 8h
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
+  - type: web
+    name: nexora-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

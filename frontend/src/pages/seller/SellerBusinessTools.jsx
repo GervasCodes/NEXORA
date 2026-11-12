@@ -77,6 +77,11 @@ function AdjustPanel({ target, onClose, onSaved }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const keyRef = useRef(newKey());
+    const valueInputRef = useRef(null);
+
+    // This panel is opened on demand ("count" / "restock" on a row), so move focus to its
+    // first field when it appears (a ref + effect instead of the autoFocus attribute).
+    useEffect(() => { valueInputRef.current?.focus(); }, []);
 
     const isRestock = target.mode === "restock";
     const name = target.variant ? `${target.product.name} (${target.variant.label})` : target.product.name;
@@ -118,7 +123,7 @@ function AdjustPanel({ target, onClose, onSaved }) {
                 <label className="text-xs text-ash flex flex-col gap-1">
                     {t(isRestock ? "seller.pos.quantityAdded" : "seller.pos.countedStock")}
                     <Input type="number" inputMode="numeric" min={isRestock ? 1 : 0} step="1" value={value}
-                        onChange={(e) => setValue(e.target.value)} autoFocus />
+                        onChange={(e) => setValue(e.target.value)} ref={valueInputRef} />
                 </label>
                 <label className="text-xs text-ash flex flex-col gap-1">
                     {t("seller.pos.reason")}

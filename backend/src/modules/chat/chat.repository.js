@@ -45,7 +45,15 @@ const archivedColumnFor = (conversation, userId) => {
 };
 exports.archivedColumnFor = archivedColumnFor;
 
+// Defence in depth: the column is interpolated, so it must be one of these
+// even if a future caller passes something else.
+const TIMESTAMP_COLUMNS = new Set([
+    "buyer_muted_at", "seller_muted_at", "agent_muted_at",
+    "buyer_archived_at", "seller_archived_at", "agent_archived_at"
+]);
+
 exports.setColumnTimestamp = async (conversationId, column, active) => {
+    if (!TIMESTAMP_COLUMNS.has(column)) throw new Error("Invalid conversation column");
     // Column name is only ever one of the fixed set returned by
     // mutedColumnFor/archivedColumnFor above (never user input), so
     // interpolating it directly is safe - same approach

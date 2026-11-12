@@ -703,3 +703,66 @@ describe("wallet.service.releaseOrderEarnings", () => {
         expect(summary.released).toBe(1);
     });
 });
+
+describe("wallet.service.processWithdrawal - two-person approval of large payouts", () => {
+    const LARGE = { id: 5, status: "pending", seller_id: 10, amount: "2000000", hold_until: null, first_approved_by: null };
+
+    afterEach(() => {
+        delete process.env.PAYOUT_DUAL_APPROVAL_THRESHOLD;
+    });
+
+    it("records the first approval of a large payout and leaves it pending", async () => {
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE });
+
+        const result = await walletService.processWithdrawal(5, "approve", "checked", null, { adminId: 1 });
+
+        expect(result).toEqual({ status: "pending", awaitingSecondApproval: true });
+        expect(walletRepository.recordFirstWithdrawalApproval).toHaveBeenCalledWith(5, 1, "checked", connection);
+        expect(walletRepository.updateWithdrawalStatus).not.toHaveBeenCalled();
+    });
+
+    it("does not let the same admin give the second approval", async () => {
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE, first_approved_by: 1 });
+
+        await expect(walletService.processWithdrawal(5, "approve", null, null, { adminId: 1 }))
+            .rejects.toThrow("second, different admin");
+        expect(walletRepository.updateWithdrawalStatus).not.toHaveBeenCalled();
+    });
+
+    it("approves once a different admin gives the second approval", async () => {
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE, first_approved_by: 1 });
+
+        await expect(walletService.processWithdrawal(5, "approve", null, null, { adminId: 2 }))
+            .resolves.toEqual({ status: "approved" });
+        expect(walletRepository.updateWithdrawalStatus).toHaveBeenCalledWith(5, "approved", null, connection, null);
+    });
+
+    it("refuses to approve a large payout when the admin is not identified", async () => {
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE });
+
+        await expect(walletService.processWithdrawal(5, "approve", null)).rejects.toThrow("must be identified");
+    });
+
+    it("keeps one-admin approval below the threshold and lets one admin reject a large payout", async () => {
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE, amount: "999999" });
+        await expect(walletService.processWithdrawal(5, "approve", null, null, { adminId: 1 }))
+            .resolves.toEqual({ status: "approved" });
+
+        walletRepository.incrementBalance.mockResolvedValue(3000000);
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE });
+        await expect(walletService.processWithdrawal(5, "reject", null, null, { adminId: 1 }))
+            .resolves.toEqual({ status: "rejected" });
+    });
+
+    it("honours a custom threshold and 0 switches the rule off", async () => {
+        process.env.PAYOUT_DUAL_APPROVAL_THRESHOLD = "5000000";
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE });
+        await expect(walletService.processWithdrawal(5, "approve", null, null, { adminId: 1 }))
+            .resolves.toEqual({ status: "approved" });
+
+        process.env.PAYOUT_DUAL_APPROVAL_THRESHOLD = "0";
+        walletRepository.findWithdrawalById.mockResolvedValue({ ...LARGE, amount: "90000000" });
+        await expect(walletService.processWithdrawal(5, "approve", null))
+            .resolves.toEqual({ status: "approved" });
+    });
+});

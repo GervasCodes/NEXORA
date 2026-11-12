@@ -15,7 +15,7 @@ describe("getConfirmationState", () => {
     });
     it("waits for an online payment that has not landed", () => {
         expect(getConfirmationState(base)).toBe("awaiting_payment");
-        expect(getConfirmationState({ ...base, payment_method: "snippe" })).toBe("awaiting_payment");
+        expect(getConfirmationState({ ...base, payment_method: "card" })).toBe("awaiting_payment");
     });
     it("flags a cancelled order, even if it was paid", () => {
         expect(getConfirmationState({ ...base, status: "cancelled", payment_status: "paid" })).toBe("cancelled");

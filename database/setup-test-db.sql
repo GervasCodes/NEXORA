@@ -1,4 +1,7 @@
 -- NEXORA test database setup for XAMPP / local MySQL
+-- NOTE: this file is MySQL-only (IDENTIFIED WITH mysql_native_password). On MariaDB,
+-- or if you are unsure which server you have, run `npm run setup:test-db` in this
+-- folder instead; it detects the engine and runs the matching statements.
 -- ----------------------------------------------------
 -- Replaces the old disposable Docker MySQL (docker-compose.test.yml) for
 -- running the backend's real-database integration tests

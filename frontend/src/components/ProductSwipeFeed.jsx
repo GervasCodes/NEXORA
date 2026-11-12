@@ -340,8 +340,13 @@ export default function ProductSwipeFeed({ products, hasMore, loadingMore, onLoa
     return createPortal(
         <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Product feed" className="fixed inset-0 z-[var(--z-feed)] bg-black text-frost">
             {filtersOpen && filterPanel && (
-                <div className="absolute inset-0 z-30 flex items-end md:items-center justify-center bg-black/60" onClick={() => setFiltersOpen(false)}>
-                    <div role="dialog" aria-modal="true" aria-label={t("products.feedFilters")} onClick={(e) => e.stopPropagation()} className="w-full md:max-w-md max-h-[80%] overflow-y-auto bg-paper text-ink rounded-t-2xl md:rounded-2xl p-4">
+                <div
+                    role="presentation"
+                    className="absolute inset-0 z-30 flex items-end md:items-center justify-center bg-black/60"
+                    onClick={(e) => { if (e.target === e.currentTarget) setFiltersOpen(false); }}
+                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setFiltersOpen(false); } }}
+                >
+                    <div role="dialog" aria-modal="true" aria-label={t("products.feedFilters")} className="w-full md:max-w-md max-h-[80%] overflow-y-auto bg-paper text-ink rounded-t-2xl md:rounded-2xl p-4">
                         <div className="flex items-center justify-between mb-3">
                             <p className="font-medium">{t("products.feedFilters")}</p>
                             <button type="button" onClick={() => setFiltersOpen(false)} aria-label={t("products.feedClose")} className="w-11 h-11 rounded-full border border-line flex items-center justify-center">×</button>

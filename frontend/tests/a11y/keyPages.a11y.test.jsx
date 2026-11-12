@@ -76,7 +76,10 @@ const product = {
 describe("accessibility (axe) - key entry points", () => {
     it("HomeCarousel has no violations", async () => {
         const { container } = render(withProviders(<HomeCarousel />));
-        await screen.findByRole("button", { name: "Next slide" });
+        // By design the home carousel is fully automatic (see HomeCarousel.jsx): no arrows,
+        // no dots and no play/pause button. Wait for the loaded region instead of a button.
+        await screen.findByRole("region");
+        expect(screen.queryByRole("button", { name: /slide|next|previous|pause|play/i })).toBeNull();
         expect(await axe(container)).toHaveNoViolations();
     });
 

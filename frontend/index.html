@@ -33,6 +33,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NEXORA" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Start-up styling and guard: external files (an inline script would be blocked by the CSP). They keep
+         the pre-React shell looking intentional and explain a failed/slow start. See public/boot-guard.js. -->
+    <link rel="stylesheet" href="/boot.css" />
+    <script src="/boot-guard.js"></script>
     <title>NEXORA — Online Marketplace in Tanzania: Shop &amp; Book Services</title>
     <!--
       (Branding): dedicated 1200x630 Open Graph banner

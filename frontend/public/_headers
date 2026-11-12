@@ -1,0 +1,22 @@
+# Host header policy, versioned with the code. Netlify and Cloudflare Pages read this file as is.
+# On Render Static Sites copy the same rules into Settings -> Headers (Render does not read this file);
+# frontend/tests/hostPolicy.test.js keeps this file and docs/FRONTEND_CSP.md identical.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://www.googletagmanager.com; connect-src 'self' https://api.nexoramarketplace.online wss://api.nexoramarketplace.online https://res.cloudinary.com https://nominatim.openstreetmap.org https://accounts.google.com https://*.ingest.sentry.io https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; img-src 'self' data: blob: https://res.cloudinary.com https://*.tile.openstreetmap.org https://unpkg.com https://images.unsplash.com https://*.google-analytics.com https://*.googletagmanager.com; media-src 'self' blob: https://res.cloudinary.com; font-src 'self' data:; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=()
+  X-Frame-Options: DENY
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache

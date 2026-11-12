@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const validationMiddleware = require("../../middleware/validation.middleware");
+const { beaconLimiter } = require("../../middleware/rateLimit.middleware");
 const searchController = require("./search.controller");
 const { logQueryValidation } = require("./search.validator");
 
@@ -13,6 +14,6 @@ router.get("/trending", searchController.getTrending);
 // awaiting or inspecting the response, so a 400 from validationMiddleware
 // on a malformed body is harmless (nothing reads it). The controller's own
 // try/catch below that point only covers failures from the service/DB.
-router.post("/log", logQueryValidation, validationMiddleware, searchController.logQuery);
+router.post("/log", beaconLimiter, logQueryValidation, validationMiddleware, searchController.logQuery);
 
 module.exports = router;

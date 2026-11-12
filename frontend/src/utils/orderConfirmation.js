@@ -1,6 +1,6 @@
 // Pure helpers for the order-confirmation page (/order-confirmed/:id).
 
-const ONLINE_METHODS_PAID_LATER = new Set(["mobile_money", "snippe", "malipopay_card", "paypal", "azampay", "selcom", "pawapay"]);
+const ONLINE_METHODS_PAID_LATER = new Set(["mobile_money", "card", "paypal", "azampay", "selcom", "pawapay"]);
 const PURCHASE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // "confirmed"        - paid (or deposit paid), or cash on delivery (nothing to wait for)

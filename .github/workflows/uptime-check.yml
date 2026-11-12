@@ -1,87 +1,69 @@
 name: Uptime Check
 
+# Backup to the external uptime monitor (docs/UPTIME_MONITORING.md). Every 10 minutes it also keeps a
+# sleeping API host warm, which softens the first-visit cold start. GitHub's scheduler can delay or skip
+# runs, so this is a mitigation, not a guarantee: an always-on plan is the real fix.
 on:
   schedule:
-    # Every 15 minutes
-    - cron: "*/15 * * * *"
-  workflow_dispatch: {}
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
 permissions:
+  contents: read
   issues: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping health endpoint
-        id: ping
+      - name: Skip when no URL is configured
+        id: config
+        env:
+          URL: ${{ vars.BACKEND_HEALTH_URL }}
         run: |
-          URL="${{ vars.BACKEND_HEALTH_URL }}"
           if [ -z "$URL" ]; then
-            echo "BACKEND_HEALTH_URL repository variable is not set - skipping check."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::warning::BACKEND_HEALTH_URL is not set; skipping the uptime check."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "Health check returned HTTP $STATUS"
 
-      - name: Open or update issue on failure
-        if: steps.ping.outputs.skip == 'false' && steps.ping.outputs.status != '200'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const status = "${{ steps.ping.outputs.status }}";
-            const label = "uptime";
-            const title = "Backend health check failing";
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "open",
-              labels: label,
-            });
-            const body = `Health check returned HTTP ${status} at ${new Date().toISOString()}.`;
-            if (issues.data.length === 0) {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title,
-                body,
-                labels: [label],
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issues.data[0].number,
-                body,
-              });
-            }
+      - name: Check /health (up to 3 tries, 60 s each - a cold start can take that long)
+        id: health
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          URL: ${{ vars.BACKEND_HEALTH_URL }}
+        run: |
+          code=000
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -m 60 -w "%{http_code}" "$URL" || true)
+            echo "attempt $attempt -> HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 15
+          done
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = "200" ]
 
-      - name: Auto-close issue on recovery
-        if: steps.ping.outputs.skip == 'false' && steps.ping.outputs.status == '200'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const label = "uptime";
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "open",
-              labels: label,
-            });
-            for (const issue of issues.data) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `Health check recovered (HTTP 200) at ${new Date().toISOString()}.`,
-              });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                state: "closed",
-              });
-            }
+      - name: Open or update the uptime issue on failure
+        if: failure() && steps.config.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.health.outputs.code }}
+        run: |
+          gh label create uptime --repo "$GITHUB_REPOSITORY" --color B60205 --description "Backend health check failing" 2>/dev/null || true
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label uptime --state open --json number --jq '.[0].number')
+          body="The backend health check did not return 200 (last HTTP status: ${CODE:-none}) at $(date -u +%FT%TZ). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label uptime --title "Backend health check is failing" --body "$body"
+          fi
+
+      - name: Close the uptime issue on recovery
+        if: success() && steps.config.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --label uptime --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --repo "$GITHUB_REPOSITORY" --comment "Health check is back to 200."
+          done

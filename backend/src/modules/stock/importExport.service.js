@@ -35,7 +35,7 @@ const COLUMNS = {
 const ALIAS = new Map();
 Object.entries(COLUMNS).forEach(([field, names]) => names.forEach((n) => ALIAS.set(n, field)));
 
-const normHeader = (h) => String(h || "").replace(/^﻿/, "").trim().toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ");
+const normHeader = (h) => String(h || "").replace(/^\ufeff/, "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 
 const HEADERS = {
     en: ["Name", "SKU", "Barcode", "Unit", "Cost price", "Selling price", "Reorder level", "Opening stock"],

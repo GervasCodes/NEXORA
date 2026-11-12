@@ -55,6 +55,9 @@ exports.createFromWhatsApp = async ({ userId, contactPhone, body }) => {
     });
     await supportRepository.addMessage({ ticketId, senderId: userId, senderRole: "user", body });
 
+    // adminNotificationService.notify is fire-and-forget: it returns undefined and records/logs its own
+    // failures. This call used to chain `.catch(...)` onto it, which threw a TypeError for every customer's
+    // FIRST WhatsApp message - after the ticket and message had already been saved.
     adminNotificationService.notify({
         type: "support_ticket",
         category: "moderation",
@@ -62,7 +65,7 @@ exports.createFromWhatsApp = async ({ userId, contactPhone, body }) => {
         title: "New support ticket (WhatsApp)",
         message: body,
         metadata: { ticket_id: ticketId }
-    }).catch((err) => logger.warn({ err, ticketId }, "admin notify error (whatsapp ticket)"));
+    });
 
     return getFullTicket(ticketId);
 };

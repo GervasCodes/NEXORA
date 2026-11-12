@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "../context/ToastContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
-import api, { getServerWaking, subscribeServerWaking } from "../api/client";
+import api, { getServerWaking, subscribeServerWaking, getStaleState, subscribeStale } from "../api/client";
 import { flushQueue, queueCounts } from "../utils/stockOfflineStore";
 
 // How often an open, visible tab pings the API to keep a sleepy host awake.
@@ -40,6 +40,10 @@ export default function NetworkStatusNotice() {
     const t = language?.t || ((key) => key);
     const hasMounted = useRef(false);
     const [showWaking, setShowWaking] = useState(false);
+    // Saved copies were shown while the server was away / newer data has arrived since (api/client.js).
+    const [stale, setStale] = useState(getStaleState());
+
+    useEffect(() => subscribeStale(setStale), []);
 
     useEffect(() => {
         hasMounted.current = true;
@@ -132,6 +136,35 @@ export default function NetworkStatusNotice() {
             document.removeEventListener("visibilitychange", handleVisibility);
         };
     }, []);
+
+    // Newer data has arrived after saved copies were shown: offer a refresh (a reload could discard
+    // half-filled forms, so it is the person's choice).
+    if (stale.freshAvailable) {
+        return (
+            <div
+                role="status"
+                aria-live="polite"
+                className="bg-teal/10 text-ink border-b border-line text-sm text-center py-2 px-4"
+            >
+                {t("network.freshReady")}{" "}
+                <button type="button" className="underline font-medium" onClick={() => window.location.reload()}>
+                    {t("network.refresh")}
+                </button>
+            </div>
+        );
+    }
+
+    if (stale.stale) {
+        return (
+            <div
+                role="status"
+                aria-live="polite"
+                className="bg-teal/10 text-ink border-b border-line text-sm text-center py-2 px-4"
+            >
+                {t("network.staleShowing")}
+            </div>
+        );
+    }
 
     if (!showWaking) return null;
 

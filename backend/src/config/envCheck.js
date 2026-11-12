@@ -11,7 +11,10 @@
 // JWT_SECRET looks identical to a right one from here) - only that the
 // variable names present in process.env look like what the app expects,
 // and that a short list of vars the app can't safely run without are
-// actually set. Warn-only, never blocks startup - see server.js.
+// actually set. By default it only warns. Two exceptions, see fatal() and
+// strictProblems() below: a small set of clearly dangerous configurations
+// stops startup, and STRICT_SECURITY_CHECKS=true turns the production
+// security warnings into startup failures as well.
 
 // Every var referenced anywhere in src/, database/seed.js, or
 // server.js - kept in sync with .env.example (same source list).
@@ -28,16 +31,14 @@ const KNOWN_VARS = [
     "DB_READ_CONNECTION_LIMIT", "RUN_JOBS_IN_PROCESS",
     "JWT_SECRET",
     "ADMIN_EMAIL", "ADMIN_PASSWORD", "ADMIN_PHONE",
-    "MOBILE_MONEY_PROVIDER", "CARD_PROVIDER",
-    "PAYMENTS_MAINTENANCE", "PAYMENTS_MAINTENANCE_MESSAGE", "PAYMENTS_MAINTENANCE_TESTER_IDS",
-    // Legacy Selcom names (still read as a fallback) + current ones.
-    "MOBILE_MONEY_API_BASE_URL", "MOBILE_MONEY_API_KEY",
-    "MOBILE_MONEY_API_SECRET", "MOBILE_MONEY_VENDOR_ID",
+    "MOBILE_MONEY_PROVIDER", "MOBILE_MONEY_API_BASE_URL", "MOBILE_MONEY_API_KEY",
+    "MOBILE_MONEY_API_SECRET", "MOBILE_MONEY_VENDOR_ID", "SELCOM_WEBHOOK_SECRET",
+    "AZAMPAY_API_BASE_URL", "AZAMPAY_APP_NAME", "AZAMPAY_CLIENT_ID", "AZAMPAY_CLIENT_SECRET",
+    "AZAMPAY_AUTH_BASE_URL", "AZAMPAY_API_KEY", "AZAMPAY_VENDOR_ID", "AZAMPAY_VENDOR_NAME", "AZAMPAY_WEBHOOK_SECRET",
     "SELCOM_API_BASE_URL", "SELCOM_API_KEY", "SELCOM_API_SECRET", "SELCOM_VENDOR_ID",
-    "SELCOM_WEBHOOK_SECRET", "SELCOM_WEBHOOK_ALLOWED_IPS", "SELCOM_PUBLIC_API_URL", "SELCOM_CARD_PAYMENT_METHODS",
-    "AZAMPAY_API_BASE_URL", "AZAMPAY_AUTH_BASE_URL", "AZAMPAY_APP_NAME", "AZAMPAY_CLIENT_ID", "AZAMPAY_CLIENT_SECRET",
-    "AZAMPAY_API_KEY", "AZAMPAY_VENDOR_ID", "AZAMPAY_VENDOR_NAME", "AZAMPAY_WEBHOOK_SECRET", "AZAMPAY_WEBHOOK_ALLOWED_IPS",
-    "PAWAPAY_API_TOKEN", "PAWAPAY_MODE", "PAWAPAY_API_BASE_URL", "PAWAPAY_ALLOW_UNSIGNED_CALLBACKS", "PAWAPAY_CALLBACK_AUTHORITY",
+    "SELCOM_PUBLIC_API_URL", "SELCOM_CARD_PAYMENT_METHODS",
+    "DB_CONNECT_TIMEOUT_MS", "DB_LOCK_POOL_LIMIT", "DB_LOCK_WAIT_TIMEOUT_S", "DB_MAX_EXECUTION_MS", "DB_POOL_QUEUE_LIMIT",
+    "PAYMENTS_MAINTENANCE", "PAYMENTS_MAINTENANCE_MESSAGE", "PAYMENTS_MAINTENANCE_TESTER_IDS",
     "PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "PAYPAL_MODE",
     "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET",
     "BREVO_API_KEY", "BREVO_SENDER_EMAIL", "BREVO_SENDER_NAME",
@@ -76,7 +77,28 @@ const KNOWN_VARS = [
     // config/db.js. Optional - falls back to 10 if unset. Was missing
     // from this list since RF4 added it (found during Phase 2 of the
     // NEXORA Fix Plan while cross-checking against .env.example).
-    "DB_POOL_CONNECTION_LIMIT"
+    "DB_POOL_CONNECTION_LIMIT",
+    // Variables read by the code but previously missing from this list (found
+    // by comparing every process.env.* reference in src/ with this array).
+    "AI_PROVIDER", "AI_MODEL", "AI_PROVIDER_BASE_URL", "AI_OPENROUTER_SITE_NAME", "AI_OPENROUTER_SITE_URL",
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY",
+    "BREVO_WEBHOOK_SECRET", "SELCOM_WEBHOOK_ALLOWED_IPS", "GOOGLE_CLIENT_ID",
+    "CARD_PROVIDER",
+    "PAWAPAY_API_TOKEN", "PAWAPAY_MODE", "PAWAPAY_API_BASE_URL",
+    "PAWAPAY_ALLOW_UNSIGNED_CALLBACKS", "PAWAPAY_CALLBACK_AUTHORITY",
+    "PAYMENT_ENABLE_PAYPAL", "PAYPAL_WEBHOOK_ID",
+    "PAYMENT_AMOUNT_TOLERANCE_PERCENT", "PAYMENT_RECONCILIATION_DAYS",
+    "STALE_BOOKING_MINUTES", "STALE_HOSTED_PAYMENT_HARD_MINUTES", "STALE_HOSTED_PAYMENT_MINUTES",
+    "STALE_PAYMENT_HARD_MINUTES", "STALE_PAYMENT_MINUTES",
+    "WHATSAPP_ORDER_TEMPLATE_LANG", "WHATSAPP_ORDER_TEMPLATE_NAME",
+    "WHATSAPP_OTP_TEMPLATE_LANG", "WHATSAPP_OTP_TEMPLATE_NAME",
+    "DOCUMENT_URL_TTL_SECONDS", "EMAIL_LOGO_URL", "SUPPORT_EMAIL", "RENDER_DEPLOY_HOOK_URL",
+    // Dangerous switches: never valid in production (see strictProblems()).
+    "ALLOW_UNSIGNED_WEBHOOKS", "ALLOW_PLATFORM_DATA_RESET", "ALLOW_PLATFORM_DATA_RESET_REAL", "LOADTEST_BYPASS_TOKEN",
+    // Startup-check controls (this file).
+    "ALLOW_NON_LOCAL_DEV_DB", "STRICT_SECURITY_CHECKS", "ADMIN_SESSION_TTL", "PAYOUT_DUAL_APPROVAL_THRESHOLD",
+    // Dedicated key for encrypting stored payer phone numbers (utils/phoneEncryption.js).
+    "PHONE_ENCRYPTION_KEY", "PHONE_ENCRYPTION_KEY_ID", "PHONE_ENCRYPTION_KEY_PREVIOUS"
 ];
 
 // Vars whose complete absence should be called out explicitly, not just
@@ -141,10 +163,6 @@ exports.check = () => {
         problems.push("MOBILE_MONEY_PROVIDER is not set in production - mobile money payments will fail to resolve a provider (see mobileMoney.provider.js)");
     }
 
-    if (process.env.NODE_ENV === "production" && !process.env.CARD_PROVIDER) {
-        problems.push("CARD_PROVIDER is not set in production - card payments will not be offered (selcom | azampay)");
-    }
-
     // Uploads fail OPEN without CLAMAV_HOST (see utils/malwareScan.js), so in
     // production that is a real security gap worth being loud about - it
     // does not block startup, but it shows in the boot log on every deploy.
@@ -152,6 +170,97 @@ exports.check = () => {
         problems.push("CLAMAV_HOST is not set in production - uploaded files are NOT being virus-scanned (see utils/malwareScan.js)");
     }
 
+    problems.push(...exports.fatal());
+    problems.push(...exports.strictProblems());
+
+    return problems;
+};
+
+
+const ALLOWED_NODE_ENVS = ["production", "development", "test"];
+const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"]);
+
+// Conditions that stop startup in every environment (see enforce()). They are
+// limited to configurations where continuing is clearly dangerous:
+//  - Payment, SMS, WhatsApp and TRA integrations use a *simulate* provider
+//    whenever NODE_ENV is not "production". A mistyped NODE_ENV ("prod",
+//    "Production", ...) in a real deployment would therefore silently
+//    simulate payments.
+//  - A non-production process pointed at a non-local database is the other way
+//    the same mistake shows up (real data, simulated providers).
+// Set ALLOW_NON_LOCAL_DEV_DB=true for a deliberate shared staging database.
+exports.fatal = () => {
+    const problems = [];
+    const nodeEnv = process.env.NODE_ENV;
+    const dbHost = (process.env.DB_HOST || "").trim().toLowerCase();
+
+    if (nodeEnv && !ALLOWED_NODE_ENVS.includes(nodeEnv)) {
+        problems.push(
+            `NODE_ENV="${nodeEnv}" is not one of ${ALLOWED_NODE_ENVS.join("/")}. Anything other than "production" ` +
+            "makes the payment, SMS, WhatsApp and TRA integrations use their simulate providers - set NODE_ENV=production"
+        );
+    }
+
+    if (nodeEnv !== "production" && dbHost && !LOCAL_DB_HOSTS.has(dbHost) && process.env.ALLOW_NON_LOCAL_DEV_DB !== "true") {
+        problems.push(
+            `NODE_ENV is "${nodeEnv || "(unset)"}" (not production) but DB_HOST is not local. A non-production process ` +
+            "uses simulated payment/SMS/WhatsApp/TRA providers; set NODE_ENV=production, or ALLOW_NON_LOCAL_DEV_DB=true " +
+            "if this is a deliberate shared staging database"
+        );
+    }
+
+    return problems;
+};
+
+// Production-only security findings. Always reported as warnings; they stop
+// startup only when STRICT_SECURITY_CHECKS=true, so an unattended deploy can
+// never be taken down by them. Turn strict mode on once they are all clear.
+// The three findings that leave the platform open to the internet are
+// MANDATORY in production: unverified database TLS, no CORS_ORIGIN, and an
+// unauthenticated payment webhook. They block startup unless the operator
+// explicitly sets STRICT_SECURITY_CHECKS=false (a deliberate, logged opt-out).
+exports.mandatoryProblems = () => {
+    const problems = [];
+    const env = process.env;
+    if (env.NODE_ENV !== "production") return problems;
+    if (String(env.DB_SSL).toLowerCase() === "true"
+        && !env.DB_SSL_CA && !env.DB_SSL_CA_PATH && env.DB_SSL_REJECT_UNAUTHORIZED !== "true") {
+        problems.push("DB_SSL is on but the database certificate is not verified (set DB_SSL_CA or DB_SSL_CA_PATH, or DB_SSL_REJECT_UNAUTHORIZED=true)");
+    }
+    if (!env.CORS_ORIGIN) {
+        problems.push("CORS_ORIGIN is not set in production - the API would allow any origin");
+    }
+    if (String(env.MOBILE_MONEY_PROVIDER).toLowerCase() === "selcom"
+        && !env.SELCOM_WEBHOOK_SECRET && !env.SELCOM_WEBHOOK_ALLOWED_IPS) {
+        problems.push("MOBILE_MONEY_PROVIDER=selcom but neither SELCOM_WEBHOOK_SECRET nor SELCOM_WEBHOOK_ALLOWED_IPS is set - the Selcom webhook is open");
+    }
+    return problems;
+};
+
+exports.strictProblems = () => {
+    const problems = [];
+    if (process.env.NODE_ENV !== "production") return problems;
+    const env = process.env;
+
+    if (String(env.DB_SSL).toLowerCase() === "true"
+        && !env.DB_SSL_CA && !env.DB_SSL_CA_PATH && env.DB_SSL_REJECT_UNAUTHORIZED !== "true") {
+        problems.push("DB_SSL is on but the database certificate is not verified (set DB_SSL_CA or DB_SSL_CA_PATH, or DB_SSL_REJECT_UNAUTHORIZED=true)");
+    }
+    if (!env.CORS_ORIGIN) {
+        problems.push("CORS_ORIGIN is not set in production - the API falls back to allowing any origin");
+    }
+    if ((env.JWT_SECRET || "").length < 32) {
+        problems.push("JWT_SECRET is shorter than 32 characters in production");
+    }
+    if (String(env.MOBILE_MONEY_PROVIDER).toLowerCase() === "selcom" && !env.SELCOM_WEBHOOK_ALLOWED_IPS) {
+        problems.push("MOBILE_MONEY_PROVIDER=selcom but SELCOM_WEBHOOK_ALLOWED_IPS is empty - the Selcom webhook accepts any source IP");
+    }
+    if (!env.PHONE_ENCRYPTION_KEY) {
+        problems.push("PHONE_ENCRYPTION_KEY is not set - stored payer phone numbers are encrypted with a key derived from JWT_SECRET");
+    }
+    for (const name of ["ALLOW_UNSIGNED_WEBHOOKS", "ALLOW_PLATFORM_DATA_RESET", "ALLOW_PLATFORM_DATA_RESET_REAL", "LOADTEST_BYPASS_TOKEN", "PAWAPAY_ALLOW_UNSIGNED_CALLBACKS"]) {
+        if (env[name]) problems.push(`${name} is set in production - it must only ever be used in local testing`);
+    }
     return problems;
 };
 
@@ -163,6 +272,29 @@ exports.run = (logger = console) => {
     if (problems.length) {
         logger.warn?.(`Env var check: ${problems.length} issue(s) found:`) ?? logger.log?.(`Env var check: ${problems.length} issue(s) found:`);
         problems.forEach((problem) => (logger.warn?.(`  - ${problem}`) ?? logger.log?.(`  - ${problem}`)));
+    }
+    return problems;
+};
+
+// Called at boot by server.js and worker.js. Logs everything run() logs, then
+// exits when a fatal condition exists, or - with STRICT_SECURITY_CHECKS=true -
+// when a production security finding exists. `exit` is injectable for tests.
+exports.enforce = (logger = console, exit = (code) => process.exit(code)) => {
+    const problems = exports.run(logger);
+    const fatal = exports.fatal();
+    const optOut = process.env.STRICT_SECURITY_CHECKS === "false";
+    const mandatory = optOut ? [] : exports.mandatoryProblems();
+    if (optOut && exports.mandatoryProblems().length) {
+        (logger.warn || logger.log)?.call(logger, "STRICT_SECURITY_CHECKS=false: mandatory production security checks are being SKIPPED");
+    }
+    const strict = process.env.STRICT_SECURITY_CHECKS === "true" ? exports.strictProblems() : [];
+    const blocking = [...new Set([...fatal, ...mandatory, ...strict])];
+
+    if (blocking.length) {
+        const say = logger.fatal?.bind(logger) || logger.error?.bind(logger) || logger.log?.bind(logger);
+        say?.(`Refusing to start: ${blocking.length} blocking configuration problem(s):`);
+        blocking.forEach((problem) => say?.(`  - ${problem}`));
+        exit(1);
     }
     return problems;
 };

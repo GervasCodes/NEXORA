@@ -30,6 +30,17 @@ exports.createUser = async ({ role = "buyer", ...overrides } = {}) => {
         ]
     );
 
+    // A real seller always has a seller_profiles row (created at registration), and
+    // several repositories INNER JOIN it - for example the cart query used by
+    // checkout. Without it a seller's products silently vanish from carts.
+    // Pass `withSellerProfile: false` to test the "no profile" edge case.
+    if (role === "seller" && overrides.withSellerProfile !== false) {
+        await db.query(
+            "INSERT INTO seller_profiles (user_id, store_name, store_slug) VALUES (?, ?, ?)",
+            [result.insertId, overrides.store_name || "Test Store", unique("store")]
+        );
+    }
+
     return { id: result.insertId, email, phone, role };
 };
 
@@ -180,62 +191,50 @@ exports.createMessage = async (conversationId, senderId, overrides = {}) => {
 // since these tables have foreign keys to users/products that would
 // need FK checks disabled - plain DELETE keeps this safe by default and
 // this suite's fixture volume per test is small enough that it's fast.
-exports.resetTables = async () => {
-    const tables = [
-        // RF3 addition - children of services/users that the new booking
-        // db-integration test (Phase RF3, validating the createBooking /
-        // cancelBooking N+1 batching) writes to. No booking-related
-        // tables were in this list before - the booking module had no
-        // tests at all until this phase.
-        "booking_items",
-        "bookings",
-        "service_availability",
-        "services",
-        // Additions - children of users/conversations that the
-        // admin account-management and messaging db-integration tests
-        // write to. Deleted first since they're the deepest children.
-        "audit_logs",
-        "admin_notifications",
-        "notifications",
-        "message_reactions",
-        "messages",
-        "conversations",
-        "seller_profiles",
-        // Additions - children of orders/disputes/users that the
-        // new checkout/refund/login db-integration tests write to.
-        "refunds",
-        "dispute_history",
-        "dispute_messages",
-        "dispute_evidence",
-        "disputes",
-        "payments",
-        "cart_items",
-        "otp_codes",
-        // Pre-existing and earlier).
-        "wallet_transactions",
-        "withdrawal_requests",
-        "seller_wallets",
-        "order_items",
-        "orders",
-        "account_verification_documents",
-        "account_verification_history",
-        "products",
-        "users"
-    ];
+// Tables whose rows are written by the migrations themselves (reference data
+// the application needs to work). Everything else is cleared between tests.
+// If a future migration seeds another table, add it here (the db-integration
+// suite will fail loudly with missing reference data if you forget).
+const MIGRATION_SEEDED_TABLES = new Set([
+    "schema_migrations",
+    "kyc_tier_limits",
+    "fuel_reference",
+    "delivery_eta_adjustments",
+    "platform_settings",
+    "subscription_plans",
+    "platform_modules",
+    "store_types",
+    "delivery_rate_cards",
+    "service_categories"
+]);
 
-    for (const table of tables) {
-        await db.query(`DELETE FROM ${table}`);
+let cachedTableNames = null;
+
+// Clears every table except the migration-seeded ones. The table list is read
+// from information_schema, so a table added by a later migration (for example
+// the stock_* tables, whose foreign key to users used to make cleanup fail)
+// is covered automatically. Foreign key checks are switched off on one
+// dedicated connection for the clear, so no table ordering is needed.
+exports.resetTables = async () => {
+    if (!cachedTableNames) {
+        const [rows] = await db.query(
+            "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'"
+        );
+        cachedTableNames = rows.map((row) => row.name || row.NAME || row.TABLE_NAME)
+            .filter((name) => name && !MIGRATION_SEEDED_TABLES.has(name));
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.query("SET FOREIGN_KEY_CHECKS = 0");
+        for (const table of cachedTableNames) {
+            await connection.query(`DELETE FROM \`${table}\``);
+        }
+    } finally {
+        try { await connection.query("SET FOREIGN_KEY_CHECKS = 1"); } finally { connection.release(); }
     }
 };
 
-// adminNotificationService.notify() / notificationService.notify() calls
-// throughout the codebase are fire-and-forget (the callers - suspendUser,
-// unsuspendUser, permanentlyDeleteUser, chat.service#sendMessage - never
-// await them, and notify() itself doesn't return a promise), so the row
-// they write can land a moment after the calling service function already
-// resolved. Polls briefly instead of assuming either a fixed sleep or an
-// immediate write - a fixed sleep is either too slow (adds real time to
-// every run) or, worse, occasionally too short (flaky).
 exports.waitForRows = async (query, params, { timeoutMs = 2000, intervalMs = 50 } = {}) => {
     const deadline = Date.now() + timeoutMs;
     for (;;) {

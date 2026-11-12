@@ -58,3 +58,15 @@ exports.usernameCheckLimiter = rateLimit({
     skip: loadtestBypass,
     message: { success: false, message: "Too many username checks. Please wait a minute and try again." }
 });
+
+// Anonymous "beacon" writes - a search term logged for the trending list, an affiliate click counted.
+// Nothing sensitive, but a script could poison trending or inflate clicks, so each IP gets a tight
+// budget on top of the general apiLimiter. A real shopper stays far below 60 a minute.
+exports.beaconLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: loadtestBypass,
+    message: { success: false, message: "Too many requests. Please slow down." }
+});

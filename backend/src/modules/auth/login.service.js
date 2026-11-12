@@ -16,6 +16,14 @@ exports.login = async (email, password) => {
     const user = await userRepository.findByEmail(email);
 
     if (!user) {
+        // Counted and locked exactly like a real account so the response
+        // pattern (401s, then 429 after the 5th failure) cannot be used to
+        // find out which emails are registered - see loginLockout.service.js.
+        loginLockoutService.assertUnknownEmailNotLocked(email);
+        const outcome = loginLockoutService.recordUnknownEmailFailure(email);
+        if (outcome.locked) {
+            throw loginLockoutService.lockedErrorFor(outcome);
+        }
         throw Object.assign(appError("INVALID_CREDENTIALS", 401), { failureReason: "unknown_email" });
     }
 

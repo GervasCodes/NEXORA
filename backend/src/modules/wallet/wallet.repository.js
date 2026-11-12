@@ -415,6 +415,17 @@ exports.updateWithdrawalStatus = async (id, status, adminNote, executor = db, pa
     );
 };
 
+// Two-person approval (migration 162): remembers which admin gave the first
+// approval of a large payout. The request stays "pending".
+exports.recordFirstWithdrawalApproval = async (id, adminId, adminNote, executor = db) => {
+    await executor.query(
+        `UPDATE withdrawal_requests
+        SET first_approved_by = ?, first_approved_at = NOW(), admin_note = COALESCE(?, admin_note)
+        WHERE id = ? AND status = 'pending'`,
+        [adminId, adminNote ?? null, id]
+    );
+};
+
 // A seller's users.verification_tier - used for the withdrawal daily cap
 // (higher tier, higher cap; see wallet.service.js#requestWithdrawal).
 exports.getSellerVerificationTier = async (sellerId) => {

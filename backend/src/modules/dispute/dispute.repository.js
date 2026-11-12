@@ -196,7 +196,13 @@ exports.markSellerResponseOverdue = async (id) => {
 // allow a column name as a bound param) but is only ever called with
 // the two hardcoded literals below from disputeSla.job.js, never with
 // anything derived from a request.
+const CHECKPOINT_COLUMNS = new Set(["sla_12h_notified_at", "sla_20h_notified_at"]);
+const assertCheckpointColumn = (column) => {
+    if (!CHECKPOINT_COLUMNS.has(column)) throw new Error("Invalid dispute checkpoint column");
+};
+
 exports.findUnnotifiedAtCheckpoint = async (hours, column) => {
+    assertCheckpointColumn(column);
     const [rows] = await db.query(
         `SELECT id, dispute_number, order_id, created_at
         FROM disputes
@@ -209,6 +215,7 @@ exports.findUnnotifiedAtCheckpoint = async (hours, column) => {
 };
 
 exports.markCheckpointNotified = async (id, column) => {
+    assertCheckpointColumn(column);
     await db.query(`UPDATE disputes SET ${column} = NOW() WHERE id = ?`, [id]);
 };
 

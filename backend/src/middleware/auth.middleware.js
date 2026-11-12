@@ -85,7 +85,10 @@ module.exports = async (req, res, next) => {
             });
         }
 
-        req.user = decoded;
+        // The role is authoritative from the database row read above, not
+        // from the JWT: a demotion/promotion takes effect on the very next
+        // request instead of lasting until the token expires.
+        req.user = status.role ? { ...decoded, role: status.role } : decoded;
 
         // Revenue & Product Enhancements roadmap - "active users" metric
         // (see admin.repository.js#getActiveUsersMetrics). Throttled to

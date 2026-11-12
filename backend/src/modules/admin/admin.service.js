@@ -1106,8 +1106,8 @@ exports.revealWithdrawalPayoutDetails = async (withdrawalId, adminId, req) => {
     return walletService.getWithdrawalPayoutDetails(withdrawalId, { adminId, req });
 };
 
-exports.approveWithdrawal = async (withdrawalId, adminNote) => {
-    return walletService.processWithdrawal(withdrawalId, "approve", adminNote);
+exports.approveWithdrawal = async (withdrawalId, adminNote, adminId) => {
+    return walletService.processWithdrawal(withdrawalId, "approve", adminNote, null, { adminId });
 };
 
 exports.rejectWithdrawal = async (withdrawalId, adminNote) => {

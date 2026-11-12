@@ -17,6 +17,8 @@ const loginService = require("../../../src/modules/auth/login.service");
 describe("login.service.login (step 1: password check)", () => {
     it("throws INVALID_CREDENTIALS for an unknown email without revealing which field was wrong", async () => {
         userRepository.findByEmail.mockResolvedValue(null);
+        // The lockout service is auto-mocked in this suite; an unknown email's failure is counted but not yet locked.
+        require("../../../src/modules/auth/loginLockout.service").recordUnknownEmailFailure.mockReturnValue({ locked: false, retryAfterSeconds: 0 });
 
         await expect(loginService.login("nobody@example.com", "password123")).rejects.toMatchObject({
             code: "INVALID_CREDENTIALS",

@@ -1,3 +1,4 @@
+const { passwordRule } = require("../../utils/passwordPolicy");
 const { body } = require("express-validator");
 const { VEHICLE_TYPES } = require("../../constants/orderStatus");
 const phoneValidator = require("../../validators/sharedPhoneValidator");
@@ -24,8 +25,7 @@ exports.registerValidation = [
     body("google_ticket").optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 2000 }),
     body("password")
         .if((value, { req }) => !req.body.google_ticket)
-        .isLength({ min: 8 })
-        .withMessage("Password must be at least 8 characters"),
+        .custom(passwordRule),
     // Sent as a plain multipart/JSON field ("true"/"false" as a string on
     // multipart submissions, boolean true on JSON ones), so accept both -
     // this is a required, explicit consent checkbox on the register form,

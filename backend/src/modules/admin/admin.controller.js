@@ -539,9 +539,15 @@ exports.revealWithdrawalPayoutDetails = async (req, res) => {
 
 exports.approveWithdrawal = async (req, res) => {
     try {
-        const result = await adminService.approveWithdrawal(req.params.id, req.body.admin_note);
+        const result = await adminService.approveWithdrawal(req.params.id, req.body.admin_note, req.user.id);
 
-        return res.json({ success: true, message: "Withdrawal approved", data: result });
+        return res.json({
+            success: true,
+            message: result.awaitingSecondApproval
+                ? "First approval recorded - a second, different admin must approve this payout"
+                : "Withdrawal approved",
+            data: result
+        });
 
     } catch (error) {
         return res.status(400).json({ success: false, message: error.message });

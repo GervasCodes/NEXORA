@@ -1,3 +1,4 @@
+const { passwordRule } = require("../../utils/passwordPolicy");
 const { body } = require("express-validator");
 const phoneValidator = require("../../validators/sharedPhoneValidator");
 
@@ -51,7 +52,7 @@ exports.verifyPasswordChangeOtpValidation = [
 
 exports.changePasswordValidation = [
     body("reauth_token").notEmpty().withMessage("Please verify with the emailed code first"),
-    body("new_password").isLength({ min: 8 }).withMessage("New password must be at least 8 characters")
+    body("new_password").custom(passwordRule)
 ];
 
 exports.deleteAccountValidation = [

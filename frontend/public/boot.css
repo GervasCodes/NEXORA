@@ -1,0 +1,69 @@
+/* Styles for what a visitor sees BEFORE the React app has started: the prerendered shell
+   (index.html + scripts/prerender-shells.mjs write it into #root) and the start-failure
+   message from boot-guard.js. Kept tiny and independent of the app bundle so it still
+   applies when the bundle is slow or fails to load. React replaces #root's content on mount,
+   so none of this is visible once the app is running. */
+
+html { background: #f7f8fb; color: #111827; }
+@media (prefers-color-scheme: dark) {
+    html { background: #070912; color: #f7f8fb; }
+}
+
+main[data-prerender] {
+    position: relative;
+    box-sizing: border-box;
+    min-height: 60vh;
+}
+main[data-prerender] a { color: #1d4ed8; }
+@media (prefers-color-scheme: dark) {
+    main[data-prerender] a { color: #9fc1f2; }
+}
+
+/* Thin animated bar: tells the visitor the page is loading, not broken. */
+main[data-prerender]::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 40%;
+    background: linear-gradient(90deg, #9fc1f2, #6ea8fe, #1d4ed8);
+    animation: nx-boot-bar 1.4s ease-in-out infinite;
+}
+@keyframes nx-boot-bar {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    main[data-prerender]::before { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* Start-failure message (added by boot-guard.js). */
+#nexora-boot-failure {
+    box-sizing: border-box;
+    max-width: 48rem;
+    margin: 1rem auto;
+    padding: 1rem 1.25rem;
+    border: 1px solid #e4572e;
+    border-radius: 0.75rem;
+    background: #fff4f0;
+    color: #111827;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+}
+@media (prefers-color-scheme: dark) {
+    #nexora-boot-failure { background: #1b1210; color: #f7f8fb; border-color: #e4572e; }
+}
+#nexora-boot-failure p { margin: 0 0 0.75rem; }
+#nexora-boot-failure button {
+    font: inherit;
+    padding: 0.6rem 1.1rem;
+    min-height: 44px;
+    border: 0;
+    border-radius: 0.5rem;
+    background: #f5a623;
+    color: #111827;
+    font-weight: 600;
+    cursor: pointer;
+}
+#nexora-boot-failure button:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }

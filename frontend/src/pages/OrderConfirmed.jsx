@@ -104,8 +104,7 @@ export default function OrderConfirmed() {
     const awaitingHint = {
         mobile_money: t("checkout.next.mobileMoney"),
         paypal: t("orderConfirmed.awaitingHint.online"),
-        snippe: t("orderConfirmed.awaitingHint.online"),
-        malipopay_card: t("orderConfirmed.awaitingHint.online")
+        card: t("orderConfirmed.awaitingHint.online")
     }[order.payment_method] || t("orderConfirmed.awaitingHint.online");
 
     const handleShare = async () => {

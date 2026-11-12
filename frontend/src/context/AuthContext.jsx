@@ -185,7 +185,7 @@ export function AuthProvider({ children }) {
             // (e.g. an admin deactivating something right after login)
             // would 403 with CSRF_TOKEN_INVALID.
             setCsrfToken(data.data.csrfToken);
-            return { success: true };
+            return { success: true, role: data.data.user?.role };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };
         }
@@ -208,7 +208,7 @@ export function AuthProvider({ children }) {
             const { data } = await api.post("/auth/google", { credential, mode: "signin" });
             if (data.data.status === "signed_in") {
                 startSessionFrom(data.data);
-                return { success: true, status: "signed_in" };
+                return { success: true, status: "signed_in", role: data.data.user?.role };
             }
             return { success: true, status: "needs_profile", ticket: data.data.ticket, profile: data.data.profile };
         } catch (error) {
@@ -262,14 +262,14 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    // `options.onUploadProgress` (axios progress callback) is only forwarded
-    // for multipart payloads - the seller/agent document upload on Register.
-    const register = useCallback(async (payload, options = {}) => {
+    // `options.onUploadProgress` (a FormData payload only) lets the register
+    // page show real upload progress for the seller documents.
+    const register = useCallback(async (payload, options) => {
         try {
             const isFormData = payload instanceof FormData;
             await api.post("/auth/register", payload, isFormData ? {
                 headers: { "Content-Type": "multipart/form-data" },
-                ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {})
+                ...(options?.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {})
             } : undefined);
             return { success: true };
         } catch (error) {

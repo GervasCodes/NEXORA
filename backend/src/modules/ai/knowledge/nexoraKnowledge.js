@@ -40,7 +40,8 @@ const logger = require("../../../utils/logger");
 // email as a personal address rather than a company-domain mailbox, and the
 // values were never verified by the owner. Change them HERE (single place).
 const SUPPORT_CONTACT = {
-    email: "amgerryofficial@gmail.com",
+    // Set SUPPORT_EMAIL (the same variable emails use) to move to a company mailbox.
+    email: process.env.SUPPORT_EMAIL || "amgerryofficial@gmail.com",
     phone: "+255622387905",
     contactPage: "/contact"
 };

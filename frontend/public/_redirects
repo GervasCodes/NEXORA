@@ -1,0 +1,4 @@
+# Single-page app: any path that is not a real file serves the app shell (status 200, not a redirect),
+# so deep links such as /orders/123 and /products/some-slug work on refresh.
+# Real files (including the pre-rendered shells) win over this rule on Netlify, Cloudflare Pages and Render.
+/*    /index.html   200

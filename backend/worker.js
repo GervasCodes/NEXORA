@@ -48,7 +48,7 @@ process.on("uncaughtException", (error) => {
     process.exit(1);
 });
 
-envCheck.run(logger);
+envCheck.enforce(logger);
 
 startJobs();
 

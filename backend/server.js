@@ -87,7 +87,7 @@ aiProviderRegistry.validateRegistry(logger);
 // (Launch Blockers): catches typo'd/misconfigured env vars (e.g.
 // AADMIN_EMAIL instead of ADMIN_EMAIL) loudly at boot instead of as
 // silent downstream behavior - see src/config/envCheck.js.
-envCheck.run(logger);
+envCheck.enforce(logger);
 
 httpServer.listen(PORT, () => {
     logger.info({ port: PORT }, " Nexora Server Running ");

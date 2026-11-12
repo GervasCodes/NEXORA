@@ -169,3 +169,56 @@ exports.clearFailures = async (user) => {
 
 // Builds the locked error for a failure that just tripped the lock.
 exports.lockedErrorFor = ({ retryAfterSeconds }) => lockedError(retryAfterSeconds, "lock_triggered");
+
+// ---- Unknown emails -------------------------------------------------------
+//
+// Real accounts lock after repeated failures (429 ACCOUNT_LOCKED) while an
+// email that has no account can never lock, so an attacker could tell which
+// emails are registered by watching for the first 429. To remove that signal,
+// failed logins for unknown emails are counted the same way and lock with the
+// same policy. There is no users row to persist to, so the counters live in a
+// small bounded in-memory map keyed by a hash of the email (the address itself
+// is never stored). It is per process, so with several replicas the lock can
+// appear slightly earlier or later than for a real account; that is acceptable
+// because the state exists only to make the two cases look alike.
+
+const crypto = require("crypto");
+
+const UNKNOWN_MAX_ENTRIES = 5000;
+const unknownEmailState = new Map();
+
+const unknownKey = (email) => crypto.createHash("sha256").update(String(email || "").trim().toLowerCase()).digest("hex");
+
+const pruneUnknown = (now) => {
+    for (const [key, value] of unknownEmailState) {
+        const decayed = now.getTime() - value.lastFailedAt.getTime() > FAILURE_DECAY_MS;
+        const lockActive = value.lockedUntil && value.lockedUntil > now;
+        if (decayed && !lockActive) unknownEmailState.delete(key);
+    }
+    while (unknownEmailState.size > UNKNOWN_MAX_ENTRIES) {
+        unknownEmailState.delete(unknownEmailState.keys().next().value); // oldest first
+    }
+};
+
+// Throws ACCOUNT_LOCKED if this unknown email is currently "locked".
+exports.assertUnknownEmailNotLocked = (email, now = new Date()) => {
+    const state = unknownEmailState.get(unknownKey(email));
+    const remaining = exports.getLockRemainingSeconds(state && { login_locked_until: state.lockedUntil }, now);
+    if (remaining > 0) throw lockedError(remaining, "account_locked");
+};
+
+// Counts one failure for an unknown email. Same return shape as recordFailure.
+exports.recordUnknownEmailFailure = (email, now = new Date()) => {
+    const key = unknownKey(email);
+    const current = unknownEmailState.get(key) || { failedAttempts: 0, lastFailedAt: null, lockedUntil: null };
+    const next = exports.computeNextState(current, now);
+    unknownEmailState.delete(key); // re-insert so the map stays ordered oldest -> newest
+    unknownEmailState.set(key, next);
+    pruneUnknown(now);
+
+    const retryAfterSeconds = exports.getLockRemainingSeconds({ login_locked_until: next.lockedUntil }, now);
+    return { failedAttempts: next.failedAttempts, locked: retryAfterSeconds > 0, retryAfterSeconds };
+};
+
+// Test helper.
+exports._resetUnknownEmailState = () => unknownEmailState.clear();

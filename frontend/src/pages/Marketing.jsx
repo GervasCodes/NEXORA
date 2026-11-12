@@ -10,9 +10,12 @@ import { SITE_URL, SITE_NAME, buildBreadcrumbJsonLd } from "../utils/seo";
 // How it works, About, Contact. Copy lives in LanguageContext (English +
 // Swahili); contact details are the ones already published on
 // /legal/company-information.
-const SUPPORT_EMAIL = "amgerryofficial@gmail.com";
-const SUPPORT_PHONE = "+255622387905";
-const REGISTERED_ADDRESS = "Dar es Salaam, Tanzania";
+// Defaults are the details already published on /legal/company-information. They can be overridden at
+// build time (VITE_SUPPORT_EMAIL, VITE_SUPPORT_PHONE, VITE_REGISTERED_ADDRESS) - for example to switch to a
+// company-domain mailbox - without editing code.
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "amgerryofficial@gmail.com";
+const SUPPORT_PHONE = import.meta.env.VITE_SUPPORT_PHONE || "+255622387905";
+const REGISTERED_ADDRESS = import.meta.env.VITE_REGISTERED_ADDRESS || "Dar es Salaam, Tanzania";
 
 function Shell({ path, titleKey, descriptionKey, headingKey, introKey, schemaType, extraJsonLd, children }) {
     const { t } = useLanguage();
@@ -62,8 +65,7 @@ function Steps({ prefix, count = 4 }) {
 
 export function SellOnNexora() {
     const { t } = useLanguage();
-    // Signed-in people already have an account, so the sign-up bar is only for visitors.
-    const signedIn = Boolean(useAuth()?.user);
+    const { user } = useAuth();
     return (
         <Shell path="/sell" titleKey="marketing.sell.title" descriptionKey="marketing.sell.description" headingKey="marketing.sell.heading" introKey="marketing.sell.intro" schemaType="WebPage">
             <Steps prefix="marketing.sell" />
@@ -71,11 +73,10 @@ export function SellOnNexora() {
                 <Link to="/register" className="inline-block px-5 py-2.5 rounded-md bg-ink text-paper text-sm">{t("marketing.sell.cta")}</Link>
                 <Link to="/terms#vendor-agreement" className="text-sm text-teal hover:underline">{t("marketing.sell.legal")}</Link>
             </div>
-            {!signedIn && (
+            {/* Phones: the sign-up link stays in reach for visitors. */}
+            {!user && (
                 <StickyMobileCta>
-                    <Link to="/register" className="flex-1 inline-flex h-11 items-center justify-center rounded-md bg-ink text-paper text-sm font-semibold">
-                        {t("marketing.sell.cta")}
-                    </Link>
+                    <Link to="/register" className="inline-flex h-11 w-full items-center justify-center rounded-md bg-ink text-paper px-4 text-sm font-semibold">{t("marketing.sell.cta")}</Link>
                 </StickyMobileCta>
             )}
         </Shell>

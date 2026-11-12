@@ -113,7 +113,7 @@ describe("lowStockAlerts job", () => {
         expect(db.query).not.toHaveBeenCalled();
     });
     it("is scheduled hourly in the job index", () => {
-        const src = require("fs").readFileSync(require("path").join(__dirname, "../../../src/jobs/jobs.index.js"), "utf8");
+        const src = require("fs").readFileSync(require("path").join(__dirname, "../../../src/jobs/index.js"), "utf8");
         expect(src).toMatch(/cron\.schedule\("40 \* \* \* \*", safeRun\("lowStockAlerts", lowStockAlertsJob\)\)/);
     });
 });

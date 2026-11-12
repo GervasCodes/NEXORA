@@ -1,6 +1,9 @@
 jest.mock("../../src/config/db", () => require("../helpers/mockDb"));
 
+jest.mock("../../src/utils/redisHealth", () => ({ getRedisStatus: jest.fn().mockResolvedValue("disabled") }));
+
 const request = require("supertest");
+const { getRedisStatus } = require("../../src/utils/redisHealth");
 const db = require("../../src/config/db");
 const app = require("../../src/app");
 
@@ -24,6 +27,31 @@ describe("GET /health", () => {
         expect(res.body.status).toBe("degraded");
         expect(res.body.database).toBe("disconnected");
         expect(JSON.stringify(res.body)).not.toMatch(/ECONNREFUSED/);
+    });
+});
+
+describe("GET /health - Redis is reported but optional", () => {
+    it("includes the Redis state in the JSON", async () => {
+        db.query.mockResolvedValueOnce([[{ result: 1 }]]);
+        getRedisStatus.mockResolvedValueOnce("ok");
+        const res = await request(app).get("/health").set("Accept", "application/json");
+        expect(res.body.redis).toBe("ok");
+    });
+
+    it("stays 200 when Redis is unavailable (Redis is optional; the app degrades to direct DB reads)", async () => {
+        db.query.mockResolvedValueOnce([[{ result: 1 }]]);
+        getRedisStatus.mockResolvedValueOnce("unavailable");
+        const res = await request(app).get("/health").set("Accept", "application/json");
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe("ok");
+        expect(res.body.redis).toBe("unavailable");
+    });
+
+    it("is still 503 when the database is down, whatever Redis says", async () => {
+        db.query.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+        getRedisStatus.mockResolvedValueOnce("ok");
+        const res = await request(app).get("/health").set("Accept", "application/json");
+        expect(res.status).toBe(503);
     });
 });
 

@@ -15,6 +15,7 @@ const { apiLimiter } = require("./middleware/rateLimit.middleware");
 
 const authRoutes = require("./modules/auth/auth.routes");
 const authMiddleware = require("./middleware/auth.middleware");
+const { getRedisStatus } = require("./utils/redisHealth");
 const sellerRoutes = require("./modules/seller/seller.routes");
 const productRoutes = require("./modules/product/product.routes");
 const categoryRoutes = require("./modules/category/category.routes");
@@ -84,7 +85,6 @@ const aiRoutes = require("./modules/ai/ai.routes");
 const sitemapController = require("./modules/sitemap/sitemap.controller");
 const errorHandler = require("./middleware/errorHandler");
 
-const authorizeMiddleware = require("./middleware/authorize.middleware");
 
 const app = express();
 
@@ -185,26 +185,24 @@ app.get("/ping", (req, res) => {
 // Structured per-request access logging (method/path/status/duration,
 // request id) - see middleware/requestLogger.middleware.js. Mounted this
 // early so the request id it generates (X-Request-Id) is available to
-// every handler below, including the raw-body payment webhook routes.
+// every handler below, including the raw-body PawaPay/PayPal webhook routes.
 app.use(require("./middleware/requestLogger.middleware"));
 
-// PawaPay and PayPal webhook verification needs the exact raw request bytes
-// (PawaPay's signature covers a digest of the body; PayPal's is checked
-// through its verify-webhook-signature API) - once express.json() below parses
-// the body into an object, that's gone for good. So these routes are
-// registered here, with their own express.raw() parser, BEFORE the global
-// express.json() - Express handles a fully-matched route and never reaches the
-// later json() middleware for these paths. Every other payment webhook
-// (Selcom, AzamPay) verifies a shared secret instead of a body signature and is
-// fine going through the normal JSON body parser below.
+// PawaPay webhook - signed callbacks (RFC 9421) are verified over the exact
+// raw request bytes (Content-Digest), which express.json() below would
+// destroy. So this route is registered here, with its own express.raw()
+// parser, BEFORE the global express.json() - Express handles a fully-matched
+// route and never reaches the later json() middleware for this path. Selcom
+// and AzamPay verify a shared-secret header instead and go through the normal
+// JSON body parser (see payment.routes.js).
 app.post(
     "/api/v1/payments/webhooks/pawapay",
     express.raw({ type: "application/json" }),
     require("./modules/payment/payment.controller").pawapayWebhook
 );
 
-// PayPal webhook - verified through PayPal's verify-webhook-signature API
-// (PAYPAL_WEBHOOK_ID).
+// PayPal webhook - raw body for the same reason as the PawaPay route above;
+// verified through PayPal's verify-webhook-signature API (PAYPAL_WEBHOOK_ID).
 app.post(
     "/api/v1/payments/webhooks/paypal",
     express.raw({ type: "application/json" }),
@@ -244,27 +242,6 @@ app.use(require("./middleware/locale.middleware"));
 // authLimiter (tighter) is applied directly on the auth/password-OTP routes.
 app.use("/api/", apiLimiter);
 
-// Debug route - gated behind admin auth so it can't be used to probe the
-// database or leak connection errors to the public internet.
-app.get("/db-test", authMiddleware, authorizeMiddleware("admin"), async (req, res) => {
-    try {
-        const [rows] = await db.query("SELECT NOW() AS currentTime");
-
-        res.json({
-            success: true,
-            database: "Connected",
-            time: rows[0].currentTime
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: process.env.NODE_ENV === "production"
-                ? "Database connection failed"
-                : error.message
-        });
-    }
-});
-
 // Public health check - safe to expose (no DB error details, no auth
 // required). Use this as Render's "Health Check Path" for the backend
 // service, and as a quick visual "is MySQL actually connected" check by
@@ -281,6 +258,9 @@ app.get("/health", async (req, res) => {
 
     const status = dbConnected ? "ok" : "degraded";
     const statusCode = dbConnected ? 200 : 503;
+
+    // Redis is optional, so it is reported but never changes the status code.
+    const redisStatus = await getRedisStatus();
 
     // Browsers get a simple visual page; anything else (curl, Render's
     // health monitor, uptime tools) gets plain JSON.
@@ -327,6 +307,7 @@ app.get("/health", async (req, res) => {
     <div class="card">
         <h1><span class="dot"></span>NEXORA API is running</h1>
         <p>MySQL: ${dbConnected ? "Connected" : "Not connected"}</p>
+        <p>Redis: ${redisStatus}</p>
         <p>${new Date().toISOString()}</p>
     </div>
 </body>
@@ -338,6 +319,7 @@ app.get("/health", async (req, res) => {
     res.status(statusCode).json({
         status,
         database: dbConnected ? "connected" : "disconnected",
+        redis: redisStatus,
         timestamp: new Date().toISOString()
     });
 });

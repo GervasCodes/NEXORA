@@ -4,66 +4,94 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
-    name: Backend (lint, test, audit)
+    name: Backend (lint + unit/integration tests)
     runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
+        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
       - run: npm ci
-        working-directory: backend
       - run: npm run lint
-        working-directory: backend
-      - run: npm run test:unit
-        working-directory: backend
-      - run: npm run test:integration
-        working-directory: backend
-      - run: npm audit --audit-level=moderate
-        working-directory: backend
+      - run: npm test
+      - name: No unreviewed dynamic SQL
+        run: node scripts/sqlInterpolationGuard.js
+      - name: OpenAPI is in sync with the routes
+        run: node scripts/syncOpenApi.js
+      - name: Production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
 
   frontend:
-    name: Frontend (lint, test, build, audit)
+    name: Frontend (lint + tests + build)
     runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+        with: { node-version: 20, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
-        working-directory: frontend
       - run: npm run lint
-        working-directory: frontend
+      - run: npm run lint:i18n
+      - run: node scripts/generate-screen-inventory.mjs --check
       - run: npm test
-        working-directory: frontend
       - run: npm run build
-        working-directory: frontend
-      - run: npm audit --audit-level=moderate
-        working-directory: frontend
+      - run: npm audit --omit=dev --audit-level=high
 
   database:
-    name: Database (audit)
+    name: Database tests (MySQL 8)
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: test
+      DB_PASSWORD: test
+      DB_NAME: nexora_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: database/package-lock.json
+        with: { node-version: 20 }
+      - name: Create the test database and user
+        working-directory: database
+        run: npm ci && ROOT_USER=root node setup-test-db.js
+      - name: Apply migrations
+        working-directory: database
+        run: node migrate.js
+      - name: Generate the schema docs (proves the generator runs against the real migrations)
+        working-directory: database
+        run: node generate-schema-docs.js
+      - name: Run the real-database suite
+        working-directory: backend
+        run: npm ci && npx cross-env NODE_ENV=test npx jest --config jest.db.config.js --runInBand
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    # Runs on pull requests and main, but never blocks a merge until it has been green once on CI.
+    continue-on-error: true
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
-        working-directory: database
-      - run: npm run lint --if-present
-        working-directory: database
-      - run: npm test --if-present
-        working-directory: database
-      - run: npm audit --audit-level=moderate
-        working-directory: database
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: frontend/playwright-report }

@@ -17,7 +17,7 @@ const MAX_UNZIPPED_BYTES = 20 * 1024 * 1024;
 // ---------------------------------------------------------------------- CSV
 
 exports.parseCsv = (text) => {
-    let s = String(text).replace(/^﻿/, "");
+    let s = String(text).replace(/^\ufeff/, "");
     const firstLine = s.split(/\r?\n/, 1)[0] || "";
     const counts = { ",": 0, ";": 0, "\t": 0 };
     let inQ = false;
@@ -69,7 +69,7 @@ exports.safeCell = safeCell;
 exports.toCsv = (headers, rows) => {
     const lines = [headers.map(safeCell).join(",")];
     rows.forEach((r) => lines.push(r.map(safeCell).join(",")));
-    return `﻿${lines.join("\r\n")}\r\n`;
+    return `\ufeff${lines.join("\r\n")}\r\n`;
 };
 
 const dtf = new Intl.DateTimeFormat("en-CA", {

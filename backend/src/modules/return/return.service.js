@@ -39,6 +39,14 @@ const assertParticipant = (ret, userId, role) => {
     if (!isOwner && !isSeller && !isAdmin) throw new Error("Return not found");
 };
 
+// Approving, rejecting and confirming receipt are decisions for the seller or an admin, never for the
+// buyer who opened the return. The routes already restrict this (return.routes.js); the check is repeated
+// here so a future route mistake cannot let a buyer decide on their own return. Reports "not found" so it
+// does not reveal that the return exists.
+const assertDecisionMaker = (role) => {
+    if (role !== "seller" && role !== "admin") throw new Error("Return not found");
+};
+
 const getFullReturn = async (returnId) => {
     const ret = await returnRepository.findById(returnId);
     if (!ret) return null;
@@ -149,6 +157,7 @@ exports.cancelReturn = async (returnId, buyerId) => {
 // ---- Seller/admin: approve or reject -----------------------------------
 
 exports.approveReturn = async (returnId, actorId, role) => {
+    assertDecisionMaker(role);
     const ret = await returnRepository.findById(returnId);
     assertParticipant(ret, actorId, role);
 
@@ -172,6 +181,7 @@ exports.approveReturn = async (returnId, actorId, role) => {
 };
 
 exports.rejectReturn = async (returnId, actorId, role, reason) => {
+    assertDecisionMaker(role);
     const ret = await returnRepository.findById(returnId);
     assertParticipant(ret, actorId, role);
 
@@ -231,6 +241,7 @@ exports.markShippedBack = async (returnId, buyerId, { tracking_number: trackingN
 // ---- Seller/admin: confirm received -> triggers refund -------------------
 
 exports.markReceived = async (returnId, actorId, role) => {
+    assertDecisionMaker(role);
     const ret = await returnRepository.findById(returnId);
     assertParticipant(ret, actorId, role);
 

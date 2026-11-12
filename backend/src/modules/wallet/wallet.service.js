@@ -839,7 +839,20 @@ exports.listNegativeBalanceSellers = async () => {
 // Phase 2 additions: "approve" is blocked while the request is still
 // inside its first-time-payout-details hold window; "paid" now requires a
 // payout reference/receipt from the admin, recorded on the row.
-exports.processWithdrawal = async (withdrawalId, action, adminNote, payoutReference = null) => {
+//
+// Two-person rule: an approval of a payout at or above
+// PAYOUT_DUAL_APPROVAL_THRESHOLD (TZS, default 1,000,000, 0 = off) needs two
+// DIFFERENT admins. The first approval is only recorded (status stays
+// "pending", result.awaitingSecondApproval = true); the second one approves.
+const dualApprovalThreshold = () => {
+    const raw = process.env.PAYOUT_DUAL_APPROVAL_THRESHOLD;
+    if (raw === undefined || raw === "") return 1000000;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : 1000000;
+};
+exports.dualApprovalThreshold = dualApprovalThreshold;
+
+exports.processWithdrawal = async (withdrawalId, action, adminNote, payoutReference = null, { adminId = null } = {}) => {
     const connection = await db.getConnection();
 
     try {
@@ -866,6 +879,24 @@ exports.processWithdrawal = async (withdrawalId, action, adminNote, payoutRefere
 
         if (action === "approve" && withdrawal.hold_until && new Date(withdrawal.hold_until) > new Date()) {
             throw new Error(`This is the seller's first withdrawal to these payout details - it can't be approved until ${new Date(withdrawal.hold_until).toISOString()}`);
+        }
+
+        if (action === "approve") {
+            const threshold = dualApprovalThreshold();
+            // Withdrawals can be held in another currency; the wallet amount is TZS.
+            if (threshold > 0 && Number(withdrawal.amount) >= threshold) {
+                if (!adminId) {
+                    throw new Error("This payout needs two admin approvals, so the approving admin must be identified");
+                }
+                if (!withdrawal.first_approved_by) {
+                    await walletRepository.recordFirstWithdrawalApproval(withdrawalId, adminId, adminNote, connection);
+                    await connection.commit();
+                    return { status: "pending", awaitingSecondApproval: true };
+                }
+                if (Number(withdrawal.first_approved_by) === Number(adminId)) {
+                    throw new Error("A second, different admin must approve this payout");
+                }
+            }
         }
 
         if (action === "paid" && !payoutReference) {

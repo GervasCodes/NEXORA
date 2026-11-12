@@ -264,7 +264,7 @@ export default function GroupBuyDetail() {
                         type="button"
                         onClick={() => {
                             setShowClaimForm(true);
-                            setTimeout(() => document.getElementById("group-claim-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+                            setTimeout(() => document.getElementById("group-claim-form")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 0);
                         }}
                         className="inline-flex h-11 items-center justify-center rounded-md bg-ink text-paper px-4 text-sm font-semibold"
                     >

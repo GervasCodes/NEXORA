@@ -1,5 +1,7 @@
 # NEXORA Deployment Guide
 
+> **Note 2026-11-11.** Snippe and MalipoPay were removed from the code. The live gateways are AzamPay, Selcom, PawaPay (mobile money and card) and PayPal; references below to the retired two describe the audited state or legacy rows only.
+
 This covers taking NEXORA from a fresh checkout to a running instance, in
 both a local/dev environment and a production environment.
 

@@ -21,7 +21,9 @@
     "test:integration": "cross-env NODE_ENV=test jest --runInBand tests/integration",
     "test:db": "cross-env NODE_ENV=test jest --config jest.db.config.js",
     "lint": "eslint .",
-    "loadtest": "artillery run loadtest/nexora-load-test.yml"
+    "loadtest": "artillery run loadtest/nexora-load-test.yml",
+    "docs:openapi:check": "node scripts/syncOpenApi.js",
+    "docs:openapi:sync": "node scripts/syncOpenApi.js --write"
   },
   "keywords": [],
   "author": "",
@@ -60,6 +62,7 @@
     "cross-env": "^7.0.3",
     "eslint": "^8.57.1",
     "jest": "^30.5.2",
+    "js-yaml": "^4.3.2",
     "nodemon": "^3.1.14",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.1.0"

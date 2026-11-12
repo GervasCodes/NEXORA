@@ -1,3 +1,4 @@
+const { checkPassword } = require("../../utils/passwordPolicy");
 const userRepository = require("./auth.repository");
 const accountRepository = require("../account/account.repository");
 const hashPassword = require("../../utils/hashPassword");
@@ -35,6 +36,14 @@ exports.requestPasswordReset = async (email, channel = "email") => {
 // the logged-in password-change flow, there's no session to issue a
 // reauth token against here, so this does both steps at once.
 exports.resetPassword = async (email, code, newPassword) => {
+    // Checked FIRST, before the emailed code is verified (and consumed), so a
+    // rejected password does not burn the person's one-time code. It does not
+    // depend on the email, so it reveals nothing about which accounts exist.
+    const problem = checkPassword(newPassword);
+    if (problem) {
+        throw new Error(problem.message);
+    }
+
     const user = await userRepository.findByEmail(email);
 
     // Same code path as a real user so a wrong/expired code and an

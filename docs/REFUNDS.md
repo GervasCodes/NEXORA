@@ -1,5 +1,7 @@
 # Refund Automation (Phase 2)
 
+> **Note 2026-11-11.** Snippe and MalipoPay were removed from the code. The live gateways are AzamPay, Selcom, PawaPay (mobile money and card) and PayPal; references below to the retired two describe the audited state or legacy rows only.
+
 ## What it does
 
 When an admin resolves a dispute with resolution `refund_full` or

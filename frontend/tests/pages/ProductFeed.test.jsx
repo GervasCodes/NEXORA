@@ -16,7 +16,7 @@ import ProductFeed from "../../src/pages/ProductFeed";
 beforeEach(() => { metaCalls.length = 0; });
 
 describe("ProductFeed - page meta (Phase 8)", () => {
-    it("sets a title and description and leaves the page indexable", () => {
+    it("sets a title and keeps the feed out of the index", () => {
         render(
             <LanguageProvider>
                 <MemoryRouter initialEntries={["/feed"]}><ProductFeed /></MemoryRouter>
@@ -24,10 +24,10 @@ describe("ProductFeed - page meta (Phase 8)", () => {
         );
 
         const meta = metaCalls.at(-1);
-        expect(meta.title).toBe("All products");
-        expect(meta.description).toBe("Browse every product on NEXORA, across every department.");
-        expect(meta.noIndex).toBeFalsy();
-        expect(meta.noIndexFollow).toBeFalsy();
+        // Filtered feeds are many near-duplicate URLs, so the page is deliberately
+        // kept out of the index (see the comment above <PageMeta> in ProductFeed.jsx).
+        expect(meta.title).toBe("Browse all products");
+        expect(meta.noIndexFollow).toBe(true);
     });
 
     it("uses the same meta for filtered / store-scoped feeds (canonical drops the query in PageMeta)", () => {

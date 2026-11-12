@@ -1,4 +1,5 @@
 import axios from "axios";
+import { isCacheable, saveResponse, loadResponse } from "../utils/staleCache";
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
@@ -106,6 +107,58 @@ export const getServerWaking = () => retryingCount > 0;
 export const subscribeServerWaking = (listener) => {
     wakingListeners.add(listener);
     return () => wakingListeners.delete(listener);
+};
+
+// ---- Saved copies while the server is away -------------------------------
+// When a PUBLIC catalog GET (see utils/staleCache.js for the exact allow-list) fails because the server
+// is unreachable or answering 502/503/504 - typically because the host is asleep - and a saved copy from
+// an earlier visit exists, that copy is returned at once, so the page is not empty while the server wakes.
+// The same request then keeps retrying in the background through the normal retry path; when it succeeds
+// the saved copy is refreshed and `freshAvailable` becomes true, which NetworkStatusNotice turns into a
+// "Refresh" prompt. A fresh response is never replaced by an old one, and nothing that is not on the
+// allow-list (cart, orders, wallet, account, admin ...) is ever saved or served from a copy.
+const STALE_STATUS = new Set([502, 503, 504]);
+const staleState = { stale: false, freshAvailable: false };
+const staleListeners = new Set();
+const notifyStale = () => staleListeners.forEach((listener) => listener({ ...staleState }));
+
+export const getStaleState = () => ({ ...staleState });
+export const subscribeStale = (listener) => {
+    staleListeners.add(listener);
+    return () => staleListeners.delete(listener);
+};
+// For tests.
+export const _resetStaleState = () => {
+    staleState.stale = false;
+    staleState.freshAvailable = false;
+};
+
+const serverAwayError = (error) => !error.response || STALE_STATUS.has(error.response.status);
+
+const serveSavedCopy = (error) => {
+    const config = error?.config;
+    if (!config || config._revalidate || !serverAwayError(error) || axios.isCancel(error)) return null;
+    if (!isCacheable(config)) return null;
+
+    const saved = loadResponse(config, api.getUri(config));
+    if (!saved) return null;
+
+    staleState.stale = true;
+    notifyStale();
+
+    // Refresh in the background. It goes through the same retry loop; if it never succeeds nothing happens.
+    api({ ...config, _revalidate: true, _retryCount: 0 }).catch(() => {});
+
+    return {
+        data: saved.data,
+        status: 200,
+        statusText: "OK (saved copy)",
+        headers: {},
+        config,
+        request: null,
+        stale: true,
+        staleSavedAt: saved.savedAt
+    };
 };
 
 // ---- Circuit breaker for "no response at all" failures -------------------
@@ -216,9 +269,19 @@ api.interceptors.response.use(
         // so a breaker tripped by an earlier, now-resolved problem doesn't
         // keep blocking retries for later requests.
         resetFailureStreak();
+        if (isCacheable(response.config)) {
+            saveResponse(response.config, api.getUri(response.config), response.data);
+            if (response.config._revalidate) {
+                staleState.freshAvailable = true;
+                notifyStale();
+            }
+        }
         return response;
     },
     (error) => {
+        const saved = serveSavedCopy(error);
+        if (saved) return saved;
+
         if (isRetryable(error)) {
             const attempt = error.config._retryCount || 0;
             if (attempt < RETRY_DELAYS_MS.length) {

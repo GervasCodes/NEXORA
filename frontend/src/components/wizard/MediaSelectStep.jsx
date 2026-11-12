@@ -50,7 +50,7 @@ function Thumb({ item, index, total, isCover, dispatch, onEdit, dragState }) {
                 {item.status === "done" && <span className="absolute top-1 right-1 text-[11px] bg-teal text-white rounded-full px-1.5" aria-label={t("wizard.uploaded")}>✓</span>}
             </div>
             {item.status === "error" && <p role="alert" className="text-coral text-xs mt-1">{item.error}</p>}
-            <div className="flex flex-wrap gap-1 mt-2" onKeyDown={onKeyDown}>
+            <div role="presentation" className="flex flex-wrap gap-1 mt-2" onKeyDown={onKeyDown}>
                 <button type="button" className={BTN} onClick={() => move(index - 1)} disabled={index === 0} aria-label={t("wizard.moveEarlier", { label })}>←</button>
                 <button type="button" className={BTN} onClick={() => move(index + 1)} disabled={index === total - 1} aria-label={t("wizard.moveLater", { label })}>→</button>
                 <button type="button" className={BTN} onClick={() => onEdit(item.clientId)} aria-label={t("wizard.editItem", { label })}>✎</button>

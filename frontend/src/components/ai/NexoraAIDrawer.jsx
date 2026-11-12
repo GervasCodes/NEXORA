@@ -20,24 +20,11 @@ function TypingDots() {
 }
 
 
-// Maps ai.service.js#chat's unavailableReason (only ever set when the
-// spend guard specifically blocked the call, never for any other kind
-// of AI-unavailable case) to a short note shown under the fallback
-// bubble. Any other/missing reason renders no extra note.
-// Values are i18n keys (assistant.note.*), resolved with t() at render.
-const UNAVAILABLE_REASON_NOTES = {
-    AI_DISABLED: "assistant.note.disabled",
-    USER_DAILY_CAP: "assistant.note.dailyCap",
-    GLOBAL_DAILY_CAP: "assistant.note.dailyCap",
-    USER_MONTHLY_CAP: "assistant.note.monthlyCap",
-    GLOBAL_MONTHLY_CAP: "assistant.note.monthlyCap"
-};
-
-// Topic ids the backend may return in `suggestedTopics` (see backend
-// knowledge/fallback.js#SUGGESTED_TOPIC_IDS). Each has i18n keys
-// assistant.topic.<id>.label and assistant.topic.<id>.question; tapping
-// the button sends that question. Unknown ids from the server are ignored.
+// Topic ids the server may suggest (see backend knowledge/fallback.js,
+// SUGGESTED_TOPIC_IDS). Labels and the question each button sends live in
+// i18n as assistant.topic.<id>.label / .question; unknown ids are dropped.
 const TOPIC_IDS = ["track_order", "refunds", "payments", "cancel_order", "become_seller", "support"];
+const UNAVAILABLE_REASONS = ["AI_DISABLED", "USER_DAILY_CAP", "GLOBAL_DAILY_CAP", "USER_MONTHLY_CAP", "GLOBAL_MONTHLY_CAP"];
 
 export default function NexoraAIDrawer() {
     const assistant = useAIAssistant();
@@ -65,7 +52,7 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: t("assistant.error.order"), aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: "I couldn't load that order's status right now — please check the Orders page directly.", aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else if (context?.type === "product") {
@@ -75,7 +62,7 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: t("assistant.error.product"), aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: "I couldn't load that product's details right now — please check the product page directly.", aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else if (context?.type === "booking") {
@@ -85,11 +72,11 @@ export default function NexoraAIDrawer() {
                     setMessages([{ role: "assistant", text: result.explanation, aiGenerated: result.aiGenerated }]);
                 })
                 .catch(() => {
-                    setMessages([{ role: "assistant", text: t("assistant.error.booking"), aiGenerated: false }]);
+                    setMessages([{ role: "assistant", text: "I couldn't load that booking's status right now — please check the Bookings page directly.", aiGenerated: false }]);
                 })
                 .finally(() => setSending(false));
         } else {
-            setMessages([{ role: "assistant", text: t("assistant.welcome"), aiGenerated: false, suggestedTopics: TOPIC_IDS }]);
+            setMessages([{ role: "assistant", text: t("assistant.welcome"), aiGenerated: false }]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
@@ -116,11 +103,25 @@ export default function NexoraAIDrawer() {
 
     const handleSend = (e) => {
         e.preventDefault();
-        return sendText(input.trim());
+        submitText(input.trim());
     };
 
-    // Shared by the form and the suggested-topic buttons.
-    const sendText = async (text) => {
+    const topicButtons = (ids) => (
+        <div role="group" aria-label={t("assistant.topics.label")} className="flex flex-wrap gap-2">
+            {ids.map((id) => (
+                <button
+                    key={id}
+                    type="button"
+                    onClick={() => submitText(t(`assistant.topic.${id}.question`))}
+                    className="text-xs border border-azure/30 text-azure px-3 py-1.5 rounded-full hover:bg-azure/8 transition-colors"
+                >
+                    {t(`assistant.topic.${id}.label`)}
+                </button>
+            ))}
+        </div>
+    );
+
+    const submitText = async (text) => {
         if (!text || sending) return;
 
         // Existing messages state, mapped to the {role, content} shape
@@ -141,13 +142,13 @@ export default function NexoraAIDrawer() {
                 aiGenerated: result.aiGenerated,
                 truncated: result.truncated,
                 unavailableReason: result.unavailableReason,
-                suggestedTopics: Array.isArray(result.suggestedTopics) ? result.suggestedTopics : [],
+                suggestedTopics: (result.suggestedTopics || []).filter((id) => TOPIC_IDS.includes(id)),
                 sourceQuestion: text
             }]);
         } catch {
             setMessages((prev) => [...prev, {
                 role: "assistant",
-                text: t("assistant.error.unavailable"),
+                text: t("assistant.error"),
                 aiGenerated: false,
                 error: true
             }]);
@@ -214,7 +215,9 @@ export default function NexoraAIDrawer() {
     };
 
     return (
-        <div className="fixed inset-0 z-[var(--z-drawer)] flex items-end sm:items-center sm:justify-end">
+        // role="presentation": the wrapper only forwards keystrokes (focus trap / Escape, see
+        // handlePanelKeyDown) from the dialog inside it; the dialog itself carries the semantics.
+        <div role="presentation" onKeyDown={handlePanelKeyDown} className="fixed inset-0 z-[var(--z-drawer)] flex items-end sm:items-center sm:justify-end">
             {/* Backdrop */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
             <div
@@ -228,8 +231,7 @@ export default function NexoraAIDrawer() {
                 ref={panelRef}
                 role="dialog"
                 aria-modal="true"
-                aria-label={t("assistant.title")}
-                onKeyDown={handlePanelKeyDown}
+                aria-label="Nexora Assistant"
                 className="
                     relative w-full sm:w-[400px] sm:mr-6 sm:mb-6
                     h-[80vh] sm:h-[600px]
@@ -247,8 +249,8 @@ export default function NexoraAIDrawer() {
                             <AssistantSparkleIcon className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                            <p className="font-semibold text-sm text-ink leading-tight">{t("assistant.title")}</p>
-                            <p className="text-[10px] text-azure/80 uppercase tracking-widest leading-tight">{t("assistant.tagline")}</p>
+                            <p className="font-semibold text-sm text-ink leading-tight">Nexora Assistant</p>
+                            <p className="text-[10px] text-azure/80 uppercase tracking-widest leading-tight">Always here to help</p>
                         </div>
                     </div>
                     <button
@@ -296,24 +298,13 @@ export default function NexoraAIDrawer() {
                                         {m.loadingMore ? t("assistant.loadingMore") : t("assistant.showMore")}
                                     </button>
                                 )}
-                                {m.role === "assistant" && UNAVAILABLE_REASON_NOTES[m.unavailableReason] && (
+                                {m.role === "assistant" && UNAVAILABLE_REASONS.includes(m.unavailableReason) && (
                                     <p className="mt-1 ml-1 text-xs text-ash">
-                                        {t(UNAVAILABLE_REASON_NOTES[m.unavailableReason])}
+                                        {t(`assistant.unavailable.${m.unavailableReason}`)}
                                     </p>
                                 )}
-                                {m.role === "assistant" && i === messages.length - 1 && !sending && Array.isArray(m.suggestedTopics) && (
-                                    <div role="group" aria-label={t("assistant.topics.heading")} className="mt-2 flex flex-wrap gap-2">
-                                        {m.suggestedTopics.filter((id) => TOPIC_IDS.includes(id)).map((id) => (
-                                            <button
-                                                key={id}
-                                                type="button"
-                                                onClick={() => sendText(t(`assistant.topic.${id}.question`))}
-                                                className="text-xs border border-azure/30 text-azure px-3 py-2 rounded-full hover:bg-azure/8 transition-colors text-left"
-                                            >
-                                                {t(`assistant.topic.${id}.label`)}
-                                            </button>
-                                        ))}
-                                    </div>
+                                {m.role === "assistant" && m.suggestedTopics?.length > 0 && (
+                                    <div className="mt-2">{topicButtons(m.suggestedTopics)}</div>
                                 )}
                             </div>
                         </div>
@@ -333,6 +324,11 @@ export default function NexoraAIDrawer() {
 
                     <div ref={bottomRef} />
                 </div>
+
+                {/* Topic buttons - shown with the first message, before the person has typed */}
+                {messages.length <= 1 && !sending && (
+                    <div className="px-4 pb-2 shrink-0">{topicButtons(TOPIC_IDS)}</div>
+                )}
 
                 {/* Input */}
                 <form

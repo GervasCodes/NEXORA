@@ -1,0 +1,317 @@
+{
+  "src/jobs/documentRetention.job.js": [
+    "BATCH_SIZE"
+  ],
+  "src/modules/account/account.repository.js": [
+    "fields.join(\", \")"
+  ],
+  "src/modules/accountVerification/accountVerification.repository.js": [
+    "BUSINESS_REQUEST_COLUMNS",
+    "conditions.join(\" AND \")"
+  ],
+  "src/modules/admin/admin.repository.js": [
+    "BUYER_TRANSACTIONS_SQL",
+    "PROVIDER_ACTIVITY_SQL",
+    "from",
+    "orderByClause",
+    "where",
+    "whereClause"
+  ],
+  "src/modules/admin/admin.service.js": [
+    "previousLevel",
+    "resolvedLevel",
+    "target.email",
+    "target.first_name",
+    "target.last_name"
+  ],
+  "src/modules/adminNotification/adminNotification.repository.js": [
+    "where"
+  ],
+  "src/modules/ai/ai.service.js": [
+    "JSON.stringify(VALID_SORTS)",
+    "Number(product.average_rating).toFixed(1)",
+    "facts",
+    "formattedOriginalPrice",
+    "product.review_count"
+  ],
+  "src/modules/ai/knowledge/fallback.js": [
+    "SUPPORT_CONTACT.email",
+    "SUPPORT_CONTACT.phone"
+  ],
+  "src/modules/audit/audit.repository.js": [
+    "where"
+  ],
+  "src/modules/auth/auth.repository.js": [
+    "trialEndSql",
+    "trialStartSql"
+  ],
+  "src/modules/availability/availability.repository.js": [
+    "caseClauses"
+  ],
+  "src/modules/booking/booking.repository.js": [
+    "whereClause"
+  ],
+  "src/modules/category/category.repository.js": [
+    "VERIFIED_BADGE_ORDER",
+    "VERIFIED_BADGE_SELECT",
+    "VERIFIED_BADGE_SQL"
+  ],
+  "src/modules/chat/chat.repository.js": [
+    "archived ? \"\" : \"NOT\"",
+    "clearedAt ? \"AND created_at > ?\" : \"\"",
+    "clearedAt ? \"AND m.created_at > ?\" : \"\"",
+    "clearedColumn",
+    "column",
+    "contextId ? `${ctxCol} = ?` : `${ctxCol} IS NULL`",
+    "ctxCol",
+    "deletedColumn",
+    "otherCol"
+  ],
+  "src/modules/content/content.repository.js": [
+    "conditions.join(\" AND \")",
+    "sets.join(\", \")"
+  ],
+  "src/modules/dataReset/dataReset.repository.js": [
+    "sellerId ? \"WHERE w.seller_id = ?\" : \"\"",
+    "table",
+    "testOnly ? \" AND is_test = TRUE\" : \"\"",
+    "testOnly ? \" AND r.is_test = TRUE\" : \"\"",
+    "testOnly ? \"AND o.is_test = TRUE\" : \"\"",
+    "testOnly ? \"WHERE is_test = TRUE\" : \"\"",
+    "where"
+  ],
+  "src/modules/delivery/delivery.repository.js": [
+    "DISPATCHABLE_SQL"
+  ],
+  "src/modules/delivery/delivery.service.js": [
+    "delivery.status",
+    "newStatus"
+  ],
+  "src/modules/delivery/deliveryRates.service.js": [
+    "minFee",
+    "perKmRate",
+    "vehicleType",
+    "when.toISOString()"
+  ],
+  "src/modules/deliveryBusiness/deliveryBusiness.repository.js": [
+    "sets",
+    "where"
+  ],
+  "src/modules/dispute/dispute.repository.js": [
+    "column",
+    "where",
+    "whereClause"
+  ],
+  "src/modules/documentAccess/documentAccess.repository.js": [
+    "table"
+  ],
+  "src/modules/fraud/fraud.repository.js": [
+    "from",
+    "where"
+  ],
+  "src/modules/fraud/fraud.service.js": [
+    "Math.round(order.total_amount).toLocaleString()"
+  ],
+  "src/modules/groupBuy/groupBuy.repository.js": [
+    "conditions.join(\" AND \")"
+  ],
+  "src/modules/kyc/kyc.service.js": [
+    "cap",
+    "limit.max_order_amount",
+    "orderAmount",
+    "upgradeHint"
+  ],
+  "src/modules/monetizationSchedule/monetizationSchedule.repository.js": [
+    "reminderColumn"
+  ],
+  "src/modules/order/order.repository.js": [
+    "caseClauses",
+    "conditions.join(\" AND \")",
+    "guardClauses",
+    "orderByClause",
+    "whereClause"
+  ],
+  "src/modules/order/order.service.js": [
+    "newStatus",
+    "order.status"
+  ],
+  "src/modules/payment/chargeback.repository.js": [
+    "itemIds.map(() => \"?\").join(\", \")"
+  ],
+  "src/modules/payment/payment.repository.js": [
+    "column"
+  ],
+  "src/modules/payment/payment.service.js": [
+    "dailyCap"
+  ],
+  "src/modules/pickupPoint/pickupPoint.repository.js": [
+    "conditions.join(\" AND \")",
+    "sets.join(\", \")"
+  ],
+  "src/modules/pos/pos.repository.js": [
+    "OFFLINE_WHERE",
+    "ON_PLATFORM_FROM",
+    "STOCK_FROM",
+    "STOCK_LOW_BASIS",
+    "STOCK_TOTAL",
+    "extra",
+    "itemSets.join(\", \")",
+    "lowExpr",
+    "sets",
+    "trade.darDaySql(\"o.created_at\")",
+    "trade.darDaySql(\"sold_at\", \"datetime\")",
+    "where"
+  ],
+  "src/modules/product/product.repository.js": [
+    "VERIFIED_BADGE_SELECT",
+    "conditions.join(\" AND \")",
+    "expression",
+    "fields.join(\", \")",
+    "orderBy",
+    "selectExtra.length ? selectExtra.join(\", \") + \",\" : \"\"",
+    "sets.join(\", \")",
+    "table",
+    "whereClause"
+  ],
+  "src/modules/product/productMedia.repository.js": [
+    "COLUMNS"
+  ],
+  "src/modules/product/productMedia.service.js": [
+    "item.kind === \"image\" ? \"product_images\" : \"product_videos\"",
+    "legacyTable"
+  ],
+  "src/modules/productVariant/productVariant.repository.js": [
+    "draftStock ? \", stock = ?\" : \"\""
+  ],
+  "src/modules/push/push.repository.js": [
+    "placeholders"
+  ],
+  "src/modules/recommendation/recommendation.repository.js": [
+    "PRODUCT_CARD_SELECT",
+    "VERIFIED_BADGE_SELECT",
+    "categoryIds.map(() => \"?\").join(\",\")",
+    "excludeClause"
+  ],
+  "src/modules/refund/refund.repository.js": [
+    "where"
+  ],
+  "src/modules/refund/refund.service.js": [
+    "payment.provider"
+  ],
+  "src/modules/return/return.repository.js": [
+    "fields.join(\", \")",
+    "where",
+    "whereClause"
+  ],
+  "src/modules/review/review.repository.js": [
+    "resolveSortClause(sortBy)"
+  ],
+  "src/modules/rewardSettlement/rewardSettlement.service.js": [
+    "order.id"
+  ],
+  "src/modules/seller/seller.repository.js": [
+    "fields.join(\", \")",
+    "r.sql"
+  ],
+  "src/modules/service/service.repository.js": [
+    "VERIFIED_BADGE_SELECT",
+    "conditions.join(\" AND \")",
+    "fields.join(\", \")",
+    "orderBy",
+    "selectExtra.length ? selectExtra.join(\", \") + \",\" : \"\"",
+    "whereClause"
+  ],
+  "src/modules/settings/settings.service.js": [
+    "ESCROW_HOLD_MAX_DAYS",
+    "ESCROW_HOLD_MIN_DAYS",
+    "bounds.label",
+    "bounds.max",
+    "bounds.min",
+    "commission.newValue",
+    "commission.oldValue"
+  ],
+  "src/modules/sitemap/seoShells.service.js": [
+    "SELLER_LISTED"
+  ],
+  "src/modules/sitemap/sitemap.service.js": [
+    "SELLER_LISTED"
+  ],
+  "src/modules/status/status.repository.js": [
+    "fields.join(\", \")"
+  ],
+  "src/modules/stock/expenses.service.js": [
+    "SELECT",
+    "whereSql"
+  ],
+  "src/modules/stock/importExport.service.js": [
+    "ITEM_LIVE"
+  ],
+  "src/modules/stock/parties.service.js": [
+    "OWED_SQL[kind]",
+    "table",
+    "whereSql"
+  ],
+  "src/modules/stock/purchases.service.js": [
+    "whereSql"
+  ],
+  "src/modules/stock/reports.service.js": [
+    "ITEM_JOINS",
+    "ITEM_NAME",
+    "LIVE_STOCK",
+    "OFF_WHERE",
+    "ON_FROM",
+    "ON_GROSS",
+    "ON_KEPT",
+    "ON_NET",
+    "trade.darDaySql(\"o.created_at\")",
+    "trade.darDaySql(\"s.sold_at\", \"datetime\")"
+  ],
+  "src/modules/stock/sales.service.js": [
+    "order",
+    "outcome.amount",
+    "outcome.receiptNo",
+    "outcome.refund",
+    "sale.receipt_no",
+    "where.join(\" AND \")",
+    "whereSql"
+  ],
+  "src/modules/stock/stock.alerts.js": [
+    "LIVE_STOCK"
+  ],
+  "src/modules/stock/stock.ledger.js": [
+    "ITEM_COLUMNS",
+    "lock ? \" FOR UPDATE\" : \"\""
+  ],
+  "src/modules/stock/stock.service.js": [
+    "ITEM_SELECT",
+    "sets.join(\", \")",
+    "stockExpr",
+    "whereSql"
+  ],
+  "src/modules/store/store.repository.js": [
+    "VERIFIED_BADGE_ORDER",
+    "VERIFIED_BADGE_SELECT"
+  ],
+  "src/modules/subscription/subscription.repository.js": [
+    "fields.join(\", \")",
+    "periodDays"
+  ],
+  "src/modules/support/support.repository.js": [
+    "where"
+  ],
+  "src/modules/wallet/wallet.repository.js": [
+    "amountCase",
+    "joins",
+    "netCase",
+    "orderBy",
+    "placeholders",
+    "rateCase",
+    "where"
+  ],
+  "src/modules/wallet/wallet.service.js": [
+    "dailyCap"
+  ],
+  "src/modules/wishlist/wishlist.repository.js": [
+    "VERIFIED_BADGE_SELECT"
+  ]
+}

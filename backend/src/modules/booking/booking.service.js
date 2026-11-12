@@ -318,7 +318,7 @@ exports.rejectBooking = async (bookingId, providerId) => {
                 title: "Booking wallet reversal failed",
                 message: `Reversing provider earnings for booking #${bookingId} failed - needs manual reconciliation.`,
                 metadata: { bookingId }
-            }).catch(() => {});
+            });
         });
 
         refundService.autoRefundForBooking({ booking, amount: Number(booking.amount), requestedBy: null })
@@ -434,7 +434,7 @@ exports.cancelBooking = async (bookingId, userId) => {
                     title: "Booking wallet reversal failed",
                     message: `Reversing provider earnings for booking #${bookingId} failed - needs manual reconciliation.`,
                     metadata: { bookingId }
-                }).catch(() => {});
+                });
             });
 
             // Tracked refund row (Phase 5, P0) - goes through the same

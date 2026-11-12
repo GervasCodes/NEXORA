@@ -24,6 +24,10 @@ const settingsService = require("../modules/settings/settings.service");
 const adminNotificationService = require("../modules/adminNotification/adminNotification.service");
 const logger = require("../utils/logger").child({ module: "job:disputeSla" });
 
+// NOTE: adminNotificationService.notify() is fire-and-forget. It returns undefined and records/logs its own
+// failures, so it must be called plainly - not awaited and not chained with .catch(), which threw a
+// TypeError before the dispute was marked as notified (see tests/unit/jobs/disputeSla.job.test.js).
+
 exports.run = async () => {
     const [at12h, at20h] = await Promise.all([
         disputeRepository.findUnnotifiedAtCheckpoint(12, "sla_12h_notified_at"),
@@ -31,26 +35,26 @@ exports.run = async () => {
     ]);
 
     for (const d of at12h) {
-        await adminNotificationService.notify({
+        adminNotificationService.notify({
             type: "dispute_sla_12h",
             category: "moderation",
             severity: "info",
             title: "Dispute open 12h with no resolution",
             message: `Dispute ${d.dispute_number} has been open for 12 hours.`,
             metadata: { dispute_id: d.id, order_id: d.order_id }
-        }).catch((err) => logger.warn({ err, disputeId: d.id }, "12h SLA notify error"));
+        });
         await disputeRepository.markCheckpointNotified(d.id, "sla_12h_notified_at");
     }
 
     for (const d of at20h) {
-        await adminNotificationService.notify({
+        adminNotificationService.notify({
             type: "dispute_sla_20h",
             category: "moderation",
             severity: "warning",
             title: "Dispute open 20h with no resolution",
             message: `Dispute ${d.dispute_number} has been open for 20 hours and still needs a decision.`,
             metadata: { dispute_id: d.id, order_id: d.order_id }
-        }).catch((err) => logger.warn({ err, disputeId: d.id }, "20h SLA notify error"));
+        });
         await disputeRepository.markCheckpointNotified(d.id, "sla_20h_notified_at");
     }
 
@@ -59,14 +63,14 @@ exports.run = async () => {
 
     for (const d of overdue) {
         await disputeRepository.markSellerResponseOverdue(d.id);
-        await adminNotificationService.notify({
+        adminNotificationService.notify({
             type: "dispute_seller_overdue",
             category: "moderation",
             severity: "warning",
             title: "Seller hasn't responded to a dispute",
             message: `Dispute ${d.dispute_number} (order ${d.order_number}) has had no seller response within ${responseHours}h.`,
             metadata: { dispute_id: d.id, order_id: d.order_id, seller_id: d.seller_id }
-        }).catch((err) => logger.warn({ err, disputeId: d.id }, "seller-overdue notify error"));
+        });
     }
 
     if (at12h.length || at20h.length || overdue.length) {

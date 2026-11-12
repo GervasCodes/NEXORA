@@ -1,6 +1,6 @@
 // Must stay the first import: guards localStorage/sessionStorage before any other module touches them.
 import "./utils/installSafeStorage.js";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import * as Sentry from "@sentry/react";
@@ -74,8 +74,24 @@ if ("serviceWorker" in navigator) {
     });
 }
 
+// Tells public/boot-guard.js that the app has started (so it does not show its "taking longer than
+// usual" message), removes that message if it already appeared, and forwards anything the guard
+// recorded before start-up (script load failures, early errors) to Sentry.
+function BootReady() {
+    useEffect(() => {
+        document.documentElement.setAttribute("data-app-mounted", "1");
+        window.__nexoraBootGuard?.clear?.();
+        const early = window.__nexoraBootErrors;
+        if (import.meta.env.VITE_SENTRY_DSN && Array.isArray(early) && early.length) {
+            Sentry.captureMessage("Errors recorded before the app started", { level: "warning", extra: { early } });
+        }
+    }, []);
+    return null;
+}
+
 createRoot(document.getElementById("root")).render(
     <StrictMode>
+        <BootReady />
         <HelmetProvider>
             <ThemeProvider>
                 <LanguageProvider>

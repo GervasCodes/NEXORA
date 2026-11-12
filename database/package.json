@@ -7,9 +7,11 @@
     "migrate": "node migrate.js",
     "migrate:status": "node migrate.js --status",
     "seed": "node seed.js",
+    "setup:test-db": "node setup-test-db.js",
     "backup": "node backup.js",
     "restore": "node restore.js",
-    "check:docs-drift": "node checkMigrationDocsDrift.js"
+    "check:docs-drift": "node checkMigrationDocsDrift.js",
+    "docs:schema": "node generate-schema-docs.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -54,7 +54,7 @@ exports.findByPhone = async (phone) => {
 // FALSE and surface the reason on the full-screen suspended page.
 exports.findAccountStatusById = async (id) => {
     const [rows] = await db.query(
-        "SELECT is_active, deleted_at, suspended_at, suspension_reason, token_version, last_active_at FROM users WHERE id = ?",
+        "SELECT role, is_active, deleted_at, suspended_at, suspension_reason, token_version, last_active_at FROM users WHERE id = ?",
         [id]
     );
     return rows[0];

@@ -1,58 +1,18 @@
+# Weekly dependency update pull requests. Security updates are raised by GitHub separately.
 version: 2
-
-# Weekly dependency update PRs, grouped so minor/patch bumps land as one
-# PR per package instead of one-per-dependency noise. Major bumps are
-# deliberately left out of the group (they're more likely to need code
-# changes) and surface as their own individual PRs.
-#
-# Referenced from docs/SECURITY_REVIEW_CHECKLIST.md's "Automated
-# dependency update PRs" row, which already assumed this file existed.
-
 updates:
-  - package-ecosystem: "npm"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    commit-message:
-      prefix: "chore(backend/deps)"
-
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    commit-message:
-      prefix: "chore(frontend/deps)"
-
-  - package-ecosystem: "npm"
-    directory: "/database"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    commit-message:
-      prefix: "chore(database/deps)"
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    commit-message:
-      prefix: "chore(ci/deps)"
+  - package-ecosystem: npm
+    directory: /backend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /database
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

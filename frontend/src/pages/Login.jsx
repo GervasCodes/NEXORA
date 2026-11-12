@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { landingPathFor } from "../utils/landing";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import Button from "../components/ui/Button";
-import FullScreenLoader from "../components/ui/FullScreenLoader";
 import Input from "../components/ui/Input";
 import PageMeta from "../components/PageMeta";
-import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 import useFormErrors from "../hooks/useFormErrors";
 import { rules, validateFields } from "../utils/formErrors";
+import GoogleSignInButton, { isGoogleSignInConfigured } from "../components/GoogleSignInButton";
 
 //  (OTP resend/expiry UX) - fallbacks only, used if a response
 // ever omits expiresInSeconds (e.g. an old cached bundle mid-deploy
@@ -18,6 +18,11 @@ import { rules, validateFields } from "../utils/formErrors";
 // fallback still lines up with the server's actual behavior.
 const OTP_EXPIRY_FALLBACK_SECONDS = 300;
 const RESEND_COOLDOWN_SECONDS = 60;
+
+const LOGIN_RULES = {
+    email: [rules.required(), rules.email()],
+    password: [rules.required("auth.error.passwordRequired")]
+};
 
 const formatCountdown = (totalSeconds) => {
     const clamped = Math.max(0, totalSeconds);
@@ -31,12 +36,6 @@ const formatCountdown = (totalSeconds) => {
 // /login?returnTo=...), so a bare "send the user there after login"
 // would be an open-redirect vector. Must start with a single "/" and
 // not "//" (protocol-relative, i.e. a disguised external host).
-// Per-field rules for the credentials step (Phase 6 form-error pattern).
-const CREDENTIAL_RULES = {
-    email: [rules.required(), rules.email()],
-    password: [rules.required("auth.error.passwordRequired")]
-};
-
 const sanitizeReturnTo = (value) => {
     if (!value) return null;
     if (!value.startsWith("/") || value.startsWith("//")) return null;
@@ -67,7 +66,6 @@ export default function Login() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const [googleBusy, setGoogleBusy] = useState(false);
     //  (OTP resend/expiry UX) - live "expires in mm:ss" and a
     // resend-button cooldown, both driven off the real values the API
     // returns (see AuthContext.jsx's login/resendLoginOtp) rather than
@@ -75,7 +73,7 @@ export default function Login() {
     const [expiresIn, setExpiresIn] = useState(OTP_EXPIRY_FALLBACK_SECONDS);
     const [resendCooldown, setResendCooldown] = useState(0);
     const tickRef = useRef(null);
-    const { formRef, errors: fieldErrors, showErrors, clearError, clearErrors } = useFormErrors();
+    const { formRef, errors: fieldErrors, showErrors, clearError } = useFormErrors();
 
     // One ticking interval drives both counters at once while on the
     // OTP step - restarted (via the `step` dependency) each time the
@@ -99,12 +97,11 @@ export default function Login() {
         e.preventDefault();
         setError("");
 
-        const problems = validateFields(CREDENTIAL_RULES, form, t);
+        const problems = validateFields(LOGIN_RULES, form, t);
         showErrors(problems);
         if (Object.keys(problems).length > 0) return;
 
         setSubmitting(true);
-
         const result = await login(form.email, form.password);
 
         setSubmitting(false);
@@ -132,17 +129,15 @@ export default function Login() {
     const handleGoogleCredential = async (credential) => {
         setError("");
         setSubmitting(true);
-        setGoogleBusy(true);
         const result = await loginWithGoogle(credential);
         setSubmitting(false);
-        setGoogleBusy(false);
 
         if (!result.success) {
             setError(result.message);
             return;
         }
         if (result.status === "signed_in") {
-            navigate(returnTo || "/");
+            navigate(returnTo || landingPathFor(result.role));
             return;
         }
         navigate("/register", { state: { googleTicket: result.ticket, googleProfile: result.profile, returnTo } });
@@ -158,7 +153,8 @@ export default function Login() {
         setSubmitting(false);
 
         if (result.success) {
-            navigate(returnTo || "/");
+            // No explicit page to go back to: sellers, delivery agents and admins land in their own area.
+            navigate(returnTo || landingPathFor(result.role));
         } else {
             setError(result.message);
         }
@@ -191,7 +187,6 @@ export default function Login() {
     if (step === "otp") {
         return (
             <div className="max-w-sm mx-auto px-4 py-20">
-            <FullScreenLoader open={googleBusy} message={t("account.finishingSignIn")} />
                 <h1 className="font-display text-2xl mb-1">{t("auth.otp.title")}</h1>
                 <p className="text-ash text-sm mb-8">
                     {(() => {
@@ -232,7 +227,7 @@ export default function Login() {
                     {error && <p role="alert" className="text-coral text-sm">{error}</p>}
                     {notice && !error && <p className="text-teal text-sm">{notice}</p>}
 
-                    <Button loading={submitting}
+                    <Button
                         type="submit"
                         disabled={submitting || code.length !== 6}
                         fullWidth
@@ -244,7 +239,7 @@ export default function Login() {
                 <div className="flex items-center justify-between mt-6 text-sm">
                     <button
                         type="button"
-                        onClick={() => { setStep("credentials"); setCode(""); setError(""); setNotice(""); clearErrors(); }}
+                        onClick={() => { setStep("credentials"); setCode(""); setError(""); setNotice(""); }}
                         className="text-ash hover:text-ink transition-colors"
                     >
                         ← {t("auth.otp.useDifferentAccount")}
@@ -280,7 +275,7 @@ export default function Login() {
             {intent && <p className="text-sm text-ash mb-4">{t(intent === "save" ? "auth.intentSave" : "auth.intentCart")}</p>}
             <p className="text-ash text-sm mb-8">{t("auth.signInSubtitle")}</p>
 
-            <form ref={formRef} onSubmit={handleCredentials} noValidate className="space-y-4">
+            <form ref={formRef} noValidate onSubmit={handleCredentials} className="space-y-4">
                 <Input
                     label={t("auth.emailLabel")}
                     type="email"
@@ -311,12 +306,13 @@ export default function Login() {
 
                 {error && <p role="alert" className="text-coral text-sm">{error}</p>}
 
-                <Button loading={submitting}
+                <Button
                     type="submit"
                     disabled={submitting}
                     fullWidth
                     className="gap-2"
                 >
+                    {submitting && <span className="w-4 h-4 border-2 border-abyss/30 border-t-abyss rounded-full animate-spin" />}
                     {submitting ? t("auth.signingIn") : t("auth.signInButton")}
                 </Button>
             </form>

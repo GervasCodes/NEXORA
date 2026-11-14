@@ -12,6 +12,8 @@ import LanguageToggle from "./LanguageToggle";
 import { NAV_ICON_BY_PATH, BrowseIcon, CartIcon, HomeIcon, SignInIcon, SignOutIcon } from "./NavIcons";
 import ConfirmDialog from "./ConfirmDialog";
 import ToolsMenu from "./ToolsMenu";
+import HolidayToggle from "./HolidayToggle";
+import { HolidayHeaderLights, HolidayLogoAccent } from "./HolidayHeaderAccents";
 import SideDrawer from "./ui/SideDrawer";
 
 // A single nav link config, shared between the desktop row and the mobile
@@ -184,6 +186,7 @@ export default function Header() {
             <span className="sr-only" role="status" aria-live="polite">
                 {unreadMessages > 0 ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : ""}
             </span>
+            <HolidayHeaderLights />
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-4 sm:gap-6">
                 <Link
                     to="/"
@@ -192,7 +195,10 @@ export default function Header() {
                     className="flex items-center gap-2 shrink-0"
                     onClick={() => setMenuOpen(false)}
                 >
-                    <img src="/favicon-32.png" alt="" aria-hidden="true" className="w-7 h-7 shrink-0" />
+                    <span className="relative block shrink-0">
+                        <img src="/favicon-32.png" alt="" aria-hidden="true" className="w-7 h-7 shrink-0" />
+                        <HolidayLogoAccent />
+                    </span>
                     <span className="font-display italic text-xl tracking-tight">NEXORA</span>
                 </Link>
 
@@ -247,6 +253,8 @@ export default function Header() {
 
                     <ToolsMenu links={secondaryLinks} isActive={isActive} />
 
+                    <HolidayToggle />
+
                     {user && <NotificationBell />}
 
                     {user && user.role !== "admin" && user.role !== "seller" ? (
@@ -268,8 +276,8 @@ export default function Header() {
                         </button>
                     ) : !user ? (
                         <>
-                            <LanguageToggle className="mr-1" />
-                            <ThemeToggle className="mr-1" />
+                            <LanguageToggle />
+                            <ThemeToggle />
                             <IconNavLink
                                 to="/login"
                                 label={t("nav.signIn")}
@@ -414,6 +422,8 @@ export default function Header() {
                             );
                         })}
 
+                        <HolidayToggle variant="row" />
+
                         {user && user.role !== "admin" && user.role !== "seller" ? (
                             <button
                                 onClick={handleSignOut}
@@ -423,9 +433,10 @@ export default function Header() {
                                 {t("nav.signOut")}
                             </button>
                         ) : !user ? (
+                            <>
+                                <LanguageToggle variant="row" />
+                                <ThemeToggle variant="row" />
                             <div className="py-3 flex items-center gap-3">
-                                <LanguageToggle />
-                                <ThemeToggle />
                                 <Link
                                     to="/login"
                                     onClick={() => setMenuOpen(false)}
@@ -443,6 +454,7 @@ export default function Header() {
                                     {t("nav.join")}
                                 </Button>
                             </div>
+                            </>
                         ) : null}
                     </nav>
                 </div>

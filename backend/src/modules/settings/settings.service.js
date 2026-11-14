@@ -1,4 +1,5 @@
 const settingsRepository = require("./settings.repository");
+const { HOLIDAY_MODES, isValidDateString } = require("../../utils/holidayTheme");
 const { DEFAULT_BANDS, parseBandsConfig } = require("../../utils/deliveryPricing");
 const { OFFER_RADIUS_KM, OFFER_TIMEOUT_MS } = require("../../constants/orderStatus");
 
@@ -101,6 +102,17 @@ const DEFAULTS = {
     ai_monthly_token_cap_per_user: "300000",
     ai_daily_token_cap_global: "2000000",
     ai_monthly_token_cap_global: "30000000",
+
+    // Holiday theme (Christmas + New Year storefront visuals) - see
+    // utils/holidayTheme.js for the mode and date rules and
+    // modules/holidayTheme for the readers. Admin-editable on the Platform
+    // settings page. There is deliberately no seeded row: until an admin first
+    // saves, the on/off default comes from HOLIDAY_THEME_DEFAULT=on|off in .env
+    // (off when unset). HOLIDAY_THEME_FORCE_OFF=true overrides all of it.
+    holiday_theme_enabled: process.env.HOLIDAY_THEME_DEFAULT === "on" ? "true" : "false",
+    holiday_theme_mode: "auto",
+    holiday_theme_start_date: "",
+    holiday_theme_end_date: "",
 
     // Wallets, escrow, COD & withdrawals (master prompt Phase 2) - see
     // wallet.service.js#requestWithdrawal / payment.service.js#initiateWalletTopUp
@@ -549,6 +561,15 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
     if (data.username_blocklist !== undefined) {
         queue("username_blocklist", normalizeUsernameBlocklist(data.username_blocklist));
     }
+    if (data.holiday_theme_enabled !== undefined) {
+        queue("holiday_theme_enabled", [true, "true", 1, "1"].includes(data.holiday_theme_enabled) ? "true" : "false");
+    }
+    if (data.holiday_theme_mode !== undefined) {
+        queue("holiday_theme_mode", String(data.holiday_theme_mode));
+    }
+    for (const key of ["holiday_theme_start_date", "holiday_theme_end_date"]) {
+        if (data[key] !== undefined) queue(key, data[key] === null ? "" : String(data[key]));
+    }
 
     const changing = (key) => changes.find((c) => c.key === key);
 
@@ -594,6 +615,23 @@ exports.updateSettings = async (data, { actorId = null } = {}) => {
         const days = Number(escrow.newValue);
         if (!Number.isInteger(days) || days < ESCROW_HOLD_MIN_DAYS || days > ESCROW_HOLD_MAX_DAYS) {
             throw badRequest(`Escrow hold must be a whole number of days from ${ESCROW_HOLD_MIN_DAYS} to ${ESCROW_HOLD_MAX_DAYS}.`);
+        }
+    }
+
+    // Holiday theme: validate the combination that would result from this save.
+    if (changes.some((c) => c.key.startsWith("holiday_theme_"))) {
+        const next = (key) => (changing(key) ? changing(key).newValue : asComparable(current[key]));
+        const mode = next("holiday_theme_mode");
+        if (!HOLIDAY_MODES.includes(mode)) {
+            throw badRequest(`Holiday theme mode must be one of: ${HOLIDAY_MODES.join(", ")}.`);
+        }
+        const start = next("holiday_theme_start_date");
+        const end = next("holiday_theme_end_date");
+        if ((start && !isValidDateString(start)) || (end && !isValidDateString(end))) {
+            throw badRequest("Holiday theme dates must be real dates in the form YYYY-MM-DD.");
+        }
+        if (start && end && end < start) {
+            throw badRequest("The holiday theme end date can't be before the start date.");
         }
     }
 

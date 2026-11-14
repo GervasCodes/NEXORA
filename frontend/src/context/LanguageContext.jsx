@@ -8,8 +8,8 @@ const LanguageContext = createContext(null);
 
 const STORAGE_KEY = "nexora_language";
 export const LANGUAGES = [
-    { code: "en", label: "English" },
-    { code: "sw", label: "Kiswahili" }
+    { code: "en", label: "English", flag: "us" },
+    { code: "sw", label: "Kiswahili", flag: "tz" }
 ];
 
 // Phase 9 (first-impression performance): the two dictionaries used to

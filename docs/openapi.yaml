@@ -145,6 +145,8 @@ tags:
     description: support endpoints (tag added by scripts/syncOpenApi.js).
   - name: whatsapp
     description: whatsapp endpoints (tag added by scripts/syncOpenApi.js).
+  - name: holidayTheme
+    description: Public holiday theme status for the storefront (Christmas / New Year).
 security:
   - bearerAuth: []
 paths:
@@ -8304,6 +8306,52 @@ paths:
           description: Not signed in, or the session is no longer valid.
         '403':
           description: Signed in, but this role or account state is not allowed to do this.
+  /holiday-theme:
+    get:
+      tags:
+        - holidayTheme
+      summary: Whether the Christmas / New Year storefront theme is on (public)
+      description: >-
+        No login needed. Returns whether the holiday theme is active right now and, if so, which one
+        (christmas or newyear). The result follows the admin setting (Platform settings, holiday_theme_*)
+        and the HOLIDAY_THEME_FORCE_OFF kill-switch, and uses the platform time zone to decide what today is.
+        The response may be cached for up to 60 seconds. If the status cannot be read the endpoint answers
+        503 and clients should treat the theme as off.
+      operationId: holidayTheme_getPublic
+      responses:
+        '200':
+          description: Current holiday theme status
+          headers:
+            Cache-Control:
+              description: public, max-age=60
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      active:
+                        type: boolean
+                      mode:
+                        type: string
+                        nullable: true
+                        enum:
+                          - christmas
+                          - newyear
+                        description: Null when active is false.
+        '503':
+          description: Status temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+      security: []
   /kyc/admin:
     get:
       tags:

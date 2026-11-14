@@ -7,6 +7,7 @@ import SuspendedScreen from "./components/SuspendedScreen";
 import RouteFallback from "./components/RouteFallback";
 import PageTransition from "./components/PageTransition";
 import RouteProgressBar from "./components/RouteProgressBar";
+import HolidayMount from "./components/HolidayMount";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
 import SocketStatusBar from "./components/SocketStatusBar";
@@ -311,6 +312,7 @@ export default function App() {
             <AffiliateClickTracker />
 
             <RouteProgressBar />
+            <HolidayMount />
 
             <main id="main-content" tabIndex={-1} className="flex-1">
                 <Suspense fallback={<RouteFallback />}>

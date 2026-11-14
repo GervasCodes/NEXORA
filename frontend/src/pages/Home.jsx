@@ -211,15 +211,12 @@ export default function Home() {
                         }}
                     />
                     <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-10 grid lg:grid-cols-[0.85fr_1.15fr] gap-4 lg:gap-8 items-center">
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-azure-light text-xs uppercase tracking-[0.2em] mb-3">{t("home.eyebrow")}</p>
                             {(user?.username || user?.first_name) && (
-                                <div className="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full border border-frost/20 bg-frost/5 text-frost/80 text-xs font-medium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-azure-light">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                                    </svg>
+                                <p className="mb-3 max-w-full truncate whitespace-nowrap text-sm text-frost/60">
                                     {t("home.welcomeBack", { name: user.username || user.first_name })}
-                                </div>
+                                </p>
                             )}
                             <h1 className="font-display text-4xl sm:text-5xl max-w-xl leading-tight mb-4">
                                 {t("home.heroTitle")}

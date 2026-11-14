@@ -2,6 +2,7 @@ const db = require("../../config/db");
 const adminRepository = require("./admin.repository");
 const notificationService = require("../notification/notification.service");
 const settingsService = require("../settings/settings.service");
+const holidayThemeService = require("../holidayTheme/holidayTheme.service");
 const logger = require("../../utils/logger").child({ module: "admin" });
 const walletService = require("../wallet/wallet.service");
 const sponsorshipService = require("../sponsorship/sponsorship.service");
@@ -1052,8 +1053,13 @@ exports.exportAdvancedAnalyticsCsv = async (type) => {
 };
 
 exports.getSettings = async () => {
-    const [settings, meta] = await Promise.all([settingsService.getAll(), settingsService.getSettingsMeta()]);
-    return { ...settings, setting_meta: meta, settings_loaded_at: new Date().toISOString() };
+    const [settings, meta, holidayThemeStatus] = await Promise.all([
+        settingsService.getAll(),
+        settingsService.getSettingsMeta(),
+        holidayThemeService.getStatus()
+    ]);
+    // holiday_theme_status = what the storefront is showing today and why (admin-only detail).
+    return { ...settings, setting_meta: meta, settings_loaded_at: new Date().toISOString(), holiday_theme_status: holidayThemeStatus };
 };
 
 exports.updateSettings = async (data, actorId) => {

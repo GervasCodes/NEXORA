@@ -5,7 +5,7 @@
 > checks inside services are not visible here (see `backend/tests/unit/ownership.test.js`).
 > A route with several roles counts once per role.
 
-Total routes under /api/v1: **566**.
+Total routes under /api/v1: **567**.
 
 | Module | Public | Webhook (signature) | Any signed-in | Buyer | Seller | Delivery agent | Admin |
 |---|---|---|---|---|---|---|---|
@@ -38,6 +38,7 @@ Total routes under /api/v1: **566**.
 | efd |  |  | 1 |  | 3 |  | 4 |
 | featuredStore |  |  |  |  | 5 |  |  |
 | groupBuy | 2 |  |  | 3 | 2 |  |  |
+| holidayTheme | 1 |  |  |  |  |  |  |
 | kyc |  |  | 2 |  |  |  | 3 |
 | liveSelling | 1 |  |  | 3 | 3 |  |  |
 | maintenance |  |  |  |  |  |  | 3 |

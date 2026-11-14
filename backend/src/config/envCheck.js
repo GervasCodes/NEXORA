@@ -45,6 +45,8 @@ const KNOWN_VARS = [
     "EMAIL_HOST", "EMAIL_PORT", "EMAIL_USER", "EMAIL_PASSWORD", "EMAIL_FROM",
     "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT",
     "OSRM_BASE_URL", "OSRM_PROFILE", "OSRM_TIMEOUT_MS", "ROUTING_PROVIDER", "ROUTING_FALLBACK_ENABLED",
+    // Holiday theme (Christmas / New Year storefront visuals) - all optional.
+    "HOLIDAY_THEME_DEFAULT", "HOLIDAY_THEME_FORCE_OFF", "HOLIDAY_THEME_TIMEZONE",
     "SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_RELEASE", "SENTRY_TRACES_SAMPLE_RATE",
     // Phase RF5 (red-flag remediation): Redis caching layer. All optional -
     // omitting REDIS_URL just means the app runs uncached (see

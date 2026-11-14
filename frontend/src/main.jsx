@@ -13,6 +13,7 @@ import { SocketProvider } from "./context/SocketContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { CurrencyProvider } from "./context/CurrencyContext.jsx";
 import { DataSaverProvider } from "./context/DataSaverContext.jsx";
+import { HolidayProvider } from "./context/HolidayContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
@@ -97,6 +98,7 @@ createRoot(document.getElementById("root")).render(
                 <LanguageProvider>
                     <CurrencyProvider>
                         <DataSaverProvider>
+                        <HolidayProvider>
                         <BrowserRouter>
                             <AuthProvider>
                                 <SocketProvider>
@@ -114,6 +116,7 @@ createRoot(document.getElementById("root")).render(
                                 </SocketProvider>
                             </AuthProvider>
                         </BrowserRouter>
+                        </HolidayProvider>
                         </DataSaverProvider>
                     </CurrencyProvider>
                 </LanguageProvider>

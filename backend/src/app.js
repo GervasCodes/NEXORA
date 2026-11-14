@@ -77,6 +77,7 @@ const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const subscriptionRoutes = require("./modules/subscription/subscription.routes");
 const recommendationRoutes = require("./modules/recommendation/recommendation.routes");
 const statusRoutes = require("./modules/status/status.routes");
+const holidayThemeRoutes = require("./modules/holidayTheme/holidayTheme.routes");
 const seoMetricsRoutes = require("./modules/seoMetrics/seoMetrics.routes");
 const aiRoutes = require("./modules/ai/ai.routes");
 // Phase 1 (SEO Critical). Controller only - this is a single public
@@ -486,6 +487,8 @@ app.use("/api/v1/affiliate", affiliateRoutes);
 app.use("/api/v1/subscriptions", subscriptionRoutes);
 app.use("/api/v1/recommendations", recommendationRoutes);
 app.use("/api/v1/status", statusRoutes);
+// Public, read-only: whether the Christmas / New Year storefront theme is on.
+app.use("/api/v1/holiday-theme", holidayThemeRoutes);
 app.use("/api/v1/seo", seoMetricsRoutes);
 // Nexora AI  - see modules/ai/ai.service.js's header comment
 // for the safety/grounding rules every route here shares.

@@ -84,6 +84,7 @@
 | Retention | `approved_document_retention_days` (0 = do not keep approved documents) |
 | AI | `ai_enabled` and four token caps (per user and global, daily and monthly) |
 | Stock tools | `stock_default_reorder_level` (5), `stock_backdate_max_days` (7), `stock_offline_max_age_days` (30), `stock_export_grace_days` (30), `stock_low_alert_channels` (push) |
+| Holiday theme | `holiday_theme_enabled` (off), `holiday_theme_mode` (auto), `holiday_theme_start_date`, `holiday_theme_end_date` (blank). See section 7. |
 | Other | `username_blocklist`, `usd_exchange_rate_max_change_percent` (10) |
 
 Settings apply without redeploying. Record every change (what, why, who) outside the app as well.
@@ -96,6 +97,31 @@ Settings apply without redeploying. Record every change (what, why, who) outside
 - **Delivery rates and pickup points**: adjust bands and locations.
 - **EFD** (`/admin/efd`): review fiscal receipts and failures; retries run every 30 minutes.
 - **Audit logs**: filter by event type (for example login failures and admin account changes).
+- **Holiday theme** (Christmas and New Year decorations on the storefront): see the steps below.
+
+### Turning the holiday theme on or off
+
+The theme is purely decorative (falling snow, header lights and a Santa hat for Christmas; gentle fireworks and gold sparkles for New Year). It never blocks clicks. Visitors who have Reduce Motion or Data Saver switched on never see it, and everyone else can switch it off with the small festive-decorations button in the header (their choice is remembered on their device).
+
+**Settings** (saved in Platform settings, same audit trail as other settings; they apply within about a minute, with no redeploy):
+
+| Setting | Values | Effect |
+|---|---|---|
+| `holiday_theme_enabled` | `true` / `false` | The main on/off switch. Off means no decorations for anyone. |
+| `holiday_theme_mode` | `auto`, `christmas`, `newyear` | `auto` shows Christmas from 1 Dec to 26 Dec and New Year from 27 Dec to 3 Jan, and nothing the rest of the year. `christmas` or `newyear` forces that theme while the switch is on. |
+| `holiday_theme_start_date`, `holiday_theme_end_date` | `YYYY-MM-DD`, or blank | Optional. The theme only shows between these dates (inclusive). A blank side is open-ended. |
+
+"Today" is judged in Tanzania time (Africa/Dar_es_Salaam), so New Year starts at midnight in Dar es Salaam even though the server runs on UTC.
+
+**To turn it on:** set `holiday_theme_enabled` to `true`, choose a mode (leave `auto` unless you want to override the calendar), and save. **To turn it off:** set `holiday_theme_enabled` to `false` and save. Changes are made with `PUT /api/v1/admin/settings` as an admin; the current values are returned by `GET /api/v1/admin/settings`. Check the result by opening the storefront in a private window: `GET /api/v1/holiday-theme` returns `{ "active": true|false, "mode": ... }`.
+
+> **Note:** in this version of the code the Platform settings page does not yet show a Holiday theme card, so the switch is changed through the API above. Ask the developer to add the card if you want a button on the page.
+
+**Environment settings** (server `.env`, need a restart; ask the developer):
+
+- `HOLIDAY_THEME_DEFAULT=on|off`: the starting state until an admin first saves the setting. Off when unset.
+- `HOLIDAY_THEME_FORCE_OFF=true`: emergency kill-switch. Turns the theme off everywhere whatever the admin setting says. Use it if the decorations ever misbehave, then set it back to `false` (or remove it) to let the admin setting apply again.
+- `HOLIDAY_THEME_TIMEZONE`: optional; defaults to Africa/Dar_es_Salaam.
 
 ## 8. Super admin only
 

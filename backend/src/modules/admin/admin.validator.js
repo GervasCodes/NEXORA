@@ -1,5 +1,6 @@
 const { passwordRule } = require("../../utils/passwordPolicy");
 const { param, body } = require("express-validator");
+const { isValidDateString } = require("../../utils/holidayTheme");
 
 exports.userIdValidation = [
     param("id").isInt({ gt: 0 }).withMessage("Invalid user")
@@ -70,6 +71,24 @@ exports.updateSettingsValidation = [
         .isString()
         .isLength({ max: 1000 })
         .withMessage("Username blocklist must be text of at most 1000 characters"),
+
+    body("holiday_theme_enabled")
+        .optional()
+        .isBoolean()
+        .withMessage("Holiday theme on/off must be true or false"),
+
+    body("holiday_theme_mode")
+        .optional()
+        .isIn(["auto", "christmas", "newyear"])
+        .withMessage("Holiday theme mode must be auto, christmas or newyear"),
+
+    // Blank clears the date (open-ended side of the range).
+    body(["holiday_theme_start_date", "holiday_theme_end_date"])
+        .optional({ values: "falsy" })
+        .custom((value) => {
+            if (!isValidDateString(value)) throw new Error("Holiday theme dates must be real dates in the form YYYY-MM-DD");
+            return true;
+        }),
 
     body("rider_delivery_fee")
         .optional()

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { LanguageProvider } from "../../src/context/LanguageContext";
@@ -76,5 +76,74 @@ describe("Header nav links (A2 audit)", () => {
         if (toolsButton) await user.click(toolsButton);
 
         expect(screen.queryByRole("link", { name: "Returns" })).not.toBeInTheDocument();
+    });
+});
+
+describe("Header mobile search row (scroll flicker fix)", () => {
+    const ROW_H = 56;
+    const setScroll = (y, { scrollHeight = 5000, innerHeight = 800 } = {}) => {
+        Object.defineProperty(window, "scrollY", { value: y, configurable: true, writable: true });
+        Object.defineProperty(window, "innerHeight", { value: innerHeight, configurable: true, writable: true });
+        Object.defineProperty(document.documentElement, "scrollHeight", { value: scrollHeight, configurable: true });
+        fireEvent.scroll(window);
+    };
+    const mountWithRowHeight = () => {
+        const spy = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(ROW_H);
+        mockUser = null;
+        const utils = renderHeader();
+        const header = utils.container.querySelector("header");
+        const row = header.querySelector(":scope > div[aria-hidden]");
+        return { header, row, spy };
+    };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        setScroll(0);
+    });
+
+    it("hides the row by moving the sticky offset, never by shrinking the header", () => {
+        const { header, row } = mountWithRowHeight();
+        setScroll(0);
+        expect(header.style.top).toBe("0px");
+        expect(row).toHaveAttribute("aria-hidden", "false");
+
+        setScroll(200);
+        setScroll(300);
+        expect(header.style.top).toBe(`-${ROW_H}px`);
+        expect(row).toHaveAttribute("aria-hidden", "true");
+        // The old fix animated max-height to 0, which changed the document
+        // height and made the row flicker at the bottom of long pages.
+        expect(row.className).not.toMatch(/max-h-|overflow-hidden/);
+        expect(row.className).toContain("pb-3");
+    });
+
+    it("brings the row back on scroll up and when near the top", () => {
+        const { header } = mountWithRowHeight();
+        setScroll(200);
+        setScroll(400);
+        expect(header.style.top).toBe(`-${ROW_H}px`);
+
+        setScroll(380);
+        expect(header.style.top).toBe("0px");
+
+        setScroll(400);
+        expect(header.style.top).toBe(`-${ROW_H}px`);
+        setScroll(20);
+        expect(header.style.top).toBe("0px");
+    });
+
+    it("does not flip while resting at the very bottom of the page (rubber-band / clamping)", () => {
+        const { header } = mountWithRowHeight();
+        const page = { scrollHeight: 2000, innerHeight: 800 };
+        setScroll(500, page);
+        setScroll(700, page);
+        expect(header.style.top).toBe(`-${ROW_H}px`);
+
+        // The bottom is y = 1200. Over-scrolling past it and bouncing back
+        // reports a reverse move of more than 4px; that must not re-open the row.
+        setScroll(1200, page);
+        setScroll(1212, page);
+        setScroll(1200, page);
+        expect(header.style.top).toBe(`-${ROW_H}px`);
     });
 });

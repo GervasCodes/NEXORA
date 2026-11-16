@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -108,12 +108,35 @@ export default function Header() {
     const [menuOpen, setMenuOpen] = useState(false);
     // Mobile: the search row folds away while the page scrolls down and comes
     // back on scroll up. Below 80px it is always shown.
+    //
+    // The fold must NOT change the header's layout height. It used to animate
+    // max-height to 0, which shrank the whole document by the row's height on
+    // every collapse; near the bottom of a page the browser then clamped (or
+    // scroll-anchored) scrollY upward, that read as "scrolled up", the row
+    // expanded again, the page grew, and the header flickered in a loop (most
+    // visible at the end of the product list). Now the header keeps its full
+    // height and only moves its sticky offset: `top: -rowHeight` pushes the
+    // search row out of view while the top bar stays pinned, and `top: 0`
+    // brings it back. Sticky offsets never alter document height.
     const [searchCollapsed, setSearchCollapsed] = useState(false);
+    const [searchRowH, setSearchRowH] = useState(0);
+    const searchRowRef = useRef(null);
+    useLayoutEffect(() => {
+        const measure = () => setSearchRowH(searchRowRef.current?.offsetHeight || 0);
+        measure();
+        window.addEventListener("resize", measure);
+        return () => window.removeEventListener("resize", measure);
+    }, []);
     useEffect(() => {
         let lastY = window.scrollY;
         const onScroll = () => {
             const y = window.scrollY;
+            const doc = document.documentElement;
+            // Rubber-band / over-scroll at either end reports tiny reverse
+            // movements; never let those flip the row.
+            const atBottom = y + window.innerHeight >= doc.scrollHeight - 2;
             if (y < 80) setSearchCollapsed(false);
+            else if (atBottom) { /* keep whatever state we are in */ }
             else if (y > lastY + 4) setSearchCollapsed(true);
             else if (y < lastY - 4) setSearchCollapsed(false);
             lastY = y;
@@ -170,7 +193,10 @@ export default function Header() {
 
     return (
         <>
-        <header className="glass-dark text-frost sticky top-0 z-[var(--z-sticky)]">
+        <header
+            className="glass-dark text-frost sticky z-[var(--z-sticky)] transition-[top] duration-200 motion-reduce:transition-none"
+            style={{ top: searchCollapsed ? -searchRowH : 0 }}
+        >
             {/* (UI/UX remediation): the cart/messages/notification
                 badge counts above only ever updated visually - a
                 screen-reader user had no way to learn a new item landed
@@ -335,8 +361,9 @@ export default function Header() {
             </div>
 
             <div
-                className={`md:hidden px-4 overflow-hidden transition-[max-height,opacity,padding] duration-200 motion-reduce:transition-none ${
-                    searchCollapsed ? "max-h-0 opacity-0 pb-0" : "max-h-24 opacity-100 pb-3"
+                ref={searchRowRef}
+                className={`md:hidden px-4 pb-3 transition-opacity duration-200 motion-reduce:transition-none ${
+                    searchCollapsed ? "opacity-0" : "opacity-100"
                 }`}
                 aria-hidden={searchCollapsed}
                 {...(searchCollapsed ? { inert: "" } : {})}

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/client";
 import ServiceCard from "./ServiceCard";
+import ErrorState from "./ui/ErrorState";
+import InfiniteScrollFooter from "./ui/InfiniteScrollFooter";
+import useInfiniteScroll from "../hooks/useInfiniteScroll";
 
 const PAGE_SIZE = 24;
+// A stalled request on a flaky mobile connection used to leave the grid on
+// its skeleton forever (same fix as ProductGrid.jsx).
+const REQUEST_TIMEOUT_MS = 10000;
 const GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5";
 
 export function ServiceCardSkeleton() {
@@ -25,56 +31,77 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
-    const sentinelRef = useRef(null);
+    const [loadMoreError, setLoadMoreError] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+    // Bumped whenever the list is reset, so a response from an older
+    // filter set is dropped instead of being shown / appended.
+    const generationRef = useRef(0);
 
     // Same reasoning as ProductGrid.jsx - `params` is a fresh object every
     // render, so a stable string is used as the effect dependency.
     const paramsKey = JSON.stringify(params || {});
 
     useEffect(() => {
+        let ignore = false;
+        generationRef.current += 1;
         setLoading(true);
         setError("");
+        setLoadMoreError(false);
+        setLoadingMore(false);
         setPage(startPage);
 
-        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: startPage } })
+        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: startPage }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
+                if (ignore) return;
                 setServices(data.data);
                 setTotalPages(data.pagination?.totalPages || 1);
                 onResults?.(data.pagination?.total ?? data.data.length, data.pagination?.totalPages || 1);
             })
-            .catch(() => setError("Couldn't load services right now."))
-            .finally(() => setLoading(false));
+            .catch(() => { if (!ignore) setError("Couldn't load services right now."); })
+            .finally(() => { if (!ignore) setLoading(false); });
+
+        return () => { ignore = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [paramsKey, startPage]);
+    }, [paramsKey, startPage, retryCount]);
 
     const loadMore = useCallback(() => {
         if (loading || loadingMore || page >= totalPages) return;
 
         const nextPage = page + 1;
+        const generation = generationRef.current;
         setLoadingMore(true);
+        setLoadMoreError(false);
 
-        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: nextPage } })
+        api.get("/services", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: nextPage }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
-                setServices((prev) => [...prev, ...data.data]);
+                if (generation !== generationRef.current) return;
+                setServices((prev) => {
+                    const seen = new Set(prev.map((s) => s.id));
+                    return [...prev, ...data.data.filter((s) => !seen.has(s.id))];
+                });
+                setTotalPages(data.pagination?.totalPages || totalPages);
                 setPage(nextPage);
             })
-            .catch(() => {})
-            .finally(() => setLoadingMore(false));
+            .catch(() => { if (generation === generationRef.current) setLoadMoreError(true); })
+            .finally(() => { if (generation === generationRef.current) setLoadingMore(false); });
     }, [loading, loadingMore, page, totalPages, paramsKey]);
 
-    useEffect(() => {
-        const node = sentinelRef.current;
-        if (!node) return;
+    const { sentinelRef } = useInfiniteScroll({
+        hasMore: page < totalPages,
+        loading: loading || loadingMore,
+        error: loadMoreError,
+        onLoadMore: loadMore
+    });
 
-        const observer = new IntersectionObserver(
-            (entries) => { if (entries[0].isIntersecting) loadMore(); },
-            { rootMargin: "400px" }
+    if (error) {
+        return (
+            <ErrorState
+                title="Couldn't load services"
+                hint={error}
+                onRetry={() => setRetryCount((n) => n + 1)}
+            />
         );
-        observer.observe(node);
-        return () => observer.disconnect();
-    }, [loadMore]);
-
-    if (error) return <p className="text-coral">{error}</p>;
+    }
 
     if (loading) {
         if (services.length > 0) {
@@ -114,22 +141,19 @@ export default function ServiceGrid({ params, emptyTitle, emptyHint, onResults, 
                 ))}
             </div>
 
-            <div ref={sentinelRef} />
-            {loadingMore && (
-                <div className={`${GRID_CLASS} mt-4 sm:mt-5`}>
-                    {Array.from({ length: 4 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
-                </div>
-            )}
-            {!loadingMore && page < totalPages && (
-                <div className="text-center mt-8">
-                    <button
-                        onClick={loadMore}
-                        className="text-sm border border-line px-5 py-2 rounded-full hover:border-ink transition-colors"
-                    >
-                        Load more
-                    </button>
-                </div>
-            )}
+            <InfiniteScrollFooter
+                className="mt-4 sm:mt-5"
+                sentinelRef={sentinelRef}
+                hasMore={page < totalPages}
+                loading={loadingMore}
+                error={loadMoreError}
+                onLoadMore={loadMore}
+                skeleton={(
+                    <div className={GRID_CLASS}>
+                        {Array.from({ length: 4 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
+                    </div>
+                )}
+            />
         </>
     );
 }

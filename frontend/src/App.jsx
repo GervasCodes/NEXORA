@@ -7,6 +7,7 @@ import SuspendedScreen from "./components/SuspendedScreen";
 import RouteFallback from "./components/RouteFallback";
 import PageTransition from "./components/PageTransition";
 import RouteProgressBar from "./components/RouteProgressBar";
+import ScrollToTop from "./components/ScrollToTop";
 import HolidayMount from "./components/HolidayMount";
 import UpdateAvailableBanner from "./components/UpdateAvailableBanner";
 import NetworkStatusNotice from "./components/NetworkStatusNotice";
@@ -312,6 +313,7 @@ export default function App() {
             <AffiliateClickTracker />
 
             <RouteProgressBar />
+            <ScrollToTop />
             <HolidayMount />
 
             <main id="main-content" tabIndex={-1} className="flex-1">

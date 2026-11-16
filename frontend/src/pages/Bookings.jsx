@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../api/client";
 import { formatDate } from "../utils/format";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -10,67 +9,37 @@ import MaintenanceScreen from "../components/MaintenanceScreen";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import ListFilters from "../components/ui/ListFilters";
+import InfiniteScrollFooter from "../components/ui/InfiniteScrollFooter";
+import usePagedList from "../hooks/usePagedList";
 import PageMeta from "../components/PageMeta";
 import { BookingsIcon } from "../components/NavIcons";
 
 const STATUS_OPTIONS = ["pending", "confirmed", "active", "completed", "cancelled", "refunded"];
 const FILTER_DEBOUNCE_MS = 350;
 
+const pickBookings = (body) => ({ items: body.data.bookings, pagination: body.data.pagination });
+
 export default function Bookings() {
     const { format } = useCurrency();
     const { t } = useLanguage();
-    const [bookings, setBookings] = useState([]);
-    const [pagination, setPagination] = useState(null);
     const [filters, setFilters] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [maintenance, setMaintenance] = useState(null);
-    const [error, setError] = useState(false);
-
-    const load = (page = 1, append = false) => {
-        if (append) setLoadingMore(true); else setLoading(true);
-        setMaintenance(null);
-        setError(false);
-        api.get("/bookings/mine", { params: { ...filters, page } })
-            .then(({ data }) => {
-                setBookings((prev) => (append ? [...prev, ...data.data.bookings] : data.data.bookings));
-                setPagination(data.data.pagination);
-            })
-            .catch((err) => {
-                if (err.response?.data?.code === "MODULE_MAINTENANCE") {
-                    setMaintenance(err.response.data.message);
-                } else {
-                    setError(true);
-                }
-            })
-            .finally(() => { setLoading(false); setLoadingMore(false); });
-    };
-
-    useEffect(() => {
-        const timer = setTimeout(() => load(1, false), FILTER_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters]);
+    const {
+        items: bookings, loading, loadingMore, error, maintenance, loadMoreError, hasLoaded, hasMore, loadMore, reload
+    } = usePagedList({ url: "/bookings/mine", params: filters, pick: pickBookings, debounceMs: FILTER_DEBOUNCE_MS });
 
     const hasActiveFilters = Boolean(filters.status || filters.from || filters.to || filters.q);
 
     if (maintenance) {
-        return <MaintenanceScreen title="Bookings is under maintenance" message={maintenance} onRetry={() => load(1, false)} />;
+        return <MaintenanceScreen title="Bookings is under maintenance" message={maintenance} onRetry={reload} />;
     }
 
-    if (loading) {
+    // Full-page skeleton on the very first load only, so the filter bar
+    // (and a search box being typed in) is not unmounted on every re-fetch.
+    if (!hasLoaded) {
         return (
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
                 <div className="h-9 w-40 skeleton animate-shimmer rounded-md mb-8" />
                 <SkeletonList rows={4} />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-                <ErrorState title="Couldn't load your bookings" hint="Check your connection and try again." onRetry={() => load(1, false)} />
             </div>
         );
     }
@@ -87,7 +56,9 @@ export default function Bookings() {
                 searchPlaceholder="Search service or store…"
             />
 
-            {bookings.length === 0 ? (
+            {error ? (
+                <ErrorState title="Couldn't load your bookings" hint="Check your connection and try again." onRetry={reload} />
+            ) : bookings.length === 0 ? (
                 <EmptyState
                     title={hasActiveFilters ? "No bookings match those filters" : t("booking.empty")}
                     tone="teal"
@@ -100,7 +71,7 @@ export default function Bookings() {
                 />
             ) : (
                 <>
-                    <ul className="divide-y divide-line border-y border-line">
+                    <ul aria-busy={loading} className={`divide-y divide-line border-y border-line transition-opacity ${loading ? "opacity-50" : ""}`}>
                         {bookings.map((booking, i) => (
                             <li key={booking.id} className="animate-slide-up" style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
                                 <Link
@@ -122,17 +93,12 @@ export default function Bookings() {
                         ))}
                     </ul>
 
-                    {pagination && pagination.page < pagination.totalPages && (
-                        <div className="text-center mt-6">
-                            <button
-                                onClick={() => load(pagination.page + 1, true)}
-                                disabled={loadingMore}
-                                className="text-sm text-teal hover:underline disabled:opacity-50"
-                            >
-                                {loadingMore ? "Loading…" : "Load more"}
-                            </button>
-                        </div>
-                    )}
+                    <InfiniteScrollFooter
+                        hasMore={hasMore}
+                        loading={loadingMore}
+                        error={loadMoreError}
+                        onLoadMore={loadMore}
+                    />
                 </>
             )}
         </div>

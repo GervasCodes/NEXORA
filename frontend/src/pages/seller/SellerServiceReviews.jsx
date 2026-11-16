@@ -5,6 +5,7 @@ import api, { extractErrorMessage } from "../../api/client";
 import { formatDate } from "../../utils/format";
 import PageMeta from "../../components/PageMeta";
 import EmptyState from "../../components/ui/EmptyState";
+import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import Input from "../../components/ui/Input";
 import { useLanguage } from "../../context/LanguageContext";
@@ -27,16 +28,24 @@ export default function SellerServiceReviews() {
     const [drafts, setDrafts] = useState({});
     const [submittingId, setSubmittingId] = useState(null);
     const [error, setError] = useState("");
+    // A failed load used to be swallowed: page 1 then read as "No reviews
+    // yet", and a failed "Load more" did nothing visible.
+    const [loadError, setLoadError] = useState("");
 
     const loadPage = (targetPage) => {
         setLoading(true);
+        setLoadError("");
         api.get(`/reviews/provider/${profile.user_id}`, { params: { page: targetPage } })
             .then(({ data }) => {
-                setReviews((prev) => (targetPage === 1 ? data.data.reviews : [...prev, ...data.data.reviews]));
+                setReviews((prev) => {
+                    if (targetPage === 1) return data.data.reviews;
+                    const seen = new Set(prev.map((r) => r.id));
+                    return [...prev, ...data.data.reviews.filter((r) => !seen.has(r.id))];
+                });
                 setPage(targetPage);
                 setTotalPages(data.data.totalPages || 1);
             })
-            .catch(() => {})
+            .catch((err) => setLoadError(extractErrorMessage(err) || t("seller.reviews.loadFailed")))
             .finally(() => setLoading(false));
     };
 
@@ -65,6 +74,10 @@ export default function SellerServiceReviews() {
         return <LoadingState label={t("seller.serviceReviews.loading")} />;
     }
 
+    if (loadError && reviews.length === 0) {
+        return <ErrorState title={t("seller.reviews.loadFailedTitle")} hint={loadError} onRetry={() => loadPage(1)} />;
+    }
+
     return (
         <div>
             <PageMeta title={t("seller.serviceReviews.title")} noIndex />
@@ -72,6 +85,14 @@ export default function SellerServiceReviews() {
             <p className="text-ash text-sm mb-8">{t("seller.serviceReviews.intro")}</p>
 
             {error && <p role="alert" className="text-sm text-coral mb-4">{error}</p>}
+            {loadError && (
+                <p role="alert" className="text-sm text-coral mb-4">
+                    {loadError}{" "}
+                    <button type="button" onClick={() => loadPage(reviews.length ? page + 1 : 1)} className="underline">
+                        {t("common.tryAgain")}
+                    </button>
+                </p>
+            )}
 
             {reviews.length === 0 ? (
                 <EmptyState title={t("seller.serviceReviews.empty")} />

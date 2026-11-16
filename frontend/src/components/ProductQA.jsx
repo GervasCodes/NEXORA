@@ -27,25 +27,39 @@ export default function ProductQA({ productId }) {
     const [questionText, setQuestionText] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [loadMoreError, setLoadMoreError] = useState(false);
 
     const load = (targetPage) => {
-        api.get(`/products/${productId}/questions`, { params: { page: targetPage } })
+        if (targetPage > 1) { setLoadingMore(true); setLoadMoreError(false); }
+        return api.get(`/products/${productId}/questions`, { params: { page: targetPage } })
             .then(({ data: res }) => {
                 setData((prev) => {
                     if (!prev || targetPage === 1) return res.data;
-                    return { ...res.data, questions: [...prev.questions, ...res.data.questions] };
+                    // De-duplicate: a question posted between pages can shift
+                    // rows so the same one shows up on two pages.
+                    const seen = new Set(prev.questions.map((q) => q.id));
+                    return { ...res.data, questions: [...prev.questions, ...res.data.questions.filter((q) => !seen.has(q.id))] };
                 });
+                // Only advance once the page actually arrived. It used to be
+                // advanced before the request, so after one failure the next
+                // click asked for page+2 and silently skipped a page.
+                setPage(targetPage);
+                return true;
             })
-            .catch(() => {});
+            .catch(() => {
+                if (targetPage > 1) setLoadMoreError(true);
+                return false;
+            })
+            .finally(() => { if (targetPage > 1) setLoadingMore(false); });
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` is redefined every render; this effect intentionally only re-fetches when productId changes, not on every render
     useEffect(() => { load(1); }, [productId]);
 
     const loadMore = () => {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        load(nextPage);
+        if (loadingMore) return;
+        load(page + 1);
     };
 
     const submitQuestion = async (e) => {
@@ -56,7 +70,6 @@ export default function ProductQA({ productId }) {
             await api.post(`/products/${productId}/questions`, { question: questionText });
             setQuestionText("");
             setAskOpen(false);
-            setPage(1);
             load(1);
         } catch (err) {
             setError(extractErrorMessage(err));
@@ -130,9 +143,17 @@ export default function ProductQA({ productId }) {
                 ))}
             </ul>
 
+            {loadMoreError && (
+                <p role="alert" className="text-sm text-coral mt-4">{t("infinite.error")}</p>
+            )}
             {hasMore && (
-                <button onClick={loadMore} className="text-sm text-teal hover:underline mt-4">
-                    {t("product.qaLoadMore")}
+                <button
+                    type="button"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="text-sm text-teal hover:underline mt-4 disabled:opacity-50"
+                >
+                    {loadingMore ? t("common.loading") : loadMoreError ? t("common.tryAgain") : t("product.qaLoadMore")}
                 </button>
             )}
         </section>

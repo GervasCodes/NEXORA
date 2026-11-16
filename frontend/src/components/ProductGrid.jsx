@@ -5,6 +5,8 @@ import ProductCard from "./ProductCard";
 import ProductSwipeFeed from "./ProductSwipeFeed";
 import EmptyState from "./ui/EmptyState";
 import ErrorState from "./ui/ErrorState";
+import InfiniteScrollFooter from "./ui/InfiniteScrollFooter";
+import useInfiniteScroll from "../hooks/useInfiniteScroll";
 
 const PAGE_SIZE = 24;
 // Phase 6.1 follow-up: the /products request here had no per-request
@@ -58,8 +60,17 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
+    // A failed "Load more" is its own state: the products already on screen
+    // stay, the footer shows a Retry, and auto-loading pauses until the
+    // shopper taps it. (It used to be swallowed silently, and because the
+    // observer was re-created every time loadingMore flipped, a failure
+    // while the sentinel was in view re-fired immediately - a request loop.)
+    const [loadMoreError, setLoadMoreError] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
-    const sentinelRef = useRef(null);
+    // Bumped whenever the list is reset (filters/page change). A response
+    // from an older generation is dropped instead of being appended to the
+    // new list.
+    const generationRef = useRef(0);
     const viewToggleRef = useRef(null);
     const [view, setView] = useState(readStoredView);
     const listClass = view === "list" ? LIST_CLASS : GRID_CLASS;
@@ -84,8 +95,11 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
 
     useEffect(() => {
         let ignore = false;
+        generationRef.current += 1;
         setLoading(true);
         setError("");
+        setLoadMoreError(false);
+        setLoadingMore(false);
         setPage(startPage);
 
         // Guard against an out-of-order response: if the filters/sort
@@ -121,28 +135,34 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
         if (loading || loadingMore || page >= totalPages) return;
 
         const nextPage = page + 1;
+        const generation = generationRef.current;
         setLoadingMore(true);
+        setLoadMoreError(false);
 
         api.get("/products", { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, page: nextPage }, timeout: REQUEST_TIMEOUT_MS })
             .then(({ data }) => {
-                setProducts((prev) => [...prev, ...data.data]);
+                if (generation !== generationRef.current) return;
+                // De-duplicate: if products were added/removed between
+                // pages a row can appear twice, which collides React keys.
+                setProducts((prev) => {
+                    const seen = new Set(prev.map((p) => p.id));
+                    return [...prev, ...data.data.filter((p) => !seen.has(p.id))];
+                });
+                setTotalPages(data.pagination?.totalPages || totalPages);
                 setPage(nextPage);
             })
-            .catch(() => {})
-            .finally(() => setLoadingMore(false));
+            .catch(() => { if (generation === generationRef.current) setLoadMoreError(true); })
+            .finally(() => { if (generation === generationRef.current) setLoadingMore(false); });
     }, [loading, loadingMore, page, totalPages, paramsKey]);
 
-    useEffect(() => {
-        const node = sentinelRef.current;
-        if (!node) return;
-
-        const observer = new IntersectionObserver(
-            (entries) => { if (entries[0].isIntersecting) loadMore(); },
-            { rootMargin: "400px" }
-        );
-        observer.observe(node);
-        return () => observer.disconnect();
-    }, [loadMore]);
+    // Shared sentinel + IntersectionObserver. Pauses while a page is loading
+    // or after a failure, and respects Data Saver (manual button only).
+    const { sentinelRef } = useInfiniteScroll({
+        hasMore: page < totalPages,
+        loading: loading || loadingMore,
+        error: loadMoreError,
+        onLoadMore: loadMore
+    });
 
     const closeFeed = useCallback(() => {
         if (onFeedClose) { onFeedClose(); return; }
@@ -275,27 +295,21 @@ export default function ProductGrid({ params, emptyTitle, emptyHint, onResults, 
                 ))}
             </div>
 
-            {/* Sentinel for infinite scroll, plus a manual fallback for
-                anyone whose browser/extensions block IntersectionObserver. */}
-            <div ref={sentinelRef} />
-            {loadingMore && (
-                <div className={`${listClass} mt-4 sm:mt-5`}>
-                    {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)}
-                </div>
-            )}
-            {!loadingMore && page < totalPages && (
-                <div className="text-center mt-8">
-                    <button
-                        onClick={loadMore}
-                        className="text-sm border border-line px-5 py-2 rounded-full hover:border-ink transition-colors"
-                    >
-                        Load more
-                    </button>
-                </div>
-            )}
-            {page >= totalPages && products.length >= PAGE_SIZE && (
-                <p className="text-center text-ash text-xs mt-8">{t("products.endOfList")}</p>
-            )}
+            <InfiniteScrollFooter
+                className="mt-4 sm:mt-5"
+                sentinelRef={sentinelRef}
+                hasMore={page < totalPages}
+                loading={loadingMore}
+                error={loadMoreError}
+                onLoadMore={loadMore}
+                skeleton={(
+                    <div className={listClass}>
+                        {Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)}
+                    </div>
+                )}
+                showEnd={products.length >= PAGE_SIZE}
+                endMessage={t("products.endOfList")}
+            />
 
             {feedOpen && (
                 <ProductSwipeFeed

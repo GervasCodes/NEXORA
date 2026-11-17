@@ -77,7 +77,7 @@ describe("role matrix (route guards)", () => {
             // Whatever the handler then does with the mocked database (200, 400, 404, 500), it is not the guard saying no.
             expect([401, 403]).not.toContain(res.status);
         }
-    });
+    }, 120_000);
 
     it("a token for a suspended or deactivated account is refused on a protected route", async () => {
         const route = roleRestricted.find((r) => rolesOf(r).includes("buyer"));

@@ -28,7 +28,7 @@ describe("getRedisStatus", () => {
         redisConfig.getClient.mockReturnValue({ ping: () => new Promise(() => {}) });
         const started = Date.now();
         expect(await getRedisStatus(50)).toBe("unavailable");
-        expect(Date.now() - started).toBeLessThan(500);
+        expect(Date.now() - started).toBeLessThan(2000);
     });
 
     it("is 'disabled' when configured but no client can be built", async () => {

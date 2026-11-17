@@ -172,6 +172,11 @@ app.use(helmet({
 // Gzips every JSON/HTML response over the wire - product listings and
 // admin tables in particular shrink dramatically, at negligible CPU cost.
 app.use(compression());
+// Keep the API host out of Google's index (sitemaps and robots.txt excepted) - see
+// middleware/apiSeoHygiene.middleware.js. Mounted before every route so it covers all of them.
+const apiSeoHygiene = require("./middleware/apiSeoHygiene.middleware");
+app.use(apiSeoHygiene.noIndexApi);
+app.get("/robots.txt", apiSeoHygiene.apiRobots);
 // Lightweight keep-alive endpoint (Reliability phase). Unlike /health it
 // never touches MySQL, so the frontend can ping it every few minutes
 // while a tab is open - keeping a free-tier host from going to sleep

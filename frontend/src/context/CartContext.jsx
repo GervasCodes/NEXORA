@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo } 
 import api, { extractErrorMessage } from "../api/client";
 import { useAuth } from "./AuthContext";
 import { notifyMeaningfulAction } from "../hooks/useInstallPrompt";
+import { trackEvent } from "../utils/analytics";
 
 const CartContext = createContext(null);
 
@@ -47,6 +48,8 @@ export function CartProvider({ children }) {
             await api.post("/cart", { product_id: productId, quantity });
             await refresh();
             notifyMeaningfulAction();
+            // GA4 key event: public product id + quantity only (consent-gated inside trackEvent).
+            trackEvent("add_to_cart", { currency: "TZS", items: [{ item_id: String(productId), quantity }] }, { allowPrivate: true });
             return { success: true };
         } catch (error) {
             return { success: false, message: extractErrorMessage(error) };

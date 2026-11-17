@@ -12,6 +12,12 @@ const deriveAiContext = (endpoint) => {
     return match ? match[1] : null;
 };
 
+// The backend falls back to these generic lines when the AI call fails. Showing
+// the same sentence under every product adds noise and makes tiles uneven, so
+// only a real, per-product reason is displayed.
+const GENERIC_WHY = new Set(["Picked for you", "Related to this product"]);
+const realWhy = (text) => (typeof text === "string" && text.trim() && !GENERIC_WHY.has(text.trim()) ? text.trim() : "");
+
 // One reusable horizontal shelf, fed by either recommendation endpoint -
 // `endpoint` is the full request path so this component stays agnostic
 // about which rules-based ranking produced the list (see
@@ -123,10 +129,12 @@ export default function RecommendedProducts({ endpoint, title }) {
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                     {products.map((product) => (
-                        <div key={product.id}>
-                            <ProductCard product={product} />
-                            {whyById[product.id] && (
-                                <p className="text-[11px] text-ash mt-1 px-0.5 line-clamp-1">{whyById[product.id]}</p>
+                        <div key={product.id} className="flex flex-col h-full">
+                            <div className="flex-1">
+                                <ProductCard product={product} />
+                            </div>
+                            {realWhy(whyById[product.id]) && (
+                                <p className="text-[11px] text-ash mt-1 px-0.5 line-clamp-1">{realWhy(whyById[product.id])}</p>
                             )}
                         </div>
                     ))}

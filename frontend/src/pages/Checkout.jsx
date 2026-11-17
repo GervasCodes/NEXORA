@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BrandLogo from "../components/BrandLogo";
 import { useNavigate, Link } from "react-router-dom";
 import api, { extractErrorMessage } from "../api/client";
 import { useCart } from "../context/CartContext";
+import { trackEvent } from "../utils/analytics";
 import { useCurrency } from "../context/CurrencyContext";
 import { useLanguage } from "../context/LanguageContext";
 import FullScreenLoader from "../components/ui/FullScreenLoader";
@@ -122,6 +123,14 @@ const DEFAULT_CARD_PROVIDERS = Object.keys(CARD_PROVIDER_LABELS).map((key) => ({
 export default function Checkout() {
     const { format } = useCurrency();
     const { items, total, refresh } = useCart();
+
+    // GA4 begin_checkout: once per visit to this page, totals only (no items, no personal data).
+    const checkoutTracked = useRef(false);
+    useEffect(() => {
+        if (checkoutTracked.current || !items?.length) return;
+        checkoutTracked.current = true;
+        trackEvent("begin_checkout", { currency: "TZS", value: Number(total) || undefined }, { allowPrivate: true });
+    }, [items, total]);
     const navigate = useNavigate();
     const { t } = useLanguage();
     const toast = useToast();

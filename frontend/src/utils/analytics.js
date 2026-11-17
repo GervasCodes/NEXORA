@@ -90,13 +90,20 @@ export const trackPageView = (pathname, title) => {
     window.gtag("event", "page_view", {
         page_path: pathname,
         page_location: `${window.location.origin}${pathname}`,
-        page_title: title || document.title
+        page_title: title || document.title,
+        // Lets GA4 split English / Kiswahili traffic (register "language" as a custom dimension).
+        language: (document.documentElement.lang || "en").slice(0, 2)
     });
 };
 
-// Generic custom event (e.g. "add_to_cart"). Private pages stay unreported.
-export const trackEvent = (name, params = {}) => {
-    if (!canSend() || isPrivatePath(window.location.pathname)) return;
+// Generic custom event (e.g. "add_to_cart"). Events fired while the visitor is on a
+// private page (cart, checkout, register...) are dropped, unless the caller passes
+// { allowPrivate: true }. Only do that for events whose params carry NO personal
+// data (no names, phone numbers, addresses, order numbers): public product ids,
+// totals and a role label are fine.
+export const trackEvent = (name, params = {}, { allowPrivate = false } = {}) => {
+    if (!canSend()) return;
+    if (!allowPrivate && isPrivatePath(window.location.pathname)) return;
     window.gtag("event", name, params);
 };
 

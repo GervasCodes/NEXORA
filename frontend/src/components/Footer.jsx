@@ -25,7 +25,7 @@ export default function Footer() {
     // legal documents live inside /terms), copyright. Links already in the
     // header/drawer (shop, services, sell) and the install prompt are gone.
     return (
-        <footer className="glass-dark text-frost/70 mt-24">
+        <footer className="bg-abyss text-frost/70 mt-12 sm:mt-20">
             <div className="max-w-6xl mx-auto px-6 pt-8 pb-8 flex flex-col gap-4 text-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-baseline gap-x-3 gap-y-1 flex-wrap">

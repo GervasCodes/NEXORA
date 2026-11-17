@@ -1,4 +1,10 @@
 # Single-page app: any path that is not a real file serves the app shell (status 200, not a redirect),
 # so deep links such as /orders/123 and /products/some-slug work on refresh.
 # Real files (including the pre-rendered shells) win over this rule on Netlify, Cloudflare Pages and Render.
+# Sitemap lives on the API (backend/src/modules/sitemap). Proxy it so Google sees the
+# file on this domain. These two lines MUST stay above the catch-all below.
+# NOTE: Render Static Sites ignore this file - the same rules are in render.yaml and
+# must also exist under Render -> nexora-web -> Redirects/Rewrites (see docs/SEO_ANALYTICS_SETUP.md).
+/sitemap.xml        https://api.nexoramarketplace.online/sitemap.xml        200
+/sitemap-:n.xml     https://api.nexoramarketplace.online/sitemap-:n.xml     200
 /*    /index.html   200

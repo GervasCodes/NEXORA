@@ -58,11 +58,12 @@ describe("LanguageToggle", () => {
     // instantly - after the tap. findByRole (which retries) reflects that;
     // document.documentElement.lang still flips synchronously since that
     // only depends on the language code, not the dictionary content.
-    it("switches between English and Kiswahili with one tap", async () => {
-        render(<LanguageProvider><LanguageToggle /></LanguageProvider>);
-        const btn = screen.getByRole("button", { name: "Switch language to Kiswahili" });
-        fireEvent.click(btn);
+    // LanguageToggle is now a dropdown (trigger + menu of menuitemradio options) and reads the
+    // router location, so it needs a Router. Open the menu, then pick Kiswahili.
+    it("switches to Kiswahili from the language menu", async () => {
+        render(<MemoryRouter><LanguageProvider><LanguageToggle /></LanguageProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole("button", { name: "Language: English" }));
+        fireEvent.click(await screen.findByRole("menuitemradio", { name: /kiswahili/i }));
         expect(document.documentElement.lang).toBe("sw");
-        expect(await screen.findByRole("button", { name: "Badilisha lugha kuwa English" })).toBeInTheDocument();
     });
 });

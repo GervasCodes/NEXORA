@@ -57,3 +57,8 @@ process.env.DB_SSL_CA = "";
 // emailTemplate.js, just an unpinned env var letting local config bleed
 // into the test run.
 process.env.EMAIL_LOGO_URL = "";
+
+// Same dotenv leak as above: a real backend/.env with PAYMENTS_MAINTENANCE=true makes the payment routes
+// answer 503 before the role guard runs, which broke tests/integration/roleMatrix.test.js. Pin it off.
+process.env.PAYMENTS_MAINTENANCE = "";
+process.env.PAYMENTS_MAINTENANCE_TESTER_IDS = "";

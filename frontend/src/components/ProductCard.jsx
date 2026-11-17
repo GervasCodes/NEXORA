@@ -148,7 +148,7 @@ function ProductCard({ product, priority = false, layout = "grid" }) {
     );
 
     const ratingAndStock = (
-        <div className="flex items-center justify-between mt-1">
+        <div className="flex items-center justify-between mt-1 min-h-[1.25rem]">
             {product.average_rating ? (
                 <p className="text-xs text-ash flex items-center gap-0.5">
                     <span className="text-mango">★</span> {Number(product.average_rating).toFixed(1)}
@@ -216,9 +216,11 @@ function ProductCard({ product, priority = false, layout = "grid" }) {
     // no nested interactive elements.
     return (
         <div className={`tag-string group relative bg-paper border border-line rounded-lg transition-all ${
-            isList ? "flex gap-3 p-3" : "block pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5"
+            isList ? "flex gap-3 p-3" : "flex flex-col h-full pt-4 px-3 pb-3 hover:shadow-md hover:-translate-y-0.5"
         }`}>
-            <Link to={`/products/${product.slug}`} className={isList ? "flex gap-3 flex-1 min-w-0" : "block"}>
+            {/* Grid tiles: the link grows so Add to cart always sits on the same line in a row,
+                whether or not a tile has the "Only N left" line. */}
+            <Link to={`/products/${product.slug}`} className={isList ? "flex gap-3 flex-1 min-w-0" : "block flex-1"}>
                 {isList ? <div className="w-20 shrink-0">{media}</div> : media}
                 {details}
             </Link>

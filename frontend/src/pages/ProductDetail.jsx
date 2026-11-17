@@ -27,6 +27,7 @@ import Skeleton from "../components/Skeleton";
 import ShareButtons from "../components/ShareButtons";
 import { recordRecentlyViewed } from "../utils/recentlyViewed";
 import { deliveryEstimate } from "../utils/deliveryEstimate";
+import { trackEvent } from "../utils/analytics";
 
 export default function ProductDetail() {
     const { format } = useCurrency();
@@ -96,6 +97,16 @@ export default function ProductDetail() {
             .catch(() => setProduct(null))
             .finally(() => setLoading(false));
     }, [slug]);
+
+    // GA4 view_item (consent-gated): public catalogue data only.
+    useEffect(() => {
+        if (!product?.id) return;
+        trackEvent("view_item", {
+            currency: "TZS",
+            value: Number(product.discount_price || product.price) || undefined,
+            items: [{ item_id: String(product.id), item_name: product.name, price: Number(product.discount_price || product.price) || undefined }]
+        });
+    }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Feeds the "Recently viewed" rail on Home.
     useEffect(() => {

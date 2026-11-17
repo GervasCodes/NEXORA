@@ -108,3 +108,46 @@ describe("trackPurchase", () => {
         expect(await trackPurchase({ orderId: 9, value: 100 })).toBe(false);
     });
 });
+
+describe("trackEvent", () => {
+    const load = async () => {
+        vi.resetModules();
+        vi.stubEnv("VITE_GA_MEASUREMENT_ID", "G-TEST1234");
+        return import("../../src/utils/analytics");
+    };
+    const sentEvents = () => window.dataLayer.map((entry) => Array.from(entry)).filter((entry) => entry[0] === "event");
+
+    beforeEach(() => {
+        localStorage.clear();
+        delete window.gtag;
+        window.dataLayer = [];
+        window.history.pushState({}, "", "/");
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("sends nothing without consent", async () => {
+        const { trackEvent } = await load();
+        trackEvent("view_item", { currency: "TZS" });
+        expect(sentEvents()).toHaveLength(0);
+    });
+
+    it("sends public-page events after consent", async () => {
+        const { trackEvent, setAnalyticsConsent } = await load();
+        setAnalyticsConsent("granted");
+        window.dataLayer = [];
+        window.history.pushState({}, "", "/products/some-slug");
+        trackEvent("view_item", { currency: "TZS" });
+        expect(sentEvents().map((e) => e[1])).toEqual(["view_item"]);
+    });
+
+    it("drops events fired on private pages unless allowPrivate is set", async () => {
+        const { trackEvent, setAnalyticsConsent } = await load();
+        setAnalyticsConsent("granted");
+        window.dataLayer = [];
+        window.history.pushState({}, "", "/checkout");
+        trackEvent("begin_checkout", { value: 1000 });
+        expect(sentEvents()).toHaveLength(0);
+        trackEvent("begin_checkout", { value: 1000 }, { allowPrivate: true });
+        expect(sentEvents().map((e) => e[1])).toEqual(["begin_checkout"]);
+    });
+});

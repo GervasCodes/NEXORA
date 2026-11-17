@@ -17,6 +17,7 @@ import useFormErrors from "../hooks/useFormErrors";
 import FieldError from "../components/ui/FieldError";
 import { rules, validateFields } from "../utils/formErrors";
 import { isValidUsernameFormat, randomSuggestionDigits, suggestUsername } from "../utils/username";
+import { trackEvent } from "../utils/analytics";
 
 const initialForm = {
     first_name: "",
@@ -238,6 +239,8 @@ export default function Register() {
         setSubmitting(false);
 
         if (result.success) {
+            // GA4 sign_up: role label only, never the person's details.
+            trackEvent("sign_up", { method: "email", role: form.role }, { allowPrivate: true });
             setStep(STEP_DONE);
             setTimeout(() => navigate("/login"), needsDocuments ? 2200 : 1200);
         } else {
